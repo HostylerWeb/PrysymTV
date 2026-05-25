@@ -1,0 +1,55 @@
+"use client"
+
+import { ChevronRight } from "lucide-react"
+import { VideoCard } from "./video-card"
+import { useRef } from "react"
+
+interface ContentItem {
+  id: string
+  title: string
+  thumbnail: string
+  duration?: string
+  views?: string
+  channel?: string
+  isLive?: boolean
+  liveViewers?: string
+  type: "movie" | "video" | "live"
+  progress?: number
+}
+
+interface ContentRowProps {
+  title: string
+  items: ContentItem[]
+  showViewAll?: boolean
+}
+
+export function ContentRow({ title, items, showViewAll = true }: ContentRowProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <section className="py-4">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 mb-3">
+        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+        {showViewAll && (
+          <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+            View all
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Scrollable Row */}
+      <div 
+        ref={scrollRef}
+        className="flex gap-3 px-4 overflow-x-auto scrollbar-hide snap-x snap-mandatory"
+      >
+        {items.map((item) => (
+          <div key={item.id} className="snap-start">
+            <VideoCard {...item} />
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
