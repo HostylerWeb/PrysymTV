@@ -4,7 +4,7 @@ import { ChevronRight } from "lucide-react"
 import { VideoCard } from "./video-card"
 import { useRef } from "react"
 
-interface ContentItem {
+export interface ContentItem {
   id: string
   title: string
   thumbnail: string
@@ -46,7 +46,7 @@ export function ContentRow({ title, items, showViewAll = true }: ContentRowProps
       >
         {items.map((item) => (
           <div key={item.id} className="snap-start">
-            <VideoCard {...item} />
+            <VideoCard id={item.id} {...item} />
           </div>
         ))}
       </div>

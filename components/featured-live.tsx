@@ -3,8 +3,11 @@ import { Button } from "@/components/ui/button"
 import { useState } from "react"
 import Link from "next/link"
 
+import { mockLiveStreams } from "@/lib/mock-data"
+
 export function FeaturedLive() {
   const [isMuted, setIsMuted] = useState(true)
+  const stream = mockLiveStreams[0]
 
   return (
     <section className="relative w-full pt-20 md:pt-24 pb-8 px-4">
@@ -69,7 +72,7 @@ export function FeaturedLive() {
             </div>
 
             <div className="mt-auto space-y-3">
-              <Link href="/live/progamerx">
+              <Link href={`/live/${stream.slug}`}>
                 <Button className="w-full rounded-xl gap-2 h-12 text-base font-bold">
                   <Play className="w-5 h-5 fill-current" />
                   Watch Stream

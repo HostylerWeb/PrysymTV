@@ -5,6 +5,7 @@ import { LiveCard } from "./live-card"
 
 interface LiveStream {
   id: string
+  slug?: string
   title: string
   thumbnail: string
   streamer: string

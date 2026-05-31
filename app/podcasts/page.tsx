@@ -249,6 +249,7 @@ export default function PodcastsPage() {
                 <div
                   key={ep.id}
                   onClick={() => setNowPlaying(ep)}
+                  onDoubleClick={() => { window.location.href = `/podcast/${ep.id}` }}
                   className={cn(
                     "group flex items-center gap-4 p-3 rounded-2xl cursor-pointer transition-all duration-200",
                     nowPlaying?.id === ep.id

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { 
   ChevronLeft, 
   Settings, 
@@ -10,14 +10,8 @@ import {
   Heart,
   Clock,
   Play,
-  Video,
   ChevronRight,
-  Moon,
-  Bell,
-  HelpCircle,
-  LogOut,
-  Crown,
-  Radio
+  Radio,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -27,7 +21,10 @@ import { SearchModal } from "@/components/search-modal"
 import { CoinsModal } from "@/components/coins-modal"
 import { AuthModal } from "@/components/auth-modal"
 import { StreamerApplicationModal } from "@/components/streamer-application-modal"
+import { EditProfileModal } from "@/components/edit-profile-modal"
+import { ProfileSettingsSheet, type ProfileSettingsScreen } from "@/components/profile-settings-sheet"
 import { useAuth } from "@/contexts/auth-context"
+import { useSearchParams } from "next/navigation"
 
 const tabs = [
   { id: "videos", label: "Videos", icon: Grid3X3 },
@@ -57,16 +54,52 @@ const watchHistory = [
   { id: "3", thumbnail: "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=200&h=120&fit=crop", title: "Breaking Bad - S5E12", channel: "TV Shows", progress: 80 },
 ]
 
-export default function ProfilePage() {
-  const { user, isAuthenticated, logout, updateCoins } = useAuth()
+const VALID_SETTINGS_SCREENS: ProfileSettingsScreen[] = [
+  "menu",
+  "notifications",
+  "dashboard",
+  "help",
+  "premium",
+  "history",
+  "go-live",
+  "upload",
+]
+
+function ProfilePageContent() {
+  const searchParams = useSearchParams()
+  const settingsParam = searchParams.get("settings")
+  const initialSettingsScreen =
+    settingsParam && VALID_SETTINGS_SCREENS.includes(settingsParam as ProfileSettingsScreen)
+      ? (settingsParam as ProfileSettingsScreen)
+      : undefined
+
+  const { user, isAuthenticated, isLoading, logout, updateCoins } = useAuth()
   const [activeTab, setActiveTab] = useState("videos")
   const [showSettings, setShowSettings] = useState(false)
+  const [settingsOpenTo, setSettingsOpenTo] = useState<ProfileSettingsScreen | undefined>()
   const [navTab, setNavTab] = useState("profile")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isCoinsModalOpen, setIsCoinsModalOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isStreamerModalOpen, setIsStreamerModalOpen] = useState(false)
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false)
   const [darkModeEnabled, setDarkModeEnabled] = useState(true)
+
+  const openSettingsPanel = (screen: ProfileSettingsScreen = "menu") => {
+    setSettingsOpenTo(screen)
+    setShowSettings(true)
+  }
+
+  const closeSettingsPanel = () => {
+    setShowSettings(false)
+    setSettingsOpenTo(undefined)
+  }
+
+  useEffect(() => {
+    if (initialSettingsScreen && initialSettingsScreen !== "menu" && isAuthenticated && !isLoading) {
+      openSettingsPanel(initialSettingsScreen)
+    }
+  }, [initialSettingsScreen, isAuthenticated, isLoading])
 
   const handlePurchaseCoins = (amount: number) => {
     updateCoins(amount)
@@ -75,7 +108,32 @@ export default function ProfilePage() {
 
   const handleLogout = () => {
     logout()
-    setShowSettings(false)
+    closeSettingsPanel()
+  }
+
+  if (isLoading) {
+    return (
+      <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
+        <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-lg border-b border-border">
+          <div className="flex items-center justify-between px-4 py-3 max-w-5xl mx-auto w-full">
+            <div className="w-10 h-10 rounded-full bg-secondary animate-pulse" />
+            <div className="h-5 w-20 rounded bg-secondary animate-pulse" />
+            <div className="w-10" />
+          </div>
+        </div>
+        <div className="px-4 py-10 max-w-5xl mx-auto animate-pulse space-y-6">
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-secondary" />
+            <div className="flex-1 space-y-3 w-full">
+              <div className="h-6 w-40 rounded bg-secondary mx-auto md:mx-0" />
+              <div className="h-4 w-28 rounded bg-secondary mx-auto md:mx-0" />
+              <div className="h-10 w-48 rounded-full bg-secondary mx-auto md:mx-0" />
+            </div>
+          </div>
+        </div>
+        <BottomNavigation activeTab={navTab} onTabChange={setNavTab} onSearchClick={() => setIsSearchOpen(true)} />
+      </main>
+    )
   }
 
   // Guest view
@@ -99,7 +157,7 @@ export default function ProfilePage() {
           <div className="w-24 h-24 rounded-full bg-secondary flex items-center justify-center mb-6">
             <span className="text-5xl">👋</span>
           </div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">Welcome to StreamVerse</h2>
+          <h2 className="text-2xl font-bold text-foreground mb-2">Welcome to Prysym TV</h2>
           <p className="text-muted-foreground mb-8 max-w-sm">
             Sign in to access your profile, save videos, track your watch history, and more.
           </p>
@@ -162,21 +220,6 @@ export default function ProfilePage() {
     )
   }
 
-  // Authenticated view
-  const menuItems = [
-    { icon: Crown, label: "Upgrade to Premium", description: "Ad-free viewing & exclusive content", isPremium: true },
-    ...(user?.isStreamer 
-      ? [{ icon: Radio, label: "Go Live", description: "Start streaming now", isLive: true }]
-      : [{ icon: Radio, label: "Become a Streamer", description: user?.streamerStatus === "pending" ? "Application pending..." : "Apply to start streaming", action: "streamer" }]
-    ),
-    { icon: Clock, label: "Watch History", description: "Your recently watched content" },
-    { icon: Video, label: "Your Videos", description: "Manage your uploads" },
-    { icon: Bell, label: "Notifications", description: "Manage notification preferences" },
-    { icon: Moon, label: "Dark Mode", description: darkModeEnabled ? "Currently enabled" : "Currently disabled", toggle: true, isEnabled: darkModeEnabled },
-    { icon: HelpCircle, label: "Help & Support", description: "FAQs and contact support" },
-    { icon: LogOut, label: "Sign Out", description: "Log out of your account", danger: true, action: "logout" },
-  ]
-
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       {/* Header */}
@@ -188,11 +231,17 @@ export default function ProfilePage() {
             </button>
           </Link>
           <h1 className="text-lg font-semibold text-foreground">Profile</h1>
-          <button 
-            onClick={() => setShowSettings(!showSettings)}
-            className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors"
+          <button
+            type="button"
+            onClick={() => (showSettings ? closeSettingsPanel() : openSettingsPanel("menu"))}
+            className="flex items-center gap-2 rounded-full hover:bg-secondary transition-colors pl-1 pr-1 py-1"
+            aria-label="Settings"
+            aria-expanded={showSettings}
           >
-            <Settings className="w-5 h-5 text-foreground" />
+            <span className="text-sm font-semibold text-foreground">Settings</span>
+            <span className="w-10 h-10 rounded-full flex items-center justify-center">
+              <Settings className="w-5 h-5 text-foreground" />
+            </span>
           </button>
         </div>
       </div>
@@ -232,9 +281,13 @@ export default function ProfilePage() {
               
               {/* Action Buttons */}
               <div className="flex items-center justify-center md:justify-start gap-3 w-full max-w-xs md:max-w-none md:w-auto">
-                <Button className="flex-1 md:flex-none rounded-full px-8">Edit Profile</Button>
+                <Button className="flex-1 md:flex-none rounded-full px-8" onClick={() => setIsEditProfileOpen(true)}>Edit Profile</Button>
                 {user?.isStreamer ? (
-                  <Button variant="secondary" className="flex-1 md:flex-none rounded-full gap-2 px-6">
+                  <Button
+                    variant="secondary"
+                    className="flex-1 md:flex-none rounded-full gap-2 px-6"
+                    onClick={() => openSettingsPanel("go-live")}
+                  >
                     <Radio className="w-4 h-4" />
                     Go Live
                   </Button>
@@ -288,11 +341,17 @@ export default function ProfilePage() {
             <Clock className="w-4 h-4" />
             Continue Watching
           </h3>
-          <button className="text-xs text-primary font-medium">See All</button>
+          <button
+            type="button"
+            onClick={() => openSettingsPanel("history")}
+            className="text-xs text-primary font-medium"
+          >
+            See All
+          </button>
         </div>
         <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4">
-          {watchHistory.map((item) => (
-            <Link key={item.id} href="/watch">
+            {watchHistory.map((item) => (
+            <Link key={item.id} href={`/watch/${item.id}`}>
               <div className="flex-shrink-0 w-44 cursor-pointer group">
                 <div className="relative aspect-video rounded-lg overflow-hidden bg-muted mb-2">
                   <img 
@@ -346,7 +405,7 @@ export default function ProfilePage() {
         {activeTab === "videos" && (
           <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 md:gap-3">
             {userVideos.map((video) => (
-              <Link key={video.id} href="/watch">
+              <Link key={video.id} href={`/watch/${video.id}`}>
                 <div className="relative aspect-square rounded-lg overflow-hidden bg-muted cursor-pointer group">
                   <img 
                     src={video.thumbnail} 
@@ -391,7 +450,7 @@ export default function ProfilePage() {
         {activeTab === "liked" && (
           <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 md:gap-3">
             {[...userVideos].reverse().map((video) => (
-              <Link key={video.id} href="/watch">
+              <Link key={video.id} href={`/watch/${video.id}`}>
                 <div className="relative aspect-square rounded-lg overflow-hidden bg-muted cursor-pointer group">
                   <img 
                     src={video.thumbnail} 
@@ -427,102 +486,45 @@ export default function ProfilePage() {
         isOpen={isStreamerModalOpen} 
         onClose={() => setIsStreamerModalOpen(false)} 
       />
+      <EditProfileModal isOpen={isEditProfileOpen} onClose={() => setIsEditProfileOpen(false)} />
 
-      {/* Settings Menu Overlay */}
-      {showSettings && (
-        <div 
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm transition-all duration-300"
-          onClick={() => setShowSettings(false)}
-        >
-          <div 
-            className="absolute bottom-0 left-0 right-0 md:top-1/2 md:left-1/2 md:right-auto md:-translate-x-1/2 md:-translate-y-1/2 md:w-[450px] md:bottom-auto bg-background rounded-t-3xl md:rounded-3xl max-h-[80vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom md:zoom-in-95 duration-300"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 px-4 py-4 border-b border-border">
-              <div className="w-12 h-1 rounded-full bg-muted mx-auto mb-4 md:hidden" />
-              <h3 className="text-lg font-semibold text-foreground text-center">Settings</h3>
-            </div>
-
-            {/* Coins in settings */}
-            <div className="px-4 py-3">
-              <button 
-                onClick={() => { setShowSettings(false); setIsCoinsModalOpen(true); }}
-                className="w-full flex items-center gap-4 px-4 py-4 rounded-xl bg-gradient-to-r from-yellow-500/10 via-amber-500/10 to-orange-500/10 border border-yellow-500/20 hover:border-yellow-500/40 transition-colors"
-              >
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 flex items-center justify-center">
-                  <span className="text-xl">🪙</span>
-                </div>
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-medium text-foreground">Your Coins</p>
-                  <p className="text-xs text-muted-foreground">{(user?.coins || 0).toLocaleString()} coins available</p>
-                </div>
-                <span className="text-sm font-semibold text-primary">Top Up</span>
-              </button>
-            </div>
-
-            <div className="px-4 py-2">
-              {menuItems.map((item, index) => {
-                const Icon = item.icon
-                return (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      if (item.toggle) {
-                        setDarkModeEnabled(!darkModeEnabled)
-                      } else if (item.action === "logout") {
-                        handleLogout()
-                      } else if (item.action === "streamer") {
-                        setShowSettings(false)
-                        setIsStreamerModalOpen(true)
-                      }
-                    }}
-                    className={cn(
-                      "w-full flex items-center gap-4 px-4 py-4 rounded-xl hover:bg-secondary/50 transition-colors",
-                      item.isPremium && "bg-gradient-to-r from-primary/10 to-transparent",
-                      item.isLive && "bg-gradient-to-r from-green-500/10 to-transparent"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center",
-                      item.isPremium ? "bg-primary" : item.isLive ? "bg-green-500" : item.danger ? "bg-destructive/10" : "bg-secondary"
-                    )}>
-                      <Icon className={cn(
-                        "w-5 h-5",
-                        item.isPremium || item.isLive ? "text-white" : item.danger ? "text-destructive" : "text-foreground"
-                      )} />
-                    </div>
-                    <div className="flex-1 text-left">
-                      <p className={cn(
-                        "text-sm font-medium",
-                        item.danger ? "text-destructive" : "text-foreground"
-                      )}>
-                        {item.label}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{item.description}</p>
-                    </div>
-                    {item.toggle ? (
-                      <div className={cn(
-                        "w-12 h-7 rounded-full flex items-center px-1 transition-colors",
-                        item.isEnabled ? "bg-primary justify-end" : "bg-muted justify-start"
-                      )}>
-                        <div className={cn(
-                          "w-5 h-5 rounded-full transition-colors",
-                          item.isEnabled ? "bg-primary-foreground" : "bg-foreground"
-                        )} />
-                      </div>
-                    ) : (
-                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-            <div className="px-4 py-6">
-              <p className="text-center text-xs text-muted-foreground">StreamVerse v2.4.1</p>
-            </div>
-          </div>
-        </div>
-      )}
+      <ProfileSettingsSheet
+        isOpen={showSettings}
+        onClose={closeSettingsPanel}
+        user={user}
+        darkModeEnabled={darkModeEnabled}
+        onDarkModeToggle={() => setDarkModeEnabled(!darkModeEnabled)}
+        onCoinsClick={() => {
+          closeSettingsPanel()
+          setIsCoinsModalOpen(true)
+        }}
+        onStreamerApply={() => {
+          closeSettingsPanel()
+          setIsStreamerModalOpen(true)
+        }}
+        onLogout={handleLogout}
+        initialScreen={settingsOpenTo ?? initialSettingsScreen}
+      />
     </main>
+  )
+}
+
+function ProfileLoadingFallback() {
+  return (
+    <main className="min-h-screen bg-background pb-24 md:pl-20">
+      <div className="h-14 border-b border-border animate-pulse bg-secondary/30" />
+      <div className="max-w-4xl mx-auto px-4 py-8 space-y-4">
+        <div className="h-24 rounded-xl bg-secondary/50 animate-pulse" />
+        <div className="h-40 rounded-xl bg-secondary/50 animate-pulse" />
+      </div>
+    </main>
+  )
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<ProfileLoadingFallback />}>
+      <ProfilePageContent />
+    </Suspense>
   )
 }

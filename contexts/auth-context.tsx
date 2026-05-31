@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react"
+import { createContext, useContext, useState, useLayoutEffect, ReactNode } from "react"
 
 export interface User {
   id: string
@@ -35,19 +35,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    // Check for saved user in localStorage on mount
-    const savedUser = localStorage.getItem("streamverse_user")
+  // useLayoutEffect runs before paint so logged-in users don't flash guest UI
+  useLayoutEffect(() => {
+    const legacy = localStorage.getItem("streamverse_user")
+    const savedUser = localStorage.getItem("prysymtv_user") ?? legacy
     if (savedUser) {
       setUser(JSON.parse(savedUser))
+      if (legacy && !localStorage.getItem("prysymtv_user")) {
+        localStorage.setItem("prysymtv_user", legacy)
+        localStorage.removeItem("streamverse_user")
+      }
     }
     setIsLoading(false)
   }, [])
 
   const saveUser = (userData: User | null) => {
     if (userData) {
-      localStorage.setItem("streamverse_user", JSON.stringify(userData))
+      localStorage.setItem("prysymtv_user", JSON.stringify(userData))
+      localStorage.removeItem("streamverse_user")
     } else {
+      localStorage.removeItem("prysymtv_user")
       localStorage.removeItem("streamverse_user")
     }
     setUser(userData)
@@ -122,14 +129,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     // Auto-approve after 3 seconds for demo purposes
     setTimeout(() => {
-      const currentUser = JSON.parse(localStorage.getItem("streamverse_user") || "null")
+      const currentUser = JSON.parse(localStorage.getItem("prysymtv_user") || "null")
       if (currentUser && currentUser.streamerStatus === "pending") {
         const approvedUser = {
           ...currentUser,
           isStreamer: true,
           streamerStatus: "approved"
         }
-        localStorage.setItem("streamverse_user", JSON.stringify(approvedUser))
+        localStorage.setItem("prysymtv_user", JSON.stringify(approvedUser))
         setUser(approvedUser)
       }
     }, 3000)

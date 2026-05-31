@@ -4,6 +4,8 @@ import { Users } from "lucide-react"
 import Link from "next/link"
 
 interface LiveCardProps {
+  id: string
+  slug?: string
   title: string
   thumbnail: string
   streamer: string
@@ -12,9 +14,9 @@ interface LiveCardProps {
   avatar?: string
 }
 
-export function LiveCard({ title, thumbnail, streamer, viewers, category, avatar }: LiveCardProps) {
+export function LiveCard({ id, slug, title, thumbnail, streamer, viewers, category, avatar }: LiveCardProps) {
   return (
-    <Link href="/live/stream">
+    <Link href={`/live/${slug ?? id}`}>
       <div className="group flex-shrink-0 w-[300px] md:w-[340px] cursor-pointer">
         {/* Thumbnail */}
         <div className="relative aspect-video rounded-lg overflow-hidden bg-muted mb-2">

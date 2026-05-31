@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import { cn } from "@/lib/utils"
 
 const categories = [
@@ -24,6 +23,7 @@ export function CategoryTabs({ activeCategory, onCategoryChange }: CategoryTabsP
         {categories.map((category) => (
           <button
             key={category.id}
+            type="button"
             onClick={() => onCategoryChange(category.id)}
             className={cn(
               "px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all",

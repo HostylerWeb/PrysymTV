@@ -11,14 +11,9 @@ interface CoinsModalProps {
   onPurchase: (amount: number) => void
 }
 
-const coinPackages = [
-  { id: "1", coins: 100, price: "$0.99", popular: false, bonus: 0 },
-  { id: "2", coins: 500, price: "$4.99", popular: false, bonus: 0 },
-  { id: "3", coins: 1200, price: "$9.99", popular: true, bonus: 200 },
-  { id: "4", coins: 2500, price: "$19.99", popular: false, bonus: 500 },
-  { id: "5", coins: 6500, price: "$49.99", popular: false, bonus: 1500 },
-  { id: "6", coins: 14000, price: "$99.99", popular: false, bonus: 4000 },
-]
+import { COIN_PACKAGES } from "@/lib/mock-data"
+
+const coinPackages = COIN_PACKAGES
 
 export function CoinsModal({ isOpen, onClose, currentCoins, onPurchase }: CoinsModalProps) {
   if (!isOpen) return null
@@ -74,7 +69,7 @@ export function CoinsModal({ isOpen, onClose, currentCoins, onPurchase }: CoinsM
             {coinPackages.map((pkg) => (
               <button
                 key={pkg.id}
-                onClick={() => onPurchase(pkg.coins + pkg.bonus)}
+                onClick={() => onPurchase(pkg.coins + (pkg.bonus ?? 0))}
                 className={cn(
                   "relative flex flex-col items-center p-4 rounded-xl border-2 transition-all hover:scale-[1.02]",
                   pkg.popular 
@@ -95,7 +90,7 @@ export function CoinsModal({ isOpen, onClose, currentCoins, onPurchase }: CoinsM
                   )}
                 </div>
                 <span className="text-sm font-semibold text-foreground mt-1">{pkg.price}</span>
-                {pkg.bonus > 0 && (
+                {"bonus" in pkg && pkg.bonus > 0 && (
                   <span className="text-xs text-primary mt-1">
                     {Math.round((pkg.bonus / pkg.coins) * 100)}% Bonus!
                   </span>

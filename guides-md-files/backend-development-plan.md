@@ -1,6 +1,8 @@
 # Master Backend Development Plan: 0 to 100%
 
-This document serves as the ultimate blueprint and checklist for building the PrysymTV/StreamVerse backend. It details the architecture, database schema, API endpoints, and a week-by-week implementation checklist.
+This document serves as the ultimate blueprint and checklist for building the **Prysym TV** backend. It details the architecture, database schema, API endpoints, and a week-by-week implementation checklist. The Next.js frontend (`/app`) is **UI-complete** with mock data in `lib/mock-data.ts` plus a few inline mocks on `/profile` — this plan is aligned to every screen, modal, and settings panel the UI exposes.
+
+**Repository:** [github.com/HostylerWeb/PrysymTV](https://github.com/HostylerWeb/PrysymTV)
 
 ---
 
@@ -29,43 +31,109 @@ This document serves as the ultimate blueprint and checklist for building the Pr
 - `email` (String, Unique)
 - `password_hash` (String)
 - `avatar_url` (String)
+- `banner_url` (String) — Creator channel banner (`/banners/{user_id}.jpg`)
 - `bio` (Text)
+- `role` (Enum: 'user', 'creator', 'admin') — Required for admin panel guards
 - `is_verified` (Boolean)
+- `is_banned` (Boolean, default false)
 - `streamer_status` (Enum: 'none', 'pending', 'approved', 'rejected')
 - `coins_balance` (Integer)
+- `premium_tier` (Enum: 'none', 'basic', 'premium', 'ultimate', nullable)
+- `premium_expires_at` (Timestamp, nullable)
 - `created_at` (Timestamp)
 - `updated_at` (Timestamp)
 
-### `videos` (Shorts & Movies)
+### `streamer_applications`
+- `id` (UUID, PK)
+- `user_id` (UUID, FK -> users.id, Unique)
+- `description` (Text)
+- `id_document_url` (String) — R2 path to uploaded ID photo
+- `status` (Enum: 'pending', 'approved', 'rejected')
+- `reviewed_by` (UUID, FK -> users.id, Nullable)
+- `review_notes` (Text, Nullable)
+- `created_at` (Timestamp)
+- `updated_at` (Timestamp)
+
+### `user_social_links`
+- `id` (UUID, PK)
+- `user_id` (UUID, FK -> users.id)
+- `label` (String) — e.g. Website, Twitter
+- `url` (String)
+- `sort_order` (Integer)
+
+### `user_notification_preferences`
+- `user_id` (UUID, FK -> users.id)
+- `type` (Enum: 'follow', 'like', 'comment', 'gift', 'live', 'upload', 'system')
+- `enabled` (Boolean, default true)
+- PK: (`user_id`, `type`)
+
+### `gift_catalog` (Platform-configured gifts — must match frontend)
+- `id` (String, PK) — heart, star, fire, diamond, lion, universe
+- `name` (String)
+- `coin_cost` (Integer)
+- `animation_key` (String)
+- `is_active` (Boolean)
+
+### `videos` (Shorts, Long-form & Movies)
 - `id` (UUID, PK)
 - `creator_id` (UUID, FK -> users.id)
-- `type` (Enum: 'short', 'movie')
+- `type` (Enum: 'short', 'video', 'movie', 'series_episode')
 - `title` (String)
 - `description` (Text)
+- `category` (String) — Genre or category (e.g., Action, Comedy)
+- `tags` (Array of Strings)
 - `thumbnail_url` (String)
 - `hls_master_url` (String)
 - `duration_seconds` (Integer)
-- `visibility` (Enum: 'public', 'private', 'unlisted')
+- `release_year` (Integer, Nullable) — Movies
+- `age_rating` (String, Nullable) — PG-13, R, etc.
+- `tagline` (String, Nullable)
+- `director` (String, Nullable)
+- `writers` (Array of Strings, Nullable)
+- `visibility` (Enum: 'public', 'private', 'unlisted', 'subscriber_only')
 - `status` (Enum: 'processing', 'ready', 'failed')
 - `views_count` (Integer)
 - `likes_count` (Integer)
 - `comments_count` (Integer)
 - `created_at` (Timestamp)
 
-### `podcasts` (Audio content)
+### `video_cast`
+- `id` (UUID, PK)
+- `video_id` (UUID, FK -> videos.id)
+- `name` (String)
+- `role` (String)
+- `image_url` (String, Nullable)
+- `sort_order` (Integer)
+
+### `podcast_shows`
 - `id` (UUID, PK)
 - `creator_id` (UUID, FK -> users.id)
 - `title` (String)
 - `description` (Text)
-- `cover_url` (String) — Cover image for the podcast
+- `cover_url` (String)
+- `category` (String)
+- `followers_count` (Integer)
+- `visibility` (Enum: 'public', 'private', 'unlisted')
+- `created_at` (Timestamp)
+
+### `podcast_episodes`
+- `id` (UUID, PK)
+- `show_id` (UUID, FK -> podcast_shows.id)
+- `creator_id` (UUID, FK -> users.id)
+- `title` (String)
+- `description` (Text)
+- `cover_url` (String, Nullable)
 - `audio_url` (String) — HLS or processed audio URL in R2
 - `duration_seconds` (Integer)
-- `category` (String)
 - `visibility` (Enum: 'public', 'private', 'unlisted')
 - `status` (Enum: 'processing', 'ready', 'failed')
 - `plays_count` (Integer)
 - `likes_count` (Integer)
+- `published_at` (Timestamp)
 - `created_at` (Timestamp)
+
+### `podcasts` (DEPRECATED — use podcast_shows + podcast_episodes)
+- Kept for migration only. New code should use the split model above.
 
 ### `streams` (Livestreams)
 - `id` (UUID, PK)
@@ -73,8 +141,11 @@ This document serves as the ultimate blueprint and checklist for building the Pr
 - `title` (String)
 - `category` (String)
 - `status` (Enum: 'scheduled', 'live', 'ended')
+- `thumbnail_url` (String, Nullable)
+- `hls_playback_url` (String, Nullable) — LL-HLS output from MediaMTX
 - `viewer_count` (Integer)
 - `temporary_stream_token` (String, nullable)
+- `scheduled_at` (Timestamp, Nullable)
 - `started_at` (Timestamp, nullable)
 - `ended_at` (Timestamp, nullable)
 
@@ -131,22 +202,62 @@ This document serves as the ultimate blueprint and checklist for building the Pr
 - `used` (Boolean)
 - `created_at` (Timestamp)
 
-### `saved_videos` (User Watchlist)
-- `user_id` (UUID, FK -> users.id)
-- `video_id` (UUID, FK -> videos.id)
+### `playlists`
+- `id` (UUID, PK)
+- `creator_id` (UUID, FK -> users.id)
+- `title` (String)
+- `description` (Text, Nullable)
+- `cover_url` (String, Nullable)
+- `type` (Enum: 'video', 'podcast', 'mixed')
+- `visibility` (Enum: 'public', 'private', 'unlisted')
 - `created_at` (Timestamp)
-- PK: (`user_id`, `video_id`)
+- `updated_at` (Timestamp)
+
+### `playlist_items`
+- `id` (UUID, PK)
+- `playlist_id` (UUID, FK -> playlists.id)
+- `item_type` (Enum: 'video', 'podcast')
+- `item_id` (UUID) — FK to either videos.id or podcasts.id
+- `sort_order` (Integer)
+- `added_at` (Timestamp)
+
+### `stream_messages` (VOD Chat Replays)
+- `id` (UUID, PK)
+- `stream_id` (UUID, FK -> streams.id)
+- `user_id` (UUID, FK -> users.id)
+- `message` (Text)
+- `timestamp_offset_ms` (Integer) — Milliseconds from stream start (for VOD sync)
+- `created_at` (Timestamp)
+
+### `watch_history` (Resume Playback & Recommendations)
+- `user_id` (UUID, FK -> users.id)
+- `content_type` (Enum: 'video', 'podcast')
+- `content_id` (UUID)
+- `progress_seconds` (Integer) — Where the user left off
+- `completed` (Boolean)
+- `updated_at` (Timestamp)
+- PK: (`user_id`, `content_type`, `content_id`)
 
 ### `likes`
 - `user_id` (UUID, FK -> users.id)
-- `video_id` (UUID, FK -> videos.id)
+- `target_type` (Enum: 'video', 'podcast_episode', 'comment')
+- `target_id` (UUID)
 - `created_at` (Timestamp)
-- PK: (`user_id`, `video_id`)
+- PK: (`user_id`, `target_type`, `target_id`)
+
+### `saved_items` (User Watchlist — replaces video-only saved_videos)
+- `user_id` (UUID, FK -> users.id)
+- `item_type` (Enum: 'video', 'movie', 'podcast_episode', 'live', 'playlist')
+- `item_id` (UUID)
+- `created_at` (Timestamp)
+- PK: (`user_id`, `item_type`, `item_id`)
+
+### `saved_videos` (Legacy — migrate to saved_items)
 
 ### `notifications`
 - `id` (UUID, PK)
 - `user_id` (UUID, FK -> users.id)
-- `type` (Enum: 'follow', 'like', 'comment', 'gift', 'system')
+- `type` (Enum: 'follow', 'like', 'comment', 'gift', 'live', 'upload', 'system')
 - `actor_id` (UUID, FK -> users.id, Nullable)
 - `reference_id` (UUID) — video_id, stream_id, etc.
 - `message` (String)
@@ -214,6 +325,7 @@ Your R2 bucket will have the following directory structure:
 - `/podcasts/raw/{podcast_id}.mp3`
 - `/podcasts/processed/{podcast_id}/master.m3u8`
 - `/podcasts/covers/{podcast_id}.jpg`
+- `/playlists/covers/{playlist_id}.jpg`
 - `/streams/recordings/{stream_id}/*.m3u8`
 - `/ads/banners/{campaign_id}.jpg`
 - `/ads/videos/{campaign_id}.mp4`
@@ -229,20 +341,34 @@ All endpoints prefixed with `/api/v1/`
 - `POST /login` — Body: `{ email, password }`. Returns JWT. Refresh token set as HttpOnly cookie (web) or returned in body (mobile).
 - `POST /refresh` — Uses refresh token to issue a new access token (15 min TTL).
 - `POST /oauth/google` — Body: `{ id_token }`. Backend verifies with Google public keys. Creates/links account.
-- `POST /oauth/apple` — Body: `{ identity_token, authorization_code }`. Backend verifies with Apple.
+- `POST /oauth/apple` — Body: `{ identity_token, authorization_code }`. Backend verifies with Apple. (Frontend shows Google + Apple buttons — no GitHub OAuth.)
 - `POST /logout` — Clears refresh token cookie, invalidates token in Redis blacklist.
 - `POST /forgot-password` — Body: `{ email }`. Generates a hashed token, saves to `password_resets`, sends email via Resend/SendGrid.
 - `POST /reset-password` — Body: `{ token, new_password }`. Validates token against DB, hashes new password with Argon2.
 
 ### Users & Creators (`/users`)
 - `GET /me` — Returns full authenticated user profile including coins_balance, follower/following counts.
-- `PUT /me` — Body: `{ username?, bio?, avatar? }`. Avatar is uploaded to R2 `/avatars/`.
+- `PUT /me` — Body: `{ username?, bio?, avatar?, banner? }`. Avatar/banner uploaded to R2.
+- `GET /me/notification-preferences` — Returns toggles for follow, like, comment, live, upload, gift, system.
+- `PUT /me/notification-preferences` — Body: `{ type, enabled }`.
+- `PUT /me/social-links` — Replace creator external links (Website, Twitter, etc.).
 - `GET /:username` — Public creator profile: bio, avatar, follower count, video count, is_live status.
 - `POST /:username/follow` — Creates a row in `follows` table. Sends a notification to the creator.
 - `DELETE /:username/follow` — Removes the follow relationship.
-- `POST /apply-streamer` — Sets `streamer_status` to 'pending'. Admin reviews in dashboard.
+- `POST /apply-streamer` — Body: `{ description, id_document }`. Creates `streamer_applications` row; sets `streamer_status` to 'pending'.
 - `GET /me/notifications` — Paginated list of notifications for the authenticated user.
 - `PUT /me/notifications/:id/read` — Mark a notification as read.
+- `PUT /me/notifications/read-all` — Mark all as read.
+- `DELETE /me/notifications` — Clear all notifications (frontend has "Clear all").
+- `GET /me/videos` — Paginated videos uploaded by the authenticated user (`Profile` → Videos tab).
+- `GET /me/saved` — Paginated watchlist from `saved_items` (`Profile` → Saved tab).
+- `GET /me/liked` — Paginated liked content from polymorphic `likes` (`Profile` → Liked tab).
+- `GET /:username/videos` — Public uploads for creator channel (Videos tab on `/creator/[slug]`).
+- `GET /:username/playlists` — Public playlists for creator channel (Playlists tab).
+
+### Home & Aggregated Feeds (`/feed`)
+- `GET /home` — **Primary home payload** for `/`: `live_now[]`, `continue_watching[]`, `featured_live`, `trending[]`, `new_releases[]`, optional `stories_placeholder` (UI mock only in V1). Reduces client-side waterfall requests.
+- `GET /trending` — Optional dedicated trending row if not fully covered by `/home`.
 
 ### Videos (Shorts & Movies) (`/videos`)
 - `POST /upload/init` — Returns a signed TUS upload URL pointing to R2. Body: `{ type: 'short'|'movie', title, description }`.
@@ -259,26 +385,52 @@ All endpoints prefixed with `/api/v1/`
 - `GET /:id/comments` — Paginated. Top-level comments with nested replies.
 - `POST /:id/report` — Body: `{ reason, description? }`. Creates a `reports` row for admin review.
 
+### Playlists (`/playlists`)
+- `POST /` — Create a new playlist. Body: `{ title, description, type, visibility }`.
+- `PUT /:id/cover` — Upload a cover image for the playlist.
+- `GET /:id` — Get playlist metadata and its paginated items.
+- `POST /:id/items` — Add an item to the playlist. Body: `{ item_type, item_id, sort_order }`.
+- `DELETE /:id/items/:item_id` — Remove an item from the playlist.
+- `POST /:id/reorder` — Update sort order of items in bulk.
+
+### Watch History (`/history`)
+- `GET /` — Paginated list of user's recently watched videos and podcasts.
+- `POST /progress` — Sync playback progress. Body: `{ content_type, content_id, progress_seconds, completed }`.
+- `DELETE /:content_type/:content_id` — Remove specific item from history.
+- `DELETE /clear` — Clear all watch history.
+
+### Search & Discovery (`/search`)
+- `GET /` — Global search. Query params: `?q=xxx&type=all|videos|podcasts|creators&page=1`. Uses Typesense.
+- `GET /suggest` — Fast autocomplete endpoint for the search bar (returns top 3 matches per category).
+
 ### Podcasts (`/podcasts`)
-- `POST /upload/init` — Returns a signed TUS upload URL pointing to R2 for audio upload. Body: `{ title, description, category }`.
-- `POST /upload/complete` — Called after TUS finishes. Creates a `podcasts` row with `status: 'processing'`, dispatches a BullMQ job for audio encoding/processing.
-- `POST /:id/cover` — Upload a cover image for the podcast.
-- `GET /feed` — Paginated list of podcasts. Query params: `?category=Tech&sort=popular`.
-- `GET /trending` — Top podcasts based on plays_count and recency.
-- `GET /:id` — Returns full podcast metadata, audio URL, like count, and creator info.
-- `POST /:id/play` — Logs a play event and increments `podcasts.plays_count`.
-- `POST /:id/like` — Toggles like for the podcast.
+- `GET /shows` — Paginated podcast shows (frontend `/podcasts` trending grid).
+- `GET /shows/:id` — Show metadata + episode list (frontend `/podcast/[id]` can map to episode; show detail optional).
+- `GET /shows/featured` — Hero banner on podcasts page.
+- `POST /shows` — Create podcast show (creator).
+- `POST /episodes/upload/init` — TUS upload for audio.
+- `POST /episodes/upload/complete` — Queue encoding job.
+- `GET /episodes/feed` — Latest episodes across platform.
+- `GET /episodes/:id` — Full episode metadata + audio URL.
+- `POST /episodes/:id/play` — Log play + increment plays_count.
+- `POST /episodes/:id/like` — Toggle like.
 
 ### Livestreams (`/streams`)
-- `POST /init` — Generates a temporary RTMP stream key (expires in 5 min). Only for approved streamers.
-- `POST /webhooks/publish` — Called by MediaMTX when OBS connects. Validates the stream key. Returns 200 to allow or 403 to reject.
-- `POST /webhooks/done` — Called by MediaMTX when stream ends. Sets `streams.status` to 'ended', clears viewer count in Redis.
-- `GET /live` — Lists all active streams sorted by `viewer_count` DESC. Includes creator info and thumbnail.
-- `GET /:username` — Returns the active stream for a specific creator (or 404 if offline).
+- `POST /init` — Generates a temporary RTMP stream key (expires in 5 min). Only for approved streamers. (Frontend: `/go-live`.)
+- `POST /webhooks/publish` — MediaMTX on_publish webhook.
+- `POST /webhooks/done` — MediaMTX on_publish_done webhook.
+- `GET /live` — All active streams sorted by viewer_count DESC.
+- `GET /creator/:username/live` — Active stream for creator (avoid `/:id` vs `/:username` route collision).
+- `GET /:id` — Stream metadata + HLS playback URL.
+- `GET /:id/chat` — Paginated chat replay for VOD recordings.
 
 ### Billing & Coins (`/billing`)
-- `GET /products` — Lists coin packages: `[{ id, coins: 100, price_usd: 0.99 }, { coins: 500, price_usd: 3.99 }, ...]`
-- `POST /stripe/create-checkout` — Creates a Stripe Checkout Session. Returns `{ checkout_url }` for redirect.
+- `GET /products` — Lists coin packages (must match frontend: 100/$0.99, 500/$3.99, 1000/$6.99, 5000/$29.99).
+- `GET /gifts/catalog` — Returns active gifts from `gift_catalog` (Heart=1, Star=10, Fire=50, Diamond=100, Lion=500, Universe=1000).
+- `POST /stripe/create-checkout` — Stripe Checkout for coins OR platform premium. Body: `{ product_type: 'coins'|'premium', package_id?, tier? }`. Returns `{ checkout_url }` for redirect (`CoinsModal`, `/premium`, profile settings Premium panel).
+- `POST /subscriptions/create` — Body: `{ creator_id?, tier }`. Creator subscription or platform premium.
+- `DELETE /subscriptions/:id` — Cancel subscription.
+- `GET /subscriptions/me` — Active subscriptions for user.
 - `POST /stripe/webhook` — Stripe sends `checkout.session.completed` event. Backend adds coins to user's balance in an ACID transaction.
 - `POST /apple/verify-receipt` — Body: `{ receipt_data }`. Validates with Apple servers. Credits coins.
 - `POST /google/verify-receipt` — Body: `{ purchase_token, product_id }`. Validates with Google Play. Credits coins.
@@ -323,6 +475,7 @@ All endpoints prefixed with `/api/v1/`
 - [ ] **Google Play Console:** Enroll for Android IAP credentials.
 - [ ] **Typesense:** Spin up a Docker container or use Typesense Cloud.
 - [ ] **MediaMTX:** Configure `mediamtx.yml` for HLS generation and Auth webhooks.
+- [ ] **Resend or SendGrid:** Transactional email for password reset links and streamer application status.
 
 ---
 
@@ -353,6 +506,8 @@ All endpoints prefixed with `/api/v1/`
 - [ ] Build User Profile endpoints (GET, Update, Upload Avatar)
   - [ ] Avatar upload to R2 `/avatars/{user_id}.jpg`
   - [ ] Banner upload to R2 `/banners/{user_id}.jpg`
+  - [ ] `GET /me/videos`, `GET /me/saved`, `GET /me/liked` for profile tabs
+  - [ ] `PUT /me` wired to `EditProfileModal` (display name, bio)
 - [ ] Build Creator specific endpoints (Follow/Unfollow logic)
   - [ ] Compound unique constraint on `follows` (follower_id + following_id)
   - [ ] Send notification to the followed creator
@@ -396,6 +551,12 @@ All endpoints prefixed with `/api/v1/`
   - [ ] `POST /:id/save` — insert into `saved_videos` table (user's watchlist)
   - [ ] View tracking: increment `videos.views_count` + log to `analytics_events`
   - [ ] Prevent duplicate views from same user within 30 seconds (Redis check)
+- [ ] Implement Watch History & Playback Sync
+  - [ ] `POST /history/progress` — upsert into `watch_history` to save user's timestamp (useful for "Resume Watching" feature)
+- [ ] Implement Playlists API
+  - [ ] `POST /playlists` — create playlist (video/podcast)
+  - [ ] `POST /playlists/:id/items` — add items to playlist
+  - [ ] Connect Creator Profile Playlists tab to API
 - [ ] Implement Comment System (Nested comments/replies)
   - [ ] Top-level comments: `parent_id = NULL`
   - [ ] Replies: `parent_id = <parent_comment_id>`
@@ -436,7 +597,8 @@ All endpoints prefixed with `/api/v1/`
   - [ ] Validate message length (max 500 chars)
   - [ ] Rate limit: max 1 message per 2 seconds per user
   - [ ] Broadcast `{ username, avatar, message, timestamp }` to room
-  - [ ] Optionally persist last 100 messages in Redis for late joiners
+  - [ ] Persist message to `stream_messages` table asynchronously (with `timestamp_offset_ms`) for VOD chat replays
+  - [ ] Cache last 100 messages in Redis for immediate history delivery to late joiners
 - [ ] Setup Stripe Sandbox and Webhooks
   - [ ] Create Stripe products for coin packages (100, 500, 1000, 5000 coins)
   - [ ] Configure Stripe Webhook endpoint: `POST /billing/stripe/webhook`
@@ -581,6 +743,155 @@ We do NOT use Google AdSense. We run our own private ad network.
 - Special badge in live chat.
 - Access to subscriber-only streams (if creator enables it).
 - Price: Set by creator ($2.99 / $4.99 / $9.99 per month tiers).
+
+---
+
+## 11. FRONTEND ↔ BACKEND ROUTE MAP (UI-COMPLETE)
+
+The Next.js frontend is **100% UI-ready**. Primary mock source: `lib/mock-data.ts`. Additional inline mocks: `app/profile/page.tsx` (`userVideos`, `savedItems`, `watchHistory`).
+
+### 11.1 Profile settings sheet (in-app UX)
+
+Settings are **not standalone pages** in normal use. The gear on `/profile` opens `ProfileSettingsSheet` (stacked panels with back navigation). Legacy URLs redirect via `components/settings-redirect.tsx`:
+
+| URL (bookmark / deep link) | Opens on profile |
+|---|---|
+| `/profile?settings=notifications` | Notification toggles |
+| `/profile?settings=dashboard` | Creator analytics |
+| `/profile?settings=help` | FAQs + support links |
+| `/profile?settings=premium` | Platform subscription tiers |
+| `/profile?settings=history` | Watch history (play → `/watch/[id]`) |
+| `/profile?settings=go-live` | RTMP / OBS setup |
+| `/profile?settings=upload` | TUS upload flow |
+
+Same APIs as the table below; no separate page layouts required.
+
+### 11.2 Page routes
+
+| Frontend Route | Purpose | Primary API(s) |
+|---|---|---|
+| `/` | Home feed, ads, stories (mock), category tabs | `GET /feed/home`, `GET /ads/serve?placement=home_banner` |
+| `/shorts` | Vertical short feed + interstitial ads | `GET /videos/feed/shorts`, `GET /ads/serve?placement=shorts_interstitial` |
+| `/movies` | Movie catalog + hero | `GET /videos/feed/movies`, `GET /videos/feed/movies/featured` |
+| `/movie/[id]` | Movie detail + preroll ad + player | `GET /videos/:id`, `GET /ads/serve?placement=movie_preroll`, `POST /history/progress` |
+| `/watch`, `/watch/[id]` | Long-form video + comments + share | `GET /videos/:id`, `POST /:id/comments`, `POST /:id/like`, `POST /:id/save` |
+| `/live/[id]` | Live player + chat + gifts | Socket.IO, `GET /streams/:id`, `POST /billing/gifts/send` |
+| `/podcasts` | Podcast hub + mini player | `GET /podcasts/episodes/feed`, `GET /podcasts/shows` |
+| `/podcast/[id]` | Episode detail + audio | `GET /podcasts/episodes/:id`, `POST /episodes/:id/play` |
+| `/playlist/[id]` | Playlist detail | `GET /playlists/:id` |
+| `/creator/[slug]` | Public creator channel | `GET /users/:username`, `GET /:username/videos`, follow/subscribe, tabs |
+| `/profile` | Account, tabs, coins, **settings sheet** | `GET /me`, `GET /me/videos`, `GET /me/saved`, `GET /me/liked`, `GET /history` |
+| `/upload`, `/go-live`, `/history`, `/premium`, `/help`, `/settings/notifications`, `/creator/dashboard` | Redirect → `/profile?settings=*` | Same APIs as settings panels |
+| `/terms`, `/privacy`, `/cookies`, `/guidelines` | Static legal (no API V1) | — |
+
+### 11.3 Shared UI components → API wiring
+
+| Component | File | API(s) |
+|---|---|---|
+| `AuthModal` | `components/auth-modal.tsx` | `POST /auth/register`, `/login`, `/oauth/google`, `/oauth/apple`, `/forgot-password`, `/reset-password` |
+| `auth-context` | `contexts/auth-context.tsx` | JWT in memory + refresh; replace `localStorage` mock user with `GET /me` |
+| `EditProfileModal` | `components/edit-profile-modal.tsx` | `PUT /me` (display name, bio); avatar via presigned R2 upload |
+| `StreamerApplicationModal` | `components/streamer-application-modal.tsx` | `POST /users/apply-streamer` (multipart `id_document`) |
+| `ProfileSettingsSheet` | `components/profile-settings-sheet.tsx` | Panels map to APIs in 11.1 (notifications, dashboard, upload, go-live, etc.) |
+| `CoinsModal` | `components/coins-modal.tsx` | `GET /billing/products`, `POST /billing/stripe/create-checkout` |
+| `NotificationsModal` | `components/notifications-modal.tsx` | `GET /me/notifications`, read/clear endpoints |
+| `SearchModal` | `components/search-modal.tsx` | `GET /search`, `GET /search/suggest` |
+| `ReportModal` | `components/report-modal.tsx` | `POST /videos/:id/report` (+ stream/user variants) |
+| `ShareSheet` | `components/share-sheet.tsx` | `POST /analytics/track` with `event_type: 'share'` |
+| `AdBanner`, `AdInterstitial`, `AdPreroll` | `components/ad-*.tsx` | `GET /ads/serve`, `POST /ads/track/impression`, `POST /ads/track/click` |
+| `StoryViewer` + home stories row | `components/story-viewer.tsx` | **V1:** no API (Section 13) |
+| `login-prompt` | `components/login-prompt.tsx` | Opens `AuthModal` — no direct API |
+
+---
+
+## 12. ADDITIONAL IMPLEMENTATION WEEKS
+
+### Week 7: Podcasts, Playlists & Home Aggregation
+- [ ] Implement `podcast_shows` + `podcast_episodes` migrations (replace flat `podcasts`).
+- [ ] Build podcast show/episode CRUD and feeds.
+- [ ] Build `GET /feed/home` — aggregated rows for home page (live, continue watching, trending, new releases).
+- [ ] Wire `/podcasts`, `/podcast/[id]`, `/playlist/[id]` frontend to real APIs.
+- [ ] Index podcasts in Typesense.
+
+### Week 8: Ads, Premium & Notifications
+- [ ] Implement private ad network (`ad_campaigns`, serve + track endpoints).
+- [ ] Wire `AdBanner`, shorts interstitial, movie preroll to live campaigns.
+- [ ] Implement platform premium subscriptions (Stripe) for `/premium`.
+- [ ] Extend notification types (live, upload) + clear-all endpoint.
+- [ ] Wire `NotificationsModal` bell to real-time (Socket.IO or polling).
+
+### Week 9: Admin Panel + Creator Dashboard
+- [ ] Build separate Next.js admin app (Section 7).
+- [ ] Streamer application review UI → `streamer_applications` table.
+- [ ] Wire `/creator/dashboard` to `GET /analytics/creators/stats`.
+- [ ] Payout approval flow.
+
+### Week 10: Integration Hardening
+- [ ] Replace all `lib/mock-data.ts` imports with API client hooks.
+- [ ] HLS.js player integration (replace direct MP4 URLs).
+- [ ] Resume playback via `POST /history/progress` on all players.
+- [ ] E2E tests for auth, upload, live, gifts, ads.
+- [ ] Observability: Sentry, health checks, staging environment.
+
+---
+
+## 13. OUT OF SCOPE (V1) — DOCUMENTED DECISIONS
+
+These frontend UI elements exist but are **deferred** unless product decides otherwise:
+
+| Feature | Frontend state | Backend decision |
+|---|---|---|
+| Stories (Instagram-style) | Mock viewer on home | No schema in V1 — use live status + shorts instead |
+| Dislike button | `/watch/[id]` | Not in V1 — likes only |
+| Super Chat | Mentioned in CoinsModal | Defer — gifts cover live monetization |
+| Chromecast button | Header icon, no behavior | Client-side Cast SDK later |
+| Password reset OTP | AuthModal uses 6-digit code UI | **Use email link + token** (Section 4 Auth) — update AuthModal when API is ready |
+
+---
+
+## 14. INTEGRATION CHECKLIST (REPLACE MOCK DATA)
+
+### 14.1 Frontend foundation (do first)
+- [ ] Add `.env.local`: `NEXT_PUBLIC_API_URL=https://api.prysym.tv/api/v1` (or staging URL).
+- [ ] Create `lib/api-client.ts` — `fetch` wrapper, attach `Authorization: Bearer`, refresh on 401, typed errors.
+- [ ] Create `lib/api/` modules (e.g. `auth.ts`, `videos.ts`, `users.ts`) or React Query hooks.
+- [ ] Update `contexts/auth-context.tsx` — real login/logout/refresh; hydrate from `GET /me` on load.
+- [ ] Update `AuthModal` — wire forms to auth endpoints; align password reset with **email link** (not OTP-only).
+
+### 14.2 Replace `lib/mock-data.ts` consumers
+- [ ] `app/page.tsx` → `GET /feed/home`
+- [ ] `app/shorts/page.tsx` → `GET /videos/feed/shorts` + ad serve
+- [ ] `app/movies/page.tsx` → movie feeds
+- [ ] `app/watch/[id]/page.tsx`, `app/movie/[id]/page.tsx` → `GET /videos/:id`, HLS player, history progress
+- [ ] `app/live/[id]/page.tsx` → `GET /streams/:id`, Socket.IO chat, gifts
+- [ ] `app/creator/[slug]/page.tsx` → `GET /users/:username`, channel tabs
+- [ ] `app/podcasts/page.tsx`, `app/podcast/[id]/page.tsx`, `app/playlist/[id]/page.tsx`
+- [ ] `components/featured-live.tsx`, `content-row`, cards — pass API data from parents
+- [ ] Ad components → live `ad_campaigns`
+
+### 14.3 Profile & settings
+- [ ] `app/profile/page.tsx` — remove inline `userVideos` / `savedItems` / `watchHistory` mocks; use `GET /me`, `GET /me/videos`, `GET /me/saved`, `GET /me/liked`, `GET /history`
+- [ ] `ProfileSettingsSheet` — `GET/PUT /me/notification-preferences`; dashboard → `GET /analytics/creators/stats`; upload → TUS; go-live → `POST /streams/init`; premium → Stripe
+- [ ] `EditProfileModal` → `PUT /me`
+- [ ] `StreamerApplicationModal` → `POST /users/apply-streamer`
+- [ ] Creator subscribe on `/creator/[slug]` — require auth + `POST /subscriptions/create` or follow endpoints
+
+### 14.4 Players & realtime
+- [ ] Integrate **HLS.js** (or Video.js) — replace direct MP4 `videoUrl` from mocks.
+- [ ] `POST /history/progress` on interval during playback (watch, movie, podcast).
+- [ ] Socket.IO client for `/live/[id]` chat and gift animations.
+
+### 14.5 Monetization & admin
+- [ ] `CoinsModal` → Stripe checkout + webhook balance update.
+- [ ] Gifts → `GET /billing/gifts/catalog` + `POST /billing/gifts/send`.
+- [ ] Premium → subscription create + webhook.
+- [ ] Admin panel (separate app) → all `/admin/*` routes.
+
+### 14.6 Environment & deployment
+- [ ] Frontend: Vercel (or similar) — env vars for API URL.
+- [ ] Backend: Docker on VPS / Railway / Fly — Postgres, Redis, MediaMTX, workers.
+- [ ] CORS: allow frontend origin on API.
+- [ ] GitHub: [HostylerWeb/PrysymTV](https://github.com/HostylerWeb/PrysymTV) — frontend repo; recommend monorepo or `prysym-api` repo for NestJS.
 
 ---
 **END OF PLAN**

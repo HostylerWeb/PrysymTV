@@ -4,6 +4,7 @@ import { Play, Star } from "lucide-react"
 import Link from "next/link"
 
 interface MovieCardProps {
+  id: string
   title: string
   poster: string
   year: string
@@ -11,9 +12,9 @@ interface MovieCardProps {
   genre: string
 }
 
-export function MovieCard({ title, poster, year, rating, genre }: MovieCardProps) {
+export function MovieCard({ id, title, poster, year, rating, genre }: MovieCardProps) {
   return (
-    <Link href="/watch">
+    <Link href={`/movie/${id}`}>
       <div className="group flex-shrink-0 w-[140px] md:w-[160px] cursor-pointer">
         {/* Poster */}
         <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-muted mb-2">

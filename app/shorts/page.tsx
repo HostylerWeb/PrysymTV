@@ -24,79 +24,11 @@ import { AuthModal } from "@/components/auth-modal"
 import { Header } from "@/components/header"
 import { useAuth } from "@/contexts/auth-context"
 
+import { AdInterstitial } from "@/components/ad-interstitial"
+import { mockShorts } from "@/lib/mock-data"
+
 // Sample shorts data
-const shortsData = [
-  {
-    id: 1,
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-    username: "@gaming_pro",
-    userAvatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
-    caption: "Epic gaming moment! This clutch was insane #gaming #clutch #viral",
-    likes: "1.2M",
-    likesCount: 1200000,
-    comments: "45.2K",
-    shares: "12.5K",
-    saves: "89.3K",
-    music: "Original Sound - gaming_pro",
-    isFollowing: false,
-  },
-  {
-    id: 2,
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-    username: "@travel_vibes",
-    userAvatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop",
-    caption: "Paradise found! The most beautiful sunset I have ever seen #travel #sunset #paradise",
-    likes: "856K",
-    likesCount: 856000,
-    comments: "23.1K",
-    shares: "8.7K",
-    saves: "124K",
-    music: "Sunset Lover - Petit Biscuit",
-    isFollowing: true,
-  },
-  {
-    id: 3,
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-    username: "@cooking_master",
-    userAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop",
-    caption: "Easy 5 min recipe that will blow your mind! Link in bio #cooking #recipe #foodie",
-    likes: "2.3M",
-    likesCount: 2300000,
-    comments: "67.8K",
-    shares: "34.2K",
-    saves: "456K",
-    music: "Cooking Time - Chef Beats",
-    isFollowing: false,
-  },
-  {
-    id: 4,
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
-    username: "@fitness_guru",
-    userAvatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop",
-    caption: "Transform your body in 30 days with this workout! #fitness #workout #motivation",
-    likes: "567K",
-    likesCount: 567000,
-    comments: "12.4K",
-    shares: "5.6K",
-    saves: "78.9K",
-    music: "Workout Mix - DJ Pump",
-    isFollowing: false,
-  },
-  {
-    id: 5,
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
-    username: "@comedy_central",
-    userAvatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop",
-    caption: "When your mom says dinner is ready but it is not #relatable #funny #comedy",
-    likes: "4.5M",
-    likesCount: 4500000,
-    comments: "123K",
-    shares: "89.2K",
-    saves: "234K",
-    music: "Funny Sound - Meme Lord",
-    isFollowing: true,
-  },
-]
+const shortsData = mockShorts
 
 interface ShortVideoProps {
   short: typeof shortsData[0]
@@ -225,7 +157,7 @@ function ShortVideo({
       <div className="absolute right-3 bottom-32 flex flex-col items-center gap-5 z-10">
         {/* Profile */}
         <div className="flex flex-col items-center gap-1">
-          <Link href={`/creator/${short.username.replace('@', '')}`}>
+          <Link href={`/creator/${short.userSlug}`}>
             <div className="relative">
               <img
                 src={short.userAvatar}
@@ -361,6 +293,8 @@ export default function ShortsPage() {
   const [activeTab, setActiveTab] = useState("shorts")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const [showAd, setShowAd] = useState(false)
+  const shortsViewCount = useRef(0)
 
   const handleScroll = () => {
     if (containerRef.current) {
@@ -369,6 +303,10 @@ export default function ShortsPage() {
       const newIndex = Math.round(scrollTop / height)
       if (newIndex !== activeIndex && newIndex >= 0 && newIndex < shortsData.length) {
         setActiveIndex(newIndex)
+        shortsViewCount.current += 1
+        if (shortsViewCount.current > 0 && shortsViewCount.current % 5 === 0) {
+          setShowAd(true)
+        }
       }
     }
   }
@@ -695,6 +633,7 @@ export default function ShortsPage() {
 
       {/* Auth Modal */}
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      {showAd && <AdInterstitial onClose={() => setShowAd(false)} />}
 
       <style jsx global>{`
         @keyframes spin-slow {

@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import Link from "next/link"
 
 interface VideoCardProps {
+  id: string
   title: string
   thumbnail: string
   duration?: string
@@ -17,6 +18,7 @@ interface VideoCardProps {
 }
 
 export function VideoCard({
+  id,
   title,
   thumbnail,
   duration,
@@ -28,7 +30,7 @@ export function VideoCard({
   progress,
 }: VideoCardProps) {
   return (
-    <Link href="/watch">
+    <Link href={type === "movie" ? `/movie/${id}` : isLive ? `/live/${id}` : `/watch/${id}`}>
       <div className="group flex-shrink-0 w-[280px] md:w-[320px] cursor-pointer">
         {/* Thumbnail */}
         <div className="relative aspect-video rounded-lg overflow-hidden bg-muted mb-2">
