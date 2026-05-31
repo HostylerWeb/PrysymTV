@@ -1,0 +1,684 @@
+// Prysym TV — full PostgreSQL schema (see guides-md-files/backend-development-plan.md)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  user
+  creator
+  admin
+}
+
+enum StreamerStatus {
+  none
+  pending
+  approved
+  rejected
+}
+
+enum PremiumTier {
+  none
+  basic
+  premium
+  ultimate
+}
+
+enum ApplicationStatus {
+  pending
+  approved
+  rejected
+}
+
+enum NotificationPrefType {
+  follow
+  like
+  comment
+  gift
+  live
+  upload
+  system
+}
+
+enum VideoType {
+  short
+  video
+  movie
+  series_episode
+}
+
+enum Visibility {
+  public
+  private
+  unlisted
+  subscriber_only
+}
+
+enum ContentStatus {
+  processing
+  ready
+  failed
+}
+
+enum StreamStatus {
+  scheduled
+  live
+  ended
+}
+
+enum PlaylistType {
+  video
+  podcast
+  mixed
+}
+
+enum PlaylistItemType {
+  video
+  podcast_episode
+}
+
+enum WatchContentType {
+  video
+  podcast_episode
+}
+
+enum LikeTargetType {
+  video
+  podcast_episode
+  comment
+}
+
+enum SavedItemType {
+  video
+  movie
+  podcast_episode
+  live
+  playlist
+}
+
+enum NotificationType {
+  follow
+  like
+  comment
+  gift
+  live
+  upload
+  system
+}
+
+enum ReportTargetType {
+  video
+  comment
+  stream
+  user
+}
+
+enum ReportReason {
+  spam
+  nudity
+  violence
+  harassment
+  other
+}
+
+enum ReportStatus {
+  pending
+  reviewed
+  actioned
+  dismissed
+}
+
+enum AdPlacement {
+  home_banner
+  shorts_interstitial
+  movie_preroll
+}
+
+enum AdCampaignStatus {
+  draft
+  active
+  paused
+  completed
+}
+
+enum AnalyticsEventType {
+  view
+  ad_impression
+  ad_click
+  watch_time
+  share
+}
+
+enum TransactionType {
+  purchase_coins
+  subscription
+  payout
+}
+
+enum PaymentProvider {
+  stripe
+  apple
+  google
+}
+
+enum TransactionStatus {
+  pending
+  completed
+  failed
+  refunded
+}
+
+enum SubscriptionTier {
+  basic
+  premium
+}
+
+enum SubscriptionStatus {
+  active
+  cancelled
+  expired
+}
+
+enum PayoutMethod {
+  paypal
+  bank_transfer
+  crypto
+}
+
+enum PayoutStatus {
+  requested
+  processing
+  completed
+  rejected
+}
+
+model User {
+  id                String         @id @default(uuid()) @db.Uuid
+  username          String         @unique
+  email             String         @unique
+  passwordHash      String?        @map("password_hash")
+  displayName       String?        @map("display_name")
+  avatarUrl         String?        @map("avatar_url")
+  bannerUrl         String?        @map("banner_url")
+  bio               String?
+  role              UserRole       @default(user)
+  isVerified        Boolean        @default(false) @map("is_verified")
+  isBanned          Boolean        @default(false) @map("is_banned")
+  streamerStatus    StreamerStatus @default(none) @map("streamer_status")
+  coinsBalance      Int            @default(0) @map("coins_balance")
+  premiumTier       PremiumTier    @default(none) @map("premium_tier")
+  premiumExpiresAt  DateTime?      @map("premium_expires_at")
+  googleId          String?        @unique @map("google_id")
+  appleId           String?        @unique @map("apple_id")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  streamerApplication   StreamerApplication?
+  socialLinks           UserSocialLink[]
+  notificationPrefs     UserNotificationPreference[]
+  refreshSessions       RefreshSession[]
+  passwordResets        PasswordReset[]
+  videos                Video[]
+  podcastShows          PodcastShow[]
+  podcastEpisodes       PodcastEpisode[]
+  streams               Stream[]
+  playlists             Playlist[]
+  comments              Comment[]
+  giftsSent             Gift[]              @relation("GiftsSent")
+  giftsReceived         Gift[]              @relation("GiftsReceived")
+  transactions          Transaction[]
+  subscriptionsAsSub    Subscription[]      @relation("Subscriber")
+  subscriptionsAsCreator Subscription[]     @relation("CreatorSub")
+  followers             Follow[]            @relation("Following")
+  following             Follow[]            @relation("Follower")
+  likes                 Like[]
+  savedItems            SavedItem[]
+  watchHistory          WatchHistory[]
+  notifications         Notification[]      @relation("NotificationRecipient")
+  notificationsActed    Notification[]      @relation("NotificationActor")
+  reportsFiled          Report[]            @relation("Reporter")
+  reportsReviewed       Report[]            @relation("Reviewer")
+  streamMessages        StreamMessage[]
+  creatorPayouts        CreatorPayout[]     @relation("CreatorPayouts")
+  payoutsProcessed      CreatorPayout[]     @relation("PayoutProcessor")
+  applicationsReviewed  StreamerApplication[] @relation("ApplicationReviewer")
+
+  @@map("users")
+}
+
+model RefreshSession {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_sessions")
+}
+
+model StreamerApplication {
+  id            String            @id @default(uuid()) @db.Uuid
+  userId        String            @unique @map("user_id") @db.Uuid
+  description   String
+  idDocumentUrl String?           @map("id_document_url")
+  status        ApplicationStatus @default(pending)
+  reviewedById  String?           @map("reviewed_by") @db.Uuid
+  reviewNotes   String?           @map("review_notes")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy    User?             @relation("ApplicationReviewer", fields: [reviewedById], references: [id])
+
+  @@map("streamer_applications")
+}
+
+model UserSocialLink {
+  id        String @id @default(uuid()) @db.Uuid
+  userId    String @map("user_id") @db.Uuid
+  label     String
+  url       String
+  sortOrder Int    @default(0) @map("sort_order")
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_social_links")
+}
+
+model UserNotificationPreference {
+  userId  String               @map("user_id") @db.Uuid
+  type    NotificationPrefType
+  enabled Boolean              @default(true)
+  user    User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, type])
+  @@map("user_notification_preferences")
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_resets")
+}
+
+model GiftCatalog {
+  id           String  @id
+  name         String
+  coinCost     Int     @map("coin_cost")
+  animationKey String  @map("animation_key")
+  isActive     Boolean @default(true) @map("is_active")
+  gifts        Gift[]
+
+  @@map("gift_catalog")
+}
+
+model Video {
+  id              String        @id @default(uuid()) @db.Uuid
+  creatorId       String        @map("creator_id") @db.Uuid
+  type            VideoType
+  title           String
+  description     String?
+  category        String?
+  tags            String[]      @default([])
+  thumbnailUrl    String?       @map("thumbnail_url")
+  hlsMasterUrl    String?       @map("hls_master_url")
+  durationSeconds Int           @default(0) @map("duration_seconds")
+  releaseYear     Int?          @map("release_year")
+  ageRating       String?       @map("age_rating")
+  tagline         String?
+  director        String?
+  writers         String[]      @default([])
+  visibility      Visibility    @default(public)
+  status          ContentStatus @default(processing)
+  viewsCount      Int           @default(0) @map("views_count")
+  likesCount      Int           @default(0) @map("likes_count")
+  commentsCount   Int           @default(0) @map("comments_count")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  creator         User          @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  cast            VideoCast[]
+  comments        Comment[]
+  gifts           Gift[]
+
+  @@index([creatorId])
+  @@index([type, status])
+  @@map("videos")
+}
+
+model VideoCast {
+  id        String  @id @default(uuid()) @db.Uuid
+  videoId   String  @map("video_id") @db.Uuid
+  name      String
+  role      String
+  imageUrl  String? @map("image_url")
+  sortOrder Int     @default(0) @map("sort_order")
+  video     Video   @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId])
+  @@map("video_cast")
+}
+
+model PodcastShow {
+  id              String     @id @default(uuid()) @db.Uuid
+  creatorId       String     @map("creator_id") @db.Uuid
+  title           String
+  description     String?
+  coverUrl        String?    @map("cover_url")
+  category        String?
+  followersCount  Int        @default(0) @map("followers_count")
+  visibility      Visibility @default(public)
+  createdAt       DateTime   @default(now()) @map("created_at")
+  creator         User       @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  episodes        PodcastEpisode[]
+
+  @@index([creatorId])
+  @@map("podcast_shows")
+}
+
+model PodcastEpisode {
+  id              String        @id @default(uuid()) @db.Uuid
+  showId          String        @map("show_id") @db.Uuid
+  creatorId       String        @map("creator_id") @db.Uuid
+  title           String
+  description     String?
+  coverUrl        String?       @map("cover_url")
+  audioUrl        String?       @map("audio_url")
+  durationSeconds Int           @default(0) @map("duration_seconds")
+  visibility      Visibility    @default(public)
+  status          ContentStatus @default(processing)
+  playsCount      Int           @default(0) @map("plays_count")
+  likesCount      Int           @default(0) @map("likes_count")
+  publishedAt     DateTime?     @map("published_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  show            PodcastShow   @relation(fields: [showId], references: [id], onDelete: Cascade)
+  creator         User          @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([showId])
+  @@index([creatorId])
+  @@map("podcast_episodes")
+}
+
+model Stream {
+  id                   String       @id @default(uuid()) @db.Uuid
+  creatorId            String       @map("creator_id") @db.Uuid
+  title                String
+  category             String?
+  status               StreamStatus @default(scheduled)
+  thumbnailUrl         String?      @map("thumbnail_url")
+  hlsPlaybackUrl       String?      @map("hls_playback_url")
+  viewerCount          Int          @default(0) @map("viewer_count")
+  temporaryStreamToken String?      @map("temporary_stream_token")
+  scheduledAt          DateTime?    @map("scheduled_at")
+  startedAt            DateTime?    @map("started_at")
+  endedAt              DateTime?    @map("ended_at")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  creator              User         @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  gifts                Gift[]
+  messages             StreamMessage[]
+
+  @@index([creatorId, status])
+  @@map("streams")
+}
+
+model Follow {
+  followerId  String   @map("follower_id") @db.Uuid
+  followingId String   @map("following_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  follower    User     @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@map("follows")
+}
+
+model Comment {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  videoId    String   @map("video_id") @db.Uuid
+  parentId   String?  @map("parent_id") @db.Uuid
+  body       String
+  likesCount Int      @default(0) @map("likes_count")
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video      Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  parent     Comment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies    Comment[] @relation("CommentReplies")
+
+  @@index([videoId])
+  @@map("comments")
+}
+
+model Gift {
+  id         String       @id @default(uuid()) @db.Uuid
+  senderId   String       @map("sender_id") @db.Uuid
+  receiverId String       @map("receiver_id") @db.Uuid
+  streamId   String?      @map("stream_id") @db.Uuid
+  videoId    String?      @map("video_id") @db.Uuid
+  giftType   String       @map("gift_type")
+  coinValue  Int          @map("coin_value")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  sender     User         @relation("GiftsSent", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User         @relation("GiftsReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+  stream     Stream?      @relation(fields: [streamId], references: [id])
+  video      Video?       @relation(fields: [videoId], references: [id])
+  catalog    GiftCatalog  @relation(fields: [giftType], references: [id])
+
+  @@index([receiverId])
+  @@map("gifts")
+}
+
+model Transaction {
+  id                    String            @id @default(uuid()) @db.Uuid
+  userId                String            @map("user_id") @db.Uuid
+  type                  TransactionType
+  provider              PaymentProvider
+  providerTransactionId String            @map("provider_transaction_id")
+  amountUsd             Decimal           @map("amount_usd") @db.Decimal(10, 2)
+  coinsAdded            Int               @default(0) @map("coins_added")
+  status                TransactionStatus @default(pending)
+  createdAt             DateTime          @default(now()) @map("created_at")
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("transactions")
+}
+
+model Subscription {
+  id                   String             @id @default(uuid()) @db.Uuid
+  subscriberId         String             @map("subscriber_id") @db.Uuid
+  creatorId            String?            @map("creator_id") @db.Uuid
+  stripeSubscriptionId String?            @map("stripe_subscription_id")
+  tier                 SubscriptionTier
+  status               SubscriptionStatus @default(active)
+  currentPeriodEnd     DateTime           @map("current_period_end")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  subscriber           User               @relation("Subscriber", fields: [subscriberId], references: [id], onDelete: Cascade)
+  creator              User?              @relation("CreatorSub", fields: [creatorId], references: [id])
+
+  @@index([subscriberId])
+  @@map("subscriptions")
+}
+
+model Playlist {
+  id          String     @id @default(uuid()) @db.Uuid
+  creatorId   String     @map("creator_id") @db.Uuid
+  title       String
+  description String?
+  coverUrl    String?    @map("cover_url")
+  type        PlaylistType
+  visibility  Visibility @default(public)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  creator     User       @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  items       PlaylistItem[]
+
+  @@index([creatorId])
+  @@map("playlists")
+}
+
+model PlaylistItem {
+  id         String           @id @default(uuid()) @db.Uuid
+  playlistId String           @map("playlist_id") @db.Uuid
+  itemType   PlaylistItemType @map("item_type")
+  itemId     String           @map("item_id") @db.Uuid
+  sortOrder  Int              @default(0) @map("sort_order")
+  addedAt    DateTime         @default(now()) @map("added_at")
+  playlist   Playlist         @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+
+  @@index([playlistId])
+  @@map("playlist_items")
+}
+
+model StreamMessage {
+  id                 String   @id @default(uuid()) @db.Uuid
+  streamId           String   @map("stream_id") @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  message            String
+  timestampOffsetMs  Int      @map("timestamp_offset_ms")
+  createdAt          DateTime @default(now()) @map("created_at")
+  stream             Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([streamId])
+  @@map("stream_messages")
+}
+
+model WatchHistory {
+  userId          String           @map("user_id") @db.Uuid
+  contentType     WatchContentType @map("content_type")
+  contentId       String           @map("content_id") @db.Uuid
+  progressSeconds Int              @default(0) @map("progress_seconds")
+  completed       Boolean          @default(false)
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, contentType, contentId])
+  @@map("watch_history")
+}
+
+model Like {
+  userId     String         @map("user_id") @db.Uuid
+  targetType LikeTargetType @map("target_type")
+  targetId   String         @map("target_id") @db.Uuid
+  createdAt  DateTime       @default(now()) @map("created_at")
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, targetType, targetId])
+  @@map("likes")
+}
+
+model SavedItem {
+  userId    String        @map("user_id") @db.Uuid
+  itemType  SavedItemType @map("item_type")
+  itemId    String        @map("item_id") @db.Uuid
+  createdAt DateTime      @default(now()) @map("created_at")
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, itemType, itemId])
+  @@map("saved_items")
+}
+
+model Notification {
+  id          String           @id @default(uuid()) @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  type        NotificationType
+  actorId     String?          @map("actor_id") @db.Uuid
+  referenceId String?          @map("reference_id") @db.Uuid
+  message     String
+  isRead      Boolean          @default(false) @map("is_read")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  user        User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor       User?            @relation("NotificationActor", fields: [actorId], references: [id])
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model Report {
+  id          String           @id @default(uuid()) @db.Uuid
+  reporterId  String           @map("reporter_id") @db.Uuid
+  targetType  ReportTargetType @map("target_type")
+  targetId    String           @map("target_id") @db.Uuid
+  reason      ReportReason
+  description String?
+  status      ReportStatus     @default(pending)
+  reviewedById String?         @map("reviewed_by") @db.Uuid
+  createdAt   DateTime         @default(now()) @map("created_at")
+  reporter    User             @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reviewedBy  User?            @relation("Reviewer", fields: [reviewedById], references: [id])
+
+  @@index([status])
+  @@map("reports")
+}
+
+model AdCampaign {
+  id                   String           @id @default(uuid()) @db.Uuid
+  advertiserName       String           @map("advertiser_name")
+  title                String
+  mediaUrl             String           @map("media_url")
+  clickThroughUrl      String           @map("click_through_url")
+  placement            AdPlacement
+  targetImpressions    Int              @map("target_impressions")
+  deliveredImpressions Int              @default(0) @map("delivered_impressions")
+  clicks               Int              @default(0)
+  budgetUsd            Decimal          @map("budget_usd") @db.Decimal(12, 2)
+  status               AdCampaignStatus @default(draft)
+  startsAt             DateTime         @map("starts_at")
+  endsAt               DateTime         @map("ends_at")
+  createdAt            DateTime         @default(now()) @map("created_at")
+
+  @@index([placement, status])
+  @@map("ad_campaigns")
+}
+
+model AnalyticsEvent {
+  id        BigInt             @id @default(autoincrement())
+  eventType AnalyticsEventType @map("event_type")
+  userId    String?            @map("user_id") @db.Uuid
+  targetId  String?            @map("target_id") @db.Uuid
+  metadata  Json?
+  createdAt DateTime           @default(now()) @map("created_at")
+
+  @@index([eventType, createdAt])
+  @@map("analytics_events")
+}
+
+model CreatorPayout {
+  id            String       @id @default(uuid()) @db.Uuid
+  creatorId     String       @map("creator_id") @db.Uuid
+  amountUsd     Decimal      @map("amount_usd") @db.Decimal(10, 2)
+  method        PayoutMethod
+  status        PayoutStatus @default(requested)
+  processedById String?      @map("processed_by") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at")
+  creator       User         @relation("CreatorPayouts", fields: [creatorId], references: [id], onDelete: Cascade)
+  processedBy   User?        @relation("PayoutProcessor", fields: [processedById], references: [id])
+
+  @@index([creatorId, status])
+  @@map("creator_payouts")
+}
+
+model CoinPackage {
+  id        String  @id
+  coins     Int
+  priceUsd  Decimal @map("price_usd") @db.Decimal(10, 2)
+  label     String
+  isActive  Boolean @default(true) @map("is_active")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  @@map("coin_packages")
+}

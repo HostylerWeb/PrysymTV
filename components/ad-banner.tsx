@@ -6,11 +6,13 @@ import Link from "next/link"
 
 export function AdBanner() {
   const ad = getAd("home_banner")
-  if (!ad) return null
 
   useEffect(() => {
+    if (!ad) return
     // POST /ads/track/impression when backend is ready
-  }, [])
+  }, [ad])
+
+  if (!ad) return null
 
   return (
     <section className="px-4 py-2">

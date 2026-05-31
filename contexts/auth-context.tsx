@@ -40,9 +40,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const legacy = localStorage.getItem("streamverse_user")
     const savedUser = localStorage.getItem("prysymtv_user") ?? legacy
     if (savedUser) {
-      setUser(JSON.parse(savedUser))
-      if (legacy && !localStorage.getItem("prysymtv_user")) {
-        localStorage.setItem("prysymtv_user", legacy)
+      try {
+        setUser(JSON.parse(savedUser) as User)
+        if (legacy && !localStorage.getItem("prysymtv_user")) {
+          localStorage.setItem("prysymtv_user", legacy)
+          localStorage.removeItem("streamverse_user")
+        }
+      } catch {
+        localStorage.removeItem("prysymtv_user")
         localStorage.removeItem("streamverse_user")
       }
     }
