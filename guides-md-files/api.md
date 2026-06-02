@@ -26,8 +26,8 @@
 | `POST` | `/auth/logout` | ✅ |
 | `POST` | `/auth/forgot-password` | ✅ |
 | `POST` | `/auth/reset-password` | ✅ |
-| `POST` | `/auth/oauth/google` | 🚧 |
-| `POST` | `/auth/oauth/apple` | 🚧 |
+| `POST` | `/auth/oauth/google` | 📋 |
+| `POST` | `/auth/oauth/apple` | 📋 |
 | `GET` | `/users/me` | ✅ |
 | `PUT` | `/users/me` | ✅ |
 | `GET` | `/users/me/notification-preferences` | ✅ |
@@ -41,6 +41,7 @@
 | `PUT` | `/users/me/notifications/:id/read` | ✅ |
 | `PUT` | `/users/me/notifications/read-all` | ✅ |
 | `DELETE` | `/users/me/notifications` | ✅ |
+| `GET` | `/users/:username/videos` | ✅ Public creator uploads |
 | `GET` | `/users/:username` | ✅ |
 | `POST` | `/users/:username/follow` | ✅ |
 | `DELETE` | `/users/:username/follow` | ✅ |
@@ -51,6 +52,8 @@
 | `GET` | `/videos/feed/shorts` | ✅ |
 | `GET` | `/videos/feed/movies` | ✅ |
 | `GET` | `/videos/feed/movies/featured` | ✅ |
+| `GET` | `/videos/:id/comments` | ✅ Paginated thread |
+| `POST` | `/videos/:id/comments` | ✅ Bearer; `{ body, parentId? }` |
 | `GET` | `/videos/:id` | ✅ |
 | `POST` | `/videos/:id/like` | ✅ |
 | `POST` | `/videos/:id/save` | ✅ |
@@ -62,11 +65,14 @@
 | `DELETE` | `/history/:contentType/:contentId` | ✅ |
 | `GET` | `/billing/products` | ✅ |
 | `GET` | `/billing/gifts/catalog` | ✅ |
-| `POST` | `/billing/stripe/create-checkout` | 🚧 |
+| `POST` | `/billing/stripe/create-checkout` | ✅ Dev mode grants coins; Stripe Checkout when `STRIPE_SECRET_KEY` set |
+| `POST` | `/billing/stripe/fulfill` | ✅ Body `{ sessionId }` — after Checkout |
+| `GET` | `/billing/stripe/fulfill` | ✅ `?session_id=` — redirect return URL |
 | `POST` | `/billing/gifts/send` | ✅ (coins + `viewer_support` revenue split) |
 | `POST` | `/streams/init` | ✅ |
 | `GET` | `/streams/live` | ✅ |
 | `GET` | `/streams/:id` | ✅ (UUID or creator `username`) |
+| WS | `/streams` (Socket.IO) | ✅ `join`, `message`, `history` — Bearer in handshake |
 | `GET` | `/podcasts/shows` | ✅ |
 | `GET` | `/podcasts/episodes/feed` | ✅ |
 | `GET` | `/podcasts/episodes/:id` | ✅ |
@@ -84,6 +90,10 @@
 | `GET` | `/verticals` | ✅ Micro-drama series list |
 | `GET` | `/verticals/:slug` | ✅ Series + episodes |
 | `GET` | `/verticals/:slug/episodes/:episodeNumber` | ✅ Episode playback payload |
+| `GET` | `/verticals/me/series` | ✅ Creator’s series (Bearer) |
+| `POST` | `/verticals/series` | ✅ Create series (Bearer) |
+| `POST` | `/verticals/series/:slug/episodes` | ✅ Add episode (Bearer) |
+| `PUT` | `/verticals/episodes/:episodeId/video` | ✅ Attach uploaded `videoId` (Bearer) |
 | `GET` | `/programs` | ✅ API only (no frontend hub) |
 | `GET` | `/programs/:slug` | ✅ API only |
 | `GET` | `/admin/analytics/overview` | 🚧 |
@@ -136,8 +146,8 @@ Returns a short welcome string (under global prefix `/api/v1`).
 | `POST /auth/logout` | ✅ |
 | `POST /auth/forgot-password` | ✅ Email via SMTP |
 | `POST /auth/reset-password` | ✅ |
-| `POST /auth/oauth/google` | 🚧 |
-| `POST /auth/oauth/apple` | 🚧 |
+| `POST /auth/oauth/google` | 📋 Not in codebase yet |
+| `POST /auth/oauth/apple` | 📋 Not in codebase yet |
 
 Register/login response includes `accessToken`, `tokenType`, `expiresIn`, `user`. Sets HttpOnly refresh cookie on web.
 
@@ -162,6 +172,7 @@ All `/users/me/*` routes require Bearer auth.
 | `PUT /users/me/notifications/read-all` | ✅ | |
 | `DELETE /users/me/notifications` | ✅ | |
 | `GET /users/:username` | ✅ | Public profile + `isLive`, `liveStreamId` |
+| `GET /users/:username/videos` | ✅ | `?page=&limit=` — public ready videos |
 | `POST /users/:username/follow` | ✅ | |
 | `DELETE /users/:username/follow` | ✅ | |
 
@@ -171,7 +182,7 @@ All `/users/me/*` routes require Bearer auth.
 
 ### `GET /feed/home` ✅
 
-Aggregates: `liveNow`, `featuredLive`, `trending`, `newReleases`, `movies`, `featuredMovie`, `continueWatching` (empty until watch history wired).
+Aggregates: `liveNow`, `featuredLive`, `trending`, `newReleases`, `movies`, `featuredMovie`, `continueWatching` (API field exists; home also uses client vertical progress + `GET /history` when logged in).
 
 ### `GET /feed/trending` ✅
 
@@ -188,7 +199,9 @@ Aggregates: `liveNow`, `featuredLive`, `trending`, `newReleases`, `movies`, `fea
 | `GET /videos/feed/shorts` | ✅ `?cursor=` |
 | `GET /videos/feed/movies` | ✅ `?page=&limit=` |
 | `GET /videos/feed/movies/featured` | ✅ |
-| `GET /videos/:id` | ✅ Full video + creator |
+| `GET /videos/:id` | ✅ Full video + creator (`playbackUrl`, `videoUrl`) |
+| `GET /videos/:id/comments` | ✅ `?page=&limit=` |
+| `POST /videos/:id/comments` | ✅ `{ body, parentId? }` |
 | `POST /videos/:id/like` | ✅ Toggle |
 | `POST /videos/:id/save` | ✅ Toggle |
 | `POST /videos/:id/report` | ✅ `{ reason?, details? }` |
@@ -225,7 +238,9 @@ Bearer required.
 | `GET /billing/products` | ✅ Coin packages from DB |
 | `GET /billing/gifts/catalog` | ✅ |
 | `POST /billing/gifts/send` | ✅ Deducts coins, records gift, **`viewer_support`** revenue split |
-| `POST /billing/stripe/create-checkout` | 🚧 |
+| `POST /billing/stripe/create-checkout` | ✅ `{ packageId, productType: "coins" }` → `checkoutUrl` or `devMode` |
+| `POST /billing/stripe/fulfill` | ✅ `{ sessionId }` |
+| `GET /billing/stripe/fulfill` | ✅ `?session_id=` |
 
 **`POST /billing/gifts/send` body:**
 ```json
@@ -246,6 +261,18 @@ Bearer required.
 | `POST /streams/init` | ✅ Creates scheduled stream + stream key |
 | `GET /streams/live` | ✅ All `live` streams |
 | `GET /streams/:id` | ✅ By stream UUID **or** creator `username` (e.g. `progamerx`) |
+
+### Live chat (WebSocket) ✅
+
+**Namespace:** `/streams` (same host as API, no `/api/v1` prefix)  
+**Auth:** `auth.token` or `Authorization` in Socket.IO handshake  
+
+| Event | Direction | Payload |
+|-------|-----------|---------|
+| `join` | Client → Server | `{ streamId }` → server emits `history` |
+| `message` | Client → Server | `{ streamId, message }` → broadcast `message` |
+| `history` | Server → Client | Last ~80 messages |
+| `message` | Server → Client | `{ id, streamId, userId, user, message, color, createdAt }` |
 
 ---
 
@@ -302,8 +329,12 @@ Returns `{ ad: ServedAd | null }` from active campaigns.
 | `GET /verticals` | ✅ `{ items: VerticalSeriesCard[] }` |
 | `GET /verticals/:slug` | ✅ Series metadata + episode list |
 | `GET /verticals/:slug/episodes/:episodeNumber` | ✅ `{ series, episode, nextEpisode }` |
+| `GET /verticals/me/series` | ✅ Bearer — creator admin |
+| `POST /verticals/series` | ✅ `{ slug, title, tagline?, description?, genre?, posterUrl? }` |
+| `POST /verticals/series/:slug/episodes` | ✅ `{ episodeNumber, title, description?, cliffhanger?, durationSeconds? }` |
+| `PUT /verticals/episodes/:episodeId/video` | ✅ `{ videoId }` — after TUS upload |
 
-Frontend: show **`vertical_episode`** ad before playing the next episode.
+Frontend: show **`vertical_episode`** ad before each episode. Episode progress: client `localStorage` today; DB `WatchContentType` for verticals is 📋 planned.
 
 ---
 
@@ -374,4 +405,4 @@ Tables: `revenue_split_rules`, `revenue_ledger_*`, `gaf_*`, `viewer_support_tran
 
 ---
 
-*Last updated: full route inventory — vertical series, programs, feed/streams/videos/billing/search implemented.*
+*Last updated: 2026-06-02 — added video comments, creator public videos, verticals CRUD, Stripe fulfill, WebSocket chat; Stripe checkout marked implemented (dev + live).*
