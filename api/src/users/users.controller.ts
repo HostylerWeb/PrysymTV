@@ -141,6 +141,19 @@ export class UsersController {
     return this.users.clearNotifications(user.id);
   }
 
+  @Get(':username/videos')
+  getPublicVideos(
+    @Param('username') username: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.users.getPublicVideos(
+      username,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 24,
+    );
+  }
+
   @Get(':username')
   getPublic(@Param('username') username: string) {
     return this.users.getPublicProfile(username);

@@ -14,3 +14,10 @@ export * from "./search";
 export * from "./fallback";
 export * from "./comments";
 export * from "./verticals-admin";
+export {
+  fetchPublicProfile,
+  fetchCreatorVideos,
+  followUser,
+  unfollowUser,
+  type PublicCreatorProfile,
+} from "./users";

@@ -22,7 +22,13 @@ import {
   toggleVideoLike,
   toggleVideoSave,
 } from "@/lib/api/videos-feed"
-import { fetchVideoComments, postVideoComment, type VideoComment } from "@/lib/api/comments"
+import {
+  fetchVideoComments,
+  normalizeVideoComment,
+  postVideoComment,
+  type VideoComment,
+} from "@/lib/api/comments"
+import { ApiError } from "@/lib/api-client"
 import { saveWatchProgress } from "@/lib/api/history"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
 
@@ -91,6 +97,8 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
   const [showComments, setShowComments] = useState(true)
   const [commentText, setCommentText] = useState("")
   const [comments, setComments] = useState<VideoComment[]>([])
+  const [commentError, setCommentError] = useState<string | null>(null)
+  const [commentPosting, setCommentPosting] = useState(false)
   const [activeTab, setActiveTab] = useState("home")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
@@ -142,7 +150,9 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
       }
       try {
         const c = await fetchVideoComments(id)
-        if (!cancelled) setComments(c.items)
+        if (!cancelled) {
+          setComments(c.items.map((item) => normalizeVideoComment(item as unknown as Record<string, unknown>)))
+        }
       } catch {
         /* keep empty */
       }
@@ -191,14 +201,32 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
     })
   }
 
-  const submitComment = () => {
-    if (!commentText.trim()) return
-    requireAuth(() => {
-      void postVideoComment(id, commentText.trim()).then((c) => {
-        setComments((prev) => [c, ...prev])
-        setCommentText("")
-      })
-    })
+  const submitComment = async () => {
+    const text = commentText.trim()
+    if (!text || commentPosting) return
+    if (!isAuthenticated) {
+      setIsAuthModalOpen(true)
+      return
+    }
+    setCommentPosting(true)
+    setCommentError(null)
+    try {
+      const created = await postVideoComment(id, text)
+      const normalized = normalizeVideoComment(created as unknown as Record<string, unknown>)
+      setComments((prev) => [normalized, ...prev.filter((c) => c.id !== normalized.id)])
+      setCommentText("")
+    } catch (e) {
+      const msg =
+        e instanceof ApiError
+          ? e.status === 401
+            ? "Sign in to comment."
+            : e.message
+          : "Could not post comment. Try again."
+      setCommentError(msg)
+      if (e instanceof ApiError && e.status === 401) setIsAuthModalOpen(true)
+    } finally {
+      setCommentPosting(false)
+    }
   }
 
   if (loading || !video) {
@@ -304,9 +332,36 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
             {showComments && (
               <>
                 {isAuthenticated ? (
-                  <div className="flex gap-2 mb-4">
-                    <input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Add a comment..." className="flex-1 bg-secondary/50 rounded-full px-4 py-2 text-sm" />
-                    <button type="button" onClick={submitComment} className="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><Send className="w-4 h-4 text-primary-foreground" /></button>
+                  <div className="mb-4 space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        value={commentText}
+                        onChange={(e) => {
+                          setCommentText(e.target.value)
+                          if (commentError) setCommentError(null)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault()
+                            void submitComment()
+                          }
+                        }}
+                        placeholder="Add a comment..."
+                        disabled={commentPosting}
+                        className="flex-1 bg-secondary/50 rounded-full px-4 py-2 text-sm disabled:opacity-60"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void submitComment()}
+                        disabled={commentPosting || !commentText.trim()}
+                        className="w-8 h-8 rounded-full bg-primary flex items-center justify-center disabled:opacity-50"
+                      >
+                        <Send className="w-4 h-4 text-primary-foreground" />
+                      </button>
+                    </div>
+                    {commentError && (
+                      <p className="text-xs text-destructive px-2">{commentError}</p>
+                    )}
                   </div>
                 ) : (
                   <button type="button" onClick={() => setIsAuthModalOpen(true)} className="w-full py-3 rounded-xl bg-secondary/50 border border-dashed flex items-center justify-center gap-2 text-sm text-muted-foreground mb-4">
@@ -314,6 +369,9 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
                   </button>
                 )}
                 <div className="space-y-3">
+                  {comments.length === 0 && (
+                    <p className="text-sm text-muted-foreground px-2">No comments yet. Be the first.</p>
+                  )}
                   {comments.map((c) => (
                     <div key={c.id} className="flex gap-2">
                       <img src={c.user.avatarUrl ?? `https://api.dicebear.com/7.x/initials/svg?seed=${c.user.username}`} alt="" className="w-8 h-8 rounded-full" />

@@ -25,6 +25,7 @@ import { Header } from "@/components/header"
 import { useAuth } from "@/contexts/auth-context"
 
 import { AdInterstitial } from "@/components/ad-interstitial"
+import { ShareSheet } from "@/components/share-sheet"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { mockShorts } from "@/lib/mock-data"
 import { fetchShortsFeed } from "@/lib/api/videos-feed"
@@ -284,10 +285,6 @@ function ShortVideo({
           <span className="text-white text-xs font-medium">{short.shares}</span>
         </button>
 
-        {/* Music Disc */}
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 border-2 border-gray-600 flex items-center justify-center animate-spin-slow">
-          <div className="w-3 h-3 rounded-full bg-white" />
-        </div>
       </div>
 
       {/* Bottom Info */}
@@ -344,7 +341,18 @@ export default function ShortsPage() {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [showAd, setShowAd] = useState(false)
+  const [isShareOpen, setIsShareOpen] = useState(false)
+  const [shareTarget, setShareTarget] = useState<{ title: string; url: string } | null>(null)
   const shortsViewCount = useRef(0)
+
+  const openShare = (short: ShortItem) => {
+    const origin = typeof window !== "undefined" ? window.location.origin : ""
+    setShareTarget({
+      title: short.caption,
+      url: `${origin}/watch/${short.id}`,
+    })
+    setIsShareOpen(true)
+  }
 
   const handleScroll = () => {
     if (containerRef.current) {
@@ -495,7 +503,7 @@ export default function ShortsPage() {
               isActive={index === activeIndex}
               onLike={() => toggleLike(short.id)}
               onComment={() => openComments(short.id)}
-              onShare={() => {}}
+              onShare={() => openShare(short)}
               onSave={() => toggleSave(short.id)}
               onFollow={() => toggleFollow(short.username)}
               isLiked={likedShorts.has(short.id)}
@@ -679,6 +687,12 @@ export default function ShortsPage() {
 
       {/* Auth Modal */}
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      <ShareSheet
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        title={shareTarget?.title ?? "Short"}
+        url={shareTarget?.url}
+      />
       {showAd && (
         <AdInterstitial
           onClose={() => setShowAd(false)}
@@ -687,13 +701,6 @@ export default function ShortsPage() {
       )}
 
       <style jsx global>{`
-        @keyframes spin-slow {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .animate-spin-slow {
-          animation: spin-slow 3s linear infinite;
-        }
         @keyframes marquee {
           0% { transform: translateX(0); }
           100% { transform: translateX(-100%); }

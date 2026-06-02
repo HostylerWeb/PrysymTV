@@ -4,7 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { StreamerStatus } from '@prisma/client';
+import { ContentStatus, StreamerStatus } from '@prisma/client';
+import {
+  mapVideoCard,
+  VIDEO_CARD_SELECT,
+} from '../common/mappers/content.mapper';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { UpdateNotificationPrefDto } from './dto/notification-pref.dto';
@@ -109,6 +113,36 @@ export class UsersService {
       }),
     ]);
     return { success: true, streamerStatus: StreamerStatus.pending };
+  }
+
+  async getPublicVideos(username: string, page = 1, limit = 24) {
+    const user = await this.prisma.user.findFirst({
+      where: { username: username.toLowerCase() },
+    });
+    if (!user || user.isBanned) throw new NotFoundException('Creator not found');
+
+    const skip = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      this.prisma.video.findMany({
+        where: {
+          creatorId: user.id,
+          status: ContentStatus.ready,
+          visibility: 'public',
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: VIDEO_CARD_SELECT,
+      }),
+      this.prisma.video.count({
+        where: { creatorId: user.id, status: ContentStatus.ready },
+      }),
+    ]);
+
+    return {
+      items: items.map(mapVideoCard),
+      meta: { page, limit, total },
+    };
   }
 
   async getPublicProfile(username: string) {
