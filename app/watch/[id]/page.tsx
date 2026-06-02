@@ -1,10 +1,9 @@
 "use client"
 
-import { use, useState, useRef, useEffect } from "react"
+import { use, useState, useRef, useEffect, useCallback } from "react"
 import {
   ChevronLeft, Share2, MoreVertical, ThumbsUp, ThumbsDown, MessageCircle,
-  Bookmark, ChevronDown, ChevronUp, Heart, Send, Play, Pause, Volume2,
-  VolumeX, Maximize, SkipBack, SkipForward, Lock, Flag,
+  Bookmark, ChevronDown, ChevronUp, Send, Volume2, Maximize, Lock, Flag,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -14,17 +13,75 @@ import { SearchModal } from "@/components/search-modal"
 import { AuthModal } from "@/components/auth-modal"
 import { ReportModal } from "@/components/report-modal"
 import { ShareSheet } from "@/components/share-sheet"
+import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { useAuth } from "@/contexts/auth-context"
 import { getVideo, getSuggestedVideos } from "@/lib/mock-data"
+import {
+  fetchVideoWithFallback,
+  fetchMoviesFeed,
+  toggleVideoLike,
+  toggleVideoSave,
+} from "@/lib/api/videos-feed"
+import { fetchVideoComments, postVideoComment, type VideoComment } from "@/lib/api/comments"
+import { saveWatchProgress } from "@/lib/api/history"
+import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
+
+type WatchVideo = {
+  id: string
+  title: string
+  thumbnail: string
+  videoUrl: string
+  description: string
+  views: string
+  uploadedAt: string
+  likes: string
+  channel: string
+  channelSlug: string
+  creatorId: string
+}
+
+function mapApiToWatch(v: NonNullable<Awaited<ReturnType<typeof fetchVideoWithFallback>>>): WatchVideo {
+  const creator = v.creator
+  return {
+    id: v.id,
+    title: v.title,
+    thumbnail: videoThumbnail(v.thumbnailUrl),
+    videoUrl: v.playbackUrl ?? v.videoUrl ?? v.hlsMasterUrl ?? "",
+    description: v.description ?? "",
+    views: formatViewCount(v.viewsCount),
+    uploadedAt: "Recently",
+    likes: formatViewCount(v.likesCount),
+    channel: creator.displayName ?? creator.username,
+    channelSlug: creator.username,
+    creatorId: creator.id,
+  }
+}
+
+function mapMockToWatch(m: ReturnType<typeof getVideo>): WatchVideo {
+  return {
+    id: m.id,
+    title: m.title,
+    thumbnail: m.thumbnail,
+    videoUrl: m.videoUrl,
+    description: m.description,
+    views: m.views,
+    uploadedAt: m.uploadedAt,
+    likes: m.likes,
+    channel: m.channel,
+    channelSlug: m.channelSlug,
+    creatorId: "",
+  }
+}
 
 export default function WatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const video = getVideo(id)
-  const suggested = getSuggestedVideos(id)
   const { isAuthenticated } = useAuth()
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [isMuted, setIsMuted] = useState(false)
+  const [video, setVideo] = useState<WatchVideo | null>(null)
+  const [suggested, setSuggested] = useState<
+    Array<{ id: string; title: string; thumbnail: string; duration: string; channel: string; views: string }>
+  >([])
+  const [loading, setLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [showControls, setShowControls] = useState(true)
@@ -33,31 +90,123 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [showComments, setShowComments] = useState(true)
   const [commentText, setCommentText] = useState("")
+  const [comments, setComments] = useState<VideoComment[]>([])
   const [activeTab, setActiveTab] = useState("home")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isReportOpen, setIsReportOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
+  const progressSent = useRef(0)
 
   useEffect(() => {
-    const el = videoRef.current
-    if (!el) return
-    const onTime = () => setCurrentTime(el.currentTime)
-    const onMeta = () => setDuration(el.duration)
-    const onEnd = () => setIsPlaying(false)
-    el.addEventListener("timeupdate", onTime)
-    el.addEventListener("loadedmetadata", onMeta)
-    el.addEventListener("ended", onEnd)
-    return () => {
-      el.removeEventListener("timeupdate", onTime)
-      el.removeEventListener("loadedmetadata", onMeta)
-      el.removeEventListener("ended", onEnd)
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      const api = await fetchVideoWithFallback(id)
+      if (cancelled) return
+      if (api) {
+        setVideo(mapApiToWatch(api))
+      } else {
+        setVideo(mapMockToWatch(getVideo(id)))
+      }
+      try {
+        const feed = await fetchMoviesFeed(1)
+        if (!cancelled && feed.items.length) {
+          setSuggested(
+            feed.items
+              .filter((v) => v.id !== id)
+              .slice(0, 4)
+              .map((v) => ({
+                id: v.id,
+                title: v.title,
+                thumbnail: videoThumbnail(v.thumbnailUrl),
+                duration: formatDuration(v.durationSeconds),
+                channel: v.channel,
+                views: formatViewCount(v.viewsCount),
+              })),
+          )
+        }
+      } catch {
+        if (!cancelled) {
+          setSuggested(
+            getSuggestedVideos(id).map((v) => ({
+              id: v.id,
+              title: v.title,
+              thumbnail: v.thumbnail,
+              duration: v.duration,
+              channel: v.channel,
+              views: v.views,
+            })),
+          )
+        }
+      }
+      try {
+        const c = await fetchVideoComments(id)
+        if (!cancelled) setComments(c.items)
+      } catch {
+        /* keep empty */
+      }
+      if (!cancelled) setLoading(false)
     }
-  }, [])
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [id])
+
+  const persistProgress = useCallback(
+    (seconds: number, dur: number, completed = false) => {
+      if (!isAuthenticated || !video) return
+      const bucket = Math.floor(seconds / 10)
+      if (!completed && bucket === progressSent.current) return
+      progressSent.current = bucket
+      void saveWatchProgress({
+        contentType: "video",
+        contentId: video.id,
+        progressSeconds: Math.floor(seconds),
+        completed,
+      }).catch(() => {})
+    },
+    [isAuthenticated, video],
+  )
 
   const requireAuth = (action: () => void) => {
     if (!isAuthenticated) setIsAuthModalOpen(true)
     else action()
+  }
+
+  const handleLike = () => {
+    requireAuth(() => {
+      void toggleVideoLike(id)
+        .then((r) => setIsLiked(r.liked))
+        .catch(() => setIsLiked((p) => !p))
+    })
+  }
+
+  const handleSave = () => {
+    requireAuth(() => {
+      void toggleVideoSave(id)
+        .then((r) => setIsSaved(r.saved))
+        .catch(() => setIsSaved((p) => !p))
+    })
+  }
+
+  const submitComment = () => {
+    if (!commentText.trim()) return
+    requireAuth(() => {
+      void postVideoComment(id, commentText.trim()).then((c) => {
+        setComments((prev) => [c, ...prev])
+        setCommentText("")
+      })
+    })
+  }
+
+  if (loading || !video) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-background">
+        <p className="text-muted-foreground">{loading ? "Loading…" : "Video not found"}</p>
+      </main>
+    )
   }
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
@@ -66,34 +215,50 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <div className="max-w-6xl mx-auto w-full">
         <div className="relative w-full aspect-video bg-black" onClick={() => setShowControls(true)}>
-          <video ref={videoRef} src={video.videoUrl} poster={video.thumbnail} className="w-full h-full object-contain" playsInline onClick={() => {
-            const el = videoRef.current
-            if (!el) return
-            if (isPlaying) el.pause()
-            else el.play()
-            setIsPlaying(!isPlaying)
-          }} />
-          <div className={cn("absolute inset-0 transition-opacity", showControls ? "opacity-100" : "opacity-0")}>
-            <div className="absolute top-0 left-0 right-0 flex justify-between p-3 bg-gradient-to-b from-black/70 to-transparent">
-              <Link href="/"><button className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><ChevronLeft className="w-6 h-6 text-white" /></button></Link>
+          <HlsVideoPlayer
+            src={video.videoUrl}
+            poster={video.thumbnail}
+            className="w-full h-full object-contain"
+            controls={false}
+            videoRef={videoRef}
+            onTimeUpdate={(t, d) => {
+              setCurrentTime(t)
+              setDuration(d)
+              persistProgress(t, d)
+            }}
+            onEnded={() => persistProgress(duration, duration, true)}
+          />
+          <div className={cn("absolute inset-0 transition-opacity pointer-events-none", showControls ? "opacity-100" : "opacity-0")}>
+            <div className="absolute top-0 left-0 right-0 flex justify-between p-3 bg-gradient-to-b from-black/70 to-transparent pointer-events-auto">
+              <Link href="/"><button type="button" className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><ChevronLeft className="w-6 h-6 text-white" /></button></Link>
               <div className="flex gap-2">
-                <button onClick={() => setIsShareOpen(true)} className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><Share2 className="w-5 h-5 text-white" /></button>
-                <button onClick={() => setIsReportOpen(true)} className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><Flag className="w-5 h-5 text-white" /></button>
-                <button className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><MoreVertical className="w-5 h-5 text-white" /></button>
+                <button type="button" onClick={() => setIsShareOpen(true)} className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><Share2 className="w-5 h-5 text-white" /></button>
+                <button type="button" onClick={() => setIsReportOpen(true)} className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><Flag className="w-5 h-5 text-white" /></button>
+                <button type="button" className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><MoreVertical className="w-5 h-5 text-white" /></button>
               </div>
             </div>
-            <div className="absolute bottom-0 left-0 right-0 px-3 pb-3 bg-gradient-to-t from-black/70 to-transparent">
-              <div className="w-full h-1 bg-white/30 rounded-full mb-2" onClick={(e) => {
-                const el = videoRef.current
-                if (!el) return
-                const rect = e.currentTarget.getBoundingClientRect()
-                el.currentTime = ((e.clientX - rect.left) / rect.width) * duration
-              }}>
+            <div className="absolute bottom-0 left-0 right-0 px-3 pb-3 bg-gradient-to-t from-black/70 to-transparent pointer-events-auto">
+              <div
+                className="w-full h-1 bg-white/30 rounded-full mb-2 cursor-pointer"
+                onClick={(e) => {
+                  const el = videoRef.current
+                  if (!el || !duration) return
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  el.currentTime = ((e.clientX - rect.left) / rect.width) * duration
+                }}
+              >
                 <div className="h-full bg-primary rounded-full" style={{ width: `${progress}%` }} />
               </div>
               <div className="flex items-center justify-between text-white text-xs">
-                <button onClick={() => { videoRef.current!.muted = !isMuted; setIsMuted(!isMuted) }}>
-                  {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = videoRef.current
+                    if (!el) return
+                    el.muted = !el.muted
+                  }}
+                >
+                  <Volume2 className="w-5 h-5" />
                 </button>
                 <Maximize className="w-5 h-5" />
               </div>
@@ -106,12 +271,12 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
           <p className="text-sm text-muted-foreground mb-3">{video.views} views · {video.uploadedAt}</p>
 
           <div className="flex gap-2 overflow-x-auto pb-3">
-            <button onClick={() => requireAuth(() => setIsLiked(!isLiked))} className={cn("flex items-center gap-2 px-4 py-2 rounded-full text-sm", isLiked ? "bg-primary text-primary-foreground" : "bg-secondary")}>
+            <button type="button" onClick={handleLike} className={cn("flex items-center gap-2 px-4 py-2 rounded-full text-sm", isLiked ? "bg-primary text-primary-foreground" : "bg-secondary")}>
               <ThumbsUp className="w-4 h-4" /> {video.likes}
             </button>
-            <button onClick={() => requireAuth(() => {})} className="flex items-center gap-2 px-4 py-2 rounded-full bg-secondary text-sm"><ThumbsDown className="w-4 h-4" /></button>
-            <button onClick={() => setIsShareOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-full bg-secondary text-sm"><Share2 className="w-4 h-4" /> Share</button>
-            <button onClick={() => requireAuth(() => setIsSaved(!isSaved))} className={cn("flex items-center gap-2 px-4 py-2 rounded-full text-sm", isSaved ? "bg-primary text-primary-foreground" : "bg-secondary")}>
+            <button type="button" className="flex items-center gap-2 px-4 py-2 rounded-full bg-secondary text-sm"><ThumbsDown className="w-4 h-4" /></button>
+            <button type="button" onClick={() => setIsShareOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-full bg-secondary text-sm"><Share2 className="w-4 h-4" /> Share</button>
+            <button type="button" onClick={handleSave} className={cn("flex items-center gap-2 px-4 py-2 rounded-full text-sm", isSaved ? "bg-primary text-primary-foreground" : "bg-secondary")}>
               <Bookmark className="w-4 h-4" /> Save
             </button>
           </div>
@@ -121,7 +286,7 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
               <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${video.channel}`} alt="" className="w-10 h-10 rounded-full" />
               <div>
                 <h3 className="text-sm font-medium">{video.channel}</h3>
-                <p className="text-xs text-muted-foreground">12.5M subscribers</p>
+                <p className="text-xs text-muted-foreground">Creator</p>
               </div>
             </Link>
             <Button onClick={() => requireAuth(() => setIsSubscribed(!isSubscribed))} className="rounded-full">
@@ -132,21 +297,34 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
           <p className="py-3 text-sm text-muted-foreground">{video.description}</p>
 
           <div className="py-3 border-t border-border">
-            <button onClick={() => setShowComments(!showComments)} className="flex items-center gap-2 mb-4">
-              <MessageCircle className="w-5 h-5" /> Comments
+            <button type="button" onClick={() => setShowComments(!showComments)} className="flex items-center gap-2 mb-4">
+              <MessageCircle className="w-5 h-5" /> Comments ({comments.length})
               {showComments ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
             {showComments && (
-              isAuthenticated ? (
-                <div className="flex gap-2 mb-4">
-                  <input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Add a comment..." className="flex-1 bg-secondary/50 rounded-full px-4 py-2 text-sm" />
-                  <button onClick={() => setCommentText("")} className="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><Send className="w-4 h-4 text-primary-foreground" /></button>
+              <>
+                {isAuthenticated ? (
+                  <div className="flex gap-2 mb-4">
+                    <input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Add a comment..." className="flex-1 bg-secondary/50 rounded-full px-4 py-2 text-sm" />
+                    <button type="button" onClick={submitComment} className="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><Send className="w-4 h-4 text-primary-foreground" /></button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setIsAuthModalOpen(true)} className="w-full py-3 rounded-xl bg-secondary/50 border border-dashed flex items-center justify-center gap-2 text-sm text-muted-foreground mb-4">
+                    <Lock className="w-4 h-4" /> Sign in to comment
+                  </button>
+                )}
+                <div className="space-y-3">
+                  {comments.map((c) => (
+                    <div key={c.id} className="flex gap-2">
+                      <img src={c.user.avatarUrl ?? `https://api.dicebear.com/7.x/initials/svg?seed=${c.user.username}`} alt="" className="w-8 h-8 rounded-full" />
+                      <div>
+                        <p className="text-sm font-medium">{c.user.displayName ?? c.user.username}</p>
+                        <p className="text-sm text-muted-foreground">{c.body}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ) : (
-                <button onClick={() => setIsAuthModalOpen(true)} className="w-full py-3 rounded-xl bg-secondary/50 border border-dashed flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                  <Lock className="w-4 h-4" /> Sign in to comment
-                </button>
-              )
+              </>
             )}
           </div>
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useState, useRef } from "react"
+import { use, useState, useRef, useEffect, useCallback } from "react"
 import { ChevronLeft, Play, Plus, Check, Share2, Star, Clock, Calendar, Lock, Flag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -12,12 +12,44 @@ import { AdPreroll } from "@/components/ad-preroll"
 import { ReportModal } from "@/components/report-modal"
 import { ShareSheet } from "@/components/share-sheet"
 import { Footer } from "@/components/footer"
+import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { useAuth } from "@/contexts/auth-context"
 import { getMovie } from "@/lib/mock-data"
+import { fetchVideoWithFallback, toggleVideoSave } from "@/lib/api/videos-feed"
+import { saveWatchProgress } from "@/lib/api/history"
+import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
+import type { ApiVideoDetail } from "@/lib/api/videos-feed"
+
+type MovieDisplay = ReturnType<typeof getMovie>
+
+function mapApiToMovie(v: ApiVideoDetail): MovieDisplay {
+  return {
+    id: v.id,
+    title: v.title,
+    poster: videoThumbnail(v.thumbnailUrl),
+    banner: videoThumbnail(v.thumbnailUrl),
+    year: String(v.releaseYear ?? new Date().getFullYear()),
+    rating: "8.5",
+    genre: v.category ?? "Drama",
+    genres: [v.category ?? "Drama"],
+    duration: formatDuration(v.durationSeconds),
+    ageRating: v.ageRating ?? "PG-13",
+    tagline: v.tagline ?? "",
+    description: v.description ?? "",
+    longDescription: v.description ?? "",
+    director: v.creator.displayName ?? v.creator.username,
+    writers: [],
+    matchScore: "95%",
+    views: formatViewCount(v.viewsCount),
+    videoUrl: v.playbackUrl ?? v.videoUrl ?? v.hlsMasterUrl ?? "",
+    category: "movies",
+    cast: [],
+  }
+}
 
 export default function MovieDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const movie = getMovie(id)
+  const [movie, setMovie] = useState<MovieDisplay | null>(null)
   const { isAuthenticated } = useAuth()
   const [isInList, setIsInList] = useState(false)
   const [showFullDescription, setShowFullDescription] = useState(false)
@@ -29,6 +61,37 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
   const [isReportOpen, setIsReportOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const progressSent = useRef(0)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const api = await fetchVideoWithFallback(id)
+      if (cancelled) return
+      if (api) setMovie(mapApiToMovie(api))
+      else setMovie(getMovie(id))
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [id])
+
+  const persistProgress = useCallback(
+    (seconds: number, dur: number, completed = false) => {
+      if (!isAuthenticated || !movie) return
+      const bucket = Math.floor(seconds / 10)
+      if (!completed && bucket === progressSent.current) return
+      progressSent.current = bucket
+      void saveWatchProgress({
+        contentType: "video",
+        contentId: movie.id,
+        progressSeconds: Math.floor(seconds),
+        completed,
+      }).catch(() => {})
+    },
+    [isAuthenticated, movie],
+  )
 
   const handleWatchNow = () => {
     if (!isAuthenticated) {
@@ -49,6 +112,14 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
     else action()
   }
 
+  if (!movie) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-background">
+        <p className="text-muted-foreground">Loading…</p>
+      </main>
+    )
+  }
+
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <div className="max-w-7xl mx-auto w-full">
@@ -58,8 +129,17 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
           )}
           {isPlaying ? (
             <>
-              <video ref={videoRef} src={movie.videoUrl} controls autoPlay className="w-full h-full object-contain" />
-              <button onClick={() => setIsPlaying(false)} className="absolute top-4 left-4 z-50 w-10 h-10 rounded-full bg-black/60 flex items-center justify-center text-white">✕</button>
+              <HlsVideoPlayer
+                src={movie.videoUrl}
+                poster={movie.banner}
+                className="w-full h-full object-contain"
+                autoPlay
+                controls
+                videoRef={videoRef}
+                onTimeUpdate={(t, d) => persistProgress(t, d)}
+                onEnded={() => persistProgress(0, 0, true)}
+              />
+              <button type="button" onClick={() => setIsPlaying(false)} className="absolute top-4 left-4 z-50 w-10 h-10 rounded-full bg-black/60 flex items-center justify-center text-white">✕</button>
             </>
           ) : (
             <>
@@ -98,7 +178,7 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
             </div>
             <div className="flex gap-3 mb-6 md:hidden">
               <Button onClick={handleWatchNow} className="flex-1 rounded-full gap-2">{isAuthenticated ? "Watch Now" : "Sign in"}</Button>
-              <button onClick={() => requireAuth(() => setIsInList(!isInList))} className={cn("w-12 h-12 rounded-full flex items-center justify-center", isInList ? "bg-primary text-white" : "bg-secondary")}>
+              <button type="button" onClick={() => requireAuth(() => void toggleVideoSave(id).then((r) => setIsInList(r.saved)).catch(() => setIsInList(!isInList)))} className={cn("w-12 h-12 rounded-full flex items-center justify-center", isInList ? "bg-primary text-white" : "bg-secondary")}>
                 {isInList ? <Check className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
               </button>
             </div>

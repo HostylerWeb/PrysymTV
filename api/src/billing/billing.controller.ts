@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { PrismaService } from '../prisma/prisma.service';
 import { BillingService } from './billing.service';
+import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { SendGiftDto } from './dto/send-gift.dto';
 
 @Controller('billing')
@@ -30,8 +31,26 @@ export class BillingController {
 
   @Post('stripe/create-checkout')
   @UseGuards(JwtAuthGuard)
-  checkout() {
-    return { checkoutUrl: null, message: 'Stripe checkout — configure STRIPE_SECRET_KEY' };
+  checkout(@CurrentUser() user: AuthUserPayload, @Body() body: CreateCheckoutDto) {
+    return this.billing.createCheckout(user.id, body);
+  }
+
+  @Post('stripe/fulfill')
+  @UseGuards(JwtAuthGuard)
+  fulfill(
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: { sessionId: string },
+  ) {
+    return this.billing.fulfillCheckoutSession(body.sessionId);
+  }
+
+  @Get('stripe/fulfill')
+  @UseGuards(JwtAuthGuard)
+  fulfillQuery(
+    @CurrentUser() _user: AuthUserPayload,
+    @Query('session_id') sessionId: string,
+  ) {
+    return this.billing.fulfillCheckoutSession(sessionId);
   }
 
   @Post('gifts/send')

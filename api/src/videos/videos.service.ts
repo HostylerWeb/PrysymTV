@@ -138,7 +138,92 @@ export class VideosService {
       },
     });
     if (!video) throw new NotFoundException('Video not found');
-    return video;
+    return this.toPublicVideo(video);
+  }
+
+  toPublicVideo(
+    video: {
+      id: string;
+      title: string;
+      description: string | null;
+      thumbnailUrl: string | null;
+      hlsMasterUrl: string | null;
+      durationSeconds: number;
+      viewsCount: number;
+      likesCount: number;
+      commentsCount: number;
+      type: string;
+      category: string | null;
+      releaseYear: number | null;
+      ageRating: string | null;
+      tagline: string | null;
+      creator: {
+        id: string;
+        username: string;
+        displayName: string | null;
+        avatarUrl: string | null;
+      };
+    },
+  ) {
+    return {
+      ...video,
+      playbackUrl: video.hlsMasterUrl,
+      videoUrl: video.hlsMasterUrl,
+    };
+  }
+
+  async listComments(videoId: string, page = 1, limit = 30) {
+    const video = await this.prisma.video.findUnique({ where: { id: videoId } });
+    if (!video) throw new NotFoundException('Video not found');
+
+    const skip = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      this.prisma.comment.findMany({
+        where: { videoId, parentId: null },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        include: {
+          user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+          replies: {
+            take: 5,
+            orderBy: { createdAt: 'asc' },
+            include: {
+              user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.comment.count({ where: { videoId, parentId: null } }),
+    ]);
+
+    return { items, meta: { page, limit, total } };
+  }
+
+  async createComment(
+    userId: string,
+    videoId: string,
+    body: string,
+    parentId?: string,
+  ) {
+    const video = await this.prisma.video.findUnique({ where: { id: videoId } });
+    if (!video) throw new NotFoundException('Video not found');
+
+    const comment = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.comment.create({
+        data: { userId, videoId, body, parentId },
+        include: {
+          user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+        },
+      });
+      await tx.video.update({
+        where: { id: videoId },
+        data: { commentsCount: { increment: 1 } },
+      });
+      return created;
+    });
+
+    return comment;
   }
 
   async shortsFeed(cursor?: string, limit = 20) {

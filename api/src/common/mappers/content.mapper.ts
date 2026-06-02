@@ -11,6 +11,7 @@ const videoSelect = {
   releaseYear: true,
   ageRating: true,
   tagline: true,
+  hlsMasterUrl: true,
   creator: {
     select: {
       id: true,
@@ -40,6 +41,8 @@ export function mapVideoCard(v: VideoWithCreator) {
     channel: v.creator.displayName ?? v.creator.username,
     channelSlug: v.creator.username,
     creatorId: v.creator.id,
+    playbackUrl: v.hlsMasterUrl,
+    videoUrl: v.hlsMasterUrl,
   };
 }
 

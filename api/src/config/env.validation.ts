@@ -159,6 +159,14 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   VIDEO_PROCESSING_TMP_DIR?: string;
+
+  @IsOptional()
+  @IsString()
+  STRIPE_SECRET_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  STRIPE_WEBHOOK_SECRET?: string;
 }
 
 const WEAK_SECRET_MARKERS = [

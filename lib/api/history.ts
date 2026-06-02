@@ -6,3 +6,15 @@ export async function fetchHistory(page = 1, limit = 12) {
     `/history?page=${page}&limit=${limit}`,
   );
 }
+
+export async function saveWatchProgress(body: {
+  contentType: "video" | "podcast_episode";
+  contentId: string;
+  progressSeconds: number;
+  completed?: boolean;
+}) {
+  return apiRequest("/history/progress", {
+    method: "POST",
+    body,
+  });
+}

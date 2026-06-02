@@ -44,6 +44,10 @@ export type VideoCard = {
   channel: string;
   channelSlug: string;
   creatorId: string;
+  playbackUrl?: string | null;
+  videoUrl?: string | null;
+  releaseYear?: number | null;
+  tagline?: string | null;
 };
 
 function mockFeedHome(): FeedHomeResponse {

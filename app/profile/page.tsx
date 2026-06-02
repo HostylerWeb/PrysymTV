@@ -31,6 +31,7 @@ import {
   fetchMyLiked,
 } from "@/lib/api/users"
 import { fetchHistory } from "@/lib/api/history"
+import { createCoinCheckout, fulfillCoinCheckout } from "@/lib/api/billing"
 import type {
   HistoryItemRecord,
   LikedItemRecord,
@@ -68,6 +69,7 @@ const VALID_SETTINGS_SCREENS: ProfileSettingsScreen[] = [
   "history",
   "go-live",
   "upload",
+  "verticals",
 ]
 
 function ProfilePageContent() {
@@ -78,13 +80,14 @@ function ProfilePageContent() {
       ? (settingsParam as ProfileSettingsScreen)
       : undefined
 
-  const { user, isAuthenticated, isLoading, logout, updateCoins } = useAuth()
+  const { user, isAuthenticated, isLoading, logout, refreshUser } = useAuth()
   const [activeTab, setActiveTab] = useState("videos")
   const [showSettings, setShowSettings] = useState(false)
   const [settingsOpenTo, setSettingsOpenTo] = useState<ProfileSettingsScreen | undefined>()
   const [navTab, setNavTab] = useState("profile")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isCoinsModalOpen, setIsCoinsModalOpen] = useState(false)
+  const [coinsPurchasing, setCoinsPurchasing] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isStreamerModalOpen, setIsStreamerModalOpen] = useState(false)
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false)
@@ -153,9 +156,32 @@ function ProfilePageContent() {
     }
   }, [isAuthenticated, isLoading, user?.id])
 
-  const handlePurchaseCoins = (amount: number) => {
-    updateCoins(amount)
-    setIsCoinsModalOpen(false)
+  useEffect(() => {
+    const checkout = searchParams.get("checkout")
+    const sessionId = searchParams.get("session_id")
+    if (checkout !== "success" || !sessionId || !isAuthenticated) return
+    void fulfillCoinCheckout(sessionId)
+      .then(() => refreshUser())
+      .catch(() => refreshUser())
+  }, [searchParams, isAuthenticated, refreshUser])
+
+  const handlePurchasePackage = async (packageId: string) => {
+    setCoinsPurchasing(true)
+    try {
+      const res = await createCoinCheckout(packageId)
+      if (res.devMode) {
+        await refreshUser()
+        setIsCoinsModalOpen(false)
+        return
+      }
+      if (res.checkoutUrl) {
+        window.location.href = res.checkoutUrl
+      }
+    } catch {
+      /* modal stays open */
+    } finally {
+      setCoinsPurchasing(false)
+    }
   }
 
   const handleLogout = async () => {
@@ -606,11 +632,12 @@ function ProfilePageContent() {
 
       {/* Modals */}
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
-      <CoinsModal 
-        isOpen={isCoinsModalOpen} 
-        onClose={() => setIsCoinsModalOpen(false)} 
+      <CoinsModal
+        isOpen={isCoinsModalOpen}
+        onClose={() => setIsCoinsModalOpen(false)}
         currentCoins={user?.coins || 0}
-        onPurchase={handlePurchaseCoins}
+        onPurchasePackage={handlePurchasePackage}
+        purchasing={coinsPurchasing}
       />
       <StreamerApplicationModal 
         isOpen={isStreamerModalOpen} 

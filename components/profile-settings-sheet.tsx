@@ -36,6 +36,12 @@ import { cn } from "@/lib/utils"
 import type { User } from "@/contexts/auth-context"
 import { mockVideos, mockMovies } from "@/lib/mock-data"
 import { uploadVideoFlow, getVideoUploadMaxBytes } from "@/lib/api/videos"
+import {
+  attachVerticalEpisodeVideo,
+  createVerticalEpisode,
+  createVerticalSeries,
+  fetchMyVerticalSeries,
+} from "@/lib/api/verticals-admin"
 import { ApiError } from "@/lib/api-client"
 import { fetchCreatorDashboard, type CreatorDashboardResponse } from "@/lib/api/analytics"
 import { formatViewCount } from "@/lib/format-media"
@@ -49,6 +55,7 @@ export type ProfileSettingsScreen =
   | "history"
   | "go-live"
   | "upload"
+  | "verticals"
 
 const NOTIFICATION_PREFS = [
   { id: "follow", label: "New followers", description: "When someone follows you" },
@@ -117,6 +124,7 @@ const SCREEN_TITLES: Record<Exclude<ProfileSettingsScreen, "menu">, string> = {
   history: "Watch History",
   "go-live": "Go Live",
   upload: "Upload",
+  verticals: "Micro-dramas",
 }
 
 interface ProfileSettingsSheetProps {
@@ -162,6 +170,23 @@ export function ProfileSettingsSheet({
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadDone, setUploadDone] = useState(false)
+  const [verticalSlug, setVerticalSlug] = useState("")
+  const [verticalTitle, setVerticalTitle] = useState("")
+  const [episodeSeriesSlug, setEpisodeSeriesSlug] = useState("")
+  const [episodeNumber, setEpisodeNumber] = useState(1)
+  const [episodeTitle, setEpisodeTitle] = useState("")
+  const [lastEpisodeId, setLastEpisodeId] = useState<string | null>(null)
+  const [episodeVideoFile, setEpisodeVideoFile] = useState<File | null>(null)
+  const [verticalBusy, setVerticalBusy] = useState(false)
+  const [verticalMessage, setVerticalMessage] = useState<string | null>(null)
+  const [mySeries, setMySeries] = useState<
+    Array<{
+      id: string
+      slug: string
+      title: string
+      episodes: Array<{ id: string; episodeNumber: number; title: string }>
+    }>
+  >([])
 
   useEffect(() => {
     if (!isOpen) {
@@ -172,6 +197,13 @@ export function ProfileSettingsSheet({
       setScreen(initialScreen)
     }
   }, [isOpen, initialScreen])
+
+  useEffect(() => {
+    if (!isOpen || screen !== "verticals") return
+    void fetchMyVerticalSeries()
+      .then((res) => setMySeries(res.items))
+      .catch(() => setMySeries([]))
+  }, [isOpen, screen])
 
   if (!isOpen) return null
 
@@ -316,6 +348,87 @@ export function ProfileSettingsSheet({
             />
           )}
 
+          {screen === "verticals" && (
+            <VerticalSeriesPanel
+              mySeries={mySeries}
+              verticalSlug={verticalSlug}
+              verticalTitle={verticalTitle}
+              episodeSeriesSlug={episodeSeriesSlug}
+              episodeNumber={episodeNumber}
+              episodeTitle={episodeTitle}
+              lastEpisodeId={lastEpisodeId}
+              episodeVideoFile={episodeVideoFile}
+              busy={verticalBusy}
+              message={verticalMessage}
+              onSlugChange={setVerticalSlug}
+              onTitleChange={setVerticalTitle}
+              onEpisodeSeriesSlugChange={setEpisodeSeriesSlug}
+              onEpisodeNumberChange={setEpisodeNumber}
+              onEpisodeTitleChange={setEpisodeTitle}
+              onEpisodeVideoFileChange={setEpisodeVideoFile}
+              onCreateSeries={async () => {
+                if (!verticalSlug.trim() || !verticalTitle.trim()) return
+                setVerticalBusy(true)
+                setVerticalMessage(null)
+                try {
+                  await createVerticalSeries({
+                    slug: verticalSlug.trim().toLowerCase().replace(/\s+/g, "-"),
+                    title: verticalTitle.trim(),
+                  })
+                  setVerticalMessage("Series created.")
+                  const res = await fetchMyVerticalSeries()
+                  setMySeries(res.items)
+                } catch (e) {
+                  setVerticalMessage(e instanceof Error ? e.message : "Failed to create series")
+                } finally {
+                  setVerticalBusy(false)
+                }
+              }}
+              onCreateEpisode={async () => {
+                if (!episodeSeriesSlug.trim() || !episodeTitle.trim()) return
+                setVerticalBusy(true)
+                setVerticalMessage(null)
+                try {
+                  const ep = await createVerticalEpisode(episodeSeriesSlug.trim(), {
+                    episodeNumber,
+                    title: episodeTitle.trim(),
+                  }) as { id: string }
+                  setLastEpisodeId(ep.id)
+                  setVerticalMessage(`Episode ${episodeNumber} created. Upload video below.`)
+                  const res = await fetchMyVerticalSeries()
+                  setMySeries(res.items)
+                } catch (e) {
+                  setVerticalMessage(e instanceof Error ? e.message : "Failed to create episode")
+                } finally {
+                  setVerticalBusy(false)
+                }
+              }}
+              onAttachVideo={async () => {
+                if (!lastEpisodeId || !episodeVideoFile) return
+                setVerticalBusy(true)
+                setVerticalMessage(null)
+                try {
+                  const done = await uploadVideoFlow(
+                    {
+                      type: "video",
+                      title: episodeTitle.trim() || `Episode ${episodeNumber}`,
+                      mimeType: episodeVideoFile.type,
+                      fileName: episodeVideoFile.name,
+                    },
+                    episodeVideoFile,
+                  )
+                  await attachVerticalEpisodeVideo(lastEpisodeId, done.videoId)
+                  setVerticalMessage("Episode video attached.")
+                  setEpisodeVideoFile(null)
+                } catch (e) {
+                  setVerticalMessage(e instanceof Error ? e.message : "Upload or attach failed")
+                } finally {
+                  setVerticalBusy(false)
+                }
+              }}
+            />
+          )}
+
           {screen === "upload" && (
             <UploadPanel
               selected={uploadType}
@@ -418,6 +531,7 @@ function MenuPanel({
         },
     { icon: Clock, label: "Watch History", description: "Recently watched content", screen: "history" },
     { icon: Video, label: "Your Videos", description: "Upload shorts, videos, movies", screen: "upload" },
+    { icon: Film, label: "Micro-dramas", description: "Create vertical series & episodes", screen: "verticals" },
     {
       icon: BarChart3,
       label: "Performance & Revenue",
@@ -1015,6 +1129,148 @@ function UploadPanel({
             {uploading ? `Uploading${progress ? ` ${progress}%` : "..."}` : "Start Upload"}
           </Button>
         </div>
+      )}
+    </div>
+  )
+}
+
+function VerticalSeriesPanel({
+  mySeries,
+  verticalSlug,
+  verticalTitle,
+  episodeSeriesSlug,
+  episodeNumber,
+  episodeTitle,
+  lastEpisodeId,
+  episodeVideoFile,
+  busy,
+  message,
+  onSlugChange,
+  onTitleChange,
+  onEpisodeSeriesSlugChange,
+  onEpisodeNumberChange,
+  onEpisodeTitleChange,
+  onEpisodeVideoFileChange,
+  onCreateSeries,
+  onCreateEpisode,
+  onAttachVideo,
+}: {
+  mySeries: Array<{
+    id: string
+    slug: string
+    title: string
+    episodes: Array<{ id: string; episodeNumber: number; title: string }>
+  }>
+  verticalSlug: string
+  verticalTitle: string
+  episodeSeriesSlug: string
+  episodeNumber: number
+  episodeTitle: string
+  lastEpisodeId: string | null
+  episodeVideoFile: File | null
+  busy: boolean
+  message: string | null
+  onSlugChange: (v: string) => void
+  onTitleChange: (v: string) => void
+  onEpisodeSeriesSlugChange: (v: string) => void
+  onEpisodeNumberChange: (n: number) => void
+  onEpisodeTitleChange: (v: string) => void
+  onEpisodeVideoFileChange: (f: File | null) => void
+  onCreateSeries: () => void
+  onCreateEpisode: () => void
+  onAttachVideo: () => void
+}) {
+  return (
+    <div className="space-y-6 pt-2">
+      {message && (
+        <p className="text-sm text-center text-muted-foreground bg-secondary/40 rounded-lg py-2 px-3">
+          {message}
+        </p>
+      )}
+
+      <section className="space-y-3">
+        <h4 className="text-sm font-semibold">Your series</h4>
+        {mySeries.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No micro-drama series yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {mySeries.map((s) => (
+              <li key={s.id} className="p-3 rounded-xl bg-secondary/30 text-sm">
+                <p className="font-medium">{s.title}</p>
+                <p className="text-xs text-muted-foreground">/{s.slug} · {s.episodes.length} episodes</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="space-y-3 border-t border-border pt-4">
+        <h4 className="text-sm font-semibold">New series</h4>
+        <input
+          value={verticalSlug}
+          onChange={(e) => onSlugChange(e.target.value)}
+          placeholder="slug (e.g. midnight-contract)"
+          className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+        />
+        <input
+          value={verticalTitle}
+          onChange={(e) => onTitleChange(e.target.value)}
+          placeholder="Series title"
+          className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+        />
+        <Button onClick={onCreateSeries} disabled={busy} className="w-full rounded-full">
+          Create series
+        </Button>
+      </section>
+
+      <section className="space-y-3 border-t border-border pt-4">
+        <h4 className="text-sm font-semibold">Add episode</h4>
+        <input
+          value={episodeSeriesSlug}
+          onChange={(e) => onEpisodeSeriesSlugChange(e.target.value)}
+          placeholder="Series slug"
+          className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+        />
+        <input
+          type="number"
+          min={1}
+          value={episodeNumber}
+          onChange={(e) => onEpisodeNumberChange(Number(e.target.value) || 1)}
+          className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+        />
+        <input
+          value={episodeTitle}
+          onChange={(e) => onEpisodeTitleChange(e.target.value)}
+          placeholder="Episode title"
+          className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+        />
+        <Button onClick={onCreateEpisode} disabled={busy} className="w-full rounded-full">
+          Create episode
+        </Button>
+      </section>
+
+      {lastEpisodeId && (
+        <section className="space-y-3 border-t border-border pt-4">
+          <h4 className="text-sm font-semibold">Attach episode video</h4>
+          <p className="text-xs text-muted-foreground">Episode ID: {lastEpisodeId}</p>
+          <label className="block p-6 rounded-xl border-2 border-dashed border-border text-center cursor-pointer hover:border-primary/50">
+            <input
+              type="file"
+              accept="video/*"
+              className="hidden"
+              onChange={(e) => onEpisodeVideoFileChange(e.target.files?.[0] ?? null)}
+            />
+            <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm">{episodeVideoFile?.name ?? "Choose video file"}</p>
+          </label>
+          <Button
+            onClick={onAttachVideo}
+            disabled={busy || !episodeVideoFile}
+            className="w-full rounded-full"
+          >
+            Upload & attach
+          </Button>
+        </section>
       )}
     </div>
   )

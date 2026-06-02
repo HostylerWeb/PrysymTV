@@ -25,13 +25,61 @@ import { Header } from "@/components/header"
 import { useAuth } from "@/contexts/auth-context"
 
 import { AdInterstitial } from "@/components/ad-interstitial"
+import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { mockShorts } from "@/lib/mock-data"
+import { fetchShortsFeed } from "@/lib/api/videos-feed"
+import { formatViewCount } from "@/lib/format-media"
+import type { VideoCard } from "@/lib/api/feed"
 
-// Sample shorts data
-const shortsData = mockShorts
+export type ShortItem = {
+  id: string
+  videoUrl: string
+  username: string
+  userSlug: string
+  userAvatar: string
+  caption: string
+  likes: string
+  comments: string
+  shares: string
+  saves: string
+  music: string
+  isFollowing: boolean
+}
+
+function mapShortFromApi(card: VideoCard): ShortItem {
+  return {
+    id: card.id,
+    videoUrl: card.playbackUrl ?? card.videoUrl ?? "",
+    username: `@${card.channelSlug}`,
+    userSlug: card.channelSlug,
+    userAvatar: `https://api.dicebear.com/7.x/initials/svg?seed=${card.channelSlug}`,
+    caption: card.title,
+    likes: formatViewCount(card.viewsCount),
+    comments: "0",
+    shares: "0",
+    saves: "0",
+    music: `Original Sound - ${card.channelSlug}`,
+    isFollowing: false,
+  }
+}
+
+const fallbackShorts: ShortItem[] = mockShorts.map((s) => ({
+  id: String(s.id),
+  videoUrl: s.videoUrl,
+  username: s.username,
+  userSlug: s.userSlug,
+  userAvatar: s.userAvatar,
+  caption: s.caption,
+  likes: s.likes,
+  comments: s.comments,
+  shares: s.shares,
+  saves: s.saves,
+  music: s.music,
+  isFollowing: s.isFollowing,
+}))
 
 interface ShortVideoProps {
-  short: typeof shortsData[0]
+  short: ShortItem
   isActive: boolean
   onLike: () => void
   onComment: () => void
@@ -110,15 +158,16 @@ function ShortVideo({
   return (
     <div className="relative w-full h-full bg-black snap-start snap-always">
       {/* Video */}
-      <video
-        ref={videoRef}
+      <HlsVideoPlayer
         src={short.videoUrl}
         className="w-full h-full object-cover"
-        loop
+        controls={false}
         muted={isMuted}
         playsInline
-        onClick={togglePlay}
+        loop
+        videoRef={videoRef}
       />
+      <button type="button" className="absolute inset-0 z-10" onClick={togglePlay} aria-label="Toggle play" />
 
       {/* Play/Pause Indicator */}
       {showControls && (
@@ -268,27 +317,28 @@ function ShortVideo({
 
 export default function ShortsPage() {
   const { user, isAuthenticated } = useAuth()
+  const [shortsData, setShortsData] = useState<ShortItem[]>(fallbackShorts)
   const [activeIndex, setActiveIndex] = useState(0)
-  const [likedShorts, setLikedShorts] = useState<Set<number>>(new Set())
-  const [savedShorts, setSavedShorts] = useState<Set<number>>(new Set())
+  const [likedShorts, setLikedShorts] = useState<Set<string>>(new Set())
+  const [savedShorts, setSavedShorts] = useState<Set<string>>(new Set())
   const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set(
     shortsData.filter(s => s.isFollowing).map(s => s.username)
   ))
   const [showComments, setShowComments] = useState(false)
-  const [activeShortForComments, setActiveShortForComments] = useState<number | null>(null)
+  const [activeShortForComments, setActiveShortForComments] = useState<string | null>(null)
+
+  useEffect(() => {
+    void fetchShortsFeed().then((res) => {
+      if (res.items.length) {
+        setShortsData(res.items.map(mapShortFromApi))
+      }
+    })
+  }, [])
   const [newComment, setNewComment] = useState("")
   const [replyingTo, setReplyingTo] = useState<{id: number, user: string} | null>(null)
 
   type CommentType = {id: number, user: string, text: string, likes: number, avatar: string, isLiked?: boolean, replies?: CommentType[]}
-  const [comments, setComments] = useState<{[key: number]: CommentType[]}>({
-    1: [
-      { id: 1, user: "@gamer123", text: "That was insane! How did you do that?!", likes: 234, avatar: "https://api.dicebear.com/7.x/initials/svg?seed=G1", replies: [] },
-      { id: 2, user: "@noob_player", text: "Teach me your ways master", likes: 89, avatar: "https://api.dicebear.com/7.x/initials/svg?seed=NP", replies: [] },
-    ],
-    2: [
-      { id: 1, user: "@wanderlust", text: "Where is this?? I need to go!", likes: 567, avatar: "https://api.dicebear.com/7.x/initials/svg?seed=WL", replies: [] },
-    ],
-  })
+  const [comments, setComments] = useState<Record<string, CommentType[]>>({})
   const containerRef = useRef<HTMLDivElement>(null)
   const [activeTab, setActiveTab] = useState("shorts")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -319,7 +369,7 @@ export default function ShortsPage() {
     }
   }
 
-  const toggleLike = (shortId: number) => {
+  const toggleLike = (shortId: string) => {
     setLikedShorts(prev => {
       const newSet = new Set(prev)
       if (newSet.has(shortId)) {
@@ -331,7 +381,7 @@ export default function ShortsPage() {
     })
   }
 
-  const toggleSave = (shortId: number) => {
+  const toggleSave = (shortId: string) => {
     setSavedShorts(prev => {
       const newSet = new Set(prev)
       if (newSet.has(shortId)) {
@@ -355,7 +405,7 @@ export default function ShortsPage() {
     })
   }
 
-  const openComments = (shortId: number) => {
+  const openComments = (shortId: string) => {
     setActiveShortForComments(shortId)
     setShowComments(true)
   }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Play, Star, ChevronDown, Filter, Grid3X3, List, Info, Plus, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -9,10 +9,12 @@ import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+import { fetchFeaturedMovie, fetchMoviesFeed } from "@/lib/api/videos-feed"
+import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
 
 const genres = ["All", "Action", "Comedy", "Drama", "Thriller", "Sci-Fi", "Horror", "Romance", "Documentary"]
 
-const featuredMovie = {
+const defaultFeatured = {
   title: "The Last Frontier",
   poster: "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800&h=450&fit=crop",
   year: "2024",
@@ -22,7 +24,7 @@ const featuredMovie = {
   description: "An epic journey through uncharted territories where courage meets destiny. Follow the remarkable story of explorers facing the unknown."
 }
 
-const movies = [
+const defaultMovies = [
   { id: "1", title: "Interstellar", poster: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=300&h=450&fit=crop", year: "2023", rating: "9.0", genre: "Sci-Fi" },
   { id: "2", title: "The Dark Knight", poster: "https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=300&h=450&fit=crop", year: "2022", rating: "9.1", genre: "Action" },
   { id: "3", title: "Inception", poster: "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=300&h=450&fit=crop", year: "2023", rating: "8.8", genre: "Thriller" },
@@ -54,6 +56,36 @@ export default function MoviesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [featuredMovie, setFeaturedMovie] = useState(defaultFeatured)
+  const [movies, setMovies] = useState(defaultMovies)
+
+  useEffect(() => {
+    void fetchMoviesFeed(1).then((res) => {
+      if (!res.items.length) return
+      setMovies(
+        res.items.map((m) => ({
+          id: m.id,
+          title: m.title,
+          poster: videoThumbnail(m.thumbnailUrl),
+          year: String(m.releaseYear ?? new Date().getFullYear()),
+          rating: "8.5",
+          genre: m.category ?? "Drama",
+        })),
+      )
+    })
+    void fetchFeaturedMovie().then(({ item }) => {
+      if (!item) return
+      setFeaturedMovie({
+        title: item.title,
+        poster: videoThumbnail(item.thumbnailUrl),
+        year: String(item.releaseYear ?? "2024"),
+        rating: "9.0",
+        duration: formatDuration(item.durationSeconds),
+        genre: item.category ?? "Drama",
+        description: item.tagline ?? item.title,
+      })
+    })
+  }, [])
 
   const filteredMovies = movies.filter(movie => {
     const matchesGenre = activeGenre === "All" || movie.genre === activeGenre;

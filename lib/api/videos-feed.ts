@@ -59,10 +59,17 @@ export type ApiVideoDetail = {
   description: string | null;
   thumbnailUrl: string | null;
   hlsMasterUrl: string | null;
+  playbackUrl: string | null;
+  videoUrl: string | null;
   durationSeconds: number;
   viewsCount: number;
   likesCount: number;
+  commentsCount?: number;
   type: string;
+  category?: string | null;
+  releaseYear?: number | null;
+  ageRating?: string | null;
+  tagline?: string | null;
   creator: {
     id: string;
     username: string;
@@ -73,4 +80,26 @@ export type ApiVideoDetail = {
 
 export function fetchVideo(id: string) {
   return apiRequest<ApiVideoDetail>(`/videos/${id}`, { auth: false });
+}
+
+export function fetchFeaturedMovie() {
+  return withApiFallback(
+    () => apiRequest<{ item: VideoCard | null }>("/videos/feed/movies/featured", { auth: false }),
+    { item: null },
+  );
+}
+
+export function fetchVideoWithFallback(id: string) {
+  return withApiFallback(
+    () => fetchVideo(id),
+    null as ApiVideoDetail | null,
+  );
+}
+
+export function toggleVideoLike(id: string) {
+  return apiRequest<{ liked: boolean }>(`/videos/${id}/like`, { method: "POST" });
+}
+
+export function toggleVideoSave(id: string) {
+  return apiRequest<{ saved: boolean }>(`/videos/${id}/save`, { method: "POST" });
 }

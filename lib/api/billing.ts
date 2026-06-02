@@ -38,6 +38,25 @@ export function fetchGiftCatalog() {
   );
 }
 
+export function createCoinCheckout(packageId: string) {
+  return apiRequest<{
+    checkoutUrl?: string;
+    devMode?: boolean;
+    coinsAdded?: number;
+    coinsBalance?: number;
+    sessionId?: string;
+  }>("/billing/stripe/create-checkout", {
+    method: "POST",
+    body: { packageId, productType: "coins" },
+  });
+}
+
+export function fulfillCoinCheckout(sessionId: string) {
+  return apiRequest<{ success: boolean; coinsBalance: number }>(
+    `/billing/stripe/fulfill?session_id=${encodeURIComponent(sessionId)}`,
+  );
+}
+
 export function sendGift(body: {
   giftId: string;
   receiverId: string;

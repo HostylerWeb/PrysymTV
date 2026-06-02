@@ -28,6 +28,8 @@ import { useAuth } from "@/contexts/auth-context"
 import { GIFT_CATALOG } from "@/lib/mock-data"
 import { fetchGiftCatalog, sendGift } from "@/lib/api/billing"
 import { fetchStream, type StreamDetail } from "@/lib/api/streams"
+import { connectStreamChat, type StreamChatMessage } from "@/lib/api/stream-chat"
+import type { Socket } from "socket.io-client"
 
 const GIFT_ICONS: Record<string, string> = {
   heart: "❤️",
@@ -41,11 +43,13 @@ const GIFT_ICONS: Record<string, string> = {
 export default function LiveWatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const [stream, setStream] = useState<StreamDetail | null>(null)
-  const [giftCatalog, setGiftCatalog] = useState(GIFT_CATALOG)
+  const [giftCatalog, setGiftCatalog] = useState<
+    Array<{ id: string; name: string; cost: number; icon: string }>
+  >([...GIFT_CATALOG])
   const { user, isAuthenticated, updateCoins, refreshUser } = useAuth()
-  const [chatMessages, setChatMessages] = useState([
-    { id: "1", user: "GamerPro99", message: "This stream is amazing! 🔥", color: "text-cyan-400" },
-  ])
+  const [chatMessages, setChatMessages] = useState<
+    Array<{ id: string; user: string; message: string; color: string }>
+  >([])
   const [messageInput, setMessageInput] = useState("")
   const [showGiftPanel, setShowGiftPanel] = useState(false)
   const [isFollowing, setIsFollowing] = useState(false)
@@ -58,6 +62,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
   const [isReportOpen, setIsReportOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
   const chatRef = useRef<HTMLDivElement>(null)
+  const socketRef = useRef<Socket | null>(null)
   const userCoins = user?.coins || 0
 
   useEffect(() => {
@@ -88,12 +93,59 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
     return () => clearInterval(interval)
   }, [stream])
 
+  useEffect(() => {
+    if (!stream?.id) return
+    let cancelled = false
+    void connectStreamChat(stream.id)
+      .then(({ socket, history }) => {
+        if (cancelled) {
+          socket.disconnect()
+          return
+        }
+        socketRef.current = socket
+        setChatMessages(
+          history.map((m) => ({
+            id: m.id,
+            user: m.user,
+            message: m.message,
+            color: m.color,
+          })),
+        )
+        socket.on("message", (msg: StreamChatMessage) => {
+          setChatMessages((prev) => [
+            ...prev,
+            {
+              id: msg.id,
+              user: msg.user,
+              message: msg.message,
+              color: msg.color,
+            },
+          ])
+        })
+      })
+      .catch(() => {
+        setChatMessages([
+          {
+            id: "1",
+            user: "GamerPro99",
+            message: "This stream is amazing! 🔥",
+            color: "text-cyan-400",
+          },
+        ])
+      })
+    return () => {
+      cancelled = true
+      socketRef.current?.disconnect()
+      socketRef.current = null
+    }
+  }, [stream?.id])
+
   const requireAuth = (action: () => void) => {
     if (!isAuthenticated) setIsAuthModalOpen(true)
     else action()
   }
 
-  const handleSendGift = async (gift: (typeof GIFT_CATALOG)[number]) => {
+  const handleSendGift = async (gift: { id: string; name: string; cost: number; icon: string }) => {
     if (userCoins < gift.cost || !stream?.creatorId) return
     try {
       await sendGift({
@@ -126,12 +178,28 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
   }
 
   const sendMessage = () => {
-    if (!messageInput.trim()) return
-    setChatMessages((p) => [
-      ...p,
-      { id: Date.now().toString(), user: "You", message: messageInput, color: "text-primary" },
-    ])
-    setMessageInput("")
+    if (!messageInput.trim() || !stream) return
+    requireAuth(() => {
+      const text = messageInput.trim()
+      setMessageInput("")
+      socketRef.current?.emit(
+        "message",
+        { streamId: stream.id, message: text },
+        (res: { error?: string }) => {
+          if (res?.error) {
+            setChatMessages((p) => [
+              ...p,
+              {
+                id: Date.now().toString(),
+                user: "You",
+                message: text,
+                color: "text-primary",
+              },
+            ])
+          }
+        },
+      )
+    })
   }
 
   return (
@@ -208,7 +276,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
             <div className="flex items-center justify-between mt-3 md:mt-4 gap-3">
               <Link href={`/creator/${stream.streamerSlug}`} className="flex items-center gap-3 min-w-0">
                 <img
-                  src={stream.streamerAvatar}
+                  src={stream.streamerAvatar ?? ""}
                   alt=""
                   className="w-11 h-11 md:w-12 md:h-12 rounded-full ring-2 ring-primary shrink-0"
                 />

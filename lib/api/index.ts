@@ -12,3 +12,5 @@ export * from "./streams";
 export * from "./billing";
 export * from "./search";
 export * from "./fallback";
+export * from "./comments";
+export * from "./verticals-admin";
