@@ -1,10 +1,17 @@
-import { Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { PrismaService } from '../prisma/prisma.service';
+import { BillingService } from './billing.service';
+import { SendGiftDto } from './dto/send-gift.dto';
 
 @Controller('billing')
 export class BillingController {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly billing: BillingService,
+  ) {}
 
   @Get('products')
   async products() {
@@ -24,12 +31,12 @@ export class BillingController {
   @Post('stripe/create-checkout')
   @UseGuards(JwtAuthGuard)
   checkout() {
-    return { checkoutUrl: null, message: 'Stripe — Week 5' };
+    return { checkoutUrl: null, message: 'Stripe checkout — configure STRIPE_SECRET_KEY' };
   }
 
   @Post('gifts/send')
   @UseGuards(JwtAuthGuard)
-  sendGift() {
-    return { success: false, message: 'Gifts — Week 5' };
+  sendGift(@CurrentUser() user: AuthUserPayload, @Body() body: SendGiftDto) {
+    return this.billing.sendGift(user.id, body);
   }
 }

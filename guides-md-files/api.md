@@ -8,486 +8,348 @@
 
 | Status | Meaning |
 |--------|---------|
-| ✅ Implemented | Production-ready for local dev |
-| 🚧 Stub | Route exists; business logic pending (see week in backend plan) |
+| ✅ Implemented | Works for local dev |
+| 🚧 Partial | Route exists; limited or placeholder behavior |
+| 📋 Planned | Not implemented (Phase 2+ namespaces below) |
 
 ---
 
-## Health
+## Endpoint index (all routes)
+
+| Method | Path | Status |
+|--------|------|--------|
+| `GET` | `/` | ✅ API root message |
+| `GET` | `/health` | ✅ |
+| `POST` | `/auth/register` | ✅ |
+| `POST` | `/auth/login` | ✅ |
+| `POST` | `/auth/refresh` | ✅ |
+| `POST` | `/auth/logout` | ✅ |
+| `POST` | `/auth/forgot-password` | ✅ |
+| `POST` | `/auth/reset-password` | ✅ |
+| `POST` | `/auth/oauth/google` | 🚧 |
+| `POST` | `/auth/oauth/apple` | 🚧 |
+| `GET` | `/users/me` | ✅ |
+| `PUT` | `/users/me` | ✅ |
+| `GET` | `/users/me/notification-preferences` | ✅ |
+| `PUT` | `/users/me/notification-preferences` | ✅ |
+| `PUT` | `/users/me/social-links` | ✅ |
+| `POST` | `/users/apply-streamer` | ✅ |
+| `GET` | `/users/me/videos` | ✅ |
+| `GET` | `/users/me/saved` | ✅ |
+| `GET` | `/users/me/liked` | ✅ |
+| `GET` | `/users/me/notifications` | ✅ |
+| `PUT` | `/users/me/notifications/:id/read` | ✅ |
+| `PUT` | `/users/me/notifications/read-all` | ✅ |
+| `DELETE` | `/users/me/notifications` | ✅ |
+| `GET` | `/users/:username` | ✅ |
+| `POST` | `/users/:username/follow` | ✅ |
+| `DELETE` | `/users/:username/follow` | ✅ |
+| `GET` | `/feed/home` | ✅ |
+| `GET` | `/feed/trending` | ✅ |
+| `POST` | `/videos/upload/init` | ✅ |
+| `POST` | `/videos/upload/complete` | ✅ |
+| `GET` | `/videos/feed/shorts` | ✅ |
+| `GET` | `/videos/feed/movies` | ✅ |
+| `GET` | `/videos/feed/movies/featured` | ✅ |
+| `GET` | `/videos/:id` | ✅ |
+| `POST` | `/videos/:id/like` | ✅ |
+| `POST` | `/videos/:id/save` | ✅ |
+| `POST` | `/videos/:id/report` | ✅ |
+| `POST` | `/media/upload/:videoId` | ✅ (local `STORAGE_DRIVER` only, multipart) |
+| `GET` | `/history` | ✅ |
+| `POST` | `/history/progress` | ✅ |
+| `DELETE` | `/history/clear` | ✅ |
+| `DELETE` | `/history/:contentType/:contentId` | ✅ |
+| `GET` | `/billing/products` | ✅ |
+| `GET` | `/billing/gifts/catalog` | ✅ |
+| `POST` | `/billing/stripe/create-checkout` | 🚧 |
+| `POST` | `/billing/gifts/send` | ✅ (coins + `viewer_support` revenue split) |
+| `POST` | `/streams/init` | ✅ |
+| `GET` | `/streams/live` | ✅ |
+| `GET` | `/streams/:id` | ✅ (UUID or creator `username`) |
+| `GET` | `/podcasts/shows` | ✅ |
+| `GET` | `/podcasts/episodes/feed` | ✅ |
+| `GET` | `/podcasts/episodes/:id` | ✅ |
+| `GET` | `/playlists/:id` | ✅ |
+| `GET` | `/search` | ✅ |
+| `GET` | `/search/suggest` | ✅ |
+| `GET` | `/ads/serve` | ✅ |
+| `POST` | `/ads/track/impression` | ✅ |
+| `POST` | `/ads/track/click` | ✅ |
+| `POST` | `/analytics/track` | ✅ |
+| `GET` | `/analytics/creators/me/dashboard` | ✅ |
+| `GET` | `/analytics/creators/me/stats` | ✅ |
+| `GET` | `/analytics/creators/me/content` | ✅ |
+| `GET` | `/analytics/creators/stats` | ✅ (legacy) |
+| `GET` | `/verticals` | ✅ Micro-drama series list |
+| `GET` | `/verticals/:slug` | ✅ Series + episodes |
+| `GET` | `/verticals/:slug/episodes/:episodeNumber` | ✅ Episode playback payload |
+| `GET` | `/programs` | ✅ API only (no frontend hub) |
+| `GET` | `/programs/:slug` | ✅ API only |
+| `GET` | `/admin/analytics/overview` | 🚧 |
+| `GET` | `/admin/revenue-split-rules` | ✅ |
+| `PUT` | `/admin/revenue-split-rules/:ruleKey` | ✅ |
+| `GET` | `/admin/ads/campaigns` | ✅ |
+| `POST` | `/admin/ads/campaigns` | ✅ |
+| `PUT` | `/admin/ads/campaigns/:id/status` | ✅ |
+
+---
+
+## Planned API namespaces (Phase 2+)
+
+| Prefix | Purpose |
+|--------|---------|
+| `/events` | Live events — tickets, schedule |
+| `/stores` | Creator Store |
+| `/support` | Tips, donations, super chats |
+| `/gaf` | GAF ledger (admin) |
+| `/insider` | Platform Insider $4.99/mo |
+| `/advertisers` | B2B self-serve ads |
+| `/sponsorships` | Brand ↔ creator deals |
+| `/revenue` | Ledger queries |
+
+---
+
+## Root & health
+
+### `GET /` ✅
+
+Returns a short welcome string (under global prefix `/api/v1`).
 
 ### `GET /health` ✅
 
-**Purpose:** Liveness + database connectivity.
-
 **Auth:** None
 
-**Response `200`**
 ```json
-{
-  "status": "ok",
-  "timestamp": "2026-05-31T12:00:00.000Z"
-}
+{ "status": "ok", "timestamp": "2026-05-31T12:00:00.000Z" }
 ```
 
 ---
 
 ## Auth (`/auth`)
 
-### `POST /auth/register` ✅
+| Route | Status |
+|-------|--------|
+| `POST /auth/register` | ✅ |
+| `POST /auth/login` | ✅ |
+| `POST /auth/refresh` | ✅ Cookie `prysym_refresh` |
+| `POST /auth/logout` | ✅ |
+| `POST /auth/forgot-password` | ✅ Email via SMTP |
+| `POST /auth/reset-password` | ✅ |
+| `POST /auth/oauth/google` | 🚧 |
+| `POST /auth/oauth/apple` | 🚧 |
 
-**Purpose:** Create account and issue tokens.
-
-**Body**
-```json
-{
-  "email": "user@example.com",
-  "username": "creator_jane",
-  "password": "securePass123",
-  "displayName": "Jane Creator"
-}
-```
-
-**Response `201`**
-```json
-{
-  "accessToken": "eyJhbG...",
-  "tokenType": "Bearer",
-  "expiresIn": "15m",
-  "user": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "username": "creator_jane",
-    "role": "user"
-  }
-}
-```
-
-**Sets cookie:** `prysym_refresh` (HttpOnly)
-
-**Errors:** `409` duplicate email/username, `400` validation
-
----
-
-### `POST /auth/login` ✅
-
-**Purpose:** Authenticate with email + password.
-
-**Body**
-```json
-{
-  "email": "user@example.com",
-  "password": "securePass123"
-}
-```
-
-**Response:** Same shape as register.
-
-**Errors:** `401` invalid credentials
-
----
-
-### `POST /auth/refresh` ✅
-
-**Purpose:** Rotate access token using refresh cookie.
-
-**Auth:** Cookie `prysym_refresh`
-
-**Response:** Same as login (new access token + new refresh cookie).
-
----
-
-### `POST /auth/logout` ✅
-
-**Purpose:** Revoke refresh session and clear cookie.
-
-**Auth:** Optional refresh cookie
-
-**Response**
-```json
-{ "success": true }
-```
-
----
-
-### `POST /auth/forgot-password` ✅
-
-**Purpose:** Start password reset (email link in production).
-
-**Body**
-```json
-{ "email": "user@example.com" }
-```
-
-**Response `200`**
-```json
-{
-  "success": true,
-  "message": "If the email exists, a reset link was sent.",
-  "devResetToken": "only-in-development"
-}
-```
-
----
-
-### `POST /auth/reset-password` ✅
-
-**Purpose:** Complete reset with token from email.
-
-**Body**
-```json
-{
-  "token": "raw-token-from-email",
-  "newPassword": "newSecurePass123"
-}
-```
-
-**Response**
-```json
-{ "success": true }
-```
-
----
-
-### `POST /auth/oauth/google` 🚧 Week 1
-
-**Body:** `{ "idToken": "..." }`
-
-### `POST /auth/oauth/apple` 🚧 Week 1
-
-**Body:** `{ "identityToken": "...", "authorizationCode": "..." }`
+Register/login response includes `accessToken`, `tokenType`, `expiresIn`, `user`. Sets HttpOnly refresh cookie on web.
 
 ---
 
 ## Users (`/users`)
 
-### `GET /users/me` ✅
+All `/users/me/*` routes require Bearer auth.
 
-**Purpose:** Current user profile + counts.
-
-**Auth:** Bearer required
-
-**Response `200`**
-```json
-{
-  "id": "uuid",
-  "email": "user@example.com",
-  "username": "creator_jane",
-  "displayName": "Jane",
-  "avatarUrl": null,
-  "bannerUrl": null,
-  "bio": null,
-  "role": "user",
-  "isVerified": false,
-  "streamerStatus": "none",
-  "coinsBalance": 0,
-  "premiumTier": "none",
-  "premiumExpiresAt": null,
-  "followersCount": 0,
-  "followingCount": 0,
-  "videosCount": 0,
-  "socialLinks": [],
-  "notificationPrefs": []
-}
-```
-
----
-
-### `PUT /users/me` ✅
-
-**Body** (all optional)
-```json
-{
-  "displayName": "Jane",
-  "bio": "Creator bio",
-  "avatarUrl": "https://cdn.../avatar.jpg",
-  "bannerUrl": "https://cdn.../banner.jpg"
-}
-```
-
-**Response:** Updated user object (same as GET /me).
-
----
-
-### `GET /users/me/notification-preferences` ✅
-
-**Response**
-```json
-[
-  { "userId": "uuid", "type": "follow", "enabled": true },
-  { "type": "like", "enabled": true }
-]
-```
-
----
-
-### `PUT /users/me/notification-preferences` ✅
-
-**Body**
-```json
-{ "type": "live", "enabled": false }
-```
-
-`type` enum: `follow` | `like` | `comment` | `gift` | `live` | `upload` | `system`
-
----
-
-### `PUT /users/me/social-links` ✅
-
-**Body**
-```json
-{
-  "links": [
-    { "label": "Website", "url": "https://example.com", "sortOrder": 0 }
-  ]
-}
-```
-
----
-
-### `POST /users/apply-streamer` ✅
-
-**Body**
-```json
-{
-  "description": "I stream games daily...",
-  "idDocumentUrl": "optional-r2-path"
-}
-```
-
-**Response**
-```json
-{ "success": true, "streamerStatus": "pending" }
-```
-
----
-
-### `GET /users/me/videos` ✅
-
-**Query:** `page`, `limit`
-
-**Response**
-```json
-{
-  "items": [],
-  "meta": { "page": 1, "limit": 20, "total": 0 }
-}
-```
-
----
-
-### `GET /users/me/saved` ✅
-
-**Query:** `page`, `limit` — watchlist from `saved_items`.
-
----
-
-### `GET /users/me/liked` ✅
-
-**Query:** `page`, `limit` — polymorphic likes.
-
----
-
-### `GET /users/me/notifications` ✅
-
-**Query:** `page`, `limit`
-
----
-
-### `PUT /users/me/notifications/:id/read` ✅
-
-**Response:** `{ "success": true }`
-
----
-
-### `PUT /users/me/notifications/read-all` ✅
-
----
-
-### `DELETE /users/me/notifications` ✅
-
----
-
-### `GET /users/:username` ✅
-
-**Purpose:** Public creator profile.
-
-**Response**
-```json
-{
-  "username": "creator_jane",
-  "displayName": "Jane",
-  "followersCount": 0,
-  "isLive": false,
-  "liveStreamId": null
-}
-```
-
----
-
-### `POST /users/:username/follow` ✅
-
-**Auth:** Bearer required
-
----
-
-### `DELETE /users/:username/follow` ✅
+| Route | Status | Notes |
+|-------|--------|-------|
+| `GET /users/me` | ✅ | Includes `partnerTier`, `programVerticals` when set |
+| `PUT /users/me` | ✅ | `displayName`, `bio`, `avatarUrl`, `bannerUrl` |
+| `GET/PUT /users/me/notification-preferences` | ✅ | |
+| `PUT /users/me/social-links` | ✅ | `{ links: [{ label, url, sortOrder }] }` |
+| `POST /users/apply-streamer` | ✅ | |
+| `GET /users/me/videos` | ✅ | Paginated |
+| `GET /users/me/saved` | ✅ | |
+| `GET /users/me/liked` | ✅ | |
+| `GET /users/me/notifications` | ✅ | |
+| `PUT /users/me/notifications/:id/read` | ✅ | |
+| `PUT /users/me/notifications/read-all` | ✅ | |
+| `DELETE /users/me/notifications` | ✅ | |
+| `GET /users/:username` | ✅ | Public profile + `isLive`, `liveStreamId` |
+| `POST /users/:username/follow` | ✅ | |
+| `DELETE /users/:username/follow` | ✅ | |
 
 ---
 
 ## Feed (`/feed`)
 
-### `GET /feed/home` 🚧 Week 7
+### `GET /feed/home` ✅
 
-**Purpose:** Aggregated home payload.
+Aggregates: `liveNow`, `featuredLive`, `trending`, `newReleases`, `movies`, `featuredMovie`, `continueWatching` (empty until watch history wired).
 
-### `GET /feed/trending` 🚧
+### `GET /feed/trending` ✅
+
+**Query:** `page`, `limit`
 
 ---
 
 ## Videos (`/videos`)
 
-### `POST /videos/upload/init` 🚧 Week 2
+| Route | Status |
+|-------|--------|
+| `POST /videos/upload/init` | ✅ Presigned PUT (S3) or local multipart URL |
+| `POST /videos/upload/complete` | ✅ Enqueues processing job |
+| `GET /videos/feed/shorts` | ✅ `?cursor=` |
+| `GET /videos/feed/movies` | ✅ `?page=&limit=` |
+| `GET /videos/feed/movies/featured` | ✅ |
+| `GET /videos/:id` | ✅ Full video + creator |
+| `POST /videos/:id/like` | ✅ Toggle |
+| `POST /videos/:id/save` | ✅ Toggle |
+| `POST /videos/:id/report` | ✅ `{ reason?, details? }` |
 
-### `POST /videos/upload/complete` 🚧 Week 2
+---
 
-### `GET /videos/feed/shorts` 🚧 Week 3
+## Media (`/media`)
 
-**Query:** `cursor`
+### `POST /media/upload/:videoId` ✅
 
-### `GET /videos/feed/movies` 🚧 Week 3
-
-### `GET /videos/feed/movies/featured` 🚧 Week 3
-
-### `GET /videos/:id` 🚧 Week 3
-
-### `POST /videos/:id/like` 🚧 Week 3
-
-### `POST /videos/:id/save` 🚧 Week 3
-
-### `POST /videos/:id/report` 🚧 Week 3
+**Auth:** Bearer  
+**Body:** `multipart/form-data` field `file`  
+**Only when** `STORAGE_DRIVER=local`. For S3, use presigned PUT from upload/init.
 
 ---
 
 ## History (`/history`) ✅
 
-All routes require Bearer auth.
+Bearer required.
 
-### `GET /history`
-
-**Query:** `page`, `limit`
-
-### `POST /history/progress` ✅
-
-**Body**
-```json
-{
-  "contentType": "video",
-  "contentId": "uuid",
-  "progressSeconds": 120,
-  "completed": false
-}
-```
-
-### `DELETE /history/clear` ✅
-
-### `DELETE /history/:contentType/:contentId` ✅
-
-`contentType`: `video` | `podcast_episode`
+| Route | Notes |
+|-------|-------|
+| `GET /history` | `?page=&limit=` |
+| `POST /history/progress` | `{ contentType, contentId, progressSeconds, completed }` |
+| `DELETE /history/clear` | |
+| `DELETE /history/:contentType/:contentId` | `video` \| `podcast_episode` |
 
 ---
 
 ## Billing (`/billing`)
 
-### `GET /billing/products` ✅
+| Route | Status |
+|-------|--------|
+| `GET /billing/products` | ✅ Coin packages from DB |
+| `GET /billing/gifts/catalog` | ✅ |
+| `POST /billing/gifts/send` | ✅ Deducts coins, records gift, **`viewer_support`** revenue split |
+| `POST /billing/stripe/create-checkout` | 🚧 |
 
-**Purpose:** Coin packages (matches frontend CoinsModal).
-
-**Response**
+**`POST /billing/gifts/send` body:**
 ```json
-[
-  { "id": "starter", "coins": 100, "priceUsd": "0.99", "label": "Starter" }
-]
+{
+  "giftId": "heart",
+  "receiverId": "uuid",
+  "streamId": "optional-uuid",
+  "videoId": "optional-uuid"
+}
 ```
-
----
-
-### `GET /billing/gifts/catalog` ✅
-
-**Purpose:** Gift definitions for live streams.
-
----
-
-### `POST /billing/stripe/create-checkout` 🚧 Week 5
-
-### `POST /billing/gifts/send` 🚧 Week 5
 
 ---
 
 ## Streams (`/streams`)
 
-### `POST /streams/init` 🚧 Week 4
-
-### `GET /streams/live` 🚧 Week 4
-
-### `GET /streams/:id` 🚧 Week 4
+| Route | Status |
+|-------|--------|
+| `POST /streams/init` | ✅ Creates scheduled stream + stream key |
+| `GET /streams/live` | ✅ All `live` streams |
+| `GET /streams/:id` | ✅ By stream UUID **or** creator `username` (e.g. `progamerx`) |
 
 ---
 
 ## Podcasts (`/podcasts`)
 
-### `GET /podcasts/shows` 🚧 Week 7
-
-### `GET /podcasts/episodes/feed` 🚧 Week 7
-
-### `GET /podcasts/episodes/:id` 🚧 Week 7
+| Route | Status |
+|-------|--------|
+| `GET /podcasts/shows` | ✅ |
+| `GET /podcasts/episodes/feed` | ✅ |
+| `GET /podcasts/episodes/:id` | ✅ |
 
 ---
 
 ## Playlists (`/playlists`)
 
-### `GET /playlists/:id` 🚧 Week 3
+### `GET /playlists/:id` ✅
+
+Playlist + ordered items.
 
 ---
 
 ## Search (`/search`)
 
-### `GET /search` 🚧 Week 6
+### `GET /search` ✅
 
-**Query:** `q`, `type`, `page`
+**Query:** `q`, `type` (`video` \| `creator` \| `podcast` \| `stream`), `page`
 
-### `GET /search/suggest` 🚧 Week 6
+### `GET /search/suggest` ✅
+
+**Query:** `q`
 
 ---
 
 ## Ads (`/ads`)
 
-### `GET /ads/serve` 🚧 Week 8
+### `GET /ads/serve` ✅
 
-**Query:** `placement` = `home_banner` | `shorts_interstitial` | `movie_preroll`
+**Query:** `placement` — `home_banner` \| `shorts_interstitial` \| `movie_preroll` \| **`vertical_episode`**
 
-### `POST /ads/track/impression` 🚧 Week 8
+Returns `{ ad: ServedAd | null }` from active campaigns.
 
-### `POST /ads/track/click` 🚧 Week 8
+### `POST /ads/track/impression` · `POST /ads/track/click` ✅
+
+**Body:** `{ campaignId, creatorId, videoId?, placement, viewerUserId? }`
+
+---
+
+## Verticals — micro-dramas (`/verticals`)
+
+9:16 episodic series. **Not** the same as `/programs` (founder content pillars).
+
+| Route | Status |
+|-------|--------|
+| `GET /verticals` | ✅ `{ items: VerticalSeriesCard[] }` |
+| `GET /verticals/:slug` | ✅ Series metadata + episode list |
+| `GET /verticals/:slug/episodes/:episodeNumber` | ✅ `{ series, episode, nextEpisode }` |
+
+Frontend: show **`vertical_episode`** ad before playing the next episode.
+
+---
+
+## Programs (`/programs`)
+
+Founder pillars: Podcasts, Sports, Concerts, Community, Education. **Backend only** — no `/programs` pages in the web app (use `/podcasts`, category feeds, etc.).
+
+| Route | Status |
+|-------|--------|
+| `GET /programs` | ✅ |
+| `GET /programs/:slug` | ✅ Videos + `live_events` for that vertical |
 
 ---
 
 ## Analytics (`/analytics`)
 
-### `POST /analytics/track` 🚧 Week 6
-
-**Body:** Batch events (views, shares, watch time).
-
-### `GET /analytics/creators/stats` 🚧 Week 9
-
-**Auth:** Bearer + role `creator` or `admin`
+| Route | Status |
+|-------|--------|
+| `POST /analytics/track` | ✅ Batch events |
+| `GET /analytics/creators/me/dashboard` | ✅ Impact dashboard |
+| `GET /analytics/creators/me/stats` | ✅ |
+| `GET /analytics/creators/me/content` | ✅ |
+| `GET /analytics/creators/stats` | ✅ Legacy alias |
 
 ---
 
 ## Admin (`/admin`)
 
-### `GET /admin/analytics/overview` 🚧 Week 9
-
 **Auth:** Bearer + role `admin`
+
+| Route | Status |
+|-------|--------|
+| `GET /admin/analytics/overview` | 🚧 |
+| `GET /admin/revenue-split-rules` | ✅ |
+| `PUT /admin/revenue-split-rules/:ruleKey` | ✅ Bps must sum to 10000 |
+| `GET /admin/ads/campaigns` | ✅ |
+| `POST /admin/ads/campaigns` | ✅ |
+| `PUT /admin/ads/campaigns/:id/status` | ✅ `{ status }` |
+
+**Seeded rule keys:** `live_event`, `viewer_support`, `insider_membership`, `ad_gaf_allocation`, `sponsorship`, `creator_subscription`, `coin_purchase`, `store_merchandise`
+
+---
+
+## Revenue & economy (DB ready — partial APIs)
+
+Tables: `revenue_split_rules`, `revenue_ledger_*`, `gaf_*`, `viewer_support_transactions`, `live_events`, `creator_stores`, `platform_insider_subscriptions`, etc. Gifts use `RevenueSplitService` + `viewer_support` rule.
 
 ---
 
@@ -496,22 +358,20 @@ All routes require Bearer auth.
 ```json
 {
   "statusCode": 400,
-  "message": ["email must be an email"],
+  "message": ["validation error"],
   "error": "Bad Request"
 }
 ```
 
 ---
 
-## Security notes (mobile + web)
+## Security notes
 
-1. Store **access token** in secure storage (Keychain / EncryptedSharedPreferences); never log it.
-2. On web, rely on **HttpOnly refresh cookie** + `credentials: 'include'` for `/auth/refresh`.
-3. On mobile, refresh token may be returned in body when implemented — use secure storage only.
-4. All mutating routes use **rate limiting** (global + stricter on auth).
-5. Passwords hashed with **Argon2id**; reset tokens stored hashed (SHA-256).
-6. Use **HTTPS** in production; set `secure` cookies.
+1. Access token in secure storage (mobile) or sessionStorage (web dev).
+2. Web refresh: HttpOnly cookie + `credentials: 'include'` on `/auth/refresh`.
+3. Rate limiting on all routes; stricter on auth.
+4. Argon2id passwords; HTTPS + secure cookies in production.
 
 ---
 
-*Last updated: backend bootstrap — Week 1 auth, users, history, billing catalog.*
+*Last updated: full route inventory — vertical series, programs, feed/streams/videos/billing/search implemented.*

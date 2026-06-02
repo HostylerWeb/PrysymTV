@@ -136,6 +136,12 @@ enum AdPlacement {
   home_banner
   shorts_interstitial
   movie_preroll
+  vertical_episode
+}
+
+enum VerticalSeriesStatus {
+  draft
+  published
 }
 
 enum AdCampaignStatus {
@@ -196,6 +202,165 @@ enum PayoutStatus {
   rejected
 }
 
+enum ContentVertical {
+  general
+  podcast
+  sports
+  concert
+  community_event
+  education
+}
+
+/// Admin-assigned creator partner level (separate from content program verticals & Premium/Insider).
+enum CreatorPartnerTier {
+  standard
+  rising
+  partner
+  flagship
+}
+
+enum LiveEventType {
+  sports
+  concert
+  community
+  education
+  general
+}
+
+enum LiveEventStatus {
+  scheduled
+  live
+  ended
+  cancelled
+}
+
+enum RevenueParty {
+  creator
+  platform
+  gaf
+  creator_dev_fund
+}
+
+enum RevenueSourceType {
+  gift
+  tip
+  donation
+  super_chat
+  ticket
+  store_order
+  creator_subscription
+  platform_subscription
+  ad_impression
+  sponsorship
+  insider_membership
+  coin_purchase
+  payout
+}
+
+enum GafLedgerDirection {
+  inflow
+  outflow
+}
+
+enum GafFundingSource {
+  advertising
+  sponsorship
+  marketplace
+  membership
+  grant
+  donation
+  allocation
+  viewer_support
+}
+
+enum GafProgramCategory {
+  economic
+  workforce
+  housing
+  youth
+}
+
+enum ViewerSupportType {
+  tip
+  donation
+  super_chat
+  gift
+}
+
+enum ViewerSupportStatus {
+  pending
+  completed
+  failed
+  refunded
+}
+
+enum StoreProductType {
+  merchandise
+  ticket
+  course
+  digital
+}
+
+enum StoreProductStatus {
+  draft
+  active
+  archived
+}
+
+enum StoreOrderStatus {
+  pending
+  paid
+  fulfilled
+  cancelled
+  refunded
+}
+
+enum SponsorshipDealStatus {
+  draft
+  proposed
+  active
+  completed
+  cancelled
+}
+
+enum InsiderSubscriptionStatus {
+  active
+  cancelled
+  expired
+  past_due
+}
+
+enum FraudSignalType {
+  suspicious_views
+  gift_velocity
+  chargeback_risk
+  bot_traffic
+}
+
+enum FraudSignalStatus {
+  open
+  reviewed
+  dismissed
+  actioned
+}
+
+enum TaxDocumentStatus {
+  not_submitted
+  pending_review
+  approved
+  rejected
+}
+
+enum ImpactReportStatus {
+  draft
+  published
+}
+
+enum CreatorBalanceEntryType {
+  credit
+  debit
+}
+
 model User {
   id                String         @id @default(uuid()) @db.Uuid
   username          String         @unique
@@ -209,6 +374,7 @@ model User {
   isVerified        Boolean        @default(false) @map("is_verified")
   isBanned          Boolean        @default(false) @map("is_banned")
   streamerStatus    StreamerStatus @default(none) @map("streamer_status")
+  partnerTier       CreatorPartnerTier @default(standard) @map("partner_tier")
   coinsBalance      Int            @default(0) @map("coins_balance")
   premiumTier       PremiumTier    @default(none) @map("premium_tier")
   premiumExpiresAt  DateTime?      @map("premium_expires_at")
@@ -246,6 +412,23 @@ model User {
   creatorPayouts        CreatorPayout[]     @relation("CreatorPayouts")
   payoutsProcessed      CreatorPayout[]     @relation("PayoutProcessor")
   applicationsReviewed  StreamerApplication[] @relation("ApplicationReviewer")
+  liveEvents            LiveEvent[]
+  creatorStore          CreatorStore?
+  storeOrdersAsBuyer    StoreOrder[]          @relation("StoreBuyer")
+  viewerSupportSent     ViewerSupportTransaction[] @relation("SupportSender")
+  viewerSupportReceived ViewerSupportTransaction[] @relation("SupportReceiver")
+  insiderSubscription   PlatformInsiderSubscription?
+  sponsorshipsAsCreator SponsorshipDeal[]     @relation("SponsorshipCreator")
+  sponsorshipsAsBrand   SponsorshipDeal[]     @relation("SponsorshipBrand")
+  impactSnapshots       CreatorImpactSnapshot[]
+  creatorBalances       CreatorBalanceLedger[]
+  taxProfile            CreatorTaxProfile?
+  fraudSignals          FraudSignal[]
+  revenueSplitUpdates   RevenueSplitRule[]    @relation("SplitRuleUpdater")
+  advertiserAccounts    AdvertiserAccount[]
+  programVerticals      CreatorProgramVertical[]
+  contentAdEvents       ContentAdEvent[]      @relation("CreatorAdEvents")
+  verticalSeries        VerticalSeries[]
 
   @@map("users")
 }
@@ -342,6 +525,7 @@ model Video {
   tagline         String?
   director        String?
   writers         String[]      @default([])
+  vertical        ContentVertical? @map("vertical")
   visibility      Visibility    @default(public)
   status          ContentStatus @default(processing)
   viewsCount      Int           @default(0) @map("views_count")
@@ -353,6 +537,7 @@ model Video {
   cast            VideoCast[]
   comments        Comment[]
   gifts           Gift[]
+  contentAdEvents ContentAdEvent[]
 
   @@index([creatorId])
   @@index([type, status])
@@ -379,6 +564,7 @@ model PodcastShow {
   description     String?
   coverUrl        String?    @map("cover_url")
   category        String?
+  vertical        ContentVertical? @default(podcast) @map("vertical")
   followersCount  Int        @default(0) @map("followers_count")
   visibility      Visibility @default(public)
   createdAt       DateTime   @default(now()) @map("created_at")
@@ -417,6 +603,7 @@ model Stream {
   creatorId            String       @map("creator_id") @db.Uuid
   title                String
   category             String?
+  vertical             ContentVertical? @map("vertical")
   status               StreamStatus @default(scheduled)
   thumbnailUrl         String?      @map("thumbnail_url")
   hlsPlaybackUrl       String?      @map("hls_playback_url")
@@ -427,8 +614,10 @@ model Stream {
   endedAt              DateTime?    @map("ended_at")
   createdAt            DateTime     @default(now()) @map("created_at")
   creator              User         @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  liveEvent            LiveEvent?
   gifts                Gift[]
   messages             StreamMessage[]
+  viewerSupport        ViewerSupportTransaction[]
 
   @@index([creatorId, status])
   @@map("streams")
@@ -470,8 +659,10 @@ model Gift {
   videoId    String?      @map("video_id") @db.Uuid
   giftType   String       @map("gift_type")
   coinValue  Int          @map("coin_value")
+  revenueBatchId String?  @map("revenue_batch_id") @db.Uuid
   createdAt  DateTime     @default(now()) @map("created_at")
   sender     User         @relation("GiftsSent", fields: [senderId], references: [id], onDelete: Cascade)
+  revenueBatch RevenueLedgerBatch? @relation(fields: [revenueBatchId], references: [id])
   receiver   User         @relation("GiftsReceived", fields: [receiverId], references: [id], onDelete: Cascade)
   stream     Stream?      @relation(fields: [streamId], references: [id])
   video      Video?       @relation(fields: [videoId], references: [id])
@@ -627,6 +818,8 @@ model Report {
 
 model AdCampaign {
   id                   String           @id @default(uuid()) @db.Uuid
+  advertiserAccountId  String?          @map("advertiser_account_id") @db.Uuid
+  revenueRuleKey       String           @default("ad_gaf_allocation") @map("revenue_rule_key")
   advertiserName       String           @map("advertiser_name")
   title                String
   mediaUrl             String           @map("media_url")
@@ -640,9 +833,42 @@ model AdCampaign {
   startsAt             DateTime         @map("starts_at")
   endsAt               DateTime         @map("ends_at")
   createdAt            DateTime         @default(now()) @map("created_at")
+  advertiserAccount    AdvertiserAccount? @relation(fields: [advertiserAccountId], references: [id])
+  contentAdEvents      ContentAdEvent[]
 
   @@index([placement, status])
   @@map("ad_campaigns")
+}
+
+/// Ad impressions/clicks tied to a creator's video (for Creator Impact Dashboard ad metrics).
+model ContentAdEvent {
+  id           BigInt             @id @default(autoincrement())
+  campaignId   String             @map("campaign_id") @db.Uuid
+  creatorId    String             @map("creator_id") @db.Uuid
+  videoId      String?            @map("video_id") @db.Uuid
+  placement    AdPlacement
+  eventType    AnalyticsEventType @map("event_type")
+  viewerUserId String?            @map("viewer_user_id") @db.Uuid
+  metadata     Json?
+  createdAt    DateTime           @default(now()) @map("created_at")
+  campaign     AdCampaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creator      User               @relation("CreatorAdEvents", fields: [creatorId], references: [id], onDelete: Cascade)
+  video        Video?             @relation(fields: [videoId], references: [id], onDelete: SetNull)
+
+  @@index([creatorId, createdAt])
+  @@index([videoId, eventType])
+  @@index([campaignId, createdAt])
+  @@map("content_ad_events")
+}
+
+/// Founder content programs: which verticals this creator publishes (Podcasts, Sports, etc.).
+model CreatorProgramVertical {
+  userId   String          @map("user_id") @db.Uuid
+  vertical ContentVertical
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, vertical])
+  @@map("creator_program_verticals")
 }
 
 model AnalyticsEvent {
@@ -681,4 +907,392 @@ model CoinPackage {
   sortOrder Int     @default(0) @map("sort_order")
 
   @@map("coin_packages")
+}
+
+// --- Configurable revenue splits (admin-editable; never hardcode % in app code) ---
+
+model RevenueSplitRule {
+  ruleKey           String   @id @map("rule_key")
+  name              String
+  description       String?
+  creatorBps        Int      @default(0) @map("creator_bps")
+  platformBps       Int      @map("platform_bps")
+  gafBps            Int      @default(0) @map("gaf_bps")
+  creatorDevFundBps Int      @default(0) @map("creator_dev_fund_bps")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  updatedById       String?  @map("updated_by") @db.Uuid
+  updatedBy         User?    @relation("SplitRuleUpdater", fields: [updatedById], references: [id])
+
+  batches RevenueLedgerBatch[]
+
+  @@map("revenue_split_rules")
+}
+
+model RevenueLedgerBatch {
+  id             String            @id @default(uuid()) @db.Uuid
+  ruleKey        String            @map("rule_key")
+  sourceType     RevenueSourceType @map("source_type")
+  sourceId       String            @map("source_id") @db.Uuid
+  grossAmountUsd Decimal           @map("gross_amount_usd") @db.Decimal(12, 4)
+  creatorId      String?           @map("creator_id") @db.Uuid
+  metadata       Json?
+  createdAt      DateTime          @default(now()) @map("created_at")
+  rule           RevenueSplitRule  @relation(fields: [ruleKey], references: [ruleKey])
+  entries        RevenueLedgerEntry[]
+  gifts          Gift[]
+  viewerSupport  ViewerSupportTransaction?
+  storeOrders    StoreOrder[]
+  gafEntries     GafLedgerEntry[]
+
+  @@index([sourceType, sourceId])
+  @@index([creatorId, createdAt])
+  @@map("revenue_ledger_batches")
+}
+
+model RevenueLedgerEntry {
+  id        String       @id @default(uuid()) @db.Uuid
+  batchId   String       @map("batch_id") @db.Uuid
+  party     RevenueParty
+  amountUsd Decimal      @map("amount_usd") @db.Decimal(12, 4)
+  createdAt DateTime     @default(now()) @map("created_at")
+  batch     RevenueLedgerBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+  @@index([party, createdAt])
+  @@map("revenue_ledger_entries")
+}
+
+model GafLedgerEntry {
+  id               String             @id @default(uuid()) @db.Uuid
+  direction        GafLedgerDirection
+  source           GafFundingSource
+  amountUsd        Decimal            @map("amount_usd") @db.Decimal(12, 4)
+  programCategory  GafProgramCategory? @map("program_category")
+  referenceId      String?            @map("reference_id") @db.Uuid
+  revenueBatchId   String?            @map("revenue_batch_id") @db.Uuid
+  gafProgramId     String?            @map("gaf_program_id") @db.Uuid
+  description      String?
+  createdAt        DateTime           @default(now()) @map("created_at")
+  revenueBatch     RevenueLedgerBatch? @relation(fields: [revenueBatchId], references: [id])
+  gafProgram       GafProgram?        @relation(fields: [gafProgramId], references: [id])
+
+  @@index([direction, createdAt])
+  @@map("gaf_ledger_entries")
+}
+
+model GafProgram {
+  id          String             @id @default(uuid()) @db.Uuid
+  category    GafProgramCategory
+  title       String
+  description String?
+  isActive    Boolean            @default(true) @map("is_active")
+  createdAt   DateTime           @default(now()) @map("created_at")
+  ledgerEntries GafLedgerEntry[]
+
+  @@map("gaf_programs")
+}
+
+model ViewerSupportTransaction {
+  id             String              @id @default(uuid()) @db.Uuid
+  type           ViewerSupportType
+  status         ViewerSupportStatus @default(pending)
+  senderId       String              @map("sender_id") @db.Uuid
+  receiverId     String              @map("receiver_id") @db.Uuid
+  streamId       String?             @map("stream_id") @db.Uuid
+  videoId        String?             @map("video_id") @db.Uuid
+  giftId         String?             @unique @map("gift_id") @db.Uuid
+  amountUsd      Decimal?            @map("amount_usd") @db.Decimal(12, 4)
+  coinValue      Int?                @map("coin_value")
+  message        String?
+  revenueBatchId String?             @unique @map("revenue_batch_id") @db.Uuid
+  providerRef    String?             @map("provider_ref")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  sender         User                @relation("SupportSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver       User                @relation("SupportReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  stream         Stream?             @relation(fields: [streamId], references: [id])
+  revenueBatch   RevenueLedgerBatch? @relation(fields: [revenueBatchId], references: [id])
+
+  @@index([receiverId, createdAt])
+  @@map("viewer_support_transactions")
+}
+
+model LiveEvent {
+  id              String          @id @default(uuid()) @db.Uuid
+  creatorId       String          @map("creator_id") @db.Uuid
+  streamId        String?         @unique @map("stream_id") @db.Uuid
+  eventType       LiveEventType   @map("event_type")
+  vertical        ContentVertical @default(general) @map("vertical")
+  title           String
+  description     String?
+  thumbnailUrl    String?         @map("thumbnail_url")
+  venue           String?
+  geo             Json?
+  startsAt        DateTime        @map("starts_at")
+  endsAt          DateTime?       @map("ends_at")
+  ticketProductId String?         @map("ticket_product_id") @db.Uuid
+  status          LiveEventStatus @default(scheduled)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  creator         User            @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  stream          Stream?         @relation(fields: [streamId], references: [id])
+  ticketProduct   StoreProduct?   @relation("EventTicket", fields: [ticketProductId], references: [id])
+
+  @@index([eventType, status, startsAt])
+  @@index([creatorId])
+  @@map("live_events")
+}
+
+model CreatorStore {
+  id          String   @id @default(uuid()) @db.Uuid
+  creatorId   String   @unique @map("creator_id") @db.Uuid
+  slug        String   @unique
+  displayName String   @map("display_name")
+  description String?
+  bannerUrl   String?  @map("banner_url")
+  isPublished Boolean  @default(false) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  creator     User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  products    StoreProduct[]
+  orders      StoreOrder[]
+
+  @@map("creator_stores")
+}
+
+model StoreProduct {
+  id           String            @id @default(uuid()) @db.Uuid
+  storeId      String            @map("store_id") @db.Uuid
+  productType  StoreProductType  @map("product_type")
+  title        String
+  description  String?
+  priceUsd     Decimal           @map("price_usd") @db.Decimal(12, 2)
+  imageUrl     String?           @map("image_url")
+  digitalUrl   String?           @map("digital_url")
+  inventory    Int?
+  status       StoreProductStatus @default(draft)
+  revenueRuleKey String          @default("live_event") @map("revenue_rule_key")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+  store        CreatorStore      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderLines   StoreOrderLine[]
+  ticketEvents LiveEvent[]       @relation("EventTicket")
+
+  @@index([storeId, status])
+  @@map("store_products")
+}
+
+model StoreOrder {
+  id             String          @id @default(uuid()) @db.Uuid
+  storeId        String          @map("store_id") @db.Uuid
+  buyerId        String          @map("buyer_id") @db.Uuid
+  status         StoreOrderStatus @default(pending)
+  totalUsd       Decimal         @map("total_usd") @db.Decimal(12, 2)
+  revenueBatchId String?         @unique @map("revenue_batch_id") @db.Uuid
+  providerRef    String?         @map("provider_ref")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  store          CreatorStore    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  buyer          User            @relation("StoreBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  revenueBatch   RevenueLedgerBatch? @relation(fields: [revenueBatchId], references: [id])
+  lines          StoreOrderLine[]
+
+  @@index([buyerId])
+  @@map("store_orders")
+}
+
+model StoreOrderLine {
+  id        String       @id @default(uuid()) @db.Uuid
+  orderId   String       @map("order_id") @db.Uuid
+  productId String       @map("product_id") @db.Uuid
+  quantity  Int          @default(1)
+  unitUsd   Decimal      @map("unit_usd") @db.Decimal(12, 2)
+  order     StoreOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   StoreProduct @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@map("store_order_lines")
+}
+
+model PlatformInsiderSubscription {
+  id                   String                  @id @default(uuid()) @db.Uuid
+  userId               String                  @unique @map("user_id") @db.Uuid
+  stripeSubscriptionId String?                 @unique @map("stripe_subscription_id")
+  status               InsiderSubscriptionStatus @default(active)
+  currentPeriodEnd     DateTime                @map("current_period_end")
+  revenueRuleKey       String                  @default("insider_membership") @map("revenue_rule_key")
+  createdAt            DateTime                @default(now()) @map("created_at")
+  user                 User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("platform_insider_subscriptions")
+}
+
+model SponsorshipDeal {
+  id            String                @id @default(uuid()) @db.Uuid
+  brandUserId   String?               @map("brand_user_id") @db.Uuid
+  brandName     String                @map("brand_name")
+  creatorId     String                @map("creator_id") @db.Uuid
+  title         String
+  amountUsd     Decimal               @map("amount_usd") @db.Decimal(12, 2)
+  deliverables  Json?
+  status        SponsorshipDealStatus @default(draft)
+  revenueRuleKey String               @default("sponsorship") @map("revenue_rule_key")
+  startsAt      DateTime?             @map("starts_at")
+  endsAt        DateTime?             @map("ends_at")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  brandUser     User?                 @relation("SponsorshipBrand", fields: [brandUserId], references: [id])
+  creator       User                  @relation("SponsorshipCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId, status])
+  @@map("sponsorship_deals")
+}
+
+model CreatorImpactSnapshot {
+  id                      String   @id @default(uuid()) @db.Uuid
+  creatorId               String   @map("creator_id") @db.Uuid
+  periodMonth             DateTime @map("period_month") @db.Date
+  earningsUsd             Decimal  @default(0) @map("earnings_usd") @db.Decimal(12, 2)
+  adRevenueUsd            Decimal  @default(0) @map("ad_revenue_usd") @db.Decimal(12, 2)
+  sponsorshipRevenueUsd   Decimal  @default(0) @map("sponsorship_revenue_usd") @db.Decimal(12, 2)
+  merchandiseRevenueUsd   Decimal  @default(0) @map("merchandise_revenue_usd") @db.Decimal(12, 2)
+  donationsUsd            Decimal  @default(0) @map("donations_usd") @db.Decimal(12, 2)
+  watchHours              Decimal  @default(0) @map("watch_hours") @db.Decimal(12, 2)
+  retentionRate           Decimal? @map("retention_rate") @db.Decimal(5, 4)
+  subscriberCount         Int      @default(0) @map("subscriber_count")
+  engagementScore         Decimal? @map("engagement_score") @db.Decimal(10, 2)
+  jobsSupported           Int      @default(0) @map("jobs_supported")
+  businessesFunded        Int      @default(0) @map("businesses_funded")
+  dollarsInvested         Decimal  @default(0) @map("dollars_invested") @db.Decimal(12, 2)
+  workforceOpportunities  Int      @default(0) @map("workforce_opportunities")
+  createdAt               DateTime @default(now()) @map("created_at")
+  creator                 User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorId, periodMonth])
+  @@map("creator_impact_snapshots")
+}
+
+model CreatorBalanceLedger {
+  id          String                  @id @default(uuid()) @db.Uuid
+  creatorId   String                  @map("creator_id") @db.Uuid
+  entryType   CreatorBalanceEntryType @map("entry_type")
+  amountUsd   Decimal                 @map("amount_usd") @db.Decimal(12, 4)
+  batchId     String?                 @map("batch_id") @db.Uuid
+  description String?
+  createdAt   DateTime                @default(now()) @map("created_at")
+  creator     User                    @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId, createdAt])
+  @@map("creator_balance_ledger")
+}
+
+model CreatorTaxProfile {
+  userId           String            @id @map("user_id") @db.Uuid
+  legalName        String?           @map("legal_name")
+  taxIdEncrypted   String?           @map("tax_id_encrypted")
+  addressJson      Json?             @map("address_json")
+  documentStatus   TaxDocumentStatus @default(not_submitted) @map("document_status")
+  w9SubmittedAt    DateTime?         @map("w9_submitted_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("creator_tax_profiles")
+}
+
+model AdvertiserAccount {
+  id              String       @id @default(uuid()) @db.Uuid
+  ownerUserId     String?      @map("owner_user_id") @db.Uuid
+  companyName     String       @map("company_name")
+  contactEmail    String       @map("contact_email")
+  billingEmail    String?      @map("billing_email")
+  isVerified      Boolean      @default(false) @map("is_verified")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  owner           User?        @relation(fields: [ownerUserId], references: [id])
+  campaigns       AdCampaign[]
+  impactReports   CommunityImpactReport[]
+
+  @@map("advertiser_accounts")
+}
+
+model CommunityImpactReport {
+  id                   String           @id @default(uuid()) @db.Uuid
+  advertiserAccountId  String           @map("advertiser_account_id") @db.Uuid
+  periodStart          DateTime         @map("period_start") @db.Date
+  periodEnd            DateTime         @map("period_end") @db.Date
+  businessesSupported  Int              @default(0) @map("businesses_supported")
+  jobsSupported        Int              @default(0) @map("jobs_supported")
+  economicImpactUsd    Decimal          @default(0) @map("economic_impact_usd") @db.Decimal(14, 2)
+  reportData           Json?            @map("report_data")
+  status               ImpactReportStatus @default(draft)
+  publishedAt          DateTime?        @map("published_at")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  advertiserAccount    AdvertiserAccount @relation(fields: [advertiserAccountId], references: [id], onDelete: Cascade)
+
+  @@index([advertiserAccountId, periodStart])
+  @@map("community_impact_reports")
+}
+
+model FraudSignal {
+  id          String           @id @default(uuid()) @db.Uuid
+  userId      String?          @map("user_id") @db.Uuid
+  signalType  FraudSignalType  @map("signal_type")
+  status      FraudSignalStatus @default(open)
+  score       Decimal?         @db.Decimal(5, 4)
+  metadata    Json?
+  createdAt   DateTime         @default(now()) @map("created_at")
+  reviewedAt  DateTime?        @map("reviewed_at")
+  user        User?            @relation(fields: [userId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("fraud_signals")
+}
+
+/// 9:16 micro-drama series (vertical films) — episodic, phone-first.
+model VerticalSeries {
+  id            String               @id @default(uuid()) @db.Uuid
+  slug          String               @unique
+  title         String
+  tagline       String?
+  description   String?
+  posterUrl     String?              @map("poster_url")
+  bannerUrl     String?              @map("banner_url")
+  genre         String?
+  totalEpisodes Int                  @default(0) @map("total_episodes")
+  status        VerticalSeriesStatus @default(published)
+  creatorId     String?              @map("creator_id") @db.Uuid
+  visibility    Visibility           @default(public)
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+  creator       User?                @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  episodes      VerticalEpisode[]
+
+  @@index([status])
+  @@map("vertical_series")
+}
+
+model VerticalEpisode {
+  id              String        @id @default(uuid()) @db.Uuid
+  seriesId        String        @map("series_id") @db.Uuid
+  episodeNumber   Int           @map("episode_number")
+  title           String
+  description     String?
+  thumbnailUrl    String?       @map("thumbnail_url")
+  videoUrl        String?       @map("video_url")
+  durationSeconds Int           @default(120) @map("duration_seconds")
+  cliffhanger     String?       @map("cliffhanger")
+  status          ContentStatus @default(ready)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  series          VerticalSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@unique([seriesId, episodeNumber])
+  @@index([seriesId])
+  @@map("vertical_episodes")
+}
+
+model PlatformAnnouncement {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  body        String
+  audience    String   @default("insider")
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("platform_announcements")
 }

@@ -1,18 +1,52 @@
 "use client"
 
-import { useEffect } from "react"
-import { getAd } from "@/lib/mock-data"
+import { useEffect, useState } from "react"
 import Link from "next/link"
+import {
+  fetchServedAd,
+  trackAdClick,
+  trackAdImpression,
+  type AdAttribution,
+  type ServedAd,
+} from "@/lib/api/ads"
 
-export function AdBanner() {
-  const ad = getAd("home_banner")
+type AdBannerProps = {
+  creatorId?: string
+  videoId?: string
+}
+
+export function AdBanner({ creatorId, videoId }: AdBannerProps) {
+  const [ad, setAd] = useState<ServedAd | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchServedAd("home_banner").then((served) => {
+      if (!cancelled) setAd(served)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (!ad) return
-    // POST /ads/track/impression when backend is ready
-  }, [ad])
+    const attr: AdAttribution = {
+      campaignId: ad.id,
+      placement: "home_banner",
+      creatorId,
+      videoId,
+    }
+    if (creatorId) void trackAdImpression(attr)
+  }, [ad, creatorId, videoId])
 
   if (!ad) return null
+
+  const attr: AdAttribution = {
+    campaignId: ad.id,
+    placement: "home_banner",
+    creatorId,
+    videoId,
+  }
 
   return (
     <section className="px-4 py-2">
@@ -21,11 +55,15 @@ export function AdBanner() {
         <Link
           href={ad.clickThroughUrl}
           onClick={() => {
-            /* POST /ads/track/click */
+            if (creatorId) void trackAdClick(attr)
           }}
           className="block relative w-full aspect-[6/1] md:aspect-[8/1] rounded-xl overflow-hidden border border-border hover:opacity-95 transition-opacity"
         >
-          <img src={ad.mediaUrl} alt={ad.title} className="w-full h-full object-cover" />
+          {ad.mediaType === "video" ? (
+            <video src={ad.mediaUrl} className="w-full h-full object-cover" muted autoPlay playsInline />
+          ) : (
+            <img src={ad.mediaUrl} alt={ad.title} className="w-full h-full object-cover" />
+          )}
         </Link>
       </div>
     </section>

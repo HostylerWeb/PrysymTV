@@ -170,7 +170,7 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
         </div>
       </div>
 
-      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} onSearchClick={() => setIsSearchOpen(true)} />
+      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       <ReportModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} targetType="video" targetLabel={video.title} />

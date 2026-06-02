@@ -15,6 +15,7 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtPayload } from './strategies/jwt.strategy';
+import { MailService } from '../mail/mail.service';
 
 const REFRESH_COOKIE = 'prysym_refresh';
 const NOTIFICATION_TYPES: NotificationPrefType[] = [
@@ -33,6 +34,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private config: ConfigService,
+    private mail: MailService,
   ) {}
 
   async register(dto: RegisterDto, res: Response) {
@@ -124,12 +126,19 @@ export class AuthService {
         expiresAt,
       },
     });
-    // TODO: send email via Resend/SendGrid with reset link containing rawToken
-    if (this.config.get('NODE_ENV') === 'development') {
-      // Never return reset tokens in HTTP responses (logs, proxies, DevTools).
-      console.info(
-        `[dev] Password reset token for ${user.email} (expires ${expiresAt.toISOString()}): ${rawToken}`,
-      );
+    try {
+      await this.mail.sendPasswordReset(user.email, rawToken);
+    } catch (err) {
+      const resetUrl = `${this.config.get<string>('FRONTEND_URL')?.replace(/\/$/, '')}/reset-password?token=${rawToken}`;
+      this.config.get('NODE_ENV') === 'development'
+        ? console.error(
+            `[dev] Password reset email FAILED for ${user.email}. Use this link locally:\n${resetUrl}\n`,
+            err,
+          )
+        : undefined;
+      if (this.config.get('NODE_ENV') !== 'development') {
+        throw err;
+      }
     }
     return {
       success: true,

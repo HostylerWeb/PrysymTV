@@ -2,6 +2,8 @@
 
 This document serves as the ultimate blueprint and checklist for building the **Prysym TV** backend. It details the architecture, database schema, API endpoints, and a week-by-week implementation checklist. The Next.js frontend (`/app`) is **UI-complete** with mock data in `lib/mock-data.ts` plus a few inline mocks on `/profile` — this plan is aligned to every screen, modal, and settings panel the UI exposes.
 
+**Stakeholder / mission requirements (Onyx Repository Foundation):** See [`stakeholder-product-requirements.md`](./stakeholder-product-requirements.md) for content verticals (Sports, Concerts, Community Events, Education), **GAF**, revenue splits (80/15/5 live events, 90/5/5 viewer support), Creator Store™, Impact Dashboard™, Insider Membership, and **14 implementation modules**. That doc is the gap analysis; Section **15** below integrates it into this roadmap.
+
 **Repository:** [github.com/HostylerWeb/PrysymTV](https://github.com/HostylerWeb/PrysymTV)
 
 ---
@@ -74,10 +76,25 @@ This document serves as the ultimate blueprint and checklist for building the **
 - `animation_key` (String)
 - `is_active` (Boolean)
 
+### `content_verticals` (Stakeholder catalog pillars — optional FK on videos/streams/events)
+- Values: `general`, `podcast`, `sports`, `concert`, `community_event`, `education`
+- Used for home navigation, feeds, and advertiser targeting. See Section 15.
+
+### `live_events` (Sports, Concerts, Community, Education — Phase 2)
+- `id` (UUID, PK)
+- `creator_id` (UUID, FK -> users.id)
+- `stream_id` (UUID, FK -> streams.id, Nullable) — linked live broadcast
+- `event_type` (Enum: 'sports', 'concert', 'community', 'education', 'general')
+- `title`, `description`, `thumbnail_url`, `venue`, `geo` (JSONB: city, region, country)
+- `starts_at`, `ends_at`, `ticket_product_id` (UUID, FK -> store_products.id, Nullable)
+- `status` (Enum: 'scheduled', 'live', 'ended', 'cancelled')
+- Revenue on ticket/PPV uses **80% creator / 15% PRYSYM / 5% GAF** (configurable via `revenue_split_rules`)
+
 ### `videos` (Shorts, Long-form & Movies)
 - `id` (UUID, PK)
 - `creator_id` (UUID, FK -> users.id)
 - `type` (Enum: 'short', 'video', 'movie', 'series_episode')
+- `vertical` (Enum, Nullable) — `sports`, `concert`, `community_event`, `education` when applicable
 - `title` (String)
 - `description` (Text)
 - `category` (String) — Genre or category (e.g., Action, Comedy)
@@ -307,6 +324,55 @@ This document serves as the ultimate blueprint and checklist for building the **
 - `status` (Enum: 'requested', 'processing', 'completed', 'rejected')
 - `processed_by` (UUID, FK -> users.id, Nullable) — admin who approved
 - `created_at` (Timestamp)
+
+### `revenue_split_rules` (Phase 2 — never hardcode percentages in code)
+- `id` (UUID, PK)
+- `rule_key` (String, Unique) — e.g. `live_event`, `viewer_support`, `insider_membership`, `ad_gaf_allocation`
+- `creator_bps`, `platform_bps`, `gaf_bps`, `creator_dev_fund_bps` (Integer, basis points; sum = 10000)
+- `effective_from`, `effective_to` (Timestamp)
+- Stakeholder defaults: live_event **8000/1500/500**; viewer_support **9000/500/500**; insider **8000/1000/1000** (platform / GAF / creator dev fund)
+
+### `revenue_ledger` (Phase 2 — immutable double-entry style lines)
+- `id` (UUID, PK)
+- `source_type` (Enum: 'gift', 'tip', 'donation', 'super_chat', 'ticket', 'store_order', 'subscription', 'ad', 'sponsorship', 'insider_membership')
+- `source_id` (UUID)
+- `party` (Enum: 'creator', 'platform', 'gaf', 'creator_dev_fund')
+- `amount_usd` (Decimal)
+- `creator_id` (UUID, Nullable)
+- `created_at` (Timestamp)
+
+### `gaf_ledger` (Phase 2 — Module 9)
+- `id` (UUID, PK)
+- `direction` (Enum: 'inflow', 'outflow')
+- `source` (Enum: 'advertising', 'sponsorship', 'marketplace', 'membership', 'grant', 'donation', 'allocation')
+- `amount_usd` (Decimal)
+- `reference_id` (UUID, Nullable)
+- `program_category` (Enum: 'economic', 'workforce', 'housing', 'youth', Nullable)
+- `created_at` (Timestamp)
+
+### `viewer_support_transactions` (Phase 2 — Module 6)
+- `id` (UUID, PK)
+- `type` (Enum: 'tip', 'donation', 'super_chat', 'gift')
+- `sender_id`, `receiver_id` (UUID, FK -> users.id)
+- `stream_id`, `video_id` (Nullable)
+- `amount_usd` (Decimal, Nullable) — fiat tips/donations/super chat
+- `coin_value` (Integer, Nullable) — gifts
+- `message` (Text, Nullable) — super chat highlight text
+- `ledger_id` (UUID, FK -> revenue_ledger aggregate, Nullable)
+
+### `creator_stores` / `store_products` / `store_orders` (Phase 2 — Module 5)
+- Per-creator storefront: merchandise, tickets, courses, digital downloads
+- Orders generate `revenue_ledger` lines (live event tickets → 80/15/5)
+
+### `platform_insider_subscriptions` (Phase 2)
+- `user_id`, `stripe_subscription_id`, `status`, `current_period_end`
+- Benefits: early access, roadmaps, town halls (content managed in CMS or `system_announcements`)
+
+### `sponsorship_deals` (Phase 2 — Module 4)
+- Brand, creator, amount, deliverables, status, linked campaigns
+
+### `creator_impact_snapshots` (Phase 2 — Module 8)
+- Monthly rollup per creator: earnings breakdown, watch hours, retention, jobs_supported, businesses_funded, etc.
 
 ---
 
@@ -678,7 +744,8 @@ We do NOT use Google AdSense. We run our own private ad network.
 
 ### Revenue Model:
 - Advertisers pay per 1,000 impressions (CPM) or per click (CPC).
-- Platform keeps 100% of ad revenue (this is separate from creator monetization).
+- Platform keeps primary ad revenue; **allocate a configurable portion to GAF** per stakeholder funding model (see `gaf_ledger` inflow `source: advertising`).
+- **Phase 2:** Business Advertising Portal — self-serve campaigns, audience/geo/demographic analytics, conversion tracking, **community impact reports** for B2B sales.
 
 ---
 
@@ -696,12 +763,20 @@ We do NOT use Google AdSense. We run our own private ad network.
 - Search queries (for trending topics)
 - Stream viewer minutes (for creator earnings calculations)
 
-### Creator Dashboard Stats:
+### Creator Dashboard Stats (**Creator Impact Dashboard™** — partial implementation):
+
+- **API:** `GET /analytics/creators/me/dashboard` (wired to profile **Performance & Revenue** menu)
+- **Ad views on creator videos:** `content_ad_events` via `POST /ads/track/impression` with `creatorId` + `videoId`
+- **Program verticals (founder list):** `creator_program_verticals` — Podcasts, Sports, Concerts, Community, Education (not the same as Premium/Insider tiers)
+- **Partner tier (admin):** `users.partner_tier` — optional perks ladder (`standard` → `flagship`)
+
+Legacy bullets:
 - Total views (24h / 7d / 30d)
 - Total earnings from gifts and subscriptions
 - Top 5 performing videos
 - Audience demographics: top countries, device breakdown (mobile vs desktop)
 - Follower growth over time
+- **Phase 2 additions:** monthly earnings breakdown (ads, sponsorships, merch, donations), watch hours, retention, **community impact** (jobs supported, businesses funded, GAF dollars attributed, workforce opportunities)
 
 ### Admin Platform Stats:
 - Real-time concurrent viewers across all streams
@@ -713,6 +788,12 @@ We do NOT use Google AdSense. We run our own private ad network.
 ---
 
 ## 10. MONETIZATION FLOW DETAILS
+
+> **Stakeholder rules (authoritative):** See [`stakeholder-product-requirements.md`](./stakeholder-product-requirements.md).  
+> - **Live events** (tickets/PPV): Creator **80%** · PRYSYM **15%** · GAF **5%**  
+> - **Viewer support** (tips, donations, super chats, digital gifts): Creator **90%** · PRYSYM **5%** · GAF **5%**  
+> - **Platform Insider Membership** ($4.99/mo): **80%** platform development · **10%** GAF · **10%** Creator Development Fund  
+> Implement via `revenue_split_rules` + `revenue_ledger` (Phase 2). The **30% platform cut on gifts below is legacy V1 placeholder** — replace before production monetization goes live.
 
 ### Coin Economy:
 | Package | Coins | Price (USD) | Platform Cut |
@@ -733,7 +814,8 @@ We do NOT use Google AdSense. We run our own private ad network.
 | Universe  | 1,000     | Galaxy explosion |
 
 ### Creator Payout Rules:
-- Platform takes 30% of all gifts received (industry standard: TikTok takes 50%).
+- **Target (stakeholder):** 90/5/5 on viewer support (gifts, tips, donations, super chats) via revenue engine.
+- **V1 placeholder (until Phase 2):** 30% platform cut on coin gifts — do not ship to production without migrating splits.
 - Minimum payout: $50 USD.
 - Payout methods: PayPal, Bank Transfer, Crypto (USDT).
 - Payout frequency: On-demand (creator requests), processed within 3-5 business days after admin approval.
@@ -757,7 +839,7 @@ Settings are **not standalone pages** in normal use. The gear on `/profile` open
 | URL (bookmark / deep link) | Opens on profile |
 |---|---|
 | `/profile?settings=notifications` | Notification toggles |
-| `/profile?settings=dashboard` | Creator analytics |
+| `/profile?settings=dashboard` | Performance & Revenue (`GET /analytics/creators/me/dashboard`) |
 | `/profile?settings=help` | FAQs + support links |
 | `/profile?settings=premium` | Platform subscription tiers |
 | `/profile?settings=history` | Watch history (play → `/watch/[id]`) |
@@ -823,7 +905,9 @@ Same APIs as the table below; no separate page layouts required.
 ### Week 9: Admin Panel + Creator Dashboard
 - [ ] Build separate Next.js admin app (Section 7).
 - [ ] Streamer application review UI → `streamer_applications` table.
-- [ ] Wire `/creator/dashboard` to `GET /analytics/creators/stats`.
+- [x] Profile **Performance & Revenue** → `GET /analytics/creators/me/dashboard`
+- [ ] Wire ad players to `POST /ads/track/impression` with creator + video attribution
+- [ ] Wire `/creator/dashboard` redirect (same API)
 - [ ] Payout approval flow.
 
 ### Week 10: Integration Hardening
@@ -832,6 +916,39 @@ Same APIs as the table below; no separate page layouts required.
 - [ ] Resume playback via `POST /history/progress` on all players.
 - [ ] E2E tests for auth, upload, live, gifts, ads.
 - [ ] Observability: Sentry, health checks, staging environment.
+
+### Week 11–12: Economy core (Stakeholder Modules 2, 6, 9)
+- [x] **Schema migrated** (`20260602114129_phase2_economy_schema`) — all Phase 2 tables + `videos.vertical`
+- [x] `revenue_split_rules` seeded; `RevenueSplitService` + admin GET/PUT (no hardcoded % in code)
+- [ ] Wire gifts/tips/ads checkout to `RevenueSplitService.distributeAndPersist`
+- [ ] `revenue_ledger` usage in all monetization flows
+- [ ] Viewer support: tips, donations, super chats (in addition to gifts); **90/5/5** splits
+- [ ] `gaf_ledger` inflows from viewer support + configurable ad allocation
+- [ ] Stripe Connect or equivalent for creator balances
+- [ ] Migrate gift sending to ledger-based splits
+
+### Week 13–14: Creator Store & live events (Modules 5 + verticals)
+- [ ] `creator_stores`, `store_products`, `store_orders` (merch, tickets, courses, digital)
+- [ ] `live_events` for Sports, Concerts, Community, Education
+- [ ] Ticket/PPV checkout with **80/15/5** split
+- [ ] Feeds: `GET /feed/sports`, `/events`, `/concerts`, `/education` (or unified `GET /events?type=`)
+
+### Week 15–16: Ads & sponsorships (Modules 3, 4, 13, 14)
+- [ ] Business advertiser portal (self-serve)
+- [ ] `sponsorship_deals` marketplace
+- [ ] Advertiser analytics + community impact reporting APIs
+
+### Week 17–18: Dashboards & Insider (Modules 7, 8 + Insider Membership)
+- [x] `GET /analytics/creators/me/dashboard` (financial + performance + impact + ads on content)
+- [x] Profile settings panel wired (Performance & Revenue)
+- [ ] Platform Insider Membership ($4.99) — Stripe product + **80/10/10** split
+
+### Week 19–20: Payouts, tax, fraud (Modules 10, 11, 12)
+- [ ] Automated monthly payout job
+- [ ] Tax documentation (W-9, 1099 export)
+- [ ] Verified view engine + gift/payment fraud rules
+
+Full module matrix: [`stakeholder-product-requirements.md`](./stakeholder-product-requirements.md#8-developer-implementation-modules-14-modules).
 
 ---
 
@@ -843,7 +960,10 @@ These frontend UI elements exist but are **deferred** unless product decides oth
 |---|---|---|
 | Stories (Instagram-style) | Mock viewer on home | No schema in V1 — use live status + shorts instead |
 | Dislike button | `/watch/[id]` | Not in V1 — likes only |
-| Super Chat | Mentioned in CoinsModal | Defer — gifts cover live monetization |
+| Super Chat | Mentioned in CoinsModal | **In scope (stakeholder)** — Phase 2 Module 6 with 90/5/5 split; not replaced by gifts alone |
+| Sports / Concerts / Community / Education hubs | Not in UI routes yet | Phase 2 verticals + `live_events` — see stakeholder doc |
+| Creator Store™, GAF, Impact Dashboard, Insider $4.99 | Not in UI | Phase 2–3 — see stakeholder doc |
+| Business advertiser self-serve portal | Admin-only ads in V1 plan | Phase 2 Module 13 |
 | Chromecast button | Header icon, no behavior | Client-side Cast SDK later |
 | Password reset OTP | AuthModal uses 6-digit code UI | **Use email link + token** (Section 4 Auth) — update AuthModal when API is ready |
 
@@ -892,6 +1012,61 @@ These frontend UI elements exist but are **deferred** unless product decides oth
 - [ ] Backend: Docker on VPS / Railway / Fly — Postgres, Redis, MediaMTX, workers.
 - [ ] CORS: allow frontend origin on API.
 - [ ] GitHub: [HostylerWeb/PrysymTV](https://github.com/HostylerWeb/PrysymTV) — frontend repo; recommend monorepo or `prysym-api` repo for NestJS.
+
+---
+
+## 15. STAKEHOLDER REQUIREMENTS ↔ ENGINEERING (SUMMARY)
+
+Canonical detail: **[`stakeholder-product-requirements.md`](./stakeholder-product-requirements.md)**.
+
+### 15.1 Content pillars (beyond current mock catalog)
+
+| Pillar | Discovery (proposed) | Monetization |
+|--------|----------------------|--------------|
+| Podcasts | `/podcasts` (exists) | Ads, tips, subs |
+| Sports | `/sports`, `live_events.type=sports` | Tickets, live PPV 80/15/5 |
+| Concerts | `/concerts` | Tickets + VOD |
+| Community Events | `/events` + geo/calendar | Tickets, donations |
+| Educational Programs | `/learn` | Course sales (Creator Store) |
+
+### 15.2 Revenue splits (config-driven)
+
+| Transaction type | Creator | PRYSYM | GAF | Notes |
+|------------------|---------|--------|-----|-------|
+| Live event / ticket / PPV | 80% | 15% | 5% | |
+| Tips, donations, super chats, gifts | 90% | 5% | 5% | |
+| Insider Membership ($4.99) | — (10% Creator Dev Fund) | 80% | 10% | Not creator subscription tiers |
+
+### 15.3 GAF funding & investment (reporting + future programs)
+
+**Inflows to track:** advertising, sponsorship, marketplace, membership, grants, donations.  
+**Investment priorities:** economic development, workforce, housing, youth (media training aligns with creator education vertical).
+
+### 15.4 Fourteen modules → ownership
+
+| Module | Owner phase | Key tables / APIs |
+|--------|-------------|-------------------|
+| 1 Creator Management | Week 1 ✅ | `users`, streamer apply |
+| 2 Revenue Distribution | Week 11–12 | `revenue_split_rules`, `revenue_ledger` |
+| 3 Advertising | Week 8 + 15–16 | `ad_campaigns`, `/advertisers/*` |
+| 4 Sponsorship | Week 15–16 | `sponsorship_deals` |
+| 5 Creator Store | Week 13–14 | `creator_stores`, `store_*` |
+| 6 Donation & Tip | Week 11–12 | `viewer_support_transactions` |
+| 7 Creator Analytics | Week 9 + 17–18 | `analytics_events`, aggregates |
+| 8 Impact Dashboard | Week 17–18 | `creator_impact_snapshots` |
+| 9 GAF Ledger | Week 11–12 | `gaf_ledger` |
+| 10 Monthly Payouts | Week 19–20 | cron + `creator_payouts` |
+| 11 Tax docs | Week 19–20 | tax_profiles, exports |
+| 12 Fraud / verified views | Week 19–20 | Redis + rules engine |
+| 13 Business ad portal | Week 15–16 | advertiser auth + campaigns |
+| 14 Community impact reports | Week 15–16 | impact_report_generations |
+
+### 15.5 Conflicts to resolve before launch
+
+1. **Gift platform cut (30% in Section 10) vs stakeholder 90/5/5** — implement ledger first.  
+2. **Platform premium tiers in UI vs Insider Membership ($4.99)** — separate products.  
+3. **100% platform ad revenue vs GAF inflows from ads** — configurable GAF allocation %.  
+4. **Super Chat** — remove “defer” mindset; plan Module 6.
 
 ---
 **END OF PLAN**

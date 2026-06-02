@@ -5,25 +5,60 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
+import { AnalyticsService } from './analytics.service';
+import { TrackEventsDto } from './dto/track-events.dto';
 
 @Controller('analytics')
 export class AnalyticsController {
+  constructor(private readonly analytics: AnalyticsService) {}
+
   @Post('track')
-  track(@Body() _body: Record<string, unknown>) {
-    return { success: true, message: 'Week 6 — batch to Redis' };
+  @UseGuards(JwtAuthGuard)
+  track(
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: TrackEventsDto,
+  ) {
+    return this.analytics.trackBatch(user.id, body);
+  }
+
+  /** Creator Impact Dashboard™ — performance, ad views on your videos, revenue, impact. */
+  @Get('creators/me/dashboard')
+  @UseGuards(JwtAuthGuard)
+  getMyDashboard(@CurrentUser() user: AuthUserPayload) {
+    return this.analytics.getCreatorDashboard(user.id);
+  }
+
+  @Get('creators/me/stats')
+  @UseGuards(JwtAuthGuard)
+  async getMyStats(@CurrentUser() user: AuthUserPayload) {
+    const dash = await this.analytics.getCreatorDashboard(user.id);
+    return {
+      performance: dash.performance,
+      advertising: dash.advertising,
+      financial: dash.financial,
+      topContent: dash.topContent,
+    };
+  }
+
+  @Get('creators/me/content')
+  @UseGuards(JwtAuthGuard)
+  getMyContentStats(@CurrentUser() user: AuthUserPayload) {
+    return this.analytics.getCreatorDashboard(user.id).then((d) => ({
+      items: d.content,
+    }));
   }
 
   @Get('creators/stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.creator, UserRole.admin)
-  creatorStats(@CurrentUser() _user: AuthUserPayload) {
-    return {
-      views24h: 0,
-      views7d: 0,
-      views30d: 0,
-      earnings30d: 0,
-      topContent: [],
-      message: 'Week 9',
-    };
+  creatorStatsLegacy(@CurrentUser() user: AuthUserPayload) {
+    return this.analytics.getCreatorDashboard(user.id).then((d) => ({
+      views24h: d.performance.views24h,
+      views7d: d.performance.views7d,
+      views30d: d.performance.views30d,
+      earnings30d: d.financial.earnings30dUsd,
+      adImpressions30d: d.advertising.adImpressionsOnYourContent30d,
+      topContent: d.topContent,
+    }));
   }
 }

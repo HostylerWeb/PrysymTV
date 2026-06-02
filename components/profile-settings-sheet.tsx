@@ -35,6 +35,10 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { User } from "@/contexts/auth-context"
 import { mockVideos, mockMovies } from "@/lib/mock-data"
+import { uploadVideoFlow, getVideoUploadMaxBytes } from "@/lib/api/videos"
+import { ApiError } from "@/lib/api-client"
+import { fetchCreatorDashboard, type CreatorDashboardResponse } from "@/lib/api/analytics"
+import { formatViewCount } from "@/lib/format-media"
 
 export type ProfileSettingsScreen =
   | "menu"
@@ -107,7 +111,7 @@ const SHEET_BODY = "flex-1 overflow-y-auto overscroll-contain px-4 pb-6 md:px-8 
 
 const SCREEN_TITLES: Record<Exclude<ProfileSettingsScreen, "menu">, string> = {
   notifications: "Notifications",
-  dashboard: "Creator Dashboard",
+  dashboard: "Performance & Revenue",
   help: "Help & Support",
   premium: "Premium",
   history: "Watch History",
@@ -153,6 +157,9 @@ export function ProfileSettingsSheet({
   const [copied, setCopied] = useState(false)
   const [uploadType, setUploadType] = useState<string | null>(null)
   const [uploadTitle, setUploadTitle] = useState("")
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadDone, setUploadDone] = useState(false)
 
@@ -257,7 +264,7 @@ export function ProfileSettingsSheet({
             <NotificationsPanel settings={notifSettings} onChange={setNotifSettings} />
           )}
 
-          {screen === "dashboard" && <DashboardPanel />}
+          {screen === "dashboard" && <PerformanceDashboardPanel />}
 
           {screen === "help" && <HelpPanel />}
 
@@ -313,15 +320,53 @@ export function ProfileSettingsSheet({
             <UploadPanel
               selected={uploadType}
               title={uploadTitle}
+              file={uploadFile}
+              progress={uploadProgress}
+              error={uploadError}
               uploading={uploading}
               done={uploadDone}
-              onSelect={setUploadType}
+              onSelect={(id) => {
+                setUploadType(id)
+                setUploadError(null)
+              }}
               onTitleChange={setUploadTitle}
+              onFileChange={(f) => {
+                setUploadFile(f)
+                setUploadError(null)
+              }}
               onUpload={async () => {
+                if (!uploadType || !uploadTitle.trim() || !uploadFile) return
+                const maxBytes = getVideoUploadMaxBytes()
+                if (maxBytes && uploadFile.size > maxBytes) {
+                  setUploadError(`File exceeds ${Math.round(maxBytes / (1024 * 1024))} MB limit`)
+                  return
+                }
                 setUploading(true)
-                await new Promise((r) => setTimeout(r, 1500))
-                setUploading(false)
-                setUploadDone(true)
+                setUploadError(null)
+                setUploadProgress(0)
+                try {
+                  await uploadVideoFlow(
+                    {
+                      type: uploadType as "short" | "video" | "movie" | "podcast",
+                      title: uploadTitle.trim(),
+                      mimeType: uploadFile.type,
+                      fileName: uploadFile.name,
+                    },
+                    uploadFile,
+                    setUploadProgress,
+                  )
+                  setUploadDone(true)
+                } catch (e) {
+                  const msg =
+                    e instanceof ApiError
+                      ? e.message
+                      : e instanceof Error
+                        ? e.message
+                        : "Upload failed"
+                  setUploadError(msg)
+                } finally {
+                  setUploading(false)
+                }
               }}
             />
           )}
@@ -373,7 +418,12 @@ function MenuPanel({
         },
     { icon: Clock, label: "Watch History", description: "Recently watched content", screen: "history" },
     { icon: Video, label: "Your Videos", description: "Upload shorts, videos, movies", screen: "upload" },
-    { icon: BarChart3, label: "Creator Dashboard", description: "Views, earnings, analytics", screen: "dashboard" },
+    {
+      icon: BarChart3,
+      label: "Performance & Revenue",
+      description: "Views, ads on your videos, earnings, impact",
+      screen: "dashboard",
+    },
     { icon: Bell, label: "Notifications", description: "Email & push preferences", screen: "notifications" },
     {
       icon: Moon,
@@ -497,49 +547,142 @@ function NotificationsPanel({
   )
 }
 
-function DashboardPanel() {
-  const stats = [
-    { label: "Views (24h)", value: "12.4K", icon: Eye },
-    { label: "Views (7d)", value: "89.2K", icon: TrendingUp },
-    { label: "Views (30d)", value: "412K", icon: BarChart3 },
-    { label: "Earnings (30d)", value: "$1,842", icon: DollarSign },
+function PerformanceDashboardPanel() {
+  const [data, setData] = useState<CreatorDashboardResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const dash = await fetchCreatorDashboard()
+        if (!cancelled) setData(dash)
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof ApiError ? e.message : "Could not load performance data")
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (loading) {
+    return <p className="text-sm text-muted-foreground pt-4">Loading your metrics…</p>
+  }
+  if (error) {
+    return <p className="text-sm text-destructive pt-4">{error}</p>
+  }
+  if (!data) return null
+
+  const fmtUsd = (v: string) => {
+    const n = Number(v)
+    return Number.isFinite(n) ? `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "$0.00"
+  }
+
+  const perfStats = [
+    { label: "Views (24h)", value: formatViewCount(data.performance.views24h), icon: Eye },
+    { label: "Views (7d)", value: formatViewCount(data.performance.views7d), icon: TrendingUp },
+    { label: "Watch hrs (30d)", value: String(data.performance.watchHours30d), icon: BarChart3 },
+    { label: "Earnings (30d)", value: fmtUsd(data.financial.earnings30dUsd), icon: DollarSign },
+  ]
+
+  const adStats = [
+    { label: "Ad views on your content (24h)", value: formatViewCount(data.advertising.adImpressionsOnYourContent24h) },
+    { label: "Ad views (30d)", value: formatViewCount(data.advertising.adImpressionsOnYourContent30d) },
+    { label: "Ad clicks (30d)", value: formatViewCount(data.advertising.adClicksOnYourContent30d) },
+    { label: "CTR (30d)", value: `${data.advertising.ctr30d}%` },
   ]
 
   return (
     <div className="pt-2 md:pt-3 space-y-6 md:space-y-8">
-      <p className="text-sm md:text-base text-muted-foreground">Analytics overview (mock data).</p>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        {stats.map((s) => {
-          const Icon = s.icon
-          return (
-            <div key={s.label} className="p-3 md:p-4 rounded-xl bg-secondary/30 border border-border">
-              <Icon className="w-4 h-4 md:w-5 md:h-5 text-primary mb-1 md:mb-2" />
-              <p className="text-xl md:text-2xl font-bold">{s.value}</p>
-              <p className="text-[10px] md:text-xs text-muted-foreground">{s.label}</p>
-            </div>
-          )
-        })}
-      </div>
-      <div className="md:grid md:grid-cols-2 md:gap-6">
+      {data.programVerticals.length > 0 && (
+        <p className="text-xs md:text-sm text-muted-foreground">
+          Programs: {data.programVerticals.join(", ").replace(/_/g, " ")} · Partner tier: {data.partnerTier}
+        </p>
+      )}
+
       <div>
-        <h3 className="text-sm md:text-base font-semibold mb-2 md:mb-3">Top content</h3>
-        <div className="space-y-2 md:space-y-2.5">
-          {["Building a $1M Business", "AI Deep Dive 2024", "Live: Day 100"].map((t, i) => (
-            <div key={t} className="flex justify-between text-sm md:text-base p-2.5 md:p-3 rounded-lg bg-secondary/20">
-              <span className="line-clamp-1">#{i + 1} {t}</span>
-              <span className="text-muted-foreground shrink-0 ml-2">{(3 - i) * 45}K</span>
+        <h3 className="text-sm font-semibold mb-2">Performance</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+          {perfStats.map((s) => {
+            const Icon = s.icon
+            return (
+              <div key={s.label} className="p-3 md:p-4 rounded-xl bg-secondary/30 border border-border">
+                <Icon className="w-4 h-4 md:w-5 md:h-5 text-primary mb-1 md:mb-2" />
+                <p className="text-xl md:text-2xl font-bold">{s.value}</p>
+                <p className="text-[10px] md:text-xs text-muted-foreground">{s.label}</p>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold mb-2">Ads on your videos</h3>
+        <div className="grid grid-cols-2 gap-2 md:gap-3">
+          {adStats.map((s) => (
+            <div key={s.label} className="p-3 rounded-xl bg-secondary/20 border border-border text-sm">
+              <p className="font-bold">{s.value}</p>
+              <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">{s.label}</p>
             </div>
           ))}
         </div>
       </div>
-      <div className="p-4 md:p-6 rounded-xl border border-border bg-secondary/20">
-        <p className="text-sm md:text-base font-semibold">Pending payout</p>
-        <p className="text-2xl md:text-3xl font-bold text-primary">$342.50</p>
-        <p className="text-xs md:text-sm text-muted-foreground mb-3 md:mb-4">Minimum $50</p>
-        <Button variant="secondary" className="w-full rounded-full text-sm md:text-base md:h-11">
-          Request Payout (mock)
-        </Button>
-      </div>
+
+      <div className="md:grid md:grid-cols-2 md:gap-6">
+        <div>
+          <h3 className="text-sm md:text-base font-semibold mb-2 md:mb-3">Top content</h3>
+          <div className="space-y-2 md:space-y-2.5">
+            {data.topContent.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Upload videos to see stats here.</p>
+            ) : (
+              data.topContent.map((item, i) => (
+                <div
+                  key={item.id}
+                  className="flex justify-between text-sm md:text-base p-2.5 md:p-3 rounded-lg bg-secondary/20 gap-2"
+                >
+                  <span className="line-clamp-1">
+                    #{i + 1} {item.title}
+                  </span>
+                  <span className="text-muted-foreground shrink-0 text-xs md:text-sm">
+                    {formatViewCount(item.viewsCount)} views · {item.adImpressions30d} ads
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+        <div className="space-y-4">
+          <div className="p-4 md:p-6 rounded-xl border border-border bg-secondary/20">
+            <p className="text-sm font-semibold">Revenue (30d)</p>
+            <ul className="text-xs md:text-sm text-muted-foreground mt-2 space-y-1">
+              <li>Total earnings: {fmtUsd(data.financial.earnings30dUsd)}</li>
+              <li>Ad revenue: {fmtUsd(data.financial.adRevenueUsd)}</li>
+              <li>Sponsorships: {fmtUsd(data.financial.sponsorshipRevenueUsd)}</li>
+              <li>Merch: {fmtUsd(data.financial.merchandiseRevenueUsd)}</li>
+              <li>Donations: {fmtUsd(data.financial.donationsUsd)}</li>
+            </ul>
+          </div>
+          <div className="p-4 md:p-6 rounded-xl border border-border bg-secondary/20">
+            <p className="text-sm font-semibold">Pending payout</p>
+            <p className="text-2xl md:text-3xl font-bold text-primary">
+              {fmtUsd(data.financial.pendingPayoutUsd)}
+            </p>
+            <p className="text-xs text-muted-foreground mb-3">Minimum $50 · payout request coming soon</p>
+          </div>
+          <div className="p-4 rounded-xl border border-primary/20 bg-primary/5">
+            <p className="text-sm font-semibold">Community impact</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {data.communityImpact.jobsSupported} jobs · {data.communityImpact.businessesFunded} businesses ·{" "}
+              {fmtUsd(data.communityImpact.dollarsInvested)} invested
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -778,18 +921,26 @@ function GoLivePanel({
 function UploadPanel({
   selected,
   title,
+  file,
+  progress,
+  error,
   uploading,
   done,
   onSelect,
   onTitleChange,
+  onFileChange,
   onUpload,
 }: {
   selected: string | null
   title: string
+  file: File | null
+  progress: number
+  error: string | null
   uploading: boolean
   done: boolean
   onSelect: (id: string) => void
   onTitleChange: (v: string) => void
+  onFileChange: (file: File | null) => void
   onUpload: () => void
 }) {
   if (done) {
@@ -833,13 +984,35 @@ function UploadPanel({
             className="w-full h-11 md:h-12 px-4 rounded-xl bg-secondary text-sm md:text-base"
           />
           <label className="block w-full border-2 border-dashed border-border rounded-xl p-8 md:p-12 text-center cursor-pointer hover:border-primary/40">
-            <input type="file" className="hidden" accept="video/*,audio/*" />
+            <input
+              type="file"
+              className="hidden"
+              accept="video/*,audio/*"
+              onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
+            />
             <Upload className="w-8 h-8 md:w-10 md:h-10 mx-auto mb-2 text-muted-foreground" />
-            <p className="text-sm md:text-base font-medium">Click to choose file</p>
-            <p className="text-xs md:text-sm text-muted-foreground">Resumable upload (mock)</p>
+            <p className="text-sm md:text-base font-medium">
+              {file ? file.name : "Click to choose file"}
+            </p>
+            <p className="text-xs md:text-sm text-muted-foreground">
+              {file ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : "Video or audio"}
+            </p>
           </label>
-          <Button onClick={onUpload} disabled={!title || uploading} className="w-full rounded-full md:h-12 md:text-base">
-            {uploading ? "Uploading..." : "Start Upload"}
+          {uploading && progress > 0 && (
+            <div className="w-full h-2 rounded-full bg-secondary overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          )}
+          {error && <p className="text-sm text-destructive text-center">{error}</p>}
+          <Button
+            onClick={onUpload}
+            disabled={!title || !file || uploading}
+            className="w-full rounded-full md:h-12 md:text-base"
+          >
+            {uploading ? `Uploading${progress ? ` ${progress}%` : "..."}` : "Start Upload"}
           </Button>
         </div>
       )}

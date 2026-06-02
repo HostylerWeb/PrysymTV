@@ -1,22 +1,20 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
+import { FeedService } from './feed.service';
 
-/** Week 7 — aggregated home feed */
 @Controller('feed')
 export class FeedController {
+  constructor(private readonly feed: FeedService) {}
+
   @Get('home')
   home() {
-    return {
-      liveNow: [],
-      continueWatching: [],
-      featuredLive: null,
-      trending: [],
-      newReleases: [],
-      message: 'Implement GET /feed/home aggregation (Week 7)',
-    };
+    return this.feed.home();
   }
 
   @Get('trending')
-  trending() {
-    return { items: [], meta: { page: 1, total: 0 } };
+  trending(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.feed.trending(
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20,
+    );
   }
 }

@@ -18,10 +18,9 @@ async function bootstrap() {
   );
   app.getHttpAdapter().getInstance().disable('x-powered-by');
   app.use(cookieParser());
+  const corsOrigin = config.getOrThrow<string>('CORS_ORIGIN');
   app.enableCors({
-    origin: config.get<string>('CORS_ORIGIN')?.split(',') ?? [
-      'http://localhost:3001',
-    ],
+    origin: corsOrigin.split(',').map((o) => o.trim()),
     credentials: true,
   });
   app.useGlobalPipes(

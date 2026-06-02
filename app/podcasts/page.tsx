@@ -372,7 +372,6 @@ export default function PodcastsPage() {
           if (tab === "shorts") window.location.href = "/shorts"
           if (tab === "profile") window.location.href = "/profile"
         }}
-        onSearchClick={() => setIsSearchOpen(true)}
       />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </main>

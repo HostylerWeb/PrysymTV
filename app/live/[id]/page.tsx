@@ -1,7 +1,21 @@
 "use client"
 
 import { use, useState, useEffect, useRef } from "react"
-import { ChevronLeft, Share2, MoreVertical, Heart, Send, Users, Gift, Bell, BellOff, Volume2, VolumeX, Maximize, Lock, Flag } from "lucide-react"
+import {
+  ChevronLeft,
+  Share2,
+  Heart,
+  Send,
+  Users,
+  Gift,
+  Bell,
+  BellOff,
+  Volume2,
+  VolumeX,
+  Maximize,
+  Lock,
+  Flag,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -11,12 +25,24 @@ import { AuthModal } from "@/components/auth-modal"
 import { ReportModal } from "@/components/report-modal"
 import { ShareSheet } from "@/components/share-sheet"
 import { useAuth } from "@/contexts/auth-context"
-import { getLiveStream, GIFT_CATALOG } from "@/lib/mock-data"
+import { GIFT_CATALOG } from "@/lib/mock-data"
+import { fetchGiftCatalog, sendGift } from "@/lib/api/billing"
+import { fetchStream, type StreamDetail } from "@/lib/api/streams"
+
+const GIFT_ICONS: Record<string, string> = {
+  heart: "❤️",
+  star: "⭐",
+  fire: "🔥",
+  diamond: "💎",
+  lion: "🦁",
+  universe: "🌌",
+}
 
 export default function LiveWatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const stream = getLiveStream(id)
-  const { user, isAuthenticated, updateCoins } = useAuth()
+  const [stream, setStream] = useState<StreamDetail | null>(null)
+  const [giftCatalog, setGiftCatalog] = useState(GIFT_CATALOG)
+  const { user, isAuthenticated, updateCoins, refreshUser } = useAuth()
   const [chatMessages, setChatMessages] = useState([
     { id: "1", user: "GamerPro99", message: "This stream is amazing! 🔥", color: "text-cyan-400" },
   ])
@@ -25,7 +51,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
   const [isFollowing, setIsFollowing] = useState(false)
   const [isNotifyOn, setIsNotifyOn] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
-  const [viewerCount, setViewerCount] = useState(stream.viewerCount)
+  const [viewerCount, setViewerCount] = useState(0)
   const [activeTab, setActiveTab] = useState("home")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
@@ -35,103 +61,326 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
   const userCoins = user?.coins || 0
 
   useEffect(() => {
-    const interval = setInterval(() => setViewerCount((p) => p + Math.floor(Math.random() * 20) - 10), 5000)
+    void fetchStream(id).then((s) => {
+      setStream(s)
+      setViewerCount(s.viewerCount)
+    })
+    void fetchGiftCatalog().then((items) => {
+      if (items.length) {
+        setGiftCatalog(
+          items.map((g) => ({
+            id: g.id,
+            name: g.name,
+            cost: g.coinCost,
+            icon: GIFT_ICONS[g.id] ?? "🎁",
+          })),
+        )
+      }
+    })
+  }, [id])
+
+  useEffect(() => {
+    if (!stream) return
+    const interval = setInterval(
+      () => setViewerCount((p) => p + Math.floor(Math.random() * 20) - 10),
+      5000,
+    )
     return () => clearInterval(interval)
-  }, [])
+  }, [stream])
 
   const requireAuth = (action: () => void) => {
     if (!isAuthenticated) setIsAuthModalOpen(true)
     else action()
   }
 
-  const sendGift = (gift: (typeof GIFT_CATALOG)[number]) => {
-    if (userCoins < gift.cost) return
-    updateCoins(-gift.cost)
-    setChatMessages((prev) => [...prev, { id: Date.now().toString(), user: "You", message: `sent a ${gift.name} ${gift.icon}`, color: "text-primary" }])
+  const handleSendGift = async (gift: (typeof GIFT_CATALOG)[number]) => {
+    if (userCoins < gift.cost || !stream?.creatorId) return
+    try {
+      await sendGift({
+        giftId: gift.id,
+        receiverId: stream.creatorId,
+        streamId: stream.id,
+      })
+      void refreshUser()
+    } catch {
+      updateCoins(-gift.cost)
+    }
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        user: "You",
+        message: `sent a ${gift.name} ${gift.icon}`,
+        color: "text-primary",
+      },
+    ])
     setShowGiftPanel(false)
   }
 
+  if (!stream) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Loading stream…</p>
+      </main>
+    )
+  }
+
+  const sendMessage = () => {
+    if (!messageInput.trim()) return
+    setChatMessages((p) => [
+      ...p,
+      { id: Date.now().toString(), user: "You", message: messageInput, color: "text-primary" },
+    ])
+    setMessageInput("")
+  }
+
   return (
-    <main className="h-[100dvh] bg-background flex flex-col pb-16 md:pb-0 md:pl-20">
-      <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col min-h-0">
-        <div className="relative w-full aspect-video bg-black flex-shrink-0">
-          <img src={stream.thumbnail} alt={stream.title} className="w-full h-full object-cover" />
-          <div className="absolute top-0 left-0 right-0 flex justify-between p-3 bg-gradient-to-b from-black/70 to-transparent">
-            <div className="flex items-center gap-2">
-              <Link href="/"><button className="w-9 h-9 rounded-full bg-background/20 flex items-center justify-center"><ChevronLeft className="w-5 h-5 text-white" /></button></Link>
-              <span className="bg-primary text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-white animate-pulse" /> LIVE</span>
-              <span className="bg-black/50 text-white text-xs px-2 py-1 rounded flex items-center gap-1"><Users className="w-3.5 h-3.5" />{viewerCount.toLocaleString()}</span>
+    <main className="h-[100dvh] bg-background flex flex-col pb-16 md:pb-0 md:pl-20 overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0 w-full max-w-[1600px] mx-auto lg:px-4 lg:py-4 lg:gap-4">
+        {/* Main column: player + stream info */}
+        <div className="flex-1 flex flex-col min-h-0 min-w-0">
+          <div className="relative w-full aspect-video lg:aspect-auto lg:flex-1 lg:min-h-[320px] bg-black rounded-none lg:rounded-xl overflow-hidden shrink-0">
+            <img
+              src={stream.thumbnail ?? ""}
+              alt={stream.title}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/50 pointer-events-none" />
+            <div className="absolute top-0 left-0 right-0 flex justify-between items-start p-3 md:p-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Link href="/">
+                  <button
+                    type="button"
+                    className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-black/40 backdrop-blur flex items-center justify-center"
+                  >
+                    <ChevronLeft className="w-5 h-5 text-white" />
+                  </button>
+                </Link>
+                <span className="bg-primary text-white text-xs font-bold px-2.5 py-1 rounded flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-white animate-pulse" /> LIVE
+                </span>
+                <span className="bg-black/50 backdrop-blur text-white text-xs px-2.5 py-1 rounded flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5" />
+                  {viewerCount.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex gap-1.5 md:gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsMuted(!isMuted)}
+                  className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-black/40 backdrop-blur flex items-center justify-center"
+                >
+                  {isMuted ? (
+                    <VolumeX className="w-5 h-5 text-white" />
+                  ) : (
+                    <Volume2 className="w-5 h-5 text-white" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsShareOpen(true)}
+                  className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-black/40 backdrop-blur flex items-center justify-center"
+                >
+                  <Share2 className="w-5 h-5 text-white" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsReportOpen(true)}
+                  className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-black/40 backdrop-blur flex items-center justify-center"
+                >
+                  <Flag className="w-5 h-5 text-white" />
+                </button>
+                <button
+                  type="button"
+                  className="hidden md:flex w-10 h-10 rounded-full bg-black/40 backdrop-blur items-center justify-center"
+                >
+                  <Maximize className="w-5 h-5 text-white" />
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button onClick={() => setIsMuted(!isMuted)} className="w-9 h-9 rounded-full bg-background/20 flex items-center justify-center">{isMuted ? <VolumeX className="w-5 h-5 text-white" /> : <Volume2 className="w-5 h-5 text-white" />}</button>
-              <button onClick={() => setIsShareOpen(true)} className="w-9 h-9 rounded-full bg-background/20 flex items-center justify-center"><Share2 className="w-5 h-5 text-white" /></button>
-              <button onClick={() => setIsReportOpen(true)} className="w-9 h-9 rounded-full bg-background/20 flex items-center justify-center"><Flag className="w-5 h-5 text-white" /></button>
-              <button className="w-9 h-9 rounded-full bg-background/20 flex items-center justify-center"><Maximize className="w-5 h-5 text-white" /></button>
+          </div>
+
+          <div className="px-4 py-3 md:px-5 md:py-4 border-b border-border lg:border lg:rounded-xl lg:mt-4 lg:bg-card/30 shrink-0">
+            <h1 className="text-base md:text-xl font-semibold line-clamp-2">{stream.title}</h1>
+            <p className="text-xs md:text-sm text-muted-foreground mt-1">
+              {stream.category} · Started {stream.startedAgo}
+            </p>
+            <div className="flex items-center justify-between mt-3 md:mt-4 gap-3">
+              <Link href={`/creator/${stream.streamerSlug}`} className="flex items-center gap-3 min-w-0">
+                <img
+                  src={stream.streamerAvatar}
+                  alt=""
+                  className="w-11 h-11 md:w-12 md:h-12 rounded-full ring-2 ring-primary shrink-0"
+                />
+                <div className="min-w-0">
+                  <h3 className="text-sm md:text-base font-semibold truncate">{stream.streamer}</h3>
+                  <p className="text-xs text-muted-foreground">2.1M followers</p>
+                </div>
+              </Link>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => requireAuth(() => setIsNotifyOn(!isNotifyOn))}
+                  className={cn(
+                    "w-10 h-10 rounded-full flex items-center justify-center",
+                    isNotifyOn ? "bg-primary text-white" : "bg-secondary",
+                  )}
+                >
+                  {isNotifyOn ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
+                </button>
+                <Button
+                  onClick={() => requireAuth(() => setIsFollowing(!isFollowing))}
+                  className={cn("rounded-full", isFollowing && "bg-secondary text-foreground")}
+                >
+                  {isFollowing ? "Following" : "Follow"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile-only chat below info */}
+          <div className="flex-1 flex flex-col min-h-0 lg:hidden">
+            <div ref={chatRef} className="flex-1 overflow-y-auto px-4 py-2 space-y-2 min-h-[100px]">
+              {chatMessages.map((msg) => (
+                <div key={msg.id} className="flex gap-2">
+                  <span className={cn("text-sm font-semibold shrink-0", msg.color)}>{msg.user}:</span>
+                  <span className="text-sm">{msg.message}</span>
+                </div>
+              ))}
+            </div>
+            <div className="px-4 py-3 border-t border-border">
+              {isAuthenticated ? (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowGiftPanel(true)}
+                    className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-orange-500 flex items-center justify-center shrink-0"
+                  >
+                    <Gift className="w-5 h-5 text-white" />
+                  </button>
+                  <input
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                    placeholder="Say something..."
+                    className="flex-1 bg-secondary rounded-full px-4 py-2 text-sm min-w-0"
+                  />
+                  <button
+                    type="button"
+                    onClick={sendMessage}
+                    className="w-10 h-10 rounded-full bg-primary flex items-center justify-center shrink-0"
+                  >
+                    <Send className="w-4 h-4 text-white" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsAuthModalOpen(true)}
+                  className="w-full py-3 rounded-full bg-secondary flex items-center justify-center gap-2 text-sm text-muted-foreground"
+                >
+                  <Lock className="w-4 h-4" /> Sign in to chat
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="px-4 py-3 border-b border-border">
-          <h1 className="text-base font-semibold line-clamp-1">{stream.title}</h1>
-          <p className="text-xs text-muted-foreground">{stream.category} · Started {stream.startedAgo}</p>
-          <div className="flex items-center justify-between mt-3">
-            <Link href={`/creator/${stream.streamerSlug}`} className="flex items-center gap-3">
-              <img src={stream.streamerAvatar} alt="" className="w-11 h-11 rounded-full ring-2 ring-primary" />
-              <div><h3 className="text-sm font-semibold">{stream.streamer}</h3><p className="text-xs text-muted-foreground">2.1M followers</p></div>
-            </Link>
-            <div className="flex gap-2">
-              <button onClick={() => requireAuth(() => setIsNotifyOn(!isNotifyOn))} className={cn("w-10 h-10 rounded-full flex items-center justify-center", isNotifyOn ? "bg-primary text-white" : "bg-secondary")}>
-                {isNotifyOn ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
-              </button>
-              <Button onClick={() => requireAuth(() => setIsFollowing(!isFollowing))} className={cn("rounded-full", isFollowing && "bg-secondary text-foreground")}>{isFollowing ? "Following" : "Follow"}</Button>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 flex flex-col min-h-0">
-          <div ref={chatRef} className="flex-1 overflow-y-auto px-4 py-2 space-y-2 min-h-[120px]">
+        {/* Desktop chat sidebar */}
+        <aside className="hidden lg:flex flex-col w-full lg:w-[380px] xl:w-[420px] shrink-0 border border-border rounded-xl bg-card/20 min-h-0 overflow-hidden">
+          <div className="px-4 py-3 border-b border-border font-semibold text-sm">Live chat</div>
+          <div ref={chatRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2 min-h-0">
             {chatMessages.map((msg) => (
-              <div key={msg.id} className="flex gap-2"><span className={cn("text-sm font-semibold", msg.color)}>{msg.user}:</span><span className="text-sm">{msg.message}</span></div>
+              <div key={msg.id} className="flex gap-2">
+                <span className={cn("text-sm font-semibold shrink-0", msg.color)}>{msg.user}:</span>
+                <span className="text-sm break-words">{msg.message}</span>
+              </div>
             ))}
           </div>
-          <div className="px-4 py-3 border-t border-border">
+          <div className="p-4 border-t border-border">
             {isAuthenticated ? (
               <div className="flex gap-2">
-                <button onClick={() => setShowGiftPanel(true)} className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-orange-500 flex items-center justify-center"><Gift className="w-5 h-5 text-white" /></button>
-                <input value={messageInput} onChange={(e) => setMessageInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && messageInput.trim() && (setChatMessages((p) => [...p, { id: Date.now().toString(), user: "You", message: messageInput, color: "text-primary" }]), setMessageInput(""))} placeholder="Say something..." className="flex-1 bg-secondary rounded-full px-4 py-2 text-sm" />
-                <button onClick={() => messageInput.trim() && (setChatMessages((p) => [...p, { id: Date.now().toString(), user: "You", message: messageInput, color: "text-primary" }]), setMessageInput(""))} className="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><Send className="w-4 h-4 text-white" /></button>
+                <button
+                  type="button"
+                  onClick={() => setShowGiftPanel(true)}
+                  className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-orange-500 flex items-center justify-center"
+                >
+                  <Gift className="w-5 h-5 text-white" />
+                </button>
+                <input
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                  placeholder="Say something..."
+                  className="flex-1 bg-secondary rounded-full px-4 py-2 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={sendMessage}
+                  className="w-10 h-10 rounded-full bg-primary flex items-center justify-center"
+                >
+                  <Send className="w-4 h-4 text-white" />
+                </button>
               </div>
             ) : (
-              <button onClick={() => setIsAuthModalOpen(true)} className="w-full py-3 rounded-full bg-secondary flex items-center justify-center gap-2 text-sm text-muted-foreground"><Lock className="w-4 h-4" /> Sign in to chat</button>
+              <button
+                type="button"
+                onClick={() => setIsAuthModalOpen(true)}
+                className="w-full py-3 rounded-full bg-secondary flex items-center justify-center gap-2 text-sm text-muted-foreground"
+              >
+                <Lock className="w-4 h-4" /> Sign in to chat
+              </button>
             )}
           </div>
-        </div>
-
-        {showGiftPanel && (
-          <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setShowGiftPanel(false)}>
-            <div className="absolute bottom-0 left-0 right-0 md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[450px] bg-background rounded-t-3xl md:rounded-3xl p-4" onClick={(e) => e.stopPropagation()}>
-              <div className="flex justify-between mb-4">
-                <h3 className="font-bold">Send a Gift</h3>
-                <span>🪙 {userCoins.toLocaleString()}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                {GIFT_CATALOG.map((gift) => (
-                  <button key={gift.id} onClick={() => sendGift(gift)} disabled={userCoins < gift.cost} className={cn("flex flex-col items-center p-4 rounded-xl bg-secondary", userCoins < gift.cost && "opacity-50")}>
-                    <span className="text-3xl">{gift.icon}</span>
-                    <span className="text-sm font-medium">{gift.name}</span>
-                    <span className="text-xs">🪙 {gift.cost}</span>
-                  </button>
-                ))}
-              </div>
-              <Link href="/profile"><Button variant="secondary" className="w-full rounded-full mt-4">Get More Coins</Button></Link>
-            </div>
-          </div>
-        )}
+        </aside>
       </div>
-      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} onSearchClick={() => setIsSearchOpen(true)} />
+
+      {showGiftPanel && (
+        <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setShowGiftPanel(false)}>
+          <div
+            className="absolute bottom-0 left-0 right-0 md:left-1/2 md:-translate-x-1/2 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:w-[450px] bg-background rounded-t-3xl md:rounded-3xl p-4 md:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between mb-4">
+              <h3 className="font-bold text-lg">Send a Gift</h3>
+              <span>🪙 {userCoins.toLocaleString()}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {giftCatalog.map((gift) => (
+                <button
+                  key={gift.id}
+                  type="button"
+                  onClick={() => void handleSendGift(gift)}
+                  disabled={userCoins < gift.cost}
+                  className={cn(
+                    "flex flex-col items-center p-4 rounded-xl bg-secondary",
+                    userCoins < gift.cost && "opacity-50",
+                  )}
+                >
+                  <span className="text-3xl">{gift.icon}</span>
+                  <span className="text-sm font-medium">{gift.name}</span>
+                  <span className="text-xs">🪙 {gift.cost}</span>
+                </button>
+              ))}
+            </div>
+            <Link href="/profile">
+              <Button variant="secondary" className="w-full rounded-full mt-4">
+                Get More Coins
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
+
+      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
-      <ReportModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} targetType="stream" targetLabel={stream.title} />
+      <ReportModal
+        isOpen={isReportOpen}
+        onClose={() => setIsReportOpen(false)}
+        targetType="stream"
+        targetLabel={stream.title}
+      />
       <ShareSheet isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} title={stream.title} />
     </main>
   )

@@ -38,7 +38,7 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
         <Link href={`/creator/${show.hostSlug}`} className="block p-4 rounded-xl bg-secondary/30 text-center text-sm">Hosted by {show.host}</Link>
       </div>
       <Footer />
-      <BottomNavigation activeTab={navTab} onTabChange={setNavTab} onSearchClick={() => setIsSearchOpen(true)} />
+      <BottomNavigation activeTab={navTab} onTabChange={setNavTab} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </main>
   )

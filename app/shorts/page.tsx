@@ -622,18 +622,19 @@ export default function ShortsPage() {
       )}
 
       {/* Bottom Navigation */}
-      <BottomNavigation
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onSearchClick={() => setIsSearchOpen(true)}
-      />
+      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Search Modal */}
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
       {/* Auth Modal */}
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
-      {showAd && <AdInterstitial onClose={() => setShowAd(false)} />}
+      {showAd && (
+        <AdInterstitial
+          onClose={() => setShowAd(false)}
+          videoId={String(shortsData[activeIndex]?.id ?? activeIndex)}
+        />
+      )}
 
       <style jsx global>{`
         @keyframes spin-slow {

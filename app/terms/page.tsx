@@ -51,7 +51,7 @@ export default function TermsPage() {
         </div>
       </div>
       <Footer />
-      <BottomNavigation activeTab="none" onTabChange={() => {}} onSearchClick={() => setIsSearchOpen(true)} />
+      <BottomNavigation activeTab="none" onTabChange={() => {}} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </main>
   )

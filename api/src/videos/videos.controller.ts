@@ -10,66 +10,71 @@ import {
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
+import { UploadCompleteDto } from './dto/upload-complete.dto';
+import { UploadInitDto } from './dto/upload-init.dto';
+import { VideosService } from './videos.service';
 
 @Controller('videos')
 export class VideosController {
+  constructor(private readonly videos: VideosService) {}
+
   @Post('upload/init')
   @UseGuards(JwtAuthGuard)
-  uploadInit(
-    @CurrentUser() _user: AuthUserPayload,
-    @Body() _body: Record<string, unknown>,
-  ) {
-    return { tusUrl: null, uploadId: null, message: 'TUS upload — Week 2' };
+  uploadInit(@CurrentUser() user: AuthUserPayload, @Body() body: UploadInitDto) {
+    return this.videos.uploadInit(user.id, body);
   }
 
   @Post('upload/complete')
   @UseGuards(JwtAuthGuard)
   uploadComplete(
-    @CurrentUser() _user: AuthUserPayload,
-    @Body() _body: Record<string, unknown>,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: UploadCompleteDto,
   ) {
-    return { videoId: null, status: 'processing', message: 'Week 2' };
+    return this.videos.uploadComplete(user.id, body);
   }
 
   @Get('feed/shorts')
-  shortsFeed(@Query('cursor') _cursor?: string) {
-    return { items: [], nextCursor: null };
+  shortsFeed(@Query('cursor') cursor?: string) {
+    return this.videos.shortsFeed(cursor);
   }
 
   @Get('feed/movies')
-  moviesFeed() {
-    return { items: [], meta: { page: 1, total: 0 } };
+  moviesFeed(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.videos.moviesFeed(
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 24,
+    );
   }
 
   @Get('feed/movies/featured')
   featuredMovie() {
-    return { item: null };
+    return this.videos.featuredMovie();
   }
 
   @Get(':id')
   getOne(@Param('id') id: string) {
-    return { id, message: 'Week 3 — video detail' };
+    return this.videos.getOne(id);
   }
 
   @Post(':id/like')
   @UseGuards(JwtAuthGuard)
-  like(@Param('id') _id: string, @CurrentUser() _user: AuthUserPayload) {
-    return { liked: true, message: 'Week 3' };
+  like(@Param('id') id: string, @CurrentUser() user: AuthUserPayload) {
+    return this.videos.toggleLike(user.id, id);
   }
 
   @Post(':id/save')
   @UseGuards(JwtAuthGuard)
-  save(@Param('id') _id: string, @CurrentUser() _user: AuthUserPayload) {
-    return { saved: true, message: 'Week 3' };
+  save(@Param('id') id: string, @CurrentUser() user: AuthUserPayload) {
+    return this.videos.toggleSave(user.id, id);
   }
 
   @Post(':id/report')
   @UseGuards(JwtAuthGuard)
   report(
-    @Param('id') _id: string,
-    @CurrentUser() _user: AuthUserPayload,
-    @Body() _body: Record<string, unknown>,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: { reason?: string; details?: string },
   ) {
-    return { success: true, message: 'Week 3' };
+    return this.videos.report(user.id, id, body);
   }
 }

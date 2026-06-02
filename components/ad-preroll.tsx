@@ -2,21 +2,56 @@
 
 import { useState, useRef, useEffect } from "react"
 import { X } from "lucide-react"
-import { getAd } from "@/lib/mock-data"
 import Link from "next/link"
+import {
+  fetchServedAd,
+  trackAdClick,
+  trackAdImpression,
+  type AdAttribution,
+  type ServedAd,
+} from "@/lib/api/ads"
 
 interface AdPrerollProps {
   onComplete: () => void
   skippable?: boolean
+  creatorId?: string
+  videoId?: string
 }
 
-export function AdPreroll({ onComplete, skippable = false }: AdPrerollProps) {
-  const ad = getAd("movie_preroll")
-  const [countdown, setCountdown] = useState(ad?.skipAfterSeconds ?? 15)
+export function AdPreroll({
+  onComplete,
+  skippable = false,
+  creatorId,
+  videoId,
+}: AdPrerollProps) {
+  const [ad, setAd] = useState<ServedAd | null | undefined>(undefined)
+  const [countdown, setCountdown] = useState(15)
   const [canSkip, setCanSkip] = useState(skippable)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
+    void fetchServedAd("movie_preroll").then(setAd)
+  }, [])
+
+  useEffect(() => {
+    if (!ad) return
+    setCountdown(ad.skipAfterSeconds || 15)
+    if (creatorId) {
+      void trackAdImpression({
+        campaignId: ad.id,
+        placement: "movie_preroll",
+        creatorId,
+        videoId,
+      })
+    }
+  }, [ad, creatorId, videoId])
+
+  useEffect(() => {
+    if (ad === undefined) return
+    if (ad === null) {
+      onComplete()
+      return
+    }
     if (skippable) {
       setCanSkip(true)
       return
@@ -27,37 +62,61 @@ export function AdPreroll({ onComplete, skippable = false }: AdPrerollProps) {
     }
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000)
     return () => clearTimeout(t)
-  }, [countdown, skippable])
+  }, [ad, countdown, skippable, onComplete])
 
-  if (!ad) {
-    onComplete()
-    return null
+  if (ad === undefined) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+        <p className="text-white/70 text-sm">Loading…</p>
+      </div>
+    )
+  }
+
+  if (!ad) return null
+
+  const attr: AdAttribution = {
+    campaignId: ad.id,
+    placement: "movie_preroll",
+    creatorId,
+    videoId,
   }
 
   return (
-    <div className="absolute inset-0 z-50 bg-black flex flex-col">
-      <div className="flex items-center justify-between px-4 py-2 bg-black/80">
-        <span className="text-xs text-white/70">Ad · {ad.title}</span>
-        {canSkip ? (
-          <button onClick={onComplete} className="text-xs font-bold text-white bg-white/20 px-3 py-1 rounded-full hover:bg-white/30">
-            Skip Ad
+    <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+      <div className="relative w-full max-w-5xl aspect-video">
+        <video
+          ref={videoRef}
+          src={ad.mediaUrl}
+          className="w-full h-full object-contain"
+          autoPlay
+          muted
+          playsInline
+          onEnded={onComplete}
+        />
+        {canSkip && (
+          <button
+            type="button"
+            onClick={onComplete}
+            className="absolute top-4 right-4 bg-black/70 text-white px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2"
+          >
+            Skip <X className="w-4 h-4" />
           </button>
-        ) : (
-          <span className="text-xs text-white/70">Skip in {countdown}s</span>
         )}
+        {!canSkip && (
+          <div className="absolute top-4 right-4 bg-black/70 text-white px-3 py-1 rounded text-sm">
+            Skip in {countdown}s
+          </div>
+        )}
+        <Link
+          href={ad.clickThroughUrl}
+          className="absolute bottom-4 left-4 text-white/80 text-sm underline"
+          onClick={() => {
+            if (creatorId) void trackAdClick(attr)
+          }}
+        >
+          {ad.title}
+        </Link>
       </div>
-      <video
-        ref={videoRef}
-        src={ad.mediaUrl}
-        autoPlay
-        muted
-        playsInline
-        className="flex-1 w-full object-contain"
-        onEnded={onComplete}
-      />
-      <Link href={ad.clickThroughUrl} className="text-center py-2 text-xs text-primary">
-        Learn more
-      </Link>
     </div>
   )
 }

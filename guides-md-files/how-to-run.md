@@ -15,6 +15,8 @@ This guide covers local development on Linux/macOS/WSL. You need **Node.js 20+**
 
 Ports **5433** and **6380** avoid conflicts if you already run Postgres/Redis on the default ports.
 
+**Product scope (stakeholder):** Full mission requirements (GAF, revenue splits, Creator Store, Impact Dashboard, content verticals, 14 backend modules) are documented in [`stakeholder-product-requirements.md`](./stakeholder-product-requirements.md) and integrated into [`backend-development-plan.md`](./backend-development-plan.md) Section 15.
+
 ---
 
 ## 1. One-time setup
@@ -61,6 +63,17 @@ openssl rand -base64 32
 NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
 ```
 
+**API email (password reset)** — add to `api/.env` (never commit):
+
+```env
+FRONTEND_URL=http://localhost:3001
+SMTP_HOST=smtp.hostinger.com
+SMTP_PORT=587
+SMTP_USER=your-smtp-user
+SMTP_PASS=your-smtp-password
+SMTP_FROM=your-smtp-user
+```
+
 ### Start database containers
 
 From the **repo root**:
@@ -74,8 +87,9 @@ docker compose ps   # postgres + redis should be "healthy"
 
 ```bash
 cd api
-npm run db:migrate    # applies Prisma migrations
-npm run db:seed       # gift catalog + coin packages
+npm run db:migrate    # Prisma migrations (incl. phase2 economy / revenue_split_rules)
+npm run db:seed       # gifts, coins, revenue split rules, GAF programs
+npm run db:generate   # run after schema changes
 cd ..
 ```
 
@@ -200,6 +214,14 @@ After `-v`, run `npm run db:migrate` and `npm run db:seed` again in `api/`.
 1. `docker compose ps` — is `prysymtv-postgres` healthy?
 2. `DATABASE_URL` host port must be **5433** (not 5432) unless you changed compose.
 3. Run migrations: `cd api && npm run db:migrate`
+
+### Password reset: “Check your email” but nothing arrives
+
+1. **Restart the API** after changing `api/.env` (`Ctrl+C`, then `npm run start:dev`). An old process will not load SMTP or the mail module.
+2. Use an email that is **registered** (sign up first). Unknown emails get the same success message but **no email** (on purpose).
+3. On API start you should see: `SMTP connection verified`. If you see `SMTP verification failed`, fix `SMTP_*` in `api/.env`.
+4. Check spam; reset is sent from `SMTP_FROM` (e.g. `support@hostyler.com`).
+5. In development, if send fails, the API terminal prints the full reset link.
 
 ### CORS errors from browser
 

@@ -21,6 +21,7 @@ export class UsersService {
       include: {
         socialLinks: { orderBy: { sortOrder: 'asc' } },
         notificationPrefs: true,
+        programVerticals: { select: { vertical: true } },
         _count: {
           select: {
             followers: true,
@@ -186,7 +187,7 @@ export class UsersService {
 
   async getMySaved(userId: string, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
-    const [items, total] = await Promise.all([
+    const [saved, total] = await Promise.all([
       this.prisma.savedItem.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
@@ -195,12 +196,29 @@ export class UsersService {
       }),
       this.prisma.savedItem.count({ where: { userId } }),
     ]);
+    const videoIds = saved
+      .filter((s) => s.itemType === 'video' || s.itemType === 'movie')
+      .map((s) => s.itemId);
+    const videos =
+      videoIds.length > 0
+        ? await this.prisma.video.findMany({ where: { id: { in: videoIds } } })
+        : [];
+    const videoById = new Map(videos.map((v) => [v.id, v]));
+    const items = saved.map((s) => ({
+      itemType: s.itemType,
+      itemId: s.itemId,
+      createdAt: s.createdAt,
+      video:
+        s.itemType === 'video' || s.itemType === 'movie'
+          ? (videoById.get(s.itemId) ?? null)
+          : null,
+    }));
     return { items, meta: { page, limit, total } };
   }
 
   async getMyLiked(userId: string, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
-    const [items, total] = await Promise.all([
+    const [likes, total] = await Promise.all([
       this.prisma.like.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
@@ -209,6 +227,20 @@ export class UsersService {
       }),
       this.prisma.like.count({ where: { userId } }),
     ]);
+    const videoIds = likes
+      .filter((l) => l.targetType === 'video')
+      .map((l) => l.targetId);
+    const videos =
+      videoIds.length > 0
+        ? await this.prisma.video.findMany({ where: { id: { in: videoIds } } })
+        : [];
+    const videoById = new Map(videos.map((v) => [v.id, v]));
+    const items = likes.map((l) => ({
+      targetType: l.targetType,
+      targetId: l.targetId,
+      createdAt: l.createdAt,
+      video: l.targetType === 'video' ? (videoById.get(l.targetId) ?? null) : null,
+    }));
     return { items, meta: { page, limit, total } };
   }
 
@@ -268,6 +300,8 @@ export class UsersService {
     role: string;
     isVerified: boolean;
     streamerStatus: string;
+    partnerTier?: string;
+    programVerticals?: { vertical: string }[];
     coinsBalance: number;
     premiumTier: string;
     premiumExpiresAt: Date | null;
@@ -287,6 +321,9 @@ export class UsersService {
       role: user.role,
       isVerified: user.isVerified,
       streamerStatus: user.streamerStatus,
+      partnerTier: user.partnerTier ?? 'standard',
+      programVerticals:
+        user.programVerticals?.map((p) => p.vertical) ?? [],
       coinsBalance: user.coinsBalance,
       premiumTier: user.premiumTier,
       premiumExpiresAt: user.premiumExpiresAt,

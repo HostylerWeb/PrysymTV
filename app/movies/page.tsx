@@ -376,11 +376,7 @@ export default function MoviesPage() {
       <Footer />
 
       {/* Bottom Navigation */}
-      <BottomNavigation 
-        activeTab={activeTab} 
-        onTabChange={setActiveTab}
-        onSearchClick={() => setIsSearchOpen(true)}
-      />
+      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Search Modal */}
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />

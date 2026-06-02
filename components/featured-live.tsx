@@ -10,7 +10,7 @@ export function FeaturedLive() {
   const stream = mockLiveStreams[0]
 
   return (
-    <section className="relative w-full pt-20 md:pt-24 pb-8 px-4">
+    <section className="relative w-full pt-4 md:pt-6 pb-8 px-4">
       <div className="max-w-7xl mx-auto w-full">
         <div className="flex flex-col lg:flex-row gap-4 bg-secondary/30 rounded-2xl overflow-hidden border border-border">
           {/* Main Player Area */}

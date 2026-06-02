@@ -123,7 +123,7 @@ export interface MockStory {
 
 export interface MockAd {
   id: string
-  placement: "home_banner" | "shorts_interstitial" | "movie_preroll"
+  placement: "home_banner" | "shorts_interstitial" | "movie_preroll" | "vertical_episode"
   title: string
   mediaUrl: string
   mediaType: "image" | "video"
@@ -478,6 +478,15 @@ export const mockAds: MockAd[] = [
     mediaType: "video",
     clickThroughUrl: "/premium",
     skipAfterSeconds: 15,
+  },
+  {
+    id: "ad-vertical-1",
+    placement: "vertical_episode",
+    title: "Next episode sponsor",
+    mediaUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+    mediaType: "video",
+    clickThroughUrl: "https://prysym.tv",
+    skipAfterSeconds: 5,
   },
 ]
 

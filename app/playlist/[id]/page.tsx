@@ -50,7 +50,7 @@ export default function PlaylistPage({ params }: { params: Promise<{ id: string 
         </div>
       </div>
       <Footer />
-      <BottomNavigation activeTab={navTab} onTabChange={setNavTab} onSearchClick={() => setIsSearchOpen(true)} />
+      <BottomNavigation activeTab={navTab} onTabChange={setNavTab} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </main>
   )

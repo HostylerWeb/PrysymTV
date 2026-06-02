@@ -1,6 +1,17 @@
 "use client"
 
-import { createContext, useContext, useState, useLayoutEffect, ReactNode } from "react"
+import {
+  createContext,
+  useContext,
+  useLayoutEffect,
+  useState,
+  useCallback,
+  type ReactNode,
+} from "react"
+import { ApiError, loadStoredAccessToken, setAccessToken } from "@/lib/api-client"
+import * as authApi from "@/lib/api/auth"
+import { fetchMe, applyStreamer as applyStreamerApi } from "@/lib/api/users"
+import { mapMeToUser } from "@/lib/api/map-user"
 
 export interface User {
   id: string
@@ -8,9 +19,13 @@ export interface User {
   username: string
   email: string
   avatar: string
+  bio: string
   coins: number
   isStreamer: boolean
   streamerStatus: "none" | "pending" | "approved" | "rejected"
+  followersCount: number
+  followingCount: number
+  videosCount: number
   streamerApplication?: {
     description: string
     idPhotoUrl: string
@@ -22,11 +37,12 @@ interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
-  login: (email: string, password: string) => Promise<boolean>
-  register: (name: string, email: string, password: string) => Promise<boolean>
-  logout: () => void
+  login: (email: string, password: string) => Promise<void>
+  register: (name: string, email: string, password: string) => Promise<void>
+  logout: () => Promise<void>
+  refreshUser: () => Promise<void>
   updateCoins: (amount: number) => void
-  applyForStreamer: (description: string, idPhotoUrl: string) => Promise<boolean>
+  applyForStreamer: (description: string, idPhotoUrl: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -35,131 +51,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // useLayoutEffect runs before paint so logged-in users don't flash guest UI
-  useLayoutEffect(() => {
-    const legacy = localStorage.getItem("streamverse_user")
-    const savedUser = localStorage.getItem("prysymtv_user") ?? legacy
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser) as User)
-        if (legacy && !localStorage.getItem("prysymtv_user")) {
-          localStorage.setItem("prysymtv_user", legacy)
-          localStorage.removeItem("streamverse_user")
-        }
-      } catch {
-        localStorage.removeItem("prysymtv_user")
-        localStorage.removeItem("streamverse_user")
-      }
-    }
-    setIsLoading(false)
+  const refreshUser = useCallback(async () => {
+    const me = await fetchMe()
+    setUser(mapMeToUser(me))
   }, [])
 
-  const saveUser = (userData: User | null) => {
-    if (userData) {
-      localStorage.setItem("prysymtv_user", JSON.stringify(userData))
-      localStorage.removeItem("streamverse_user")
-    } else {
-      localStorage.removeItem("prysymtv_user")
-      localStorage.removeItem("streamverse_user")
+  useLayoutEffect(() => {
+    let cancelled = false
+
+    async function hydrate() {
+      loadStoredAccessToken()
+      try {
+        const me = await fetchMe()
+        if (!cancelled) setUser(mapMeToUser(me))
+      } catch {
+        setAccessToken(null)
+        if (!cancelled) setUser(null)
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
     }
-    setUser(userData)
+
+    void hydrate()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const login = async (email: string, password: string) => {
+    await authApi.login(email, password)
+    const me = await fetchMe()
+    setUser(mapMeToUser(me))
   }
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    // Simulate API call - accept any email/password for demo
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    const mockUser: User = {
-      id: "user_" + Date.now(),
-      name: email.split("@")[0].replace(/[^a-zA-Z]/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
-      username: "@" + email.split("@")[0].toLowerCase(),
-      email: email,
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
-      coins: 1500,
-      isStreamer: false,
-      streamerStatus: "none"
-    }
-    
-    saveUser(mockUser)
-    return true
+  const register = async (name: string, email: string, password: string) => {
+    const username = authApi.deriveUsername(name, email)
+    await authApi.register({
+      email,
+      username,
+      password,
+      displayName: name,
+    })
+    const me = await fetchMe()
+    setUser(mapMeToUser(me))
   }
 
-  const register = async (name: string, email: string, password: string): Promise<boolean> => {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    const mockUser: User = {
-      id: "user_" + Date.now(),
-      name: name,
-      username: "@" + name.toLowerCase().replace(/\s+/g, ""),
-      email: email,
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
-      coins: 500, // New users get 500 coins
-      isStreamer: false,
-      streamerStatus: "none"
-    }
-    
-    saveUser(mockUser)
-    return true
-  }
-
-  const logout = () => {
-    saveUser(null)
+  const logout = async () => {
+    await authApi.logout()
+    setUser(null)
   }
 
   const updateCoins = (amount: number) => {
-    if (user) {
-      const updatedUser = { ...user, coins: user.coins + amount }
-      saveUser(updatedUser)
-    }
+    setUser((prev) =>
+      prev ? { ...prev, coins: Math.max(0, prev.coins + amount) } : null,
+    )
   }
 
-  const applyForStreamer = async (description: string, idPhotoUrl: string): Promise<boolean> => {
-    if (!user) return false
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    const updatedUser: User = {
-      ...user,
-      streamerStatus: "pending",
-      streamerApplication: {
-        description,
-        idPhotoUrl,
-        submittedAt: new Date().toISOString()
-      }
-    }
-    
-    saveUser(updatedUser)
-    
-    // Auto-approve after 3 seconds for demo purposes
-    setTimeout(() => {
-      const currentUser = JSON.parse(localStorage.getItem("prysymtv_user") || "null")
-      if (currentUser && currentUser.streamerStatus === "pending") {
-        const approvedUser = {
-          ...currentUser,
-          isStreamer: true,
-          streamerStatus: "approved"
-        }
-        localStorage.setItem("prysymtv_user", JSON.stringify(approvedUser))
-        setUser(approvedUser)
-      }
-    }, 3000)
-    
-    return true
+  const applyForStreamer = async (description: string, idPhotoUrl: string) => {
+    await applyStreamerApi(description, idPhotoUrl)
+    const me = await fetchMe()
+    setUser(mapMeToUser(me))
   }
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      isAuthenticated: !!user,
-      isLoading,
-      login,
-      register,
-      logout,
-      updateCoins,
-      applyForStreamer
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: !!user,
+        isLoading,
+        login,
+        register,
+        logout,
+        refreshUser,
+        updateCoins,
+        applyForStreamer,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )
@@ -171,4 +138,10 @@ export function useAuth() {
     throw new Error("useAuth must be used within an AuthProvider")
   }
   return context
+}
+
+export function getAuthErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) return err.message
+  if (err instanceof Error) return err.message
+  return "An error occurred. Please try again."
 }

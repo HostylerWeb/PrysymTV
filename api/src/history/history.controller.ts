@@ -27,7 +27,7 @@ export class HistoryController {
     const p = Number(page) || 1;
     const l = Number(limit) || 20;
     const skip = (p - 1) * l;
-    const [items, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.prisma.watchHistory.findMany({
         where: { userId: user.id },
         orderBy: { updatedAt: 'desc' },
@@ -36,6 +36,33 @@ export class HistoryController {
       }),
       this.prisma.watchHistory.count({ where: { userId: user.id } }),
     ]);
+    const videoIds = rows
+      .filter((r) => r.contentType === 'video')
+      .map((r) => r.contentId);
+    const videos =
+      videoIds.length > 0
+        ? await this.prisma.video.findMany({
+            where: { id: { in: videoIds } },
+            include: {
+              creator: {
+                select: {
+                  username: true,
+                  displayName: true,
+                },
+              },
+            },
+          })
+        : [];
+    const videoById = new Map(videos.map((v) => [v.id, v]));
+    const items = rows.map((r) => ({
+      contentType: r.contentType,
+      contentId: r.contentId,
+      progressSeconds: r.progressSeconds,
+      completed: r.completed,
+      updatedAt: r.updatedAt,
+      video:
+        r.contentType === 'video' ? (videoById.get(r.contentId) ?? null) : null,
+    }));
     return { items, meta: { page: p, limit: l, total } };
   }
 

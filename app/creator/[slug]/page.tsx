@@ -141,7 +141,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ slug:
         </div>
       </div>
       <Footer />
-      <BottomNavigation activeTab={navTab} onTabChange={setNavTab} onSearchClick={() => setIsSearchOpen(true)} />
+      <BottomNavigation activeTab={navTab} onTabChange={setNavTab} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} initialMode="login" />
     </main>

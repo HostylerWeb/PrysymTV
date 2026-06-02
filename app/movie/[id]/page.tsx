@@ -53,7 +53,9 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <div className="max-w-7xl mx-auto w-full">
         <div className="relative w-full aspect-video md:aspect-[21/9] bg-black overflow-hidden">
-          {showPreroll && <AdPreroll onComplete={startPlayback} />}
+          {showPreroll && (
+            <AdPreroll onComplete={startPlayback} videoId={movie.id} />
+          )}
           {isPlaying ? (
             <>
               <video ref={videoRef} src={movie.videoUrl} controls autoPlay className="w-full h-full object-contain" />
@@ -127,7 +129,7 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
       <Footer />
-      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} onSearchClick={() => setIsSearchOpen(true)} />
+      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       <ReportModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} targetType="video" targetLabel={movie.title} />

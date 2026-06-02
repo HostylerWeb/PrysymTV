@@ -45,13 +45,15 @@ Run guide (frontend + Docker + env): `../guides-md-files/how-to-run.md`
 
 - Full API reference: `../guides-md-files/api.md`
 - Backend plan: `../guides-md-files/backend-development-plan.md`
+- Stakeholder / mission requirements (GAF, splits, 14 modules): `../guides-md-files/stakeholder-product-requirements.md`
 
 ## Implementation status
 
 | Week | Focus | Status |
 |------|--------|--------|
 | 1 | Auth, users, schema | ✅ Core done |
-| 2 | TUS uploads, FFmpeg | 🚧 |
+| 2 | Uploads, storage, FFmpeg queue | ✅ Core (local/R2 env-driven) |
+| 11–20 | Economy, Store, GAF, Impact, Insider | 📋 See stakeholder doc |
 | 3 | Videos, comments, playlists | 🚧 Stubs |
 | 4 | Live streaming | 🚧 Stubs |
 | 5 | Billing, gifts | Partial (catalog) |
