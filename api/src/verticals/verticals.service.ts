@@ -59,7 +59,7 @@ export class VerticalsService {
   async getEpisode(slug: string, episodeNumber: number) {
     const series = await this.prisma.verticalSeries.findFirst({
       where: { slug, status: VerticalSeriesStatus.published },
-      select: { id: true, slug: true, title: true, creatorId: true },
+      select: { id: true, slug: true, title: true, creatorId: true, posterUrl: true },
     });
     if (!series) throw new NotFoundException('Series not found');
 
@@ -82,8 +82,21 @@ export class VerticalsService {
     });
 
     return {
-      series: { id: series.id, slug: series.slug, title: series.title, creatorId: series.creatorId },
-      episode,
+      series: {
+        id: series.id,
+        slug: series.slug,
+        title: series.title,
+        creatorId: series.creatorId,
+        posterUrl: series.posterUrl,
+      },
+      episode: {
+        id: episode.id,
+        episodeNumber: episode.episodeNumber,
+        title: episode.title,
+        videoUrl: episode.videoUrl,
+        durationSeconds: episode.durationSeconds,
+        cliffhanger: episode.cliffhanger,
+      },
       nextEpisode: next,
     };
   }

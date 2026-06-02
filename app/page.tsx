@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react"
 import { Header } from "@/components/header"
-import { FeaturedLive } from "@/components/featured-live"
+import { FeaturedLive, type FeaturedLiveStream } from "@/components/featured-live"
+import { ContinueWatchingRow } from "@/components/continue-watching-row"
+import { useAuth } from "@/contexts/auth-context"
+import { fetchHistory } from "@/lib/api/history"
+import { listVerticalContinueWatching } from "@/lib/vertical-progress"
+import type { HistoryItemRecord } from "@/lib/api/types"
 import { CategoryTabs } from "@/components/category-tabs"
 import { StoriesRow } from "@/components/stories-row"
 import { ContentRow } from "@/components/content-row"
@@ -18,6 +23,7 @@ import { formatDuration, formatViewCount } from "@/lib/format-media"
 import { mockStories, type ContentCategory, type MockStory } from "@/lib/mock-data"
 
 export default function Home() {
+  const { isAuthenticated } = useAuth()
   const [activeCategory, setActiveCategory] = useState<ContentCategory>("all")
   const [activeTab, setActiveTab] = useState("home")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -49,9 +55,38 @@ export default function Home() {
     Array<{ id: string; title: string; poster: string; year: string; rating: number; genre: string }>
   >([])
   const [newReleases, setNewReleases] = useState<typeof topMovies>([])
+  const [featuredLive, setFeaturedLive] = useState<FeaturedLiveStream | null>(null)
+  const [continueHistory, setContinueHistory] = useState<HistoryItemRecord[]>([])
+  const [continueVertical, setContinueVertical] = useState(
+    () => (typeof window !== "undefined" ? listVerticalContinueWatching() : []),
+  )
+
+  useEffect(() => {
+    setContinueVertical(listVerticalContinueWatching())
+  }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setContinueHistory([])
+      return
+    }
+    void fetchHistory(1, 8)
+      .then((res) => setContinueHistory(res.items.filter((i) => i.video)))
+      .catch(() => setContinueHistory([]))
+  }, [isAuthenticated])
 
   useEffect(() => {
     void fetchFeedHome().then((feed) => {
+      if (feed.featuredLive) {
+        setFeaturedLive({
+          id: feed.featuredLive.id,
+          slug: feed.featuredLive.slug,
+          title: feed.featuredLive.title,
+          thumbnailUrl: feed.featuredLive.thumbnailUrl,
+          streamer: feed.featuredLive.streamer,
+          viewerCount: feed.featuredLive.viewerCount,
+        })
+      }
       setLiveStreams(
         feed.liveNow.map((s) => ({
           id: s.id,
@@ -104,12 +139,21 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <Header onSearchClick={() => setIsSearchOpen(true)} />
-      <FeaturedLive />
+      <FeaturedLive stream={featuredLive} />
       <AdBanner />
 
       <div className="relative z-10 bg-background">
         <div className="max-w-7xl mx-auto w-full px-4 md:px-0">
           <CategoryTabs activeCategory={activeCategory} onCategoryChange={setActiveCategory} />
+
+          {(continueHistory.length > 0 || continueVertical.length > 0) && (
+            <div className="px-4 md:px-8 pt-4">
+              <ContinueWatchingRow
+                historyItems={continueHistory}
+                verticalItems={continueVertical}
+              />
+            </div>
+          )}
 
           {showLive && liveStreams.length > 0 && (
             <LiveRow title="Live Now" streams={liveStreams} />

@@ -4,10 +4,12 @@ import { use, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ChevronLeft, ChevronUp } from "lucide-react"
 import { VerticalEpisodeAdGate } from "@/components/vertical-episode-ad-gate"
+import { HlsVideoPlayer } from "@/components/hls-video-player"
 import {
   fetchVerticalEpisode,
   type VerticalEpisodePlayback,
 } from "@/lib/api/verticals"
+import { saveVerticalProgress } from "@/lib/vertical-progress"
 
 export default function VerticalWatchPage({
   params,
@@ -95,14 +97,27 @@ export default function VerticalWatchPage({
         <>
           <div className="flex-1 flex items-center justify-center min-h-0">
             {episode.videoUrl ? (
-              <video
-                ref={videoRef}
+              <HlsVideoPlayer
                 key={episode.id}
                 src={episode.videoUrl}
                 className="w-full h-full max-h-[100dvh] object-contain"
-                playsInline
                 autoPlay
                 controls
+                videoRef={videoRef}
+                onTimeUpdate={(t, d) => {
+                  saveVerticalProgress({
+                    slug,
+                    seriesTitle: series.title,
+                    posterUrl: series.posterUrl ?? null,
+                    episodeNumber: episode.episodeNumber,
+                    episodeTitle: episode.title,
+                    progressSeconds: Math.floor(t),
+                    durationSeconds: Math.floor(d) || episode.durationSeconds,
+                  })
+                }}
+                onEnded={() => {
+                  if (nextEpisode) goNextEpisode()
+                }}
               />
             ) : (
               <p className="text-white/60">Video unavailable</p>

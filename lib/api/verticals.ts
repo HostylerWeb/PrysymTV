@@ -31,7 +31,13 @@ export type VerticalSeriesDetail = VerticalSeriesCard & {
 };
 
 export type VerticalEpisodePlayback = {
-  series: { id: string; slug: string; title: string; creatorId: string | null };
+  series: {
+    id: string
+    slug: string
+    title: string
+    creatorId: string | null
+    posterUrl?: string | null
+  };
   episode: {
     id: string;
     episodeNumber: number;

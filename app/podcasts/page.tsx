@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
-  Play, Pause, SkipBack, SkipForward, Volume2, Heart,
+  Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Heart,
   Share2, MoreHorizontal, Mic, Clock, Users, TrendingUp,
-  Shuffle, Repeat, Plus, Search as SearchIcon,
+  Plus,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -12,6 +12,7 @@ import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+import { ShareSheet } from "@/components/share-sheet"
 
 // ─── DATA ────────────────────────────────────────────────────────────────────
 
@@ -40,68 +41,155 @@ const trendingShows = [
   { id: "6", title: "The Money Code", host: "Lisa Chen", cover: "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=400&h=400&fit=crop", category: "Business", followers: "780K", episodes: 155 },
 ]
 
-const latestEpisodes = [
-  { id: "1", podcast: "Crime & Consequence", title: "The Vanishing: A 30-Year Cold Case Solved", duration: "58m", date: "Today", cover: "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=100&h=100&fit=crop", plays: "142K" },
-  { id: "2", podcast: "Founders Mindset", title: "How I Built a $50M Company From My Garage", duration: "1h 22m", date: "Yesterday", cover: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=100&h=100&fit=crop", plays: "87K" },
-  { id: "3", podcast: "The Tech Horizon", title: "AI & The Future of Work", duration: "1h 14m", date: "2 days ago", cover: "https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=100&h=100&fit=crop", plays: "310K" },
-  { id: "4", podcast: "Laugh Therapy", title: "Dating Apps in 2025: A Comedy Special", duration: "44m", date: "3 days ago", cover: "https://images.unsplash.com/photo-1543269865-cbf427effbad?w=100&h=100&fit=crop", plays: "420K" },
-  { id: "5", podcast: "Mind & Body Lab", title: "Sleep Optimization: The Science You Need", duration: "51m", date: "4 days ago", cover: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=100&h=100&fit=crop", plays: "98K" },
-  { id: "6", podcast: "Deep Space Weekly", title: "James Webb's Latest: What We Found", duration: "1h 5m", date: "5 days ago", cover: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=100&h=100&fit=crop", plays: "65K" },
+export type PodcastEpisode = {
+  id: string
+  podcast: string
+  title: string
+  duration: string
+  durationSeconds: number
+  date: string
+  cover: string
+  plays: string
+}
+
+const latestEpisodes: PodcastEpisode[] = [
+  { id: "1", podcast: "Crime & Consequence", title: "The Vanishing: A 30-Year Cold Case Solved", duration: "58m", durationSeconds: 3480, date: "Today", cover: "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=100&h=100&fit=crop", plays: "142K" },
+  { id: "2", podcast: "Founders Mindset", title: "How I Built a $50M Company From My Garage", duration: "1h 22m", durationSeconds: 4920, date: "Yesterday", cover: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=100&h=100&fit=crop", plays: "87K" },
+  { id: "3", podcast: "The Tech Horizon", title: "AI & The Future of Work", duration: "1h 14m", durationSeconds: 4440, date: "2 days ago", cover: "https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=100&h=100&fit=crop", plays: "310K" },
+  { id: "4", podcast: "Laugh Therapy", title: "Dating Apps in 2025: A Comedy Special", duration: "44m", durationSeconds: 2640, date: "3 days ago", cover: "https://images.unsplash.com/photo-1543269865-cbf427effbad?w=100&h=100&fit=crop", plays: "420K" },
+  { id: "5", podcast: "Mind & Body Lab", title: "Sleep Optimization: The Science You Need", duration: "51m", durationSeconds: 3060, date: "4 days ago", cover: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=100&h=100&fit=crop", plays: "98K" },
+  { id: "6", podcast: "Deep Space Weekly", title: "James Webb's Latest: What We Found", duration: "1h 5m", durationSeconds: 3900, date: "5 days ago", cover: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=100&h=100&fit=crop", plays: "65K" },
 ]
 
 const topCreators = [
-  { id: "1", name: "Alex Rivera", handle: "@alexrivera", avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop", shows: 2, followers: "1.8M", isVerified: true },
-  { id: "2", name: "Sarah Mitchell", handle: "@sarahmitch", avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop", shows: 1, followers: "890K", isVerified: true },
-  { id: "3", name: "James Kim", handle: "@jameskim", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop", shows: 3, followers: "645K", isVerified: false },
-  { id: "4", name: "Dr. Priya Nair", handle: "@drpriya", avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop", shows: 1, followers: "1.4M", isVerified: true },
-  { id: "5", name: "Maria Santos", handle: "@mariasantos", avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&h=100&fit=crop", shows: 2, followers: "2.1M", isVerified: true },
+  { id: "1", slug: "progamerx", name: "Alex Rivera", handle: "@alexrivera", avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop", shows: 2, followers: "1.8M", isVerified: true },
+  { id: "2", slug: "sarahmitch", name: "Sarah Mitchell", handle: "@sarahmitch", avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop", shows: 1, followers: "890K", isVerified: true },
+  { id: "3", slug: "jameskim", name: "James Kim", handle: "@jameskim", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop", shows: 3, followers: "645K", isVerified: false },
+  { id: "4", slug: "drpriya", name: "Dr. Priya Nair", handle: "@drpriya", avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop", shows: 1, followers: "1.4M", isVerified: true },
+  { id: "5", slug: "mariasantos", name: "Maria Santos", handle: "@mariasantos", avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&h=100&fit=crop", shows: 2, followers: "2.1M", isVerified: true },
 ]
+
+function episodeForShow(showTitle: string): PodcastEpisode {
+  return latestEpisodes.find((e) => e.podcast === showTitle) ?? latestEpisodes[0]
+}
 
 // ─── MINI AUDIO PLAYER BAR ─────────────────────────────────────────────────
 
-function PlayerBar({ episode, onClose }: { episode: typeof latestEpisodes[0], onClose: () => void }) {
+function PlayerBar({
+  episodes,
+  currentIndex,
+  onIndexChange,
+  onShare,
+}: {
+  episodes: PodcastEpisode[]
+  currentIndex: number
+  onIndexChange: (index: number) => void
+  onShare: () => void
+}) {
+  const episode = episodes[currentIndex]
   const [isPlaying, setIsPlaying] = useState(true)
-  const [progress, setProgress] = useState(34)
+  const [progress, setProgress] = useState(12)
   const [liked, setLiked] = useState(false)
+  const [muted, setMuted] = useState(false)
+
+  useEffect(() => {
+    if (!isPlaying || !episode) return
+    const timer = setInterval(() => {
+      setProgress((p) => {
+        if (p >= 100) {
+          if (currentIndex < episodes.length - 1) {
+            onIndexChange(currentIndex + 1)
+            return 0
+          }
+          setIsPlaying(false)
+          return 100
+        }
+        return p + 0.35
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [isPlaying, episode, currentIndex, episodes.length, onIndexChange])
+
+  useEffect(() => {
+    setProgress(8)
+    setIsPlaying(true)
+  }, [currentIndex])
+
+  if (!episode) return null
+
+  const goPrev = () => {
+    if (currentIndex > 0) onIndexChange(currentIndex - 1)
+  }
+  const goNext = () => {
+    if (currentIndex < episodes.length - 1) onIndexChange(currentIndex + 1)
+  }
 
   return (
     <div className="fixed bottom-16 md:bottom-0 md:left-20 left-0 right-0 z-40 bg-card/95 backdrop-blur-xl border-t border-border shadow-2xl">
-      {/* Progress bar */}
-      <div className="w-full h-0.5 bg-border">
+      <div
+        className="w-full h-1 bg-border cursor-pointer"
+        onClick={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect()
+          setProgress(((e.clientX - rect.left) / rect.width) * 100)
+        }}
+      >
         <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progress}%` }} />
       </div>
       <div className="flex items-center gap-3 px-4 py-3">
-        {/* Cover */}
-        <img src={episode.cover} alt={episode.podcast} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-foreground truncate">{episode.title}</p>
+        <Link href={`/podcast/${episode.id}`}>
+          <img src={episode.cover} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 hover:opacity-90" />
+        </Link>
+        <Link href={`/podcast/${episode.id}`} className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-foreground truncate hover:text-primary">{episode.title}</p>
           <p className="text-xs text-muted-foreground truncate">{episode.podcast}</p>
-        </div>
-
-        {/* Controls */}
+        </Link>
         <div className="flex items-center gap-1">
           <button
+            type="button"
             onClick={() => setLiked(!liked)}
-            className={cn("w-8 h-8 flex items-center justify-center rounded-full transition-colors", liked ? "text-primary" : "text-muted-foreground hover:text-foreground")}
+            className={cn(
+              "w-8 h-8 flex items-center justify-center rounded-full transition-colors",
+              liked ? "text-primary" : "text-muted-foreground hover:text-foreground",
+            )}
           >
             <Heart className={cn("w-4 h-4", liked && "fill-primary")} />
           </button>
-          <button className="w-8 h-8 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground">
+          <button
+            type="button"
+            onClick={onShare}
+            className="w-8 h-8 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+          >
+            <Share2 className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={goPrev}
+            disabled={currentIndex === 0}
+            className="w-8 h-8 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground disabled:opacity-30"
+          >
             <SkipBack className="w-4 h-4" />
           </button>
           <button
+            type="button"
             onClick={() => setIsPlaying(!isPlaying)}
             className="w-9 h-9 flex items-center justify-center rounded-full bg-primary text-white hover:bg-primary/90 transition-colors"
           >
-            {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+            {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5 fill-white" />}
           </button>
-          <button className="w-8 h-8 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground">
+          <button
+            type="button"
+            onClick={goNext}
+            disabled={currentIndex >= episodes.length - 1}
+            className="w-8 h-8 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground disabled:opacity-30"
+          >
             <SkipForward className="w-4 h-4" />
           </button>
-          <button className="hidden md:flex w-8 h-8 items-center justify-center rounded-full text-muted-foreground hover:text-foreground">
-            <Volume2 className="w-4 h-4" />
+          <button
+            type="button"
+            onClick={() => setMuted(!muted)}
+            className="hidden md:flex w-8 h-8 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+          >
+            {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
           </button>
         </div>
       </div>
@@ -115,8 +203,16 @@ export default function PodcastsPage() {
   const [activeTab, setActiveTab] = useState("podcasts")
   const [activeCategory, setActiveCategory] = useState("All")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
-  const [nowPlaying, setNowPlaying] = useState<typeof latestEpisodes[0] | null>(null)
+  const [playIndex, setPlayIndex] = useState<number | null>(null)
   const [likedEpisodes, setLikedEpisodes] = useState<Set<string>>(new Set())
+  const [isShareOpen, setIsShareOpen] = useState(false)
+
+  const startEpisode = (ep: PodcastEpisode) => {
+    const idx = latestEpisodes.findIndex((e) => e.id === ep.id)
+    setPlayIndex(idx >= 0 ? idx : 0)
+  }
+
+  const nowPlaying = playIndex !== null ? latestEpisodes[playIndex] : null
 
   const toggleLike = (id: string) => {
     setLikedEpisodes(prev => {
@@ -167,7 +263,8 @@ export default function PodcastsPage() {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => setNowPlaying(latestEpisodes[2])}
+                  type="button"
+                  onClick={() => startEpisode(episodeForShow(featuredPodcast.title))}
                   className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-bold rounded-full hover:bg-primary/90 transition-all active:scale-95"
                 >
                   <Play className="w-4 h-4 fill-white" /> Play Latest
@@ -211,7 +308,7 @@ export default function PodcastsPage() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             {filteredShows.map(show => (
-              <div key={show.id} className="group cursor-pointer">
+              <div key={show.id} className="group">
                 <div className="relative aspect-square rounded-2xl overflow-hidden mb-3 shadow-lg">
                   <img
                     src={show.cover}
@@ -220,8 +317,10 @@ export default function PodcastsPage() {
                   />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 flex items-center justify-center">
                     <button
-                      onClick={() => setNowPlaying(latestEpisodes[0])}
-                      className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all duration-300 shadow-xl"
+                      type="button"
+                      onClick={() => startEpisode(episodeForShow(show.title))}
+                      className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center opacity-0 group-hover:opacity-100 md:opacity-100 scale-75 group-hover:scale-100 transition-all duration-300 shadow-xl"
+                      aria-label={`Play ${show.title}`}
                     >
                       <Play className="w-5 h-5 fill-white ml-0.5" />
                     </button>
@@ -248,7 +347,7 @@ export default function PodcastsPage() {
               {latestEpisodes.map((ep, i) => (
                 <div
                   key={ep.id}
-                  onClick={() => setNowPlaying(ep)}
+                  onClick={() => startEpisode(ep)}
                   onDoubleClick={() => { window.location.href = `/podcast/${ep.id}` }}
                   className={cn(
                     "group flex items-center gap-4 p-3 rounded-2xl cursor-pointer transition-all duration-200",
@@ -309,7 +408,11 @@ export default function PodcastsPage() {
               <h2 className="text-xl font-bold text-foreground mb-4">Top Creators</h2>
               <div className="space-y-3">
                 {topCreators.map((creator, i) => (
-                  <div key={creator.id} className="flex items-center gap-3 p-3 rounded-2xl bg-secondary/30 hover:bg-secondary/60 transition-colors cursor-pointer group">
+                  <Link
+                    key={creator.id}
+                    href={`/creator/${creator.slug}`}
+                    className="flex items-center gap-3 p-3 rounded-2xl bg-secondary/30 hover:bg-secondary/60 transition-colors group"
+                  >
                     <span className="text-sm font-black text-muted-foreground w-5 text-center">{i + 1}</span>
                     <div className="relative">
                       <img src={creator.avatar} alt={creator.name} className="w-10 h-10 rounded-full object-cover" />
@@ -320,13 +423,10 @@ export default function PodcastsPage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-foreground truncate">{creator.name}</p>
+                      <p className="text-sm font-bold text-foreground truncate group-hover:text-primary">{creator.name}</p>
                       <p className="text-xs text-muted-foreground">{creator.followers} followers</p>
                     </div>
-                    <button className="text-xs font-bold px-3 py-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all opacity-0 group-hover:opacity-100">
-                      Follow
-                    </button>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -359,9 +459,21 @@ export default function PodcastsPage() {
       <Footer />
 
       {/* ── AUDIO PLAYER BAR ───────────────────────────────────────────────── */}
-      {nowPlaying && (
-        <PlayerBar episode={nowPlaying} onClose={() => setNowPlaying(null)} />
+      {playIndex !== null && (
+        <PlayerBar
+          episodes={latestEpisodes}
+          currentIndex={playIndex}
+          onIndexChange={setPlayIndex}
+          onShare={() => setIsShareOpen(true)}
+        />
       )}
+
+      <ShareSheet
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        title={nowPlaying?.title ?? "Podcast"}
+        url={nowPlaying ? `${typeof window !== "undefined" ? window.location.origin : ""}/podcast/${nowPlaying.id}` : undefined}
+      />
 
       <BottomNavigation
         activeTab={activeTab}

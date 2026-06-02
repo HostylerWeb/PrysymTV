@@ -28,8 +28,14 @@ import { AdInterstitial } from "@/components/ad-interstitial"
 import { ShareSheet } from "@/components/share-sheet"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { mockShorts } from "@/lib/mock-data"
-import { fetchShortsFeed } from "@/lib/api/videos-feed"
+import { fetchShortsFeed, toggleVideoLike, toggleVideoSave } from "@/lib/api/videos-feed"
 import { formatViewCount } from "@/lib/format-media"
+import {
+  adjustEngagement,
+  engagementFromShort,
+  formatEngagementCount,
+  type EngagementCounts,
+} from "@/lib/engagement-count"
 import type { VideoCard } from "@/lib/api/feed"
 
 export type ShortItem = {
@@ -81,6 +87,7 @@ const fallbackShorts: ShortItem[] = mockShorts.map((s) => ({
 
 interface ShortVideoProps {
   short: ShortItem
+  counts: EngagementCounts
   isActive: boolean
   onLike: () => void
   onComment: () => void
@@ -94,10 +101,11 @@ interface ShortVideoProps {
   onAuthRequired: () => void
 }
 
-function ShortVideo({ 
-  short, 
-  isActive, 
-  onLike, 
+function ShortVideo({
+  short,
+  counts,
+  isActive,
+  onLike,
   onComment, 
   onShare, 
   onSave, 
@@ -243,7 +251,7 @@ function ShortVideo({
               isLiked && "fill-primary text-primary scale-110"
             )} />
           </div>
-          <span className="text-white text-xs font-medium">{short.likes}</span>
+          <span className="text-white text-xs font-medium">{formatEngagementCount(counts.likes)}</span>
         </button>
 
         {/* Comment */}
@@ -254,7 +262,7 @@ function ShortVideo({
           <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center">
             <MessageCircle className="w-7 h-7 text-white" />
           </div>
-          <span className="text-white text-xs font-medium">{short.comments}</span>
+          <span className="text-white text-xs font-medium">{formatEngagementCount(counts.comments)}</span>
         </button>
 
         {/* Save/Bookmark */}
@@ -271,7 +279,7 @@ function ShortVideo({
               isSaved && "fill-yellow-500 text-yellow-500"
             )} />
           </div>
-          <span className="text-white text-xs font-medium">{short.saves}</span>
+          <span className="text-white text-xs font-medium">{formatEngagementCount(counts.saves)}</span>
         </button>
 
         {/* Share */}
@@ -282,7 +290,7 @@ function ShortVideo({
           <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center">
             <Share2 className="w-7 h-7 text-white" />
           </div>
-          <span className="text-white text-xs font-medium">{short.shares}</span>
+          <span className="text-white text-xs font-medium">{formatEngagementCount(counts.shares)}</span>
         </button>
 
       </div>
@@ -342,16 +350,39 @@ export default function ShortsPage() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [showAd, setShowAd] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
-  const [shareTarget, setShareTarget] = useState<{ title: string; url: string } | null>(null)
+  const [shareTarget, setShareTarget] = useState<{ id: string; title: string; url: string } | null>(null)
+  const [engagement, setEngagement] = useState<Record<string, EngagementCounts>>({})
   const shortsViewCount = useRef(0)
+
+  useEffect(() => {
+    setEngagement((prev) => {
+      const next = { ...prev }
+      for (const s of shortsData) {
+        if (!next[s.id]) next[s.id] = engagementFromShort(s)
+      }
+      return next
+    })
+  }, [shortsData])
+
+  const bumpEngagement = (shortId: string, field: keyof EngagementCounts, delta: number) => {
+    setEngagement((prev) => {
+      const current = prev[shortId] ?? { likes: 0, comments: 0, saves: 0, shares: 0 }
+      return { ...prev, [shortId]: adjustEngagement(current, field, delta) }
+    })
+  }
 
   const openShare = (short: ShortItem) => {
     const origin = typeof window !== "undefined" ? window.location.origin : ""
     setShareTarget({
+      id: short.id,
       title: short.caption,
       url: `${origin}/watch/${short.id}`,
     })
     setIsShareOpen(true)
+  }
+
+  const onShareComplete = () => {
+    if (shareTarget?.id) bumpEngagement(shareTarget.id, "shares", 1)
   }
 
   const handleScroll = () => {
@@ -378,27 +409,61 @@ export default function ShortsPage() {
   }
 
   const toggleLike = (shortId: string) => {
-    setLikedShorts(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(shortId)) {
-        newSet.delete(shortId)
-      } else {
-        newSet.add(shortId)
-      }
-      return newSet
-    })
+    if (!isAuthenticated) {
+      setIsAuthModalOpen(true)
+      return
+    }
+    const wasLiked = likedShorts.has(shortId)
+    void toggleVideoLike(shortId)
+      .then((r) => {
+        setLikedShorts((prev) => {
+          const next = new Set(prev)
+          if (r.liked) next.add(shortId)
+          else next.delete(shortId)
+          return next
+        })
+        if (r.liked !== wasLiked) {
+          bumpEngagement(shortId, "likes", r.liked ? 1 : -1)
+        }
+      })
+      .catch(() => {
+        setLikedShorts((prev) => {
+          const next = new Set(prev)
+          if (wasLiked) next.delete(shortId)
+          else next.add(shortId)
+          return next
+        })
+        bumpEngagement(shortId, "likes", wasLiked ? -1 : 1)
+      })
   }
 
   const toggleSave = (shortId: string) => {
-    setSavedShorts(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(shortId)) {
-        newSet.delete(shortId)
-      } else {
-        newSet.add(shortId)
-      }
-      return newSet
-    })
+    if (!isAuthenticated) {
+      setIsAuthModalOpen(true)
+      return
+    }
+    const wasSaved = savedShorts.has(shortId)
+    void toggleVideoSave(shortId)
+      .then((r) => {
+        setSavedShorts((prev) => {
+          const next = new Set(prev)
+          if (r.saved) next.add(shortId)
+          else next.delete(shortId)
+          return next
+        })
+        if (r.saved !== wasSaved) {
+          bumpEngagement(shortId, "saves", r.saved ? 1 : -1)
+        }
+      })
+      .catch(() => {
+        setSavedShorts((prev) => {
+          const next = new Set(prev)
+          if (wasSaved) next.delete(shortId)
+          else next.add(shortId)
+          return next
+        })
+        bumpEngagement(shortId, "saves", wasSaved ? -1 : 1)
+      })
   }
 
   const toggleFollow = (username: string) => {
@@ -500,6 +565,7 @@ export default function ShortsPage() {
           <div key={short.id} className="h-full w-full">
             <ShortVideo
               short={short}
+              counts={engagement[short.id] ?? engagementFromShort(short)}
               isActive={index === activeIndex}
               onLike={() => toggleLike(short.id)}
               onComment={() => openComments(short.id)}
@@ -692,6 +758,7 @@ export default function ShortsPage() {
         onClose={() => setIsShareOpen(false)}
         title={shareTarget?.title ?? "Short"}
         url={shareTarget?.url}
+        onShared={onShareComplete}
       />
       {showAd && (
         <AdInterstitial
