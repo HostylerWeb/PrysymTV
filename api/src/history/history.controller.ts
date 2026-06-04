@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Param,
   Post,
   Query,
@@ -39,11 +40,23 @@ export class HistoryController {
     const videoIds = rows
       .filter((r) => r.contentType === 'video')
       .map((r) => r.contentId);
-    const videos =
+    const podcastIds = rows
+      .filter((r) => r.contentType === 'podcast_episode')
+      .map((r) => r.contentId);
+    const verticalIds = rows
+      .filter((r) => r.contentType === 'vertical_episode')
+      .map((r) => r.contentId);
+    const [videos, podcastEpisodes, verticalEpisodes] = await Promise.all([
       videoIds.length > 0
-        ? await this.prisma.video.findMany({
+        ? this.prisma.video.findMany({
             where: { id: { in: videoIds } },
-            include: {
+            select: {
+              id: true,
+              title: true,
+              thumbnailUrl: true,
+              durationSeconds: true,
+              type: true,
+              viewsCount: true,
               creator: {
                 select: {
                   username: true,
@@ -52,8 +65,31 @@ export class HistoryController {
               },
             },
           })
-        : [];
+        : [],
+      podcastIds.length > 0
+        ? this.prisma.podcastEpisode.findMany({
+            where: { id: { in: podcastIds } },
+            include: { show: { select: { title: true } } },
+          })
+        : [],
+      verticalIds.length > 0
+        ? this.prisma.verticalEpisode.findMany({
+            where: { id: { in: verticalIds } },
+            include: {
+              series: {
+                select: {
+                  slug: true,
+                  title: true,
+                  posterUrl: true,
+                },
+              },
+            },
+          })
+        : [],
+    ]);
     const videoById = new Map(videos.map((v) => [v.id, v]));
+    const podcastById = new Map(podcastEpisodes.map((e) => [e.id, e]));
+    const verticalById = new Map(verticalEpisodes.map((e) => [e.id, e]));
     const items = rows.map((r) => ({
       contentType: r.contentType,
       contentId: r.contentId,
@@ -62,6 +98,14 @@ export class HistoryController {
       updatedAt: r.updatedAt,
       video:
         r.contentType === 'video' ? (videoById.get(r.contentId) ?? null) : null,
+      podcastEpisode:
+        r.contentType === 'podcast_episode'
+          ? (podcastById.get(r.contentId) ?? null)
+          : null,
+      verticalEpisode:
+        r.contentType === 'vertical_episode'
+          ? (verticalById.get(r.contentId) ?? null)
+          : null,
     }));
     return { items, meta: { page: p, limit: l, total } };
   }
@@ -71,12 +115,19 @@ export class HistoryController {
     @CurrentUser() user: AuthUserPayload,
     @Body()
     body: {
-      contentType: 'video' | 'podcast_episode';
+      contentType: 'video' | 'podcast_episode' | 'vertical_episode';
       contentId: string;
       progressSeconds: number;
       completed?: boolean;
     },
   ) {
+    if (body.contentType === 'vertical_episode') {
+      const ep = await this.prisma.verticalEpisode.findUnique({
+        where: { id: body.contentId },
+      });
+      if (!ep) throw new NotFoundException('Vertical episode not found');
+    }
+
     return this.prisma.watchHistory.upsert({
       where: {
         userId_contentType_contentId: {
@@ -108,7 +159,7 @@ export class HistoryController {
   @Delete(':contentType/:contentId')
   async remove(
     @CurrentUser() user: AuthUserPayload,
-    @Param('contentType') contentType: 'video' | 'podcast_episode',
+    @Param('contentType') contentType: 'video' | 'podcast_episode' | 'vertical_episode',
     @Param('contentId') contentId: string,
   ) {
     await this.prisma.watchHistory.deleteMany({

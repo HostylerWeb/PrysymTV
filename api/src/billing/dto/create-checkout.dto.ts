@@ -4,6 +4,6 @@ export class CreateCheckoutDto {
   @IsString()
   packageId!: string;
 
-  @IsIn(['coins'])
-  productType: 'coins' = 'coins';
+  @IsIn(['coins', 'premium'])
+  productType: 'coins' | 'premium' = 'coins';
 }

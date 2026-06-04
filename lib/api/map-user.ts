@@ -1,8 +1,6 @@
 import type { User } from "@/contexts/auth-context";
 import type { MeResponse } from "@/lib/api/types";
-
-const DEFAULT_AVATAR =
-  "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop";
+import { userAvatarUrl } from "@/lib/user-avatar";
 
 export function mapMeToUser(me: MeResponse): User {
   const status = me.streamerStatus;
@@ -11,9 +9,12 @@ export function mapMeToUser(me: MeResponse): User {
     name: me.displayName || me.username,
     username: me.username.startsWith("@") ? me.username : `@${me.username}`,
     email: me.email,
-    avatar: me.avatarUrl || DEFAULT_AVATAR,
+    avatar: userAvatarUrl(me.avatarUrl, me.username),
+    bannerUrl: me.bannerUrl,
     bio: me.bio ?? "",
     coins: me.coinsBalance,
+    premiumTier: me.premiumTier ?? "none",
+    premiumExpiresAt: me.premiumExpiresAt,
     isStreamer: status === "approved",
     streamerStatus: status,
     followersCount: me.followersCount,

@@ -9,6 +9,7 @@ import {
   type AdAttribution,
   type ServedAd,
 } from "@/lib/api/ads"
+import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 
 type AdBannerProps = {
   creatorId?: string
@@ -16,9 +17,14 @@ type AdBannerProps = {
 }
 
 export function AdBanner({ creatorId, videoId }: AdBannerProps) {
+  const showAds = useShouldShowAds()
   const [ad, setAd] = useState<ServedAd | null>(null)
 
   useEffect(() => {
+    if (!showAds) {
+      setAd(null)
+      return
+    }
     let cancelled = false
     void fetchServedAd("home_banner").then((served) => {
       if (!cancelled) setAd(served)
@@ -26,7 +32,7 @@ export function AdBanner({ creatorId, videoId }: AdBannerProps) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [showAds])
 
   useEffect(() => {
     if (!ad) return

@@ -27,9 +27,17 @@ import { useAuth } from "@/contexts/auth-context"
 import { AdInterstitial } from "@/components/ad-interstitial"
 import { ShareSheet } from "@/components/share-sheet"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
-import { mockShorts } from "@/lib/mock-data"
 import { fetchShortsFeed, toggleVideoLike, toggleVideoSave } from "@/lib/api/videos-feed"
+import {
+  fetchVideoComments,
+  normalizeVideoComment,
+  postVideoComment,
+  type VideoComment,
+} from "@/lib/api/comments"
+import { ApiError } from "@/lib/api-client"
+import { RelativeTime } from "@/components/relative-time"
 import { formatViewCount } from "@/lib/format-media"
+import { userAvatarUrl } from "@/lib/user-avatar"
 import {
   adjustEngagement,
   engagementFromShort,
@@ -59,7 +67,7 @@ function mapShortFromApi(card: VideoCard): ShortItem {
     videoUrl: card.playbackUrl ?? card.videoUrl ?? "",
     username: `@${card.channelSlug}`,
     userSlug: card.channelSlug,
-    userAvatar: `https://api.dicebear.com/7.x/initials/svg?seed=${card.channelSlug}`,
+    userAvatar: userAvatarUrl(null, card.channelSlug),
     caption: card.title,
     likes: formatViewCount(card.viewsCount),
     comments: "0",
@@ -69,21 +77,6 @@ function mapShortFromApi(card: VideoCard): ShortItem {
     isFollowing: false,
   }
 }
-
-const fallbackShorts: ShortItem[] = mockShorts.map((s) => ({
-  id: String(s.id),
-  videoUrl: s.videoUrl,
-  username: s.username,
-  userSlug: s.userSlug,
-  userAvatar: s.userAvatar,
-  caption: s.caption,
-  likes: s.likes,
-  comments: s.comments,
-  shares: s.shares,
-  saves: s.saves,
-  music: s.music,
-  isFollowing: s.isFollowing,
-}))
 
 interface ShortVideoProps {
   short: ShortItem
@@ -322,7 +315,8 @@ function ShortVideo({
 
 export default function ShortsPage() {
   const { user, isAuthenticated } = useAuth()
-  const [shortsData, setShortsData] = useState<ShortItem[]>(fallbackShorts)
+  const [shortsData, setShortsData] = useState<ShortItem[]>([])
+  const [feedLoaded, setFeedLoaded] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const [likedShorts, setLikedShorts] = useState<Set<string>>(new Set())
   const [savedShorts, setSavedShorts] = useState<Set<string>>(new Set())
@@ -333,17 +327,18 @@ export default function ShortsPage() {
   const [activeShortForComments, setActiveShortForComments] = useState<string | null>(null)
 
   useEffect(() => {
-    void fetchShortsFeed().then((res) => {
-      if (res.items.length) {
+    void fetchShortsFeed()
+      .then((res) => {
         setShortsData(res.items.map(mapShortFromApi))
-      }
-    })
+      })
+      .finally(() => setFeedLoaded(true))
   }, [])
   const [newComment, setNewComment] = useState("")
-  const [replyingTo, setReplyingTo] = useState<{id: number, user: string} | null>(null)
-
-  type CommentType = {id: number, user: string, text: string, likes: number, avatar: string, isLiked?: boolean, replies?: CommentType[]}
-  const [comments, setComments] = useState<Record<string, CommentType[]>>({})
+  const [replyingTo, setReplyingTo] = useState<{ id: string; user: string } | null>(null)
+  const [comments, setComments] = useState<Record<string, VideoComment[]>>({})
+  const [commentsLoading, setCommentsLoading] = useState(false)
+  const [commentPosting, setCommentPosting] = useState(false)
+  const [likedCommentIds, setLikedCommentIds] = useState<Set<string>>(new Set())
   const containerRef = useRef<HTMLDivElement>(null)
   const [activeTab, setActiveTab] = useState("shorts")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -478,78 +473,95 @@ export default function ShortsPage() {
     })
   }
 
+  const commentAuthorLabel = (c: VideoComment) =>
+    c.user.displayName ?? `@${c.user.username}`
+
   const openComments = (shortId: string) => {
     setActiveShortForComments(shortId)
     setShowComments(true)
+    setCommentsLoading(true)
+    void fetchVideoComments(shortId)
+      .then((res) => {
+        setComments((prev) => ({
+          ...prev,
+          [shortId]: res.items.map((item) =>
+            normalizeVideoComment(item as unknown as Record<string, unknown>),
+          ),
+        }))
+        setEngagement((prev) => {
+          const current = prev[shortId] ?? { likes: 0, comments: 0, saves: 0, shares: 0 }
+          return { ...prev, [shortId]: { ...current, comments: res.meta.total } }
+        })
+      })
+      .catch(() => {})
+      .finally(() => setCommentsLoading(false))
   }
 
-  const toggleCommentLike = (commentId: number, isReply: boolean = false, parentId?: number) => {
-    if (!isAuthenticated) return setIsAuthModalOpen(true);
-    if (!activeShortForComments) return;
-    setComments(prev => {
-      const shortComments = [...(prev[activeShortForComments] || [])];
-      
-      if (!isReply) {
-        const commentIndex = shortComments.findIndex(c => c.id === commentId);
-        if (commentIndex > -1) {
-          const comment = shortComments[commentIndex];
-          shortComments[commentIndex] = {
-            ...comment,
-            likes: comment.isLiked ? comment.likes - 1 : comment.likes + 1,
-            isLiked: !comment.isLiked
-          };
-        }
-      } else if (parentId) {
-        const parentIndex = shortComments.findIndex(c => c.id === parentId);
-        if (parentIndex > -1) {
-          const parent = shortComments[parentIndex];
-          const replies = [...(parent.replies || [])];
-          const replyIndex = replies.findIndex(r => r.id === commentId);
-          if (replyIndex > -1) {
-            const reply = replies[replyIndex];
-            replies[replyIndex] = {
-              ...reply,
-              likes: reply.isLiked ? reply.likes - 1 : reply.likes + 1,
-              isLiked: !reply.isLiked
-            };
-            shortComments[parentIndex] = { ...parent, replies };
-          }
-        }
-      }
-      return { ...prev, [activeShortForComments]: shortComments };
-    });
-  };
+  const toggleCommentLike = (commentId: string) => {
+    if (!isAuthenticated) return setIsAuthModalOpen(true)
+    setLikedCommentIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(commentId)) next.delete(commentId)
+      else next.add(commentId)
+      return next
+    })
+  }
 
-  const addComment = () => {
-    if (!newComment.trim() || activeShortForComments === null) return
-    
-    const newCommentObj = {
-      id: Date.now(),
-      user: user?.name ? `@${user.name.toLowerCase().replace(' ', '_')}` : "@user",
-      text: newComment,
-      likes: 0,
-      avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${user?.name || 'U'}`,
-      replies: []
+  const addComment = async () => {
+    const text = newComment.trim()
+    if (!text || activeShortForComments === null) return
+    if (!isAuthenticated) {
+      setIsAuthModalOpen(true)
+      return
     }
-    
-    setComments(prev => {
-      const shortComments = [...(prev[activeShortForComments] || [])];
-      if (replyingTo) {
-        const parentIndex = shortComments.findIndex(c => c.id === replyingTo.id);
-        if (parentIndex > -1) {
-          const parent = shortComments[parentIndex];
-          shortComments[parentIndex] = {
-            ...parent,
-            replies: [...(parent.replies || []), newCommentObj]
-          };
+    if (commentPosting) return
+
+    setCommentPosting(true)
+    try {
+      const created = await postVideoComment(
+        activeShortForComments,
+        text,
+        replyingTo?.id,
+      )
+      const normalized = normalizeVideoComment(
+        created as unknown as Record<string, unknown>,
+      )
+
+      setComments((prev) => {
+        const list = [...(prev[activeShortForComments] || [])]
+        if (replyingTo) {
+          const parentIndex = list.findIndex((c) => c.id === replyingTo.id)
+          if (parentIndex > -1) {
+            const parent = list[parentIndex]
+            list[parentIndex] = {
+              ...parent,
+              replies: [...(parent.replies || []), normalized],
+            }
+          }
+        } else {
+          list.unshift(normalized)
         }
-      } else {
-        shortComments.push(newCommentObj);
-      }
-      return { ...prev, [activeShortForComments]: shortComments };
-    });
-    setNewComment("");
-    setReplyingTo(null);
+        return { ...prev, [activeShortForComments]: list }
+      })
+      bumpEngagement(activeShortForComments, "comments", 1)
+      setNewComment("")
+      setReplyingTo(null)
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) setIsAuthModalOpen(true)
+    } finally {
+      setCommentPosting(false)
+    }
+  }
+
+  if (feedLoaded && shortsData.length === 0) {
+    return (
+      <main className="h-screen bg-black overflow-hidden md:pl-20 flex flex-col items-center justify-center gap-3 px-6">
+        <p className="text-white/70 text-center">No shorts yet. Check back soon or upload one from Settings.</p>
+        <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+        <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      </main>
+    )
   }
 
   return (
@@ -623,38 +635,42 @@ export default function ShortsPage() {
 
             {/* Comments List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {(comments[activeShortForComments] || []).length === 0 ? (
+              {commentsLoading ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Loading comments…</p>
+              ) : (comments[activeShortForComments] || []).length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                   <MessageCircle className="w-12 h-12 mb-2 opacity-50" />
                   <p>No comments yet</p>
                   <p className="text-sm">Be the first to comment!</p>
                 </div>
               ) : (
-                (comments[activeShortForComments] || []).map((comment) => (
+                (comments[activeShortForComments] || []).map((comment) => {
+                  const commentLiked = likedCommentIds.has(comment.id)
+                  return (
                   <div key={comment.id} className="flex flex-col gap-2">
                     <div className="flex gap-3">
                       <img
-                        src={comment.avatar}
-                        alt={comment.user}
-                        className="w-9 h-9 rounded-full"
+                        src={userAvatarUrl(comment.user.avatarUrl, comment.user.username)}
+                        alt={commentAuthorLabel(comment)}
+                        className="w-9 h-9 rounded-full object-cover"
                       />
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <p className="text-sm">
-                          <span className="font-semibold text-foreground">{comment.user}</span>
-                          <span className="text-muted-foreground ml-2">{comment.text}</span>
+                          <span className="font-semibold text-foreground">{commentAuthorLabel(comment)}</span>
+                          <span className="text-muted-foreground ml-2">{comment.body}</span>
                         </p>
                         <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                          <span>2h</span>
+                          <RelativeTime date={comment.createdAt} />
                           <button 
-                            className={cn("flex items-center gap-1", comment.isLiked && "text-primary")}
+                            className={cn("flex items-center gap-1", commentLiked && "text-primary")}
                             onClick={() => toggleCommentLike(comment.id)}
                           >
-                            <Heart className={cn("w-3 h-3", comment.isLiked && "fill-primary")} />
-                            {comment.likes}
+                            <Heart className={cn("w-3 h-3", commentLiked && "fill-primary")} />
+                            {comment.likesCount > 0 ? comment.likesCount : null}
                           </button>
                           <button onClick={() => {
                             if (!isAuthenticated) return setIsAuthModalOpen(true);
-                            setReplyingTo({id: comment.id, user: comment.user});
+                            setReplyingTo({ id: comment.id, user: commentAuthorLabel(comment) });
                           }}>Reply</button>
                         </div>
                       </div>
@@ -663,35 +679,39 @@ export default function ShortsPage() {
                     {/* Replies */}
                     {(comment.replies || []).length > 0 && (
                       <div className="ml-12 space-y-3 mt-2">
-                        {comment.replies?.map(reply => (
+                        {comment.replies?.map((reply) => {
+                          const replyLiked = likedCommentIds.has(reply.id)
+                          return (
                           <div key={reply.id} className="flex gap-3">
                             <img
-                              src={reply.avatar}
-                              alt={reply.user}
-                              className="w-7 h-7 rounded-full"
+                              src={userAvatarUrl(reply.user.avatarUrl, reply.user.username)}
+                              alt={commentAuthorLabel(reply)}
+                              className="w-7 h-7 rounded-full object-cover"
                             />
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                               <p className="text-sm">
-                                <span className="font-semibold text-foreground">{reply.user}</span>
-                                <span className="text-muted-foreground ml-2">{reply.text}</span>
+                                <span className="font-semibold text-foreground">{commentAuthorLabel(reply)}</span>
+                                <span className="text-muted-foreground ml-2">{reply.body}</span>
                               </p>
                               <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                                <span>1h</span>
+                                <RelativeTime date={reply.createdAt} />
                                 <button 
-                                  className={cn("flex items-center gap-1", reply.isLiked && "text-primary")}
-                                  onClick={() => toggleCommentLike(reply.id, true, comment.id)}
+                                  className={cn("flex items-center gap-1", replyLiked && "text-primary")}
+                                  onClick={() => toggleCommentLike(reply.id)}
                                 >
-                                  <Heart className={cn("w-3 h-3", reply.isLiked && "fill-primary")} />
-                                  {reply.likes}
+                                  <Heart className={cn("w-3 h-3", replyLiked && "fill-primary")} />
+                                  {reply.likesCount > 0 ? reply.likesCount : null}
                                 </button>
                               </div>
                             </div>
                           </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     )}
                   </div>
-                ))
+                  )
+                })
               )}
             </div>
 
@@ -706,9 +726,9 @@ export default function ShortsPage() {
                 )}
                 <div className="flex items-center gap-3">
                   <img
-                    src={`https://api.dicebear.com/7.x/initials/svg?seed=${user?.name || 'U'}`}
+                    src={userAvatarUrl(user?.avatar, user?.username ?? user?.email ?? "user")}
                     alt="You"
-                    className="w-9 h-9 rounded-full"
+                    className="w-9 h-9 rounded-full object-cover"
                   />
                   <input
                     type="text"
@@ -716,12 +736,13 @@ export default function ShortsPage() {
                     onChange={(e) => setNewComment(e.target.value)}
                     placeholder={replyingTo ? "Add a reply..." : "Add a comment..."}
                     className="flex-1 bg-secondary/50 rounded-full px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none"
-                    onKeyDown={(e) => e.key === 'Enter' && addComment()}
+                    onKeyDown={(e) => e.key === "Enter" && void addComment()}
+                    disabled={commentPosting}
                   />
                   <Button
                     size="sm"
-                    onClick={addComment}
-                    disabled={!newComment.trim()}
+                    onClick={() => void addComment()}
+                    disabled={commentPosting || !newComment.trim()}
                     className="rounded-full"
                   >
                     Post

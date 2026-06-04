@@ -10,6 +10,8 @@ import {
   type VerticalEpisodePlayback,
 } from "@/lib/api/verticals"
 import { saveVerticalProgress } from "@/lib/vertical-progress"
+import { saveWatchProgress } from "@/lib/api/history"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function VerticalWatchPage({
   params,
@@ -17,6 +19,7 @@ export default function VerticalWatchPage({
   params: Promise<{ slug: string; episode: string }>
 }) {
   const { slug, episode: episodeStr } = use(params)
+  const { isAuthenticated } = useAuth()
   const episodeNum = parseInt(episodeStr, 10)
   const [data, setData] = useState<VerticalEpisodePlayback | null>(null)
   const [showAd, setShowAd] = useState(true)
@@ -105,14 +108,28 @@ export default function VerticalWatchPage({
                 controls
                 videoRef={videoRef}
                 onTimeUpdate={(t, d) => {
-                  saveVerticalProgress({
-                    slug,
-                    seriesTitle: series.title,
-                    posterUrl: series.posterUrl ?? null,
-                    episodeNumber: episode.episodeNumber,
-                    episodeTitle: episode.title,
-                    progressSeconds: Math.floor(t),
-                    durationSeconds: Math.floor(d) || episode.durationSeconds,
+                  const progressSeconds = Math.floor(t)
+                  const durationSeconds = Math.floor(d) || episode.durationSeconds
+                  if (!isAuthenticated) {
+                    saveVerticalProgress({
+                      slug,
+                      seriesTitle: series.title,
+                      posterUrl: series.posterUrl ?? null,
+                      episodeNumber: episode.episodeNumber,
+                      episodeTitle: episode.title,
+                      progressSeconds,
+                      durationSeconds,
+                    })
+                    return
+                  }
+                  void saveWatchProgress({
+                    contentType: "vertical_episode",
+                    contentId: episode.id,
+                    progressSeconds,
+                    completed:
+                      durationSeconds > 0 && progressSeconds >= durationSeconds * 0.95,
+                  }).catch(() => {
+                    /* keep playback smooth if API fails */
                   })
                 }}
                 onEnded={() => {

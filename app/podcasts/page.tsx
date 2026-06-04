@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import {
   Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Heart,
   Share2, MoreHorizontal, Mic, Clock, Users, TrendingUp,
@@ -13,64 +13,50 @@ import { SearchModal } from "@/components/search-modal"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { ShareSheet } from "@/components/share-sheet"
-
-// ─── DATA ────────────────────────────────────────────────────────────────────
+import {
+  fetchPodcastEpisodesFeed,
+  fetchPodcastFeatured,
+  fetchPodcastShows,
+  recordPodcastPlay,
+  togglePodcastLike,
+  type PodcastEpisodeCard,
+  type PodcastShowCard,
+} from "@/lib/api/podcasts"
+import { useAuth } from "@/contexts/auth-context"
+import { userAvatarUrl } from "@/lib/user-avatar"
 
 const categories = ["All", "True Crime", "Tech", "Business", "Comedy", "Health", "Society", "Science", "Sports", "Music"]
 
-const featuredPodcast = {
-  id: "1",
-  title: "The Tech Horizon",
-  host: "Alex Rivera",
-  cover: "https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=800&h=800&fit=crop",
-  banner: "https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=1600&h=600&fit=crop&crop=top",
-  category: "Tech",
-  episodes: 248,
-  followers: "1.2M",
-  latestEpisode: "AI & The Future of Work: What Nobody Is Telling You",
-  latestDuration: "1h 14m",
-  description: "Weekly deep-dives into the technologies reshaping our world. From AI breakthroughs to startup culture — unfiltered conversations with the people building tomorrow.",
-}
-
-const trendingShows = [
-  { id: "1", title: "Crime & Consequence", host: "Sarah Mitchell", cover: "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=400&h=400&fit=crop", category: "True Crime", followers: "890K", episodes: 312 },
-  { id: "2", title: "Founders Mindset", host: "James Kim", cover: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400&h=400&fit=crop", category: "Business", followers: "645K", episodes: 187 },
-  { id: "3", title: "Laugh Therapy", host: "Maria Santos", cover: "https://images.unsplash.com/photo-1543269865-cbf427effbad?w=400&h=400&fit=crop", category: "Comedy", followers: "2.1M", episodes: 430 },
-  { id: "4", title: "Mind & Body Lab", host: "Dr. Priya Nair", cover: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=400&fit=crop", category: "Health", followers: "1.4M", episodes: 201 },
-  { id: "5", title: "Deep Space Weekly", host: "Tom Yates", cover: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=400&h=400&fit=crop", category: "Science", followers: "520K", episodes: 98 },
-  { id: "6", title: "The Money Code", host: "Lisa Chen", cover: "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=400&h=400&fit=crop", category: "Business", followers: "780K", episodes: 155 },
-]
-
-export type PodcastEpisode = {
+type FeaturedPodcast = {
   id: string
-  podcast: string
   title: string
-  duration: string
-  durationSeconds: number
-  date: string
+  host: string
   cover: string
-  plays: string
+  banner: string
+  category: string
+  episodes: number
+  followers: string
+  latestEpisode: string
+  latestDuration: string
+  description: string
 }
 
-const latestEpisodes: PodcastEpisode[] = [
-  { id: "1", podcast: "Crime & Consequence", title: "The Vanishing: A 30-Year Cold Case Solved", duration: "58m", durationSeconds: 3480, date: "Today", cover: "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=100&h=100&fit=crop", plays: "142K" },
-  { id: "2", podcast: "Founders Mindset", title: "How I Built a $50M Company From My Garage", duration: "1h 22m", durationSeconds: 4920, date: "Yesterday", cover: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=100&h=100&fit=crop", plays: "87K" },
-  { id: "3", podcast: "The Tech Horizon", title: "AI & The Future of Work", duration: "1h 14m", durationSeconds: 4440, date: "2 days ago", cover: "https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=100&h=100&fit=crop", plays: "310K" },
-  { id: "4", podcast: "Laugh Therapy", title: "Dating Apps in 2025: A Comedy Special", duration: "44m", durationSeconds: 2640, date: "3 days ago", cover: "https://images.unsplash.com/photo-1543269865-cbf427effbad?w=100&h=100&fit=crop", plays: "420K" },
-  { id: "5", podcast: "Mind & Body Lab", title: "Sleep Optimization: The Science You Need", duration: "51m", durationSeconds: 3060, date: "4 days ago", cover: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=100&h=100&fit=crop", plays: "98K" },
-  { id: "6", podcast: "Deep Space Weekly", title: "James Webb's Latest: What We Found", duration: "1h 5m", durationSeconds: 3900, date: "5 days ago", cover: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=100&h=100&fit=crop", plays: "65K" },
-]
-
-const topCreators = [
-  { id: "1", slug: "progamerx", name: "Alex Rivera", handle: "@alexrivera", avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop", shows: 2, followers: "1.8M", isVerified: true },
-  { id: "2", slug: "sarahmitch", name: "Sarah Mitchell", handle: "@sarahmitch", avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop", shows: 1, followers: "890K", isVerified: true },
-  { id: "3", slug: "jameskim", name: "James Kim", handle: "@jameskim", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop", shows: 3, followers: "645K", isVerified: false },
-  { id: "4", slug: "drpriya", name: "Dr. Priya Nair", handle: "@drpriya", avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop", shows: 1, followers: "1.4M", isVerified: true },
-  { id: "5", slug: "mariasantos", name: "Maria Santos", handle: "@mariasantos", avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&h=100&fit=crop", shows: 2, followers: "2.1M", isVerified: true },
-]
-
-function episodeForShow(showTitle: string): PodcastEpisode {
-  return latestEpisodes.find((e) => e.podcast === showTitle) ?? latestEpisodes[0]
+function showToFeatured(show: PodcastShowCard, latest?: PodcastEpisodeCard): FeaturedPodcast {
+  return {
+    id: show.id,
+    title: show.title,
+    host: show.host,
+    cover: show.cover,
+    banner: show.banner ?? show.cover,
+    category: show.category,
+    episodes: show.episodes,
+    followers: show.followers,
+    latestEpisode: latest?.title ?? show.latestEpisodeTitle ?? "Latest episode",
+    latestDuration: latest?.duration ?? "",
+    description:
+      show.description ??
+      "Listen to the latest episodes from creators on Prysym TV.",
+  }
 }
 
 // ─── MINI AUDIO PLAYER BAR ─────────────────────────────────────────────────
@@ -81,18 +67,30 @@ function PlayerBar({
   onIndexChange,
   onShare,
 }: {
-  episodes: PodcastEpisode[]
+  episodes: PodcastEpisodeCard[]
   currentIndex: number
   onIndexChange: (index: number) => void
   onShare: () => void
 }) {
   const episode = episodes[currentIndex]
+  const audioRef = useRef<HTMLAudioElement>(null)
   const [isPlaying, setIsPlaying] = useState(true)
   const [progress, setProgress] = useState(12)
   const [liked, setLiked] = useState(false)
   const [muted, setMuted] = useState(false)
 
   useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !episode?.audioUrl) return
+    audio.src = episode.audioUrl
+    audio.muted = muted
+    if (isPlaying) void audio.play().catch(() => setIsPlaying(false))
+    else audio.pause()
+  }, [episode?.id, episode?.audioUrl, isPlaying, muted])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || episode?.audioUrl) return
     if (!isPlaying || !episode) return
     const timer = setInterval(() => {
       setProgress((p) => {
@@ -104,11 +102,13 @@ function PlayerBar({
           setIsPlaying(false)
           return 100
         }
-        return p + 0.35
+        const step =
+          episode.durationSeconds > 0 ? 100 / episode.durationSeconds : 0.35
+        return p + step
       })
     }, 1000)
     return () => clearInterval(timer)
-  }, [isPlaying, episode, currentIndex, episodes.length, onIndexChange])
+  }, [isPlaying, episode, currentIndex, episodes.length, onIndexChange, episode?.audioUrl])
 
   useEffect(() => {
     setProgress(8)
@@ -126,6 +126,21 @@ function PlayerBar({
 
   return (
     <div className="fixed bottom-16 md:bottom-0 md:left-20 left-0 right-0 z-40 bg-card/95 backdrop-blur-xl border-t border-border shadow-2xl">
+      {episode?.audioUrl ? (
+        <audio
+          ref={audioRef}
+          className="hidden"
+          onTimeUpdate={() => {
+            const audio = audioRef.current
+            if (!audio?.duration) return
+            setProgress((audio.currentTime / audio.duration) * 100)
+          }}
+          onEnded={() => {
+            if (currentIndex < episodes.length - 1) onIndexChange(currentIndex + 1)
+            else setIsPlaying(false)
+          }}
+        />
+      ) : null}
       <div
         className="w-full h-1 bg-border cursor-pointer"
         onClick={(e) => {
@@ -199,32 +214,103 @@ function PlayerBar({
 
 // ─── PAGE ──────────────────────────────────────────────────────────────────
 
+const EMPTY_FEATURED: FeaturedPodcast = {
+  id: "",
+  title: "Podcasts on Prysym TV",
+  host: "Creators",
+  cover: "/placeholder.svg",
+  banner: "/placeholder.svg",
+  category: "All",
+  episodes: 0,
+  followers: "0",
+  latestEpisode: "Upload your first show",
+  latestDuration: "",
+  description: "Discover shows and episodes from creators on the platform.",
+}
+
 export default function PodcastsPage() {
+  const { isAuthenticated } = useAuth()
   const [activeTab, setActiveTab] = useState("podcasts")
   const [activeCategory, setActiveCategory] = useState("All")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [playIndex, setPlayIndex] = useState<number | null>(null)
   const [likedEpisodes, setLikedEpisodes] = useState<Set<string>>(new Set())
   const [isShareOpen, setIsShareOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [shows, setShows] = useState<PodcastShowCard[]>([])
+  const [latestEpisodes, setLatestEpisodes] = useState<PodcastEpisodeCard[]>([])
+  const [featuredPodcast, setFeaturedPodcast] = useState<FeaturedPodcast>(EMPTY_FEATURED)
 
-  const startEpisode = (ep: PodcastEpisode) => {
+  useEffect(() => {
+    void Promise.all([
+      fetchPodcastShows(1, 24),
+      fetchPodcastEpisodesFeed(1, 30),
+      fetchPodcastFeatured(1),
+    ]).then(([showsRes, epsRes, featuredList]) => {
+      setShows(showsRes.items)
+      setLatestEpisodes(epsRes.items)
+      const featShow =
+        featuredList[0] ?? showsRes.items[0] ?? null
+      if (featShow) {
+        const latest =
+          epsRes.items.find((e) => e.showId === featShow.id) ?? epsRes.items[0]
+        setFeaturedPodcast(showToFeatured(featShow, latest))
+      }
+      setLoading(false)
+    })
+  }, [])
+
+  const topCreators = useMemo(
+    () =>
+      shows.slice(0, 5).map((s, i) => ({
+        id: s.id,
+        slug: s.hostSlug,
+        name: s.host,
+        handle: `@${s.hostSlug}`,
+        avatar: userAvatarUrl(null, s.hostSlug),
+        shows: 1,
+        followers: s.followers,
+        isVerified: i < 2,
+      })),
+    [shows],
+  )
+
+  const startEpisode = (ep: PodcastEpisodeCard) => {
+    void recordPodcastPlay(ep.id).catch(() => {})
     const idx = latestEpisodes.findIndex((e) => e.id === ep.id)
     setPlayIndex(idx >= 0 ? idx : 0)
   }
 
+  const episodeForShow = (showTitle: string) =>
+    latestEpisodes.find((e) => e.podcast === showTitle) ?? latestEpisodes[0]
+
   const nowPlaying = playIndex !== null ? latestEpisodes[playIndex] : null
 
+  const filteredShows =
+    activeCategory === "All" ? shows : shows.filter((s) => s.category === activeCategory)
+
   const toggleLike = (id: string) => {
-    setLikedEpisodes(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
+    if (!isAuthenticated) return
+    void togglePodcastLike(id)
+      .then((r) => {
+        setLikedEpisodes((prev) => {
+          const next = new Set(prev)
+          if (r.liked) next.add(id)
+          else next.delete(id)
+          return next
+        })
+      })
+      .catch(() => {})
   }
 
-  const filteredShows = activeCategory === "All"
-    ? trendingShows
-    : trendingShows.filter(s => s.category === activeCategory)
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-background pb-32 md:pb-20 md:pl-20 flex items-center justify-center">
+        <Header onSearchClick={() => setIsSearchOpen(true)} />
+        <p className="text-sm text-muted-foreground">Loading podcasts…</p>
+      </main>
+    )
+  }
 
   return (
     <main className="min-h-screen bg-background pb-32 md:pb-20 md:pl-20">
@@ -307,7 +393,7 @@ export default function PodcastsPage() {
             </h2>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-            {filteredShows.map(show => (
+            {filteredShows.map((show) => (
               <div key={show.id} className="group">
                 <div className="relative aspect-square rounded-2xl overflow-hidden mb-3 shadow-lg">
                   <img

@@ -7,8 +7,9 @@ import { mapVideoCard, VIDEO_CARD_SELECT } from '../common/mappers/content.mappe
 export class FeedService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async home() {
-    const [liveStreams, movies, videos, featuredMovie] = await Promise.all([
+  async home(userId?: string) {
+    const [liveStreams, movies, videos, featuredMovie, continueWatching] =
+      await Promise.all([
       this.prisma.stream.findMany({
         where: { status: StreamStatus.live },
         orderBy: { viewerCount: 'desc' },
@@ -45,6 +46,7 @@ export class FeedService {
         orderBy: { createdAt: 'desc' },
         select: VIDEO_CARD_SELECT,
       }),
+      userId ? this.continueWatching(userId) : Promise.resolve([]),
     ]);
 
     return {
@@ -59,7 +61,7 @@ export class FeedService {
         viewers: s.viewerCount,
         category: s.category,
       })),
-      continueWatching: [],
+      continueWatching,
       featuredLive: liveStreams[0]
         ? {
             id: liveStreams[0].id,
@@ -75,6 +77,117 @@ export class FeedService {
       movies: movies.map(mapVideoCard),
       featuredMovie: featuredMovie ? mapVideoCard(featuredMovie) : null,
     };
+  }
+
+  private async continueWatching(userId: string, limit = 12) {
+    const rows = await this.prisma.watchHistory.findMany({
+      where: { userId, completed: false },
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+    });
+    if (!rows.length) return [];
+
+    const videoIds = rows
+      .filter((r) => r.contentType === 'video')
+      .map((r) => r.contentId);
+    const podcastIds = rows
+      .filter((r) => r.contentType === 'podcast_episode')
+      .map((r) => r.contentId);
+    const verticalIds = rows
+      .filter((r) => r.contentType === 'vertical_episode')
+      .map((r) => r.contentId);
+
+    const [videos, episodes, verticalEpisodes] = await Promise.all([
+      videoIds.length
+        ? this.prisma.video.findMany({
+            where: { id: { in: videoIds } },
+            select: {
+              id: true,
+              title: true,
+              thumbnailUrl: true,
+              durationSeconds: true,
+            },
+          })
+        : [],
+      podcastIds.length
+        ? this.prisma.podcastEpisode.findMany({
+            where: { id: { in: podcastIds } },
+            select: {
+              id: true,
+              title: true,
+              coverUrl: true,
+              durationSeconds: true,
+              show: { select: { title: true } },
+            },
+          })
+        : [],
+      verticalIds.length
+        ? this.prisma.verticalEpisode.findMany({
+            where: { id: { in: verticalIds } },
+            select: {
+              id: true,
+              title: true,
+              thumbnailUrl: true,
+              durationSeconds: true,
+              episodeNumber: true,
+              series: { select: { slug: true, title: true, posterUrl: true } },
+            },
+          })
+        : [],
+    ]);
+
+    const videoById = new Map(videos.map((v) => [v.id, v]));
+    const episodeById = new Map(episodes.map((e) => [e.id, e]));
+    const verticalById = new Map(verticalEpisodes.map((e) => [e.id, e]));
+
+    return rows
+      .map((r) => {
+        if (r.contentType === 'video') {
+          const v = videoById.get(r.contentId);
+          if (!v) return null;
+          return {
+            contentType: 'video' as const,
+            contentId: r.contentId,
+            progressSeconds: r.progressSeconds,
+            completed: r.completed,
+            title: v.title,
+            thumbnailUrl: v.thumbnailUrl,
+            durationSeconds: v.durationSeconds,
+          };
+        }
+        if (r.contentType === 'podcast_episode') {
+          const ep = episodeById.get(r.contentId);
+          if (!ep) return null;
+          return {
+            contentType: 'podcast_episode' as const,
+            contentId: r.contentId,
+            progressSeconds: r.progressSeconds,
+            completed: r.completed,
+            title: ep.title,
+            thumbnailUrl: ep.coverUrl,
+            durationSeconds: ep.durationSeconds,
+            subtitle: ep.show.title,
+          };
+        }
+        if (r.contentType === 'vertical_episode') {
+          const ep = verticalById.get(r.contentId);
+          if (!ep) return null;
+          return {
+            contentType: 'vertical_episode' as const,
+            contentId: r.contentId,
+            progressSeconds: r.progressSeconds,
+            completed: r.completed,
+            title: ep.title,
+            thumbnailUrl: ep.thumbnailUrl ?? ep.series.posterUrl,
+            durationSeconds: ep.durationSeconds,
+            subtitle: `${ep.series.title} · Ep ${ep.episodeNumber}`,
+            seriesSlug: ep.series.slug,
+            episodeNumber: ep.episodeNumber,
+          };
+        }
+        return null;
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
   }
 
   async trending(page = 1, limit = 20) {

@@ -51,12 +51,15 @@ export type PublicCreatorProfile = {
   videosCount: number;
   isLive: boolean;
   liveStreamId: string | null;
+  isFollowing?: boolean;
+  /** Paid channel membership (30-day); free follow is `isFollowing`. */
+  isChannelMember?: boolean;
   socialLinks: Array<{ label: string; url: string; sortOrder: number }>;
 };
 
 export function fetchPublicProfile(username: string) {
   return apiRequest<PublicCreatorProfile>(`/users/${encodeURIComponent(username)}`, {
-    auth: false,
+    auth: true,
   });
 }
 

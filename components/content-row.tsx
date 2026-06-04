@@ -3,6 +3,7 @@
 import { ChevronRight } from "lucide-react"
 import { VideoCard } from "./video-card"
 import { useRef } from "react"
+import Link from "next/link"
 
 export interface ContentItem {
   id: string
@@ -21,9 +22,10 @@ interface ContentRowProps {
   title: string
   items: ContentItem[]
   showViewAll?: boolean
+  viewAllHref?: string
 }
 
-export function ContentRow({ title, items, showViewAll = true }: ContentRowProps) {
+export function ContentRow({ title, items, showViewAll = true, viewAllHref }: ContentRowProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   return (
@@ -31,12 +33,24 @@ export function ContentRow({ title, items, showViewAll = true }: ContentRowProps
       {/* Header */}
       <div className="flex items-center justify-between px-4 mb-3">
         <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-        {showViewAll && (
-          <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            View all
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        )}
+        {showViewAll &&
+          (viewAllHref ? (
+            <Link
+              href={viewAllHref}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              View all
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              View all
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          ))}
       </div>
 
       {/* Scrollable Row */}

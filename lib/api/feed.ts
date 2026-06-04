@@ -1,10 +1,6 @@
 import { apiRequest } from "@/lib/api-client";
 import { withApiFallback } from "@/lib/api/fallback";
-import {
-  mockLiveStreams,
-  mockMovies,
-  mockVideos,
-} from "@/lib/mock-data";
+import type { ContinueWatchingFeedItem, PaginatedMeta } from "@/lib/api/types";
 
 export type FeedHomeResponse = {
   liveNow: Array<{
@@ -18,7 +14,7 @@ export type FeedHomeResponse = {
     viewers: number;
     category: string | null;
   }>;
-  continueWatching: unknown[];
+  continueWatching: ContinueWatchingFeedItem[];
   featuredLive: {
     id: string;
     slug: string;
@@ -50,86 +46,30 @@ export type VideoCard = {
   tagline?: string | null;
 };
 
-function mockFeedHome(): FeedHomeResponse {
-  return {
-    liveNow: mockLiveStreams.map((s) => ({
-      id: s.id,
-      slug: s.slug,
-      title: s.title,
-      thumbnailUrl: s.thumbnail,
-      streamer: s.streamer,
-      streamerSlug: s.streamerSlug,
-      streamerAvatar: s.streamerAvatar,
-      viewers: s.viewerCount,
-      category: s.category,
-    })),
-    continueWatching: [],
-    featuredLive: mockLiveStreams[0]
-      ? {
-          id: mockLiveStreams[0].id,
-          slug: mockLiveStreams[0].slug,
-          title: mockLiveStreams[0].title,
-          thumbnailUrl: mockLiveStreams[0].thumbnail,
-          streamer: mockLiveStreams[0].streamer,
-          viewerCount: mockLiveStreams[0].viewerCount,
-        }
-      : null,
-    trending: mockVideos.map((v) => ({
-      id: v.id,
-      title: v.title,
-      thumbnailUrl: v.thumbnail,
-      durationSeconds: 0,
-      viewsCount: 0,
-      type: v.type,
-      category: v.category,
-      channel: v.channel,
-      channelSlug: v.channelSlug,
-      creatorId: "",
-    })),
-    newReleases: mockMovies.map((m) => ({
-      id: m.id,
-      title: m.title,
-      thumbnailUrl: m.poster,
-      durationSeconds: 0,
-      viewsCount: 0,
-      type: "movie",
-      category: "movies",
-      channel: "Prysym",
-      channelSlug: "prysym",
-      creatorId: "",
-    })),
-    movies: mockMovies.map((m) => ({
-      id: m.id,
-      title: m.title,
-      thumbnailUrl: m.poster,
-      durationSeconds: 0,
-      viewsCount: 0,
-      type: "movie",
-      category: "movies",
-      channel: "Prysym",
-      channelSlug: "prysym",
-      creatorId: "",
-    })),
-    featuredMovie: mockMovies[0]
-      ? {
-          id: mockMovies[0].id,
-          title: mockMovies[0].title,
-          thumbnailUrl: mockMovies[0].poster,
-          durationSeconds: 0,
-          viewsCount: 0,
-          type: "movie",
-          category: "movies",
-          channel: "Prysym",
-          channelSlug: "prysym",
-          creatorId: "",
-        }
-      : null,
-  };
-}
+const EMPTY_FEED_HOME: FeedHomeResponse = {
+  liveNow: [],
+  continueWatching: [],
+  featuredLive: null,
+  trending: [],
+  newReleases: [],
+  movies: [],
+  featuredMovie: null,
+};
 
 export function fetchFeedHome() {
   return withApiFallback(
-    () => apiRequest<FeedHomeResponse>("/feed/home", { auth: false }),
-    mockFeedHome(),
+    () => apiRequest<FeedHomeResponse>("/feed/home"),
+    EMPTY_FEED_HOME,
+  );
+}
+
+export function fetchFeedTrending(page = 1, limit = 24) {
+  return withApiFallback(
+    () =>
+      apiRequest<{ items: VideoCard[]; meta: PaginatedMeta }>(
+        `/feed/trending?page=${page}&limit=${limit}`,
+        { auth: false },
+      ),
+    { items: [], meta: { page: 1, limit, total: 0 } },
   );
 }

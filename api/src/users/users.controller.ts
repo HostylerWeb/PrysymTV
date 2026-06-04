@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { UsersService } from './users.service';
@@ -32,6 +33,34 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   updateMe(@CurrentUser() user: AuthUserPayload, @Body() dto: UpdateMeDto) {
     return this.users.updateMe(user.id, dto);
+  }
+
+  @Post('me/avatar/upload')
+  @UseGuards(JwtAuthGuard)
+  initAvatarUpload(
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: { mimeType: string; fileName?: string },
+  ) {
+    return this.users.initProfileImageUpload(
+      user.id,
+      'avatar',
+      body.mimeType,
+      body.fileName,
+    );
+  }
+
+  @Post('me/banner/upload')
+  @UseGuards(JwtAuthGuard)
+  initBannerUpload(
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: { mimeType: string; fileName?: string },
+  ) {
+    return this.users.initProfileImageUpload(
+      user.id,
+      'banner',
+      body.mimeType,
+      body.fileName,
+    );
   }
 
   @Get('me/notification-preferences')
@@ -154,9 +183,18 @@ export class UsersController {
     );
   }
 
+  @Get(':username/playlists')
+  getPublicPlaylists(@Param('username') username: string) {
+    return this.users.getPublicPlaylists(username);
+  }
+
   @Get(':username')
-  getPublic(@Param('username') username: string) {
-    return this.users.getPublicProfile(username);
+  @UseGuards(OptionalJwtAuthGuard)
+  getPublic(
+    @Param('username') username: string,
+    @CurrentUser() user?: AuthUserPayload | null,
+  ) {
+    return this.users.getPublicProfile(username, user?.id);
   }
 
   @Post(':username/follow')

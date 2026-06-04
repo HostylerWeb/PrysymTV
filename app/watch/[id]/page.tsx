@@ -3,7 +3,7 @@
 import { use, useState, useRef, useEffect, useCallback } from "react"
 import {
   ChevronLeft, Share2, MoreVertical, ThumbsUp, ThumbsDown, MessageCircle,
-  Bookmark, ChevronDown, ChevronUp, Send, Volume2, Maximize, Lock, Flag,
+  Bookmark, ChevronDown, ChevronUp, Send, Volume2, Maximize, Lock, Flag, ListMusic,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -12,12 +12,12 @@ import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
 import { AuthModal } from "@/components/auth-modal"
 import { ReportModal } from "@/components/report-modal"
+import { AddToPlaylistSheet } from "@/components/add-to-playlist-sheet"
 import { ShareSheet } from "@/components/share-sheet"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { useAuth } from "@/contexts/auth-context"
-import { getVideo, getSuggestedVideos } from "@/lib/mock-data"
 import {
-  fetchVideoWithFallback,
+  fetchVideo,
   fetchMoviesFeed,
   toggleVideoLike,
   toggleVideoSave,
@@ -30,7 +30,9 @@ import {
 } from "@/lib/api/comments"
 import { ApiError } from "@/lib/api-client"
 import { saveWatchProgress } from "@/lib/api/history"
+import { RelativeTime } from "@/components/relative-time"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
+import { userAvatarUrl } from "@/lib/user-avatar"
 
 type WatchVideo = {
   id: string
@@ -46,7 +48,7 @@ type WatchVideo = {
   creatorId: string
 }
 
-function mapApiToWatch(v: NonNullable<Awaited<ReturnType<typeof fetchVideoWithFallback>>>): WatchVideo {
+function mapApiToWatch(v: Awaited<ReturnType<typeof fetchVideo>>): WatchVideo {
   const creator = v.creator
   return {
     id: v.id,
@@ -60,22 +62,6 @@ function mapApiToWatch(v: NonNullable<Awaited<ReturnType<typeof fetchVideoWithFa
     channel: creator.displayName ?? creator.username,
     channelSlug: creator.username,
     creatorId: creator.id,
-  }
-}
-
-function mapMockToWatch(m: ReturnType<typeof getVideo>): WatchVideo {
-  return {
-    id: m.id,
-    title: m.title,
-    thumbnail: m.thumbnail,
-    videoUrl: m.videoUrl,
-    description: m.description,
-    views: m.views,
-    uploadedAt: m.uploadedAt,
-    likes: m.likes,
-    channel: m.channel,
-    channelSlug: m.channelSlug,
-    creatorId: "",
   }
 }
 
@@ -104,18 +90,19 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isReportOpen, setIsReportOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
+  const [isPlaylistOpen, setIsPlaylistOpen] = useState(false)
   const progressSent = useRef(0)
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoading(true)
-      const api = await fetchVideoWithFallback(id)
-      if (cancelled) return
-      if (api) {
+      try {
+        const api = await fetchVideo(id)
+        if (cancelled) return
         setVideo(mapApiToWatch(api))
-      } else {
-        setVideo(mapMockToWatch(getVideo(id)))
+      } catch {
+        if (!cancelled) setVideo(null)
       }
       try {
         const feed = await fetchMoviesFeed(1)
@@ -135,18 +122,7 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
           )
         }
       } catch {
-        if (!cancelled) {
-          setSuggested(
-            getSuggestedVideos(id).map((v) => ({
-              id: v.id,
-              title: v.title,
-              thumbnail: v.thumbnail,
-              duration: v.duration,
-              channel: v.channel,
-              views: v.views,
-            })),
-          )
-        }
+        /* no suggestions */
       }
       try {
         const c = await fetchVideoComments(id)
@@ -307,6 +283,13 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
             <button type="button" onClick={handleSave} className={cn("flex items-center gap-2 px-4 py-2 rounded-full text-sm", isSaved ? "bg-primary text-primary-foreground" : "bg-secondary")}>
               <Bookmark className="w-4 h-4" /> Save
             </button>
+            <button
+              type="button"
+              onClick={() => requireAuth(() => setIsPlaylistOpen(true))}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-secondary text-sm"
+            >
+              <ListMusic className="w-4 h-4" /> Playlist
+            </button>
           </div>
 
           <div className="flex items-center justify-between py-3 border-y border-border">
@@ -374,9 +357,19 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
                   )}
                   {comments.map((c) => (
                     <div key={c.id} className="flex gap-2">
-                      <img src={c.user.avatarUrl ?? `https://api.dicebear.com/7.x/initials/svg?seed=${c.user.username}`} alt="" className="w-8 h-8 rounded-full" />
-                      <div>
-                        <p className="text-sm font-medium">{c.user.displayName ?? c.user.username}</p>
+                      <img
+                        src={userAvatarUrl(c.user.avatarUrl, c.user.username)}
+                        alt=""
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">
+                          {c.user.displayName ?? c.user.username}
+                          <RelativeTime
+                            date={c.createdAt}
+                            className="ml-2 text-xs font-normal text-muted-foreground"
+                          />
+                        </p>
                         <p className="text-sm text-muted-foreground">{c.body}</p>
                       </div>
                     </div>
@@ -409,8 +402,23 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
-      <ReportModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} targetType="video" targetLabel={video.title} />
+      <ReportModal
+        isOpen={isReportOpen}
+        onClose={() => setIsReportOpen(false)}
+        targetType="video"
+        targetId={video.id}
+        targetLabel={video.title}
+      />
       <ShareSheet isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} title={video.title} />
+      {video && (
+        <AddToPlaylistSheet
+          isOpen={isPlaylistOpen}
+          onClose={() => setIsPlaylistOpen(false)}
+          itemType="video"
+          itemId={video.id}
+          itemTitle={video.title}
+        />
+      )}
     </main>
   )
 }

@@ -65,7 +65,7 @@ const MOCK_SERIES: VerticalSeriesCard[] = [
 export function fetchVerticalSeriesList() {
   return withApiFallback(
     () => apiRequest<{ items: VerticalSeriesCard[] }>("/verticals", { auth: false }),
-    { items: MOCK_SERIES },
+    { items: [] },
   );
 }
 

@@ -25,9 +25,10 @@ import { AuthModal } from "@/components/auth-modal"
 import { ReportModal } from "@/components/report-modal"
 import { ShareSheet } from "@/components/share-sheet"
 import { useAuth } from "@/contexts/auth-context"
-import { GIFT_CATALOG } from "@/lib/mock-data"
+import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { fetchGiftCatalog, sendGift } from "@/lib/api/billing"
 import { fetchStream, type StreamDetail } from "@/lib/api/streams"
+import { fetchPublicProfile, followUser, unfollowUser } from "@/lib/api/users"
 import { connectStreamChat, type StreamChatMessage } from "@/lib/api/stream-chat"
 import type { Socket } from "socket.io-client"
 
@@ -45,7 +46,8 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
   const [stream, setStream] = useState<StreamDetail | null>(null)
   const [giftCatalog, setGiftCatalog] = useState<
     Array<{ id: string; name: string; cost: number; icon: string }>
-  >([...GIFT_CATALOG])
+  >([])
+  const [loadError, setLoadError] = useState(false)
   const { user, isAuthenticated, updateCoins, refreshUser } = useAuth()
   const [chatMessages, setChatMessages] = useState<
     Array<{ id: string; user: string; message: string; color: string }>
@@ -62,16 +64,38 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
   const [isReportOpen, setIsReportOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
   const chatRef = useRef<HTMLDivElement>(null)
+  const liveVideoRef = useRef<HTMLVideoElement>(null)
   const socketRef = useRef<Socket | null>(null)
   const userCoins = user?.coins || 0
 
   useEffect(() => {
-    void fetchStream(id).then((s) => {
-      setStream(s)
-      setViewerCount(s.viewerCount)
-    })
+    if (!stream?.streamerSlug || !isAuthenticated) return
+    void fetchPublicProfile(stream.streamerSlug)
+      .then((p) => setIsFollowing(p.isFollowing ?? false))
+      .catch(() => {})
+  }, [stream?.streamerSlug, isAuthenticated])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadStream = async () => {
+      try {
+        const s = await fetchStream(id)
+        if (!cancelled) {
+          setStream(s)
+          setViewerCount(s.viewerCount)
+          setLoadError(false)
+        }
+      } catch {
+        if (!cancelled) setLoadError(true)
+      }
+    }
+
+    void loadStream()
+    const poll = setInterval(() => void loadStream(), 30_000)
+
     void fetchGiftCatalog().then((items) => {
-      if (items.length) {
+      if (!cancelled && items.length) {
         setGiftCatalog(
           items.map((g) => ({
             id: g.id,
@@ -82,16 +106,17 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
         )
       }
     })
+
+    return () => {
+      cancelled = true
+      clearInterval(poll)
+    }
   }, [id])
 
   useEffect(() => {
-    if (!stream) return
-    const interval = setInterval(
-      () => setViewerCount((p) => p + Math.floor(Math.random() * 20) - 10),
-      5000,
-    )
-    return () => clearInterval(interval)
-  }, [stream])
+    const el = liveVideoRef.current
+    if (el) el.muted = isMuted
+  }, [isMuted, stream?.hlsPlaybackUrl])
 
   useEffect(() => {
     if (!stream?.id) return
@@ -124,14 +149,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
         })
       })
       .catch(() => {
-        setChatMessages([
-          {
-            id: "1",
-            user: "GamerPro99",
-            message: "This stream is amazing! 🔥",
-            color: "text-cyan-400",
-          },
-        ])
+        /* chat unavailable — keep empty */
       })
     return () => {
       cancelled = true
@@ -167,6 +185,19 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
       },
     ])
     setShowGiftPanel(false)
+  }
+
+  if (loadError) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center gap-3 px-6">
+        <p className="text-muted-foreground text-center">Stream not found or unavailable.</p>
+        <Link href="/">
+          <Button variant="secondary" className="rounded-full">
+            Back to home
+          </Button>
+        </Link>
+      </main>
+    )
   }
 
   if (!stream) {
@@ -208,11 +239,37 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
         {/* Main column: player + stream info */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0">
           <div className="relative w-full aspect-video lg:aspect-auto lg:flex-1 lg:min-h-[320px] bg-black rounded-none lg:rounded-xl overflow-hidden shrink-0">
-            <img
-              src={stream.thumbnail ?? ""}
-              alt={stream.title}
-              className="w-full h-full object-cover"
-            />
+            {stream.hlsPlaybackUrl ? (
+              <HlsVideoPlayer
+                src={stream.hlsPlaybackUrl}
+                poster={stream.thumbnail}
+                className="w-full h-full object-contain bg-black"
+                autoPlay
+                controls={false}
+                muted={isMuted}
+                playsInline
+                videoRef={liveVideoRef}
+              />
+            ) : (
+              <>
+                {stream.thumbnail ? (
+                  <img
+                    src={stream.thumbnail}
+                    alt={stream.title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-zinc-900" />
+                )}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                  <p className="text-white/90 text-sm md:text-base font-medium px-4 text-center">
+                    {stream.status === "live"
+                      ? "Waiting for broadcast signal…"
+                      : "Stream is offline"}
+                  </p>
+                </div>
+              </>
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/50 pointer-events-none" />
             <div className="absolute top-0 left-0 right-0 flex justify-between items-start p-3 md:p-4">
               <div className="flex items-center gap-2 flex-wrap">
@@ -297,7 +354,15 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
                   {isNotifyOn ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
                 </button>
                 <Button
-                  onClick={() => requireAuth(() => setIsFollowing(!isFollowing))}
+                  onClick={() =>
+                    requireAuth(() => {
+                      const slug = stream.streamerSlug
+                      const next = !isFollowing
+                      void (next ? followUser(slug) : unfollowUser(slug))
+                        .then(() => setIsFollowing(next))
+                        .catch(() => setIsFollowing(next))
+                    })
+                  }
                   className={cn("rounded-full", isFollowing && "bg-secondary text-foreground")}
                 >
                   {isFollowing ? "Following" : "Follow"}
@@ -447,6 +512,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
         isOpen={isReportOpen}
         onClose={() => setIsReportOpen(false)}
         targetType="stream"
+        targetId={stream.id}
         targetLabel={stream.title}
       />
       <ShareSheet isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} title={stream.title} />

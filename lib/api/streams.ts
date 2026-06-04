@@ -1,6 +1,4 @@
 import { apiRequest } from "@/lib/api-client";
-import { withApiFallback } from "@/lib/api/fallback";
-import { getLiveStream } from "@/lib/mock-data";
 
 export type StreamDetail = {
   id: string;
@@ -20,36 +18,33 @@ export type StreamDetail = {
   creatorId: string;
 };
 
-function mockStream(idOrSlug: string): StreamDetail {
-  const s = getLiveStream(idOrSlug);
-  return {
-    id: s.id,
-    slug: s.streamerSlug,
-    title: s.title,
-    thumbnail: s.thumbnail,
-    streamer: s.streamer,
-    streamerSlug: s.streamerSlug,
-    streamerAvatar: s.streamerAvatar,
-    viewers: s.viewers,
-    viewerCount: s.viewerCount,
-    category: s.category,
-    status: "live",
-    startedAgo: s.startedAgo,
-    description: s.description,
-    creatorId: "",
-  };
-}
+export type StreamInitResponse = {
+  streamId: string;
+  streamKey: string;
+  rtmpUrl: string;
+  status: string;
+};
 
 export function fetchStream(idOrSlug: string) {
-  return withApiFallback(
-    () => apiRequest<StreamDetail>(`/streams/${encodeURIComponent(idOrSlug)}`, { auth: false }),
-    mockStream(idOrSlug),
-  );
+  return apiRequest<StreamDetail>(`/streams/${encodeURIComponent(idOrSlug)}`, {
+    auth: false,
+  });
 }
 
 export function fetchLiveStreams() {
-  return withApiFallback(
-    () => apiRequest<{ items: StreamDetail[] }>("/streams/live", { auth: false }),
-    { items: [mockStream("progamerx")] },
+  return apiRequest<{ items: StreamDetail[] }>("/streams/live", { auth: false });
+}
+
+export function initStream(title: string, category?: string) {
+  return apiRequest<StreamInitResponse>("/streams/init", {
+    method: "POST",
+    body: { title, ...(category ? { category } : {}) },
+  });
+}
+
+export function getRtmpIngestUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_RTMP_INGEST_URL?.trim() ||
+    "rtmp://localhost:1935/live"
   );
 }

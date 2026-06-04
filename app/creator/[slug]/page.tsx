@@ -1,6 +1,7 @@
 "use client"
 
-import { use, useState, useEffect } from "react"
+import { Suspense, use, useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { ChevronLeft, Share2, MoreVertical, Play, Users, Video, Heart, Bell, BellOff, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -11,7 +12,6 @@ import { Footer } from "@/components/footer"
 import { AuthModal } from "@/components/auth-modal"
 import { ShareSheet } from "@/components/share-sheet"
 import { useAuth } from "@/contexts/auth-context"
-import { getCreator, mockPodcastEpisodes, mockPlaylists } from "@/lib/mock-data"
 import {
   fetchCreatorVideos,
   fetchPublicProfile,
@@ -19,8 +19,15 @@ import {
   unfollowUser,
   type PublicCreatorProfile,
 } from "@/lib/api/users"
+import {
+  createCreatorSubscriptionCheckout,
+} from "@/lib/api/billing-monetization"
+import { fulfillCheckout } from "@/lib/api/billing"
+import { fetchPodcastShows } from "@/lib/api/podcasts"
+import { fetchCreatorPlaylists } from "@/lib/api/playlists"
 import { withApiFallback } from "@/lib/api/fallback"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
+import { userAvatarUrl } from "@/lib/user-avatar"
 
 type CreatorVideo = {
   id: string
@@ -31,22 +38,42 @@ type CreatorVideo = {
   type: string
 }
 
-export default function CreatorProfilePage({ params }: { params: Promise<{ slug: string }> }) {
+export default function CreatorProfilePage(props: { params: Promise<{ slug: string }> }) {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center bg-background md:pl-20">
+          <p className="text-muted-foreground">Loading creator…</p>
+        </main>
+      }
+    >
+      <CreatorProfilePageContent {...props} />
+    </Suspense>
+  )
+}
+
+function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
-  const mock = getCreator(slug)
-  const { isAuthenticated } = useAuth()
+  const searchParams = useSearchParams()
+  const { isAuthenticated, refreshUser } = useAuth()
   const [profile, setProfile] = useState<PublicCreatorProfile | null>(null)
   const [videos, setVideos] = useState<CreatorVideo[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("videos")
   const [navTab, setNavTab] = useState("home")
-  const [isSubscribed, setIsSubscribed] = useState(false)
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [isChannelMember, setIsChannelMember] = useState(false)
+  const [memberBusy, setMemberBusy] = useState(false)
   const [notificationsOn, setNotificationsOn] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
-  const playlists = mockPlaylists.filter((p) => p.creatorSlug === mock.slug)
-
+  const [podcastShows, setPodcastShows] = useState<
+    Array<{ id: string; title: string; cover: string; episodes: number }>
+  >([])
+  const [playlists, setPlaylists] = useState<
+    Array<{ id: string; title: string; coverUrl: string | null; itemCount: number }>
+  >([])
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -61,6 +88,8 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ slug:
       )
       if (cancelled) return
       setProfile(p)
+      setIsFollowing(p?.isFollowing ?? false)
+      setIsChannelMember(p?.isChannelMember ?? false)
       setVideos(
         v.items.map((item) => ({
           id: item.id,
@@ -71,6 +100,25 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ slug:
           type: item.type,
         })),
       )
+      if (p) {
+        void fetchPodcastShows(1, 50)
+          .then((shows) =>
+            setPodcastShows(
+              shows.items
+                .filter((s) => s.hostSlug === p.username)
+                .map((s) => ({
+                  id: s.id,
+                  title: s.title,
+                  cover: s.cover,
+                  episodes: s.episodes,
+                })),
+            ),
+          )
+          .catch(() => setPodcastShows([]))
+        void fetchCreatorPlaylists(slug)
+          .then((res) => setPlaylists(res.items))
+          .catch(() => setPlaylists([]))
+      }
       setLoading(false)
     }
     void load()
@@ -79,22 +127,53 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ slug:
     }
   }, [slug])
 
-  const name = profile?.displayName ?? mock.name
-  const username = profile ? `@${profile.username}` : mock.username
-  const avatar =
-    profile?.avatarUrl ??
-    mock.avatar
-  const banner = profile?.bannerUrl ?? mock.banner
-  const bio = profile?.bio ?? mock.bio
-  const subscribers = profile
-    ? formatViewCount(profile.followersCount)
-    : mock.subscribers
-  const videosCount = profile ? String(profile.videosCount) : mock.videosCount
-  const isVerified = profile?.isVerified ?? mock.isVerified
-  const isLive = profile?.isLive ?? mock.isLive
-  const liveSlug = profile?.username ?? mock.slug
-  const links =
-    profile?.socialLinks?.map((l) => ({ label: l.label, url: l.url })) ?? mock.links
+  useEffect(() => {
+    const checkout = searchParams.get("checkout")
+    const sessionId = searchParams.get("session_id")
+    if (checkout !== "success" || !sessionId || !isAuthenticated) return
+    void fulfillCheckout(sessionId)
+      .then(() => fetchPublicProfile(slug))
+      .then((p) => {
+        if (p) {
+          setIsChannelMember(p.isChannelMember ?? false)
+        }
+      })
+      .catch(() => {})
+      .finally(() => void refreshUser())
+  }, [searchParams, isAuthenticated, slug, refreshUser])
+
+  if (loading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-background md:pl-20">
+        <p className="text-muted-foreground">Loading creator…</p>
+      </main>
+    )
+  }
+
+  if (!profile) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center gap-3 px-6 bg-background md:pl-20">
+        <p className="text-muted-foreground">Creator not found.</p>
+        <Link href="/">
+          <Button variant="secondary" className="rounded-full">
+            Back to home
+          </Button>
+        </Link>
+      </main>
+    )
+  }
+
+  const name = profile.displayName ?? slug
+  const username = `@${profile.username}`
+  const avatar = userAvatarUrl(profile.avatarUrl, slug)
+  const banner = profile.bannerUrl ?? ""
+  const bio = profile.bio ?? ""
+  const subscribers = formatViewCount(profile.followersCount)
+  const videosCount = String(profile.videosCount)
+  const isVerified = profile.isVerified
+  const isLive = profile.isLive
+  const liveSlug = profile.username
+  const links = profile.socialLinks?.map((l) => ({ label: l.label, url: l.url })) ?? []
 
   const shortsList = videos.filter((v) => v.type === "short")
   const longVideos = videos.filter((v) => v.type !== "short")
@@ -107,26 +186,36 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ slug:
     action()
   }
 
-  const handleSubscribe = () => {
+  const handleFollow = () => {
     requireAuth(() => {
-      const username = profile?.username ?? slug
-      const next = !isSubscribed
+      const username = profile.username
+      const next = !isFollowing
       void (next ? followUser(username) : unfollowUser(username))
-        .then(() => setIsSubscribed(next))
-        .catch(() => setIsSubscribed(next))
+        .then(() => setIsFollowing(next))
+        .catch(() => setIsFollowing(next))
+    })
+  }
+
+  const handleJoinMember = () => {
+    requireAuth(() => {
+      if (isChannelMember) return
+      setMemberBusy(true)
+      void createCreatorSubscriptionCheckout(profile.id, "basic")
+        .then((res) => {
+          if (res.devMode) {
+            setIsChannelMember(true)
+            return
+          }
+          if (res.checkoutUrl) {
+            window.location.href = res.checkoutUrl
+          }
+        })
+        .finally(() => setMemberBusy(false))
     })
   }
 
   const handleNotifyToggle = () => {
     requireAuth(() => setNotificationsOn((prev) => !prev))
-  }
-
-  if (loading) {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-background md:pl-20">
-        <p className="text-muted-foreground">Loading creator…</p>
-      </main>
-    )
   }
 
   return (
@@ -158,9 +247,25 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ slug:
               <span className="flex items-center gap-1"><Video className="w-4 h-4" />{videosCount} videos</span>
             </div>
           </div>
-          <div className="flex gap-3 md:pb-2">
-            <Button onClick={handleSubscribe} className={cn("flex-1 md:w-32 rounded-full", isSubscribed && "bg-secondary text-foreground")}>{isSubscribed ? "Subscribed" : "Subscribe"}</Button>
-            {isSubscribed && (
+          <div className="flex flex-wrap gap-2 md:pb-2">
+            <Button
+              onClick={handleFollow}
+              variant={isFollowing ? "secondary" : "default"}
+              className="rounded-full"
+            >
+              {isFollowing ? "Following" : "Follow"}
+            </Button>
+            <Button
+              onClick={handleJoinMember}
+              disabled={memberBusy || isChannelMember}
+              className={cn(
+                "rounded-full",
+                isChannelMember && "bg-primary/20 text-primary border border-primary",
+              )}
+            >
+              {isChannelMember ? "Member" : memberBusy ? "…" : "Join — $4.99/mo"}
+            </Button>
+            {isFollowing && (
               <Button variant="secondary" size="icon" className="rounded-full" onClick={handleNotifyToggle}>
                 {notificationsOn ? <Bell className="w-5 h-5 fill-current" /> : <BellOff className="w-5 h-5" />}
               </Button>
@@ -223,25 +328,54 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ slug:
             <div className="text-center py-20 text-muted-foreground">No live streams right now. Enable notifications to get alerted.</div>
           ) : null}
           {activeTab === "podcasts" && (
-            <div className="space-y-3">
-              {mockPodcastEpisodes.map((ep) => (
-                <Link key={ep.id} href={`/podcast/${ep.id}`} className="flex gap-4 p-4 rounded-xl bg-secondary/30 hover:bg-secondary/60">
-                  <img src={ep.cover} alt="" className="w-16 h-16 rounded-lg object-cover" />
-                  <div><h3 className="font-semibold text-sm">{ep.title}</h3><p className="text-xs text-muted-foreground">{ep.plays} plays</p></div>
-                </Link>
-              ))}
-            </div>
+            podcastShows.length === 0 ? (
+              <p className="text-center py-20 text-muted-foreground text-sm">
+                No podcast shows from this creator yet.
+              </p>
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-4">
+                {podcastShows.map((show) => (
+                  <Link
+                    key={show.id}
+                    href="/podcasts"
+                    className="flex gap-4 p-4 rounded-xl bg-secondary/30 hover:bg-secondary/60"
+                  >
+                    <img
+                      src={videoThumbnail(show.cover)}
+                      alt=""
+                      className="w-16 h-16 rounded-lg object-cover"
+                    />
+                    <div>
+                      <h3 className="font-semibold text-sm">{show.title}</h3>
+                      <p className="text-xs text-muted-foreground">{show.episodes} episodes</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )
           )}
           {activeTab === "playlists" && (
-            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {playlists.map((pl) => (
-                <Link key={pl.id} href={`/playlist/${pl.id}`} className="group">
-                  <div className="aspect-video rounded-xl overflow-hidden mb-2"><img src={pl.cover} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" /></div>
-                  <h3 className="font-semibold text-sm">{pl.title}</h3>
-                  <p className="text-xs text-muted-foreground">{pl.itemCount} items</p>
-                </Link>
-              ))}
-            </div>
+            playlists.length === 0 ? (
+              <p className="text-center py-20 text-muted-foreground text-sm">
+                No public playlists yet.
+              </p>
+            ) : (
+              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {playlists.map((pl) => (
+                  <Link key={pl.id} href={`/playlist/${pl.id}`} className="group">
+                    <div className="aspect-video rounded-xl overflow-hidden mb-2 bg-secondary">
+                      <img
+                        src={videoThumbnail(pl.coverUrl)}
+                        alt=""
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                    </div>
+                    <h3 className="font-semibold text-sm">{pl.title}</h3>
+                    <p className="text-xs text-muted-foreground">{pl.itemCount} items</p>
+                  </Link>
+                ))}
+              </div>
+            )
           )}
         </div>
       </div>

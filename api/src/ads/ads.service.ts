@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AdCampaignStatus, AdPlacement } from '@prisma/client';
+import { isPremiumActive } from '../common/utils/premium.util';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type ServedAd = {
@@ -16,7 +17,23 @@ export type ServedAd = {
 export class AdsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async serve(placement: AdPlacement): Promise<{ ad: ServedAd | null }> {
+  async serve(
+    placement: AdPlacement,
+    viewerUserId?: string,
+  ): Promise<{ ad: ServedAd | null; adFree?: boolean }> {
+    if (viewerUserId) {
+      const viewer = await this.prisma.user.findUnique({
+        where: { id: viewerUserId },
+        select: { premiumTier: true, premiumExpiresAt: true },
+      });
+      if (
+        viewer &&
+        isPremiumActive(viewer.premiumTier, viewer.premiumExpiresAt)
+      ) {
+        return { ad: null, adFree: true };
+      }
+    }
+
     const now = new Date();
     const campaigns = await this.prisma.adCampaign.findMany({
       where: {

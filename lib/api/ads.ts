@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/api-client";
+import { apiRequest, loadStoredAccessToken } from "@/lib/api-client";
 import { getAd, type MockAd } from "@/lib/mock-data";
 
 export type AdPlacement =
@@ -37,18 +37,28 @@ function mockToServed(ad: MockAd): ServedAd {
   };
 }
 
+/**
+ * Fetches an ad for the placement. Sends Bearer when logged in so premium users get ad-free from API.
+ * Pass `skipFetch: true` when the client already knows the user is premium.
+ */
 export async function fetchServedAd(
   placement: AdPlacement,
+  options?: { skipFetch?: boolean },
 ): Promise<ServedAd | null> {
+  if (options?.skipFetch) return null;
+
+  const hasToken = !!loadStoredAccessToken();
   try {
-    const res = await apiRequest<{ ad: ServedAd | null }>(
+    const res = await apiRequest<{ ad: ServedAd | null; adFree?: boolean }>(
       `/ads/serve?placement=${encodeURIComponent(placement)}`,
-      { auth: false },
+      { auth: hasToken },
     );
-    if (res.ad) return res.ad;
+    if (res.adFree || !res.ad) return null;
+    return res.ad;
   } catch {
-    /* API offline — fallback */
+    /* API offline — fallback only for non-premium guests */
   }
+  if (hasToken) return null;
   const mock = getAd(placement);
   return mock ? mockToServed(mock) : null;
 }

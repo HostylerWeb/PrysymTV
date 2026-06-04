@@ -39,7 +39,7 @@ export type VideoRecord = {
   title: string;
   thumbnailUrl: string | null;
   durationSeconds: number;
-  viewsCount: number;
+  viewsCount?: number;
   type?: string;
   status?: string;
   creator?: {
@@ -73,6 +73,36 @@ export type LikedItemRecord = {
   video: VideoRecord | null;
 };
 
+export type PodcastEpisodeRecord = {
+  id: string;
+  title: string;
+  coverUrl: string | null;
+  durationSeconds: number;
+  show?: { title: string };
+};
+
+export type VerticalEpisodeHistoryRecord = {
+  id: string;
+  title: string;
+  thumbnailUrl: string | null;
+  durationSeconds: number;
+  episodeNumber: number;
+  series: { slug: string; title: string; posterUrl: string | null };
+};
+
+export type ContinueWatchingFeedItem = {
+  contentType: "video" | "podcast_episode" | "vertical_episode";
+  contentId: string;
+  progressSeconds: number;
+  completed: boolean;
+  title: string;
+  thumbnailUrl: string | null;
+  durationSeconds: number;
+  subtitle?: string;
+  seriesSlug?: string;
+  episodeNumber?: number;
+};
+
 export type HistoryItemRecord = {
   contentType: string;
   contentId: string;
@@ -80,6 +110,8 @@ export type HistoryItemRecord = {
   completed: boolean;
   updatedAt: string;
   video: VideoRecord | null;
+  podcastEpisode?: PodcastEpisodeRecord | null;
+  verticalEpisode?: VerticalEpisodeHistoryRecord | null;
 };
 
 export type MessageResponse = {

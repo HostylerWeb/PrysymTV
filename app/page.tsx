@@ -7,27 +7,40 @@ import { ContinueWatchingRow } from "@/components/continue-watching-row"
 import { useAuth } from "@/contexts/auth-context"
 import { fetchHistory } from "@/lib/api/history"
 import { listVerticalContinueWatching } from "@/lib/vertical-progress"
-import type { HistoryItemRecord } from "@/lib/api/types"
+import type { ContinueWatchingFeedItem, HistoryItemRecord } from "@/lib/api/types"
 import { CategoryTabs } from "@/components/category-tabs"
-import { StoriesRow } from "@/components/stories-row"
 import { ContentRow } from "@/components/content-row"
 import { MovieRow } from "@/components/movie-row"
 import { LiveRow } from "@/components/live-row"
+import { ShortsHomeRow } from "@/components/shorts-home-row"
+import { PodcastHomeRow } from "@/components/podcast-home-row"
+import { VerticalsHomeRow } from "@/components/verticals-home-row"
 import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
 import { Footer } from "@/components/footer"
 import { AdBanner } from "@/components/ad-banner"
-import { StoryViewer } from "@/components/story-viewer"
 import { fetchFeedHome } from "@/lib/api/feed"
-import { formatDuration, formatViewCount } from "@/lib/format-media"
-import { mockStories, type ContentCategory, type MockStory } from "@/lib/mock-data"
+import { fetchShortsFeed } from "@/lib/api/videos-feed"
+import { fetchPodcastEpisodesFeed } from "@/lib/api/podcasts"
+import { fetchVerticalSeriesList } from "@/lib/api/verticals"
+import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
+
+type ContentCategory = "all" | "movies" | "live" | "videos" | "series" | "trending"
 
 export default function Home() {
   const { isAuthenticated } = useAuth()
   const [activeCategory, setActiveCategory] = useState<ContentCategory>("all")
   const [activeTab, setActiveTab] = useState("home")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
-  const [activeStory, setActiveStory] = useState<MockStory | null>(null)
+  const [homeShorts, setHomeShorts] = useState<
+    Array<{ id: string; title: string; thumbnail: string; channel: string }>
+  >([])
+  const [homePodcasts, setHomePodcasts] = useState<
+    Array<{ id: string; title: string; podcast: string; cover: string; duration: string }>
+  >([])
+  const [homeVerticals, setHomeVerticals] = useState<
+    Array<{ slug: string; title: string; posterUrl: string | null; genre?: string }>
+  >([])
   const [liveStreams, setLiveStreams] = useState<
     Array<{
       id: string
@@ -56,14 +69,15 @@ export default function Home() {
   >([])
   const [newReleases, setNewReleases] = useState<typeof topMovies>([])
   const [featuredLive, setFeaturedLive] = useState<FeaturedLiveStream | null>(null)
+  const [continueFeed, setContinueFeed] = useState<ContinueWatchingFeedItem[]>([])
   const [continueHistory, setContinueHistory] = useState<HistoryItemRecord[]>([])
-  const [continueVertical, setContinueVertical] = useState(
+  const [guestVertical, setGuestVertical] = useState(
     () => (typeof window !== "undefined" ? listVerticalContinueWatching() : []),
   )
 
   useEffect(() => {
-    setContinueVertical(listVerticalContinueWatching())
-  }, [])
+    if (!isAuthenticated) setGuestVertical(listVerticalContinueWatching())
+  }, [isAuthenticated])
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -71,12 +85,17 @@ export default function Home() {
       return
     }
     void fetchHistory(1, 8)
-      .then((res) => setContinueHistory(res.items.filter((i) => i.video)))
+      .then((res) =>
+        setContinueHistory(
+          res.items.filter((i) => i.video || i.podcastEpisode || i.verticalEpisode),
+        ),
+      )
       .catch(() => setContinueHistory([]))
   }, [isAuthenticated])
 
   useEffect(() => {
     void fetchFeedHome().then((feed) => {
+      setContinueFeed(feed.continueWatching ?? [])
       if (feed.featuredLive) {
         setFeaturedLive({
           id: feed.featuredLive.id,
@@ -132,9 +151,44 @@ export default function Home() {
     })
   }, [])
 
+  useEffect(() => {
+    void fetchShortsFeed().then((res) => {
+      setHomeShorts(
+        res.items.slice(0, 10).map((s) => ({
+          id: s.id,
+          title: s.title,
+          thumbnail: videoThumbnail(s.thumbnailUrl),
+          channel: s.channel,
+        })),
+      )
+    })
+    void fetchPodcastEpisodesFeed(1, 10).then((res) => {
+      setHomePodcasts(
+        res.items.map((ep) => ({
+          id: ep.id,
+          title: ep.title,
+          podcast: ep.podcast,
+          cover: ep.cover,
+          duration: ep.duration,
+        })),
+      )
+    })
+    void fetchVerticalSeriesList().then((res) => {
+      setHomeVerticals(
+        res.items.slice(0, 10).map((s) => ({
+          slug: s.slug,
+          title: s.title,
+          posterUrl: s.posterUrl,
+          genre: s.genre,
+        })),
+      )
+    })
+  }, [])
+
   const showLive = activeCategory === "all" || activeCategory === "live"
   const showMovies = activeCategory === "all" || activeCategory === "movies"
   const showVideos = activeCategory === "all" || activeCategory === "videos" || activeCategory === "trending"
+  const showSeries = activeCategory === "all" || activeCategory === "series"
 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
@@ -146,11 +200,14 @@ export default function Home() {
         <div className="max-w-7xl mx-auto w-full px-4 md:px-0">
           <CategoryTabs activeCategory={activeCategory} onCategoryChange={setActiveCategory} />
 
-          {(continueHistory.length > 0 || continueVertical.length > 0) && (
+          {(continueFeed.length > 0 ||
+            guestVertical.length > 0 ||
+            continueHistory.length > 0) && (
             <div className="px-4 md:px-8 pt-4">
               <ContinueWatchingRow
-                historyItems={continueHistory}
-                verticalItems={continueVertical}
+                feedItems={continueFeed}
+                historyItems={continueFeed.length > 0 ? [] : continueHistory}
+                verticalItems={isAuthenticated ? [] : guestVertical}
               />
             </div>
           )}
@@ -159,12 +216,24 @@ export default function Home() {
             <LiveRow title="Live Now" streams={liveStreams} />
           )}
 
-          {activeCategory === "all" && (
-            <StoriesRow stories={mockStories} onStoryClick={setActiveStory} />
+          {showSeries && (
+            <VerticalsHomeRow title="Micro-dramas & Series" items={homeVerticals} />
+          )}
+
+          {activeCategory === "all" && homeShorts.length > 0 && (
+            <ShortsHomeRow title="Shorts" items={homeShorts} />
+          )}
+
+          {activeCategory === "all" && homePodcasts.length > 0 && (
+            <PodcastHomeRow title="Podcasts" items={homePodcasts} />
           )}
 
           {showVideos && trendingVideos.length > 0 && (
-            <ContentRow title="Trending Videos" items={trendingVideos} />
+            <ContentRow
+              title="Trending Videos"
+              items={trendingVideos}
+              viewAllHref="/videos"
+            />
           )}
 
           {showMovies && topMovies.length > 0 && (
@@ -185,7 +254,6 @@ export default function Home() {
       <Footer />
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
-      <StoryViewer story={activeStory} onClose={() => setActiveStory(null)} />
     </main>
   )
 }

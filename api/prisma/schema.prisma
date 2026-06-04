@@ -84,6 +84,7 @@ enum PlaylistItemType {
 enum WatchContentType {
   video
   podcast_episode
+  vertical_episode
 }
 
 enum LikeTargetType {
@@ -519,6 +520,7 @@ model Video {
   tags            String[]      @default([])
   thumbnailUrl    String?       @map("thumbnail_url")
   hlsMasterUrl    String?       @map("hls_master_url")
+  rawObjectKey    String?       @map("raw_object_key")
   durationSeconds Int           @default(0) @map("duration_seconds")
   releaseYear     Int?          @map("release_year")
   ageRating       String?       @map("age_rating")

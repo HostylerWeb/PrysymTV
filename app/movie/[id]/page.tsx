@@ -14,13 +14,33 @@ import { ShareSheet } from "@/components/share-sheet"
 import { Footer } from "@/components/footer"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { useAuth } from "@/contexts/auth-context"
-import { getMovie } from "@/lib/mock-data"
-import { fetchVideoWithFallback, toggleVideoSave } from "@/lib/api/videos-feed"
+import { fetchVideo, toggleVideoSave } from "@/lib/api/videos-feed"
 import { saveWatchProgress } from "@/lib/api/history"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
 import type { ApiVideoDetail } from "@/lib/api/videos-feed"
 
-type MovieDisplay = ReturnType<typeof getMovie>
+type MovieDisplay = {
+  id: string
+  title: string
+  poster: string
+  banner: string
+  year: string
+  rating: string
+  genre: string
+  genres: string[]
+  duration: string
+  ageRating: string
+  tagline: string
+  description: string
+  longDescription: string
+  director: string
+  writers: string[]
+  matchScore: string
+  views: string
+  videoUrl: string
+  category: string
+  cast: Array<{ name: string; role: string; image: string }>
+}
 
 function mapApiToMovie(v: ApiVideoDetail): MovieDisplay {
   return {
@@ -50,6 +70,7 @@ function mapApiToMovie(v: ApiVideoDetail): MovieDisplay {
 export default function MovieDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const [movie, setMovie] = useState<MovieDisplay | null>(null)
+  const [loading, setLoading] = useState(true)
   const { isAuthenticated } = useAuth()
   const [isInList, setIsInList] = useState(false)
   const [showFullDescription, setShowFullDescription] = useState(false)
@@ -66,10 +87,16 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const api = await fetchVideoWithFallback(id)
-      if (cancelled) return
-      if (api) setMovie(mapApiToMovie(api))
-      else setMovie(getMovie(id))
+      setLoading(true)
+      try {
+        const api = await fetchVideo(id)
+        if (cancelled) return
+        setMovie(mapApiToMovie(api))
+      } catch {
+        if (!cancelled) setMovie(null)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
     }
     void load()
     return () => {
@@ -112,10 +139,10 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
     else action()
   }
 
-  if (!movie) {
+  if (loading || !movie) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-background">
-        <p className="text-muted-foreground">Loading…</p>
+      <main className="min-h-screen flex items-center justify-center bg-background md:pl-20">
+        <p className="text-muted-foreground">{loading ? "Loading…" : "Movie not found"}</p>
       </main>
     )
   }
@@ -212,7 +239,13 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
-      <ReportModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} targetType="video" targetLabel={movie.title} />
+      <ReportModal
+        isOpen={isReportOpen}
+        onClose={() => setIsReportOpen(false)}
+        targetType="video"
+        targetId={movie.id}
+        targetLabel={movie.title}
+      />
       <ShareSheet isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} title={movie.title} />
     </main>
   )

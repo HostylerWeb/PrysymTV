@@ -32,6 +32,19 @@ services:
       timeout: 3s
       retries: 10
 
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: prysymtv-mediamtx
+    restart: unless-stopped
+    ports:
+      - "1935:1935"
+      - "8888:8888"
+    volumes:
+      - ./infra/mediamtx.yml:/mediamtx.yml:ro
+    command: ["/mediamtx.yml"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
   prysymtv_pg_data:
   prysymtv_redis_data:

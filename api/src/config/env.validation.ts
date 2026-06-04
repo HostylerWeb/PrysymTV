@@ -158,6 +158,10 @@ export class EnvironmentVariables {
 
   @IsOptional()
   @IsString()
+  FFPROBE_PATH?: string;
+
+  @IsOptional()
+  @IsString()
   VIDEO_PROCESSING_TMP_DIR?: string;
 
   @IsOptional()
@@ -167,6 +171,19 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   STRIPE_WEBHOOK_SECRET?: string;
+
+  @IsOptional()
+  @IsString()
+  RTMP_INGEST_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  MEDIAMTX_HLS_PUBLIC_URL?: string;
+
+  /** Dev only: auto-approve streamer applications (`true` / `1`) */
+  @IsOptional()
+  @IsString()
+  AUTO_APPROVE_STREAMER?: string;
 }
 
 const WEAK_SECRET_MARKERS = [

@@ -4,12 +4,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ContentStatus, StreamerStatus } from '@prisma/client';
 import {
   mapVideoCard,
   VIDEO_CARD_SELECT,
 } from '../common/mappers/content.mapper';
 import { PrismaService } from '../prisma/prisma.service';
+import { BillingService } from '../billing/billing.service';
+import { StorageService } from '../storage/storage.service';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { UpdateNotificationPrefDto } from './dto/notification-pref.dto';
 import { ApplyStreamerDto } from './dto/apply-streamer.dto';
@@ -17,9 +20,16 @@ import { ReplaceSocialLinksDto } from './dto/social-links.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly storage: StorageService,
+    private readonly config: ConfigService,
+    private readonly billing: BillingService,
+  ) {}
 
   async getMe(userId: string) {
+    await this.devAutoApprovePendingStreamer(userId);
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
@@ -50,6 +60,40 @@ export class UsersService {
       },
     });
     return this.sanitizeUser(user);
+  }
+
+  async initProfileImageUpload(
+    userId: string,
+    kind: 'avatar' | 'banner',
+    mimeType: string,
+    fileName?: string,
+  ) {
+    const ext = this.storage.extensionFromFileName(fileName) || '.jpg';
+    const prefix = kind === 'avatar' ? 'uploads/avatars' : 'uploads/banners';
+    const objectKey = `${prefix}/${userId}${ext}`;
+    const target = await this.storage.createUploadTargetForKey(
+      objectKey,
+      mimeType,
+    );
+    return {
+      ...target,
+      publicUrl: this.storage.getPublicUrl(objectKey),
+      kind,
+    };
+  }
+
+  async assertProfileObjectKey(userId: string, objectKey: string) {
+    const allowed = [
+      `uploads/avatars/${userId}`,
+      `uploads/banners/${userId}`,
+    ];
+    const key = objectKey.replace(/^\/+/, '');
+    const ok = allowed.some(
+      (prefix) => key === prefix || key.startsWith(`${prefix}.`),
+    );
+    if (!ok) {
+      throw new BadRequestException('Invalid profile image key');
+    }
   }
 
   async getNotificationPreferences(userId: string) {
@@ -93,6 +137,13 @@ export class UsersService {
     if (user.streamerStatus === StreamerStatus.pending) {
       throw new ConflictException('Application already pending');
     }
+
+    const autoApprove = this.isAutoApproveStreamerEnabled();
+    const nextStatus = autoApprove
+      ? StreamerStatus.approved
+      : StreamerStatus.pending;
+    const applicationStatus = autoApprove ? 'approved' : 'pending';
+
     await this.prisma.$transaction([
       this.prisma.streamerApplication.upsert({
         where: { userId },
@@ -100,19 +151,20 @@ export class UsersService {
           userId,
           description: dto.description,
           idDocumentUrl: dto.idDocumentUrl,
+          status: applicationStatus,
         },
         update: {
           description: dto.description,
           idDocumentUrl: dto.idDocumentUrl,
-          status: 'pending',
+          status: applicationStatus,
         },
       }),
       this.prisma.user.update({
         where: { id: userId },
-        data: { streamerStatus: StreamerStatus.pending },
+        data: { streamerStatus: nextStatus },
       }),
     ]);
-    return { success: true, streamerStatus: StreamerStatus.pending };
+    return { success: true, streamerStatus: nextStatus, autoApproved: autoApprove };
   }
 
   async getPublicVideos(username: string, page = 1, limit = 24) {
@@ -145,7 +197,7 @@ export class UsersService {
     };
   }
 
-  async getPublicProfile(username: string) {
+  async getPublicProfile(username: string, viewerId?: string) {
     const user = await this.prisma.user.findFirst({
       where: { username: username.toLowerCase() },
       include: {
@@ -159,6 +211,25 @@ export class UsersService {
     });
     if (!user || user.isBanned)
       throw new NotFoundException('Creator not found');
+
+    let isFollowing = false;
+    let isChannelMember = false;
+    if (viewerId && viewerId !== user.id) {
+      const row = await this.prisma.follow.findUnique({
+        where: {
+          followerId_followingId: {
+            followerId: viewerId,
+            followingId: user.id,
+          },
+        },
+      });
+      isFollowing = !!row;
+      isChannelMember = await this.billing.isActiveCreatorMember(
+        viewerId,
+        user.id,
+      );
+    }
+
     return {
       id: user.id,
       username: user.username,
@@ -174,6 +245,31 @@ export class UsersService {
       isLive: user.streams.length > 0,
       liveStreamId: user.streams[0]?.id ?? null,
       socialLinks: user.socialLinks,
+      isFollowing,
+      isChannelMember,
+    };
+  }
+
+  async getPublicPlaylists(username: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { username: username.toLowerCase() },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundException('Creator not found');
+    const playlists = await this.prisma.playlist.findMany({
+      where: { creatorId: user.id, visibility: 'public' },
+      orderBy: { updatedAt: 'desc' },
+      include: { _count: { select: { items: true } } },
+    });
+    return {
+      items: playlists.map((p) => ({
+        id: p.id,
+        title: p.title,
+        description: p.description,
+        coverUrl: p.coverUrl,
+        type: p.type,
+        itemCount: p._count.items,
+      })),
     };
   }
 
@@ -191,6 +287,9 @@ export class UsersService {
       create: { followerId, followingId: target.id },
       update: {},
     });
+
+    await this.maybeNotifyFollow(target.id, followerId);
+
     return { success: true, following: true };
   }
 
@@ -321,6 +420,57 @@ export class UsersService {
   async clearNotifications(userId: string) {
     await this.prisma.notification.deleteMany({ where: { userId } });
     return { success: true };
+  }
+
+  private isAutoApproveStreamerEnabled(): boolean {
+    const raw = this.config.get<string>('AUTO_APPROVE_STREAMER');
+    return raw === 'true' || raw === '1';
+  }
+
+  /** Dev convenience: upgrade existing pending applications when auto-approve is on. */
+  private async devAutoApprovePendingStreamer(userId: string): Promise<void> {
+    if (!this.isAutoApproveStreamerEnabled()) return;
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { streamerStatus: true },
+    });
+    if (user?.streamerStatus !== StreamerStatus.pending) return;
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { streamerStatus: StreamerStatus.approved },
+      }),
+      this.prisma.streamerApplication.updateMany({
+        where: { userId },
+        data: { status: 'approved' },
+      }),
+    ]);
+  }
+
+  private async maybeNotifyFollow(
+    recipientId: string,
+    actorId: string,
+  ): Promise<void> {
+    const pref = await this.prisma.userNotificationPreference.findUnique({
+      where: { userId_type: { userId: recipientId, type: 'follow' } },
+    });
+    if (pref && !pref.enabled) return;
+
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { displayName: true, username: true },
+    });
+    const name = actor?.displayName || actor?.username || 'Someone';
+
+    await this.prisma.notification.create({
+      data: {
+        userId: recipientId,
+        type: 'follow',
+        actorId,
+        referenceId: actorId,
+        message: `${name} started following you`,
+      },
+    });
   }
 
   private sanitizeUser(user: {

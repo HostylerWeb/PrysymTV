@@ -1,7 +1,15 @@
 import { apiRequest } from "@/lib/api-client";
 import { withApiFallback } from "@/lib/api/fallback";
 import type { VideoCard } from "@/lib/api/feed";
-import { mockMovies, mockShorts } from "@/lib/mock-data";
+import type { VideoDetail } from "@/lib/api/videos";
+
+export type ApiVideoDetail = VideoDetail;
+
+const EMPTY_SHORTS = { items: [] as VideoCard[], nextCursor: null as string | null };
+const EMPTY_MOVIES = {
+  items: [] as VideoCard[],
+  meta: { page: 1, limit: 24, total: 0 },
+};
 
 export function fetchShortsFeed(cursor?: string) {
   return withApiFallback(
@@ -10,21 +18,7 @@ export function fetchShortsFeed(cursor?: string) {
         `/videos/feed/shorts${cursor ? `?cursor=${cursor}` : ""}`,
         { auth: false },
       ),
-    {
-      items: mockShorts.map((s, i) => ({
-        id: String(s.id),
-        title: s.caption,
-        thumbnailUrl: null,
-        durationSeconds: 60,
-        viewsCount: 0,
-        type: "short",
-        category: "shorts",
-        channel: s.username,
-        channelSlug: s.userSlug,
-        creatorId: "",
-      })),
-      nextCursor: null,
-    },
+    EMPTY_SHORTS,
   );
 }
 
@@ -35,48 +29,9 @@ export function fetchMoviesFeed(page = 1) {
         `/videos/feed/movies?page=${page}`,
         { auth: false },
       ),
-    {
-      items: mockMovies.map((m) => ({
-        id: m.id,
-        title: m.title,
-        thumbnailUrl: m.poster,
-        durationSeconds: 0,
-        viewsCount: 0,
-        type: "movie",
-        category: "movies",
-        channel: "Prysym",
-        channelSlug: "prysym",
-        creatorId: "",
-      })),
-      meta: { page: 1, limit: 24, total: mockMovies.length },
-    },
+    EMPTY_MOVIES,
   );
 }
-
-export type ApiVideoDetail = {
-  id: string;
-  title: string;
-  description: string | null;
-  thumbnailUrl: string | null;
-  hlsMasterUrl: string | null;
-  playbackUrl: string | null;
-  videoUrl: string | null;
-  durationSeconds: number;
-  viewsCount: number;
-  likesCount: number;
-  commentsCount?: number;
-  type: string;
-  category?: string | null;
-  releaseYear?: number | null;
-  ageRating?: string | null;
-  tagline?: string | null;
-  creator: {
-    id: string;
-    username: string;
-    displayName: string | null;
-    avatarUrl: string | null;
-  };
-};
 
 export function fetchVideo(id: string) {
   return apiRequest<ApiVideoDetail>(`/videos/${id}`, { auth: false });
@@ -86,13 +41,6 @@ export function fetchFeaturedMovie() {
   return withApiFallback(
     () => apiRequest<{ item: VideoCard | null }>("/videos/feed/movies/featured", { auth: false }),
     { item: null },
-  );
-}
-
-export function fetchVideoWithFallback(id: string) {
-  return withApiFallback(
-    () => fetchVideo(id),
-    null as ApiVideoDetail | null,
   );
 }
 

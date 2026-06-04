@@ -42,6 +42,50 @@ export function historyProgressPercent(
   return Math.min(100, Math.round((progressSeconds / durationSeconds) * 100));
 }
 
+function pluralize(count: number, singular: string, plural: string): string {
+  return count === 1 ? singular : plural;
+}
+
+/** YouTube / TikTok style relative timestamps for comments and activity. */
+export function formatRelativeTime(isoOrDate: string | Date, nowMs = Date.now()): string {
+  const date = typeof isoOrDate === "string" ? new Date(isoOrDate) : isoOrDate;
+  const ts = date.getTime();
+  if (Number.isNaN(ts)) return "";
+
+  let diffSec = Math.floor((nowMs - ts) / 1000);
+  if (diffSec < 0) diffSec = 0;
+
+  if (diffSec < 60) return "Just now";
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) {
+    return diffMin === 1 ? "1 min ago" : `${diffMin} mins ago`;
+  }
+
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) {
+    return pluralize(diffHour, "1 hour ago", `${diffHour} hours ago`);
+  }
+
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay < 7) {
+    return pluralize(diffDay, "1 day ago", `${diffDay} days ago`);
+  }
+
+  const diffWeek = Math.floor(diffDay / 7);
+  if (diffWeek < 5) {
+    return pluralize(diffWeek, "1 week ago", `${diffWeek} weeks ago`);
+  }
+
+  const diffMonth = Math.floor(diffDay / 30);
+  if (diffMonth < 12) {
+    return pluralize(diffMonth, "1 month ago", `${diffMonth} months ago`);
+  }
+
+  const diffYear = Math.floor(diffDay / 365);
+  return pluralize(diffYear, "1 year ago", `${diffYear} years ago`);
+}
+
 export function savedItemLabel(itemType: string): string {
   switch (itemType) {
     case "movie":

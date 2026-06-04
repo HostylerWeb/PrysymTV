@@ -19,8 +19,11 @@ export interface User {
   username: string
   email: string
   avatar: string
+  bannerUrl: string | null
   bio: string
   coins: number
+  premiumTier: string
+  premiumExpiresAt: string | null
   isStreamer: boolean
   streamerStatus: "none" | "pending" | "approved" | "rejected"
   followersCount: number

@@ -3,17 +3,19 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ContentStatus } from '@prisma/client';
 import { Job } from 'bullmq';
-import { execFile } from 'child_process';
-import { mkdtemp, readdir, rm, stat } from 'fs/promises';
+import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { promisify } from 'util';
 import { getVideoProcessingSettings } from '../config/storage-env';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import {
+  extractThumbnail,
+  probeMedia,
+  transcodeToHls,
+  uploadHlsDirectory,
+} from './ffmpeg.util';
 import { VIDEO_PROCESSING_QUEUE } from './queue.constants';
-
-const execFileAsync = promisify(execFile);
 
 export type VideoProcessingJobData = {
   videoId: string;
@@ -32,10 +34,22 @@ export class VideoProcessingProcessor extends WorkerHost {
     super();
   }
 
+  private resolveFfprobePath(ffmpegPath: string): string {
+    const explicit = this.config.get<string>('FFPROBE_PATH')?.trim();
+    if (explicit) return explicit;
+    if (ffmpegPath.toLowerCase().endsWith('ffmpeg')) {
+      return ffmpegPath.replace(/ffmpeg$/i, 'ffprobe');
+    }
+    return 'ffprobe';
+  }
+
   async process(job: Job<VideoProcessingJobData>): Promise<void> {
     const { videoId, objectKey } = job.data;
     const settings = getVideoProcessingSettings(this.config);
-    this.logger.log(`Processing video ${videoId} (attempt ${job.attemptsMade + 1})`);
+    const ffprobePath = this.resolveFfprobePath(settings.ffmpegPath);
+    this.logger.log(
+      `Processing video ${videoId} mode=${settings.mode} (attempt ${job.attemptsMade + 1})`,
+    );
 
     const video = await this.prisma.video.findUnique({ where: { id: videoId } });
     if (!video) {
@@ -45,10 +59,16 @@ export class VideoProcessingProcessor extends WorkerHost {
 
     try {
       if (settings.mode === 'skip') {
-        await this.processSkipMode(videoId, objectKey);
+        await this.processSkipMode(videoId, objectKey, settings.ffmpegPath, ffprobePath);
         return;
       }
-      await this.processFfmpegMode(videoId, objectKey, settings.ffmpegPath, settings.tmpDir);
+      await this.processFfmpegMode(
+        videoId,
+        objectKey,
+        settings.ffmpegPath,
+        ffprobePath,
+        settings.tmpDir,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(`Video ${videoId} processing failed: ${message}`);
@@ -60,25 +80,56 @@ export class VideoProcessingProcessor extends WorkerHost {
     }
   }
 
-  private async processSkipMode(videoId: string, objectKey: string) {
+  private async processSkipMode(
+    videoId: string,
+    objectKey: string,
+    ffmpegPath: string,
+    ffprobePath: string,
+  ) {
     const rawUrl = this.storage.getPublicUrl(objectKey);
-    const thumbKey = this.storage.buildThumbnailKey(videoId);
+    let durationSeconds = 0;
+    let thumbnailUrl = rawUrl;
+
+    const workRoot = await mkdtemp(join(tmpdir(), `prysym-skip-${videoId}-`));
+    const inputPath = join(workRoot, 'source');
+    const thumbPath = join(workRoot, 'thumb.jpg');
+
+    try {
+      await this.storage.downloadToFile(objectKey, inputPath);
+      const probe = await probeMedia(inputPath, ffprobePath);
+      durationSeconds = probe.durationSeconds;
+
+      if (probe.hasVideo) {
+        await extractThumbnail(inputPath, thumbPath, ffmpegPath, true);
+        const thumbKey = this.storage.buildThumbnailKey(videoId);
+        await this.storage.uploadFromFile(thumbKey, thumbPath, 'image/jpeg');
+        thumbnailUrl = this.storage.getPublicUrl(thumbKey);
+      }
+    } catch (e) {
+      this.logger.warn(
+        `Skip mode probe/thumb failed for ${videoId}: ${e instanceof Error ? e.message : e}`,
+      );
+    } finally {
+      await rm(workRoot, { recursive: true, force: true });
+    }
+
     await this.prisma.video.update({
       where: { id: videoId },
       data: {
         status: ContentStatus.ready,
         hlsMasterUrl: rawUrl,
-        thumbnailUrl: rawUrl,
+        thumbnailUrl,
+        durationSeconds,
       },
     });
     this.logger.log(`Video ${videoId} ready (processing mode: skip)`);
-    void thumbKey;
   }
 
   private async processFfmpegMode(
     videoId: string,
     objectKey: string,
     ffmpegPath: string,
+    ffprobePath: string,
     tmpDirOverride: string,
   ) {
     const workRoot = tmpDirOverride
@@ -89,52 +140,29 @@ export class VideoProcessingProcessor extends WorkerHost {
     const thumbPath = join(workRoot, 'thumb.jpg');
 
     try {
-      await this.storage.downloadToFile(objectKey, inputPath);
       const { mkdir } = await import('fs/promises');
+      await this.storage.downloadToFile(objectKey, inputPath);
       await mkdir(hlsDir, { recursive: true });
 
-      await execFileAsync(ffmpegPath, [
-        '-y',
-        '-i',
-        inputPath,
-        '-codec',
-        'copy',
-        '-start_number',
-        '0',
-        '-hls_time',
-        '10',
-        '-hls_list_size',
-        '0',
-        '-f',
-        'hls',
-        join(hlsDir, 'master.m3u8'),
-      ]);
+      const probe = await transcodeToHls(inputPath, hlsDir, ffmpegPath, ffprobePath);
 
-      await execFileAsync(ffmpegPath, [
-        '-y',
-        '-ss',
-        '00:00:02',
-        '-i',
-        inputPath,
-        '-vframes',
-        '1',
-        thumbPath,
-      ]);
-
-      const hlsPrefix = `${this.storage.buildHlsMasterKey(videoId).replace(/\/master\.m3u8$/, '')}`;
-      const files = await readdir(hlsDir);
-      for (const file of files) {
-        const localFile = join(hlsDir, file);
-        const st = await stat(localFile);
-        if (!st.isFile()) continue;
-        const contentType = file.endsWith('.m3u8')
-          ? 'application/vnd.apple.mpegurl'
-          : 'video/mp2t';
-        await this.storage.uploadFromFile(`${hlsPrefix}/${file}`, localFile, contentType);
+      if (probe.hasVideo) {
+        await extractThumbnail(inputPath, thumbPath, ffmpegPath, true);
       }
 
+      const hlsPrefix = this.storage.buildHlsPrefix(videoId);
+      await uploadHlsDirectory(hlsDir, hlsPrefix, (key, localPath, contentType) =>
+        this.storage.uploadFromFile(key, localPath, contentType),
+      );
+
       const thumbKey = this.storage.buildThumbnailKey(videoId);
-      await this.storage.uploadFromFile(thumbKey, thumbPath, 'image/jpeg');
+      let thumbnailUrl: string | null = null;
+      if (probe.hasVideo) {
+        await this.storage.uploadFromFile(thumbKey, thumbPath, 'image/jpeg');
+        thumbnailUrl = this.storage.getPublicUrl(thumbKey);
+      } else if (probe.isAudioOnly) {
+        thumbnailUrl = null;
+      }
 
       const masterKey = this.storage.buildHlsMasterKey(videoId);
       await this.prisma.video.update({
@@ -142,15 +170,15 @@ export class VideoProcessingProcessor extends WorkerHost {
         data: {
           status: ContentStatus.ready,
           hlsMasterUrl: this.storage.getPublicUrl(masterKey),
-          thumbnailUrl: this.storage.getPublicUrl(thumbKey),
+          thumbnailUrl,
+          durationSeconds: probe.durationSeconds,
         },
       });
 
       if (this.storage.getSettings().driver === 's3') {
         await this.storage.deleteObject(objectKey);
       }
-
-      this.logger.log(`Video ${videoId} transcoded and published`);
+      this.logger.log(`Video ${videoId} transcoded (${probe.durationSeconds}s) and published`);
     } finally {
       if (!tmpDirOverride) {
         await rm(workRoot, { recursive: true, force: true });

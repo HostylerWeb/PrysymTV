@@ -6,6 +6,7 @@ import {
   trackAdImpression,
   type ServedAd,
 } from "@/lib/api/ads"
+import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 
 interface AdInterstitialProps {
   onClose: () => void
@@ -14,16 +15,21 @@ interface AdInterstitialProps {
 }
 
 export function AdInterstitial({ onClose, creatorId, videoId }: AdInterstitialProps) {
+  const showAds = useShouldShowAds()
   const [ad, setAd] = useState<ServedAd | null | undefined>(undefined)
   const [countdown, setCountdown] = useState(5)
 
   useEffect(() => {
+    if (!showAds) {
+      onClose()
+      return
+    }
     void fetchServedAd("shorts_interstitial").then((served) => {
       setAd(served)
       if (served) setCountdown(served.skipAfterSeconds || 5)
       else onClose()
     })
-  }, [onClose])
+  }, [onClose, showAds])
 
   useEffect(() => {
     if (!ad || !creatorId) return

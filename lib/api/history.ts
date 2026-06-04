@@ -7,8 +7,14 @@ export async function fetchHistory(page = 1, limit = 12) {
   );
 }
 
+export async function clearHistory() {
+  return apiRequest<{ success: boolean }>("/history/clear", {
+    method: "DELETE",
+  });
+}
+
 export async function saveWatchProgress(body: {
-  contentType: "video" | "podcast_episode";
+  contentType: "video" | "podcast_episode" | "vertical_episode";
   contentId: string;
   progressSeconds: number;
   completed?: boolean;

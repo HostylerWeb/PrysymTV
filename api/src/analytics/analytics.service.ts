@@ -4,13 +4,17 @@ import {
   Prisma,
   UserRole,
 } from '@prisma/client';
+import { CreatorsBalanceService } from '../billing/creators-balance.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TrackEventsDto } from './dto/track-events.dto';
 import { TrackContentAdDto } from './dto/track-content-ad.dto';
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly creatorsBalance: CreatorsBalanceService,
+  ) {}
 
   async trackBatch(userId: string | undefined, dto: TrackEventsDto) {
     if (!dto.events.length) return { success: true, recorded: 0 };
@@ -206,10 +210,8 @@ export class AnalyticsService {
         .map((r) => [r.videoId!, r._count._all]),
     );
 
-    const pendingPayout = await this.prisma.creatorBalanceLedger.aggregate({
-      where: { creatorId, entryType: 'credit' },
-      _sum: { amountUsd: true },
-    });
+    const availableBalance =
+      await this.creatorsBalance.computeAvailableBalance(creatorId);
 
     const earnings30d = await this.sumLedgerCredits(creatorId, since30d);
 
@@ -243,7 +245,8 @@ export class AnalyticsService {
         merchandiseRevenueUsd:
           latestImpact?.merchandiseRevenueUsd?.toString() ?? '0',
         donationsUsd: latestImpact?.donationsUsd?.toString() ?? '0',
-        pendingPayoutUsd: pendingPayout._sum.amountUsd?.toString() ?? '0',
+        pendingPayoutUsd: availableBalance.toFixed(2),
+        availableBalanceUsd: availableBalance.toFixed(2),
         lifetimeCreditsUsd: balanceSum._sum.amountUsd?.toString() ?? '0',
       },
       communityImpact: {

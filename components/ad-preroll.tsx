@@ -10,6 +10,7 @@ import {
   type AdAttribution,
   type ServedAd,
 } from "@/lib/api/ads"
+import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 
 interface AdPrerollProps {
   onComplete: () => void
@@ -24,14 +25,23 @@ export function AdPreroll({
   creatorId,
   videoId,
 }: AdPrerollProps) {
+  const showAds = useShouldShowAds()
   const [ad, setAd] = useState<ServedAd | null | undefined>(undefined)
   const [countdown, setCountdown] = useState(15)
   const [canSkip, setCanSkip] = useState(skippable)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
-    void fetchServedAd("movie_preroll").then(setAd)
-  }, [])
+    if (!showAds) {
+      setAd(null)
+      onComplete()
+      return
+    }
+    void fetchServedAd("movie_preroll").then((served) => {
+      setAd(served)
+      if (!served) onComplete()
+    })
+  }, [showAds, onComplete])
 
   useEffect(() => {
     if (!ad) return

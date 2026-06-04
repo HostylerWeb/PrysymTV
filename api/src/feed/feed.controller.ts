@@ -1,4 +1,7 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { FeedService } from './feed.service';
 
 @Controller('feed')
@@ -6,8 +9,9 @@ export class FeedController {
   constructor(private readonly feed: FeedService) {}
 
   @Get('home')
-  home() {
-    return this.feed.home();
+  @UseGuards(OptionalJwtAuthGuard)
+  home(@CurrentUser() user?: AuthUserPayload | null) {
+    return this.feed.home(user?.id);
   }
 
   @Get('trending')

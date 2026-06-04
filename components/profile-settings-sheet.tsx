@@ -30,20 +30,42 @@ import {
   Upload,
   Film,
   Headphones,
+  ListMusic,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { User } from "@/contexts/auth-context"
-import { mockVideos, mockMovies } from "@/lib/mock-data"
-import { uploadVideoFlow, getVideoUploadMaxBytes } from "@/lib/api/videos"
+import { uploadVideoFlow, pollVideoUntilReady, getVideoUploadMaxBytes } from "@/lib/api/videos"
+import { initStream, getRtmpIngestUrl } from "@/lib/api/streams"
+import { createPremiumCheckout } from "@/lib/api/billing"
+import { isPremiumActive } from "@/lib/premium"
+import { ApiError } from "@/lib/api-client"
+import { fetchHistory, clearHistory } from "@/lib/api/history"
+import {
+  fetchNotificationPreferences,
+  updateNotificationPreference,
+} from "@/lib/api/notifications"
+import { mapHistoryToSettingsItems, type SettingsHistoryItem } from "@/lib/map-history"
 import {
   attachVerticalEpisodeVideo,
   createVerticalEpisode,
   createVerticalSeries,
   fetchMyVerticalSeries,
 } from "@/lib/api/verticals-admin"
-import { ApiError } from "@/lib/api-client"
+import {
+  createPodcastShow,
+  fetchMyPodcastShows,
+  uploadPodcastEpisodeFlow,
+  type MyPodcastShow,
+} from "@/lib/api/podcasts-admin"
+import {
+  createPlaylist,
+  deletePlaylist,
+  fetchMyPlaylists,
+  type PlaylistSummary,
+} from "@/lib/api/playlists"
 import { fetchCreatorDashboard, type CreatorDashboardResponse } from "@/lib/api/analytics"
+import { requestCreatorPayout } from "@/lib/api/billing-monetization"
 import { formatViewCount } from "@/lib/format-media"
 
 export type ProfileSettingsScreen =
@@ -56,6 +78,8 @@ export type ProfileSettingsScreen =
   | "go-live"
   | "upload"
   | "verticals"
+  | "podcasts"
+  | "playlists"
 
 const NOTIFICATION_PREFS = [
   { id: "follow", label: "New followers", description: "When someone follows you" },
@@ -84,34 +108,13 @@ const UPLOAD_TYPES = [
   { id: "short", label: "Short", icon: Video, description: "Vertical short-form (under 60s)" },
   { id: "video", label: "Video", icon: Video, description: "Long-form video" },
   { id: "movie", label: "Movie", icon: Film, description: "Full-length movie" },
-  { id: "podcast", label: "Podcast", icon: Headphones, description: "Audio episode" },
-]
-
-const HISTORY_ITEMS = [
-  ...mockVideos.filter((v) => v.progress).map((v) => ({
-    id: v.id,
-    title: v.title,
-    thumbnail: v.thumbnail,
-    channel: v.channel,
-    progress: v.progress!,
-    href: `/watch/${v.id}`,
-  })),
-  {
-    id: "m1",
-    title: mockMovies[0].title,
-    thumbnail: mockMovies[0].poster,
-    channel: "Movie",
-    progress: 30,
-    href: `/movie/${mockMovies[0].id}`,
-  },
 ]
 
 /** Desktop-optimized sheet sizing (md+). */
 const SHEET_SHELL =
   "absolute bottom-0 left-0 right-0 md:top-1/2 md:left-1/2 md:right-auto md:-translate-x-1/2 md:-translate-y-1/2 bg-background rounded-t-3xl md:rounded-2xl shadow-2xl flex flex-col animate-in slide-in-from-bottom md:zoom-in-95 duration-300 max-h-[88vh] md:max-h-[min(820px,90vh)] md:border md:border-border/80"
-const SHEET_SIZE_MENU =
+const SHEET_SIZE_DESKTOP =
   "md:w-[min(600px,92vw)] lg:w-[640px] md:h-[90vh] md:max-h-[92vh] md:min-h-[90vh]"
-const SHEET_SIZE_PANEL = "md:w-[min(700px,94vw)] lg:w-[760px] md:min-h-[min(580px,82vh)]"
 const SHEET_HEADER = "flex items-center gap-2 px-4 py-4 md:px-8 md:py-5 border-b border-border shrink-0"
 const SHEET_TITLE = "flex-1 text-center text-lg md:text-xl font-semibold truncate"
 const SHEET_BODY = "flex-1 overflow-y-auto overscroll-contain px-4 pb-6 md:px-8 md:pb-10"
@@ -125,6 +128,8 @@ const SCREEN_TITLES: Record<Exclude<ProfileSettingsScreen, "menu">, string> = {
   "go-live": "Go Live",
   upload: "Upload",
   verticals: "Micro-dramas",
+  podcasts: "Podcasts",
+  playlists: "Playlists",
 }
 
 interface ProfileSettingsSheetProps {
@@ -136,6 +141,7 @@ interface ProfileSettingsSheetProps {
   onCoinsClick: () => void
   onStreamerApply: () => void
   onLogout: () => void
+  onRefreshUser?: () => Promise<void>
   /** Open directly to a sub-panel (e.g. from /profile?settings=notifications) */
   initialScreen?: ProfileSettingsScreen
 }
@@ -149,6 +155,7 @@ export function ProfileSettingsSheet({
   onCoinsClick,
   onStreamerApply,
   onLogout,
+  onRefreshUser,
   initialScreen,
 }: ProfileSettingsSheetProps) {
   const router = useRouter()
@@ -158,8 +165,16 @@ export function ProfileSettingsSheet({
   )
   const [premiumTier, setPremiumTier] = useState("premium")
   const [premiumActive, setPremiumActive] = useState(false)
-  const [historyItems, setHistoryItems] = useState(HISTORY_ITEMS)
+  const [premiumBusy, setPremiumBusy] = useState(false)
+  const [premiumError, setPremiumError] = useState<string | null>(null)
+  const [historyItems, setHistoryItems] = useState<SettingsHistoryItem[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [notifLoading, setNotifLoading] = useState(false)
   const [streamKey, setStreamKey] = useState<string | null>(null)
+  const [streamId, setStreamId] = useState<string | null>(null)
+  const [rtmpUrl, setRtmpUrl] = useState(() => getRtmpIngestUrl())
+  const [goLiveError, setGoLiveError] = useState<string | null>(null)
+  const [goLiveLoading, setGoLiveLoading] = useState(false)
   const [streamTitle, setStreamTitle] = useState("")
   const [streamCategory, setStreamCategory] = useState("Gaming")
   const [copied, setCopied] = useState(false)
@@ -170,6 +185,8 @@ export function ProfileSettingsSheet({
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadDone, setUploadDone] = useState(false)
+  const [uploadProcessing, setUploadProcessing] = useState(false)
+  const [processingStatus, setProcessingStatus] = useState<string | null>(null)
   const [verticalSlug, setVerticalSlug] = useState("")
   const [verticalTitle, setVerticalTitle] = useState("")
   const [episodeSeriesSlug, setEpisodeSeriesSlug] = useState("")
@@ -179,6 +196,17 @@ export function ProfileSettingsSheet({
   const [episodeVideoFile, setEpisodeVideoFile] = useState<File | null>(null)
   const [verticalBusy, setVerticalBusy] = useState(false)
   const [verticalMessage, setVerticalMessage] = useState<string | null>(null)
+  const [myPodcastShows, setMyPodcastShows] = useState<MyPodcastShow[]>([])
+  const [podcastShowTitle, setPodcastShowTitle] = useState("")
+  const [podcastShowCategory, setPodcastShowCategory] = useState("General")
+  const [podcastEpisodeShowId, setPodcastEpisodeShowId] = useState("")
+  const [podcastEpisodeTitle, setPodcastEpisodeTitle] = useState("")
+  const [podcastAudioFile, setPodcastAudioFile] = useState<File | null>(null)
+  const [podcastBusy, setPodcastBusy] = useState(false)
+  const [podcastMessage, setPodcastMessage] = useState<string | null>(null)
+  const [myPlaylists, setMyPlaylists] = useState<PlaylistSummary[]>([])
+  const [newPlaylistTitle, setNewPlaylistTitle] = useState("")
+  const [playlistBusy, setPlaylistBusy] = useState(false)
   const [mySeries, setMySeries] = useState<
     Array<{
       id: string
@@ -205,6 +233,54 @@ export function ProfileSettingsSheet({
       .catch(() => setMySeries([]))
   }, [isOpen, screen])
 
+  useEffect(() => {
+    if (!isOpen || screen !== "podcasts") return
+    void fetchMyPodcastShows()
+      .then((res) => setMyPodcastShows(res.items))
+      .catch(() => setMyPodcastShows([]))
+  }, [isOpen, screen])
+
+  useEffect(() => {
+    if (!isOpen || screen !== "playlists") return
+    void fetchMyPlaylists()
+      .then((res) => setMyPlaylists(res.items))
+      .catch(() => setMyPlaylists([]))
+  }, [isOpen, screen])
+
+  useEffect(() => {
+    if (!isOpen || screen !== "history") return
+    setHistoryLoading(true)
+    void fetchHistory(1, 40)
+      .then((res) => setHistoryItems(mapHistoryToSettingsItems(res.items)))
+      .catch(() => setHistoryItems([]))
+      .finally(() => setHistoryLoading(false))
+  }, [isOpen, screen])
+
+  useEffect(() => {
+    if (!user) return
+    setPremiumActive(isPremiumActive(user.premiumTier, user.premiumExpiresAt))
+    if (user.premiumTier && user.premiumTier !== "none") {
+      setPremiumTier(user.premiumTier)
+    }
+  }, [user, isOpen])
+
+  useEffect(() => {
+    if (!isOpen || screen !== "notifications") return
+    setNotifLoading(true)
+    void fetchNotificationPreferences()
+      .then((prefs) => {
+        const next = Object.fromEntries(NOTIFICATION_PREFS.map((p) => [p.id, true]))
+        for (const pref of prefs) {
+          next[pref.type] = pref.enabled
+        }
+        setNotifSettings(next)
+      })
+      .catch(() => {
+        /* keep defaults */
+      })
+      .finally(() => setNotifLoading(false))
+  }, [isOpen, screen])
+
   if (!isOpen) return null
 
   const goTo = (next: ProfileSettingsScreen) => setScreen(next)
@@ -224,10 +300,7 @@ export function ProfileSettingsSheet({
       role="presentation"
     >
       <div
-        className={cn(
-          SHEET_SHELL,
-          screen === "menu" ? SHEET_SIZE_MENU : SHEET_SIZE_PANEL
-        )}
+        className={cn(SHEET_SHELL, SHEET_SIZE_DESKTOP)}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -293,7 +366,16 @@ export function ProfileSettingsSheet({
           )}
 
           {screen === "notifications" && (
-            <NotificationsPanel settings={notifSettings} onChange={setNotifSettings} />
+            <NotificationsPanel
+              settings={notifSettings}
+              loading={notifLoading}
+              onToggle={(id, enabled) => {
+                setNotifSettings((s) => ({ ...s, [id]: enabled }))
+                void updateNotificationPreference(id, enabled).catch(() => {
+                  setNotifSettings((s) => ({ ...s, [id]: !enabled }))
+                })
+              }}
+            />
           )}
 
           {screen === "dashboard" && <PerformanceDashboardPanel />}
@@ -305,14 +387,45 @@ export function ProfileSettingsSheet({
               selected={premiumTier}
               onSelect={setPremiumTier}
               subscribed={premiumActive}
-              onSubscribe={() => setPremiumActive(true)}
+              busy={premiumBusy}
+              error={premiumError}
+              onSubscribe={async () => {
+                setPremiumBusy(true)
+                setPremiumError(null)
+                try {
+                  const res = await createPremiumCheckout(premiumTier)
+                  if (res.devMode) {
+                    setPremiumActive(true)
+                    await onRefreshUser?.()
+                    return
+                  }
+                  if (res.checkoutUrl) {
+                    window.location.href = res.checkoutUrl
+                  }
+                } catch (e) {
+                  setPremiumError(
+                    e instanceof ApiError
+                      ? e.message
+                      : e instanceof Error
+                        ? e.message
+                        : "Could not start checkout",
+                  )
+                } finally {
+                  setPremiumBusy(false)
+                }
+              }}
             />
           )}
 
           {screen === "history" && (
             <HistoryPanel
               items={historyItems}
-              onClear={() => setHistoryItems([])}
+              loading={historyLoading}
+              onClear={() => {
+                void clearHistory()
+                  .then(() => setHistoryItems([]))
+                  .catch(() => setHistoryItems([]))
+              }}
               onOpen={(href) => {
                 handleClose()
                 router.push(href)
@@ -327,19 +440,44 @@ export function ProfileSettingsSheet({
               title={streamTitle}
               category={streamCategory}
               streamKey={streamKey}
+              rtmpUrl={rtmpUrl}
               copied={copied}
+              loading={goLiveLoading}
+              error={goLiveError}
               onTitleChange={setStreamTitle}
               onCategoryChange={setStreamCategory}
-              onGenerateKey={() => setStreamKey(`prysym_live_${Date.now().toString(36)}`)}
+              onGenerateKey={async () => {
+                if (!streamTitle.trim()) return
+                setGoLiveLoading(true)
+                setGoLiveError(null)
+                try {
+                  const res = await initStream(streamTitle.trim(), streamCategory)
+                  setStreamKey(res.streamKey)
+                  setStreamId(res.streamId)
+                  setRtmpUrl(res.rtmpUrl || getRtmpIngestUrl())
+                } catch (e) {
+                  setGoLiveError(
+                    e instanceof ApiError
+                      ? e.message
+                      : e instanceof Error
+                        ? e.message
+                        : "Could not start stream",
+                  )
+                } finally {
+                  setGoLiveLoading(false)
+                }
+              }}
               onCopy={async () => {
                 if (!streamKey) return
-                await navigator.clipboard.writeText(streamKey)
+                const text = `Server: ${rtmpUrl}\nStream key: ${streamKey}`
+                await navigator.clipboard.writeText(text)
                 setCopied(true)
                 setTimeout(() => setCopied(false), 2000)
               }}
               onOpenLive={() => {
+                if (!streamId) return
                 handleClose()
-                router.push(`/live/${user?.username?.replace("@", "") ?? "me"}`)
+                router.push(`/live/${streamId}`)
               }}
               onApplyStreamer={() => {
                 handleClose()
@@ -429,6 +567,97 @@ export function ProfileSettingsSheet({
             />
           )}
 
+          {screen === "podcasts" && (
+            <PodcastCreatorPanel
+              shows={myPodcastShows}
+              showTitle={podcastShowTitle}
+              showCategory={podcastShowCategory}
+              episodeShowId={podcastEpisodeShowId}
+              episodeTitle={podcastEpisodeTitle}
+              audioFile={podcastAudioFile}
+              busy={podcastBusy}
+              message={podcastMessage}
+              onShowTitleChange={setPodcastShowTitle}
+              onShowCategoryChange={setPodcastShowCategory}
+              onEpisodeShowIdChange={setPodcastEpisodeShowId}
+              onEpisodeTitleChange={setPodcastEpisodeTitle}
+              onAudioFileChange={setPodcastAudioFile}
+              onCreateShow={async () => {
+                if (!podcastShowTitle.trim()) return
+                setPodcastBusy(true)
+                setPodcastMessage(null)
+                try {
+                  const show = await createPodcastShow({
+                    title: podcastShowTitle.trim(),
+                    category: podcastShowCategory.trim(),
+                  })
+                  setPodcastEpisodeShowId(show.id)
+                  setPodcastMessage("Show created.")
+                  const res = await fetchMyPodcastShows()
+                  setMyPodcastShows(res.items)
+                } catch (e) {
+                  setPodcastMessage(e instanceof Error ? e.message : "Failed")
+                } finally {
+                  setPodcastBusy(false)
+                }
+              }}
+              onUploadEpisode={async () => {
+                if (!podcastEpisodeShowId || !podcastEpisodeTitle.trim() || !podcastAudioFile) return
+                setPodcastBusy(true)
+                setPodcastMessage(null)
+                try {
+                  await uploadPodcastEpisodeFlow(
+                    podcastEpisodeShowId,
+                    podcastEpisodeTitle.trim(),
+                    podcastAudioFile,
+                  )
+                  setPodcastMessage("Episode published.")
+                  setPodcastAudioFile(null)
+                  const res = await fetchMyPodcastShows()
+                  setMyPodcastShows(res.items)
+                } catch (e) {
+                  setPodcastMessage(e instanceof Error ? e.message : "Upload failed")
+                } finally {
+                  setPodcastBusy(false)
+                }
+              }}
+            />
+          )}
+
+          {screen === "playlists" && (
+            <PlaylistsManagePanel
+              playlists={myPlaylists}
+              newTitle={newPlaylistTitle}
+              busy={playlistBusy}
+              onNewTitleChange={setNewPlaylistTitle}
+              onCreate={async () => {
+                if (!newPlaylistTitle.trim()) return
+                setPlaylistBusy(true)
+                try {
+                  await createPlaylist({
+                    title: newPlaylistTitle.trim(),
+                    type: "mixed",
+                  })
+                  setNewPlaylistTitle("")
+                  const res = await fetchMyPlaylists()
+                  setMyPlaylists(res.items)
+                } finally {
+                  setPlaylistBusy(false)
+                }
+              }}
+              onDelete={async (id) => {
+                setPlaylistBusy(true)
+                try {
+                  await deletePlaylist(id)
+                  const res = await fetchMyPlaylists()
+                  setMyPlaylists(res.items)
+                } finally {
+                  setPlaylistBusy(false)
+                }
+              }}
+            />
+          )}
+
           {screen === "upload" && (
             <UploadPanel
               selected={uploadType}
@@ -437,10 +666,15 @@ export function ProfileSettingsSheet({
               progress={uploadProgress}
               error={uploadError}
               uploading={uploading}
+              processing={uploadProcessing}
+              processingStatus={processingStatus}
               done={uploadDone}
               onSelect={(id) => {
                 setUploadType(id)
                 setUploadError(null)
+                setUploadDone(false)
+                setUploadProcessing(false)
+                setProcessingStatus(null)
               }}
               onTitleChange={setUploadTitle}
               onFileChange={(f) => {
@@ -455,12 +689,15 @@ export function ProfileSettingsSheet({
                   return
                 }
                 setUploading(true)
+                setUploadProcessing(false)
+                setUploadDone(false)
                 setUploadError(null)
                 setUploadProgress(0)
+                setProcessingStatus(null)
                 try {
-                  await uploadVideoFlow(
+                  const queued = await uploadVideoFlow(
                     {
-                      type: uploadType as "short" | "video" | "movie" | "podcast",
+                      type: uploadType as "short" | "video" | "movie",
                       title: uploadTitle.trim(),
                       mimeType: uploadFile.type,
                       fileName: uploadFile.name,
@@ -468,6 +705,12 @@ export function ProfileSettingsSheet({
                     uploadFile,
                     setUploadProgress,
                   )
+                  setUploading(false)
+                  setUploadProcessing(true)
+                  setProcessingStatus("processing")
+                  await pollVideoUntilReady(queued.videoId, {
+                    onStatus: setProcessingStatus,
+                  })
                   setUploadDone(true)
                 } catch (e) {
                   const msg =
@@ -479,6 +722,7 @@ export function ProfileSettingsSheet({
                   setUploadError(msg)
                 } finally {
                   setUploading(false)
+                  setUploadProcessing(false)
                 }
               }}
             />
@@ -532,6 +776,8 @@ function MenuPanel({
     { icon: Clock, label: "Watch History", description: "Recently watched content", screen: "history" },
     { icon: Video, label: "Your Videos", description: "Upload shorts, videos, movies", screen: "upload" },
     { icon: Film, label: "Micro-dramas", description: "Create vertical series & episodes", screen: "verticals" },
+    { icon: Headphones, label: "Podcasts", description: "Create shows & upload episodes", screen: "podcasts" },
+    { icon: ListMusic, label: "Playlists", description: "Create and manage playlists", screen: "playlists" },
     {
       icon: BarChart3,
       label: "Performance & Revenue",
@@ -629,34 +875,45 @@ function MenuPanel({
 
 function NotificationsPanel({
   settings,
-  onChange,
+  loading,
+  onToggle,
 }: {
   settings: Record<string, boolean>
-  onChange: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+  loading: boolean
+  onToggle: (id: string, enabled: boolean) => void
 }) {
   return (
     <div className="space-y-2 md:space-y-3 pt-2 md:pt-3">
-      <p className="text-sm md:text-base text-muted-foreground mb-4 md:mb-6">Choose what you want to be notified about.</p>
-      <div className="md:grid md:grid-cols-2 md:gap-3">
-      {NOTIFICATION_PREFS.map((p) => (
-        <div key={p.id} className="flex items-center justify-between gap-3 p-3 md:p-4 rounded-xl bg-secondary/30">
-          <div className="min-w-0">
-            <p className="font-medium text-sm md:text-base">{p.label}</p>
-            <p className="text-xs md:text-sm text-muted-foreground">{p.description}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => onChange((s) => ({ ...s, [p.id]: !s[p.id] }))}
-            className={cn(
-              "w-11 h-6 rounded-full flex items-center px-0.5 shrink-0 transition-colors",
-              settings[p.id] ? "bg-primary justify-end" : "bg-muted justify-start"
-            )}
-          >
-            <div className="w-5 h-5 rounded-full bg-white shadow-sm" />
-          </button>
+      <p className="text-sm md:text-base text-muted-foreground mb-4 md:mb-6">
+        Choose what you want to be notified about.
+      </p>
+      {loading ? (
+        <p className="text-sm text-muted-foreground text-center py-8">Loading preferences…</p>
+      ) : (
+        <div className="md:grid md:grid-cols-2 md:gap-3">
+          {NOTIFICATION_PREFS.map((p) => (
+            <div
+              key={p.id}
+              className="flex items-center justify-between gap-3 p-3 md:p-4 rounded-xl bg-secondary/30"
+            >
+              <div className="min-w-0">
+                <p className="font-medium text-sm md:text-base">{p.label}</p>
+                <p className="text-xs md:text-sm text-muted-foreground">{p.description}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onToggle(p.id, !settings[p.id])}
+                className={cn(
+                  "w-11 h-6 rounded-full flex items-center px-0.5 shrink-0 transition-colors",
+                  settings[p.id] ? "bg-primary justify-end" : "bg-muted justify-start",
+                )}
+              >
+                <div className="w-5 h-5 rounded-full bg-white shadow-sm" />
+              </button>
+            </div>
+          ))}
         </div>
-      ))}
-      </div>
+      )}
     </div>
   )
 }
@@ -665,6 +922,10 @@ function PerformanceDashboardPanel() {
   const [data, setData] = useState<CreatorDashboardResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [payoutAmount, setPayoutAmount] = useState("50")
+  const [payoutMethod, setPayoutMethod] = useState<"paypal" | "bank_transfer" | "crypto">("paypal")
+  const [payoutBusy, setPayoutBusy] = useState(false)
+  const [payoutMessage, setPayoutMessage] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -782,12 +1043,66 @@ function PerformanceDashboardPanel() {
               <li>Donations: {fmtUsd(data.financial.donationsUsd)}</li>
             </ul>
           </div>
-          <div className="p-4 md:p-6 rounded-xl border border-border bg-secondary/20">
-            <p className="text-sm font-semibold">Pending payout</p>
+          <div className="p-4 md:p-6 rounded-xl border border-border bg-secondary/20 space-y-3">
+            <p className="text-sm font-semibold">Available balance</p>
             <p className="text-2xl md:text-3xl font-bold text-primary">
               {fmtUsd(data.financial.pendingPayoutUsd)}
             </p>
-            <p className="text-xs text-muted-foreground mb-3">Minimum $50 · payout request coming soon</p>
+            <p className="text-xs text-muted-foreground">
+              Minimum withdrawal $50. Payouts are reviewed manually (1–5 business days).
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                min={50}
+                step={1}
+                value={payoutAmount}
+                onChange={(e) => setPayoutAmount(e.target.value)}
+                className="flex-1 h-10 px-3 rounded-lg bg-secondary text-sm"
+                placeholder="Amount (USD)"
+              />
+              <select
+                value={payoutMethod}
+                onChange={(e) =>
+                  setPayoutMethod(e.target.value as "paypal" | "bank_transfer" | "crypto")
+                }
+                className="h-10 px-2 rounded-lg bg-secondary text-sm"
+              >
+                <option value="paypal">PayPal</option>
+                <option value="bank_transfer">Bank</option>
+                <option value="crypto">Crypto</option>
+              </select>
+            </div>
+            <Button
+              className="w-full rounded-full"
+              disabled={payoutBusy}
+              onClick={() => {
+                const amount = Number(payoutAmount)
+                if (!Number.isFinite(amount) || amount < 50) {
+                  setPayoutMessage("Enter at least $50")
+                  return
+                }
+                setPayoutBusy(true)
+                setPayoutMessage(null)
+                void requestCreatorPayout({ amountUsd: amount, method: payoutMethod })
+                  .then((res) => {
+                    setPayoutMessage(`Request submitted (${res.payout.status}).`)
+                    return fetchCreatorDashboard()
+                  })
+                  .then((dash) => dash && setData(dash))
+                  .catch((e) =>
+                    setPayoutMessage(
+                      e instanceof ApiError ? e.message : "Could not request payout",
+                    ),
+                  )
+                  .finally(() => setPayoutBusy(false))
+              }}
+            >
+              {payoutBusy ? "Submitting…" : "Request payout"}
+            </Button>
+            {payoutMessage && (
+              <p className="text-xs text-center text-muted-foreground">{payoutMessage}</p>
+            )}
           </div>
           <div className="p-4 rounded-xl border border-primary/20 bg-primary/5">
             <p className="text-sm font-semibold">Community impact</p>
@@ -841,25 +1156,34 @@ function PremiumPanel({
   selected,
   onSelect,
   subscribed,
+  busy,
+  error,
   onSubscribe,
 }: {
   selected: string
   onSelect: (id: string) => void
   subscribed: boolean
-  onSubscribe: () => void
+  busy?: boolean
+  error?: string | null
+  onSubscribe: () => void | Promise<void>
 }) {
   if (subscribed) {
     return (
       <div className="py-8 text-center">
         <Check className="w-12 h-12 text-primary mx-auto mb-3" />
         <p className="font-bold text-lg">You&apos;re Premium!</p>
-        <p className="text-sm text-muted-foreground mt-1">Ad-free across Prysym TV.</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Ad-free across Prysym TV. Channel memberships are separate (support creators on their profile).
+        </p>
       </div>
     )
   }
 
   return (
     <div className="pt-2 md:pt-3 space-y-4 md:space-y-6">
+      {error && (
+        <p className="text-sm text-destructive text-center">{error}</p>
+      )}
       <p className="text-sm md:text-base text-muted-foreground text-center">Ad-free viewing and exclusive perks.</p>
       <div className="space-y-3 md:grid md:grid-cols-3 md:gap-4 md:space-y-0">
         {PREMIUM_TIERS.map((t) => (
@@ -888,8 +1212,12 @@ function PremiumPanel({
           </button>
         ))}
       </div>
-      <Button onClick={onSubscribe} className="w-full rounded-full h-11 md:h-12 md:text-base">
-        Subscribe (mock)
+      <Button
+        onClick={() => void onSubscribe()}
+        disabled={busy}
+        className="w-full rounded-full h-11 md:h-12 md:text-base"
+      >
+        {busy ? "Starting checkout…" : "Subscribe"}
       </Button>
     </div>
   )
@@ -897,10 +1225,12 @@ function PremiumPanel({
 
 function HistoryPanel({
   items,
+  loading,
   onClear,
   onOpen,
 }: {
-  items: typeof HISTORY_ITEMS
+  items: SettingsHistoryItem[]
+  loading: boolean
   onClear: () => void
   onOpen: (href: string) => void
 }) {
@@ -913,7 +1243,9 @@ function HistoryPanel({
           </button>
         )}
       </div>
-      {items.length === 0 ? (
+      {loading ? (
+        <p className="text-center text-muted-foreground py-12 text-sm">Loading history…</p>
+      ) : items.length === 0 ? (
         <p className="text-center text-muted-foreground py-12 text-sm">No watch history yet.</p>
       ) : (
         <div className="space-y-2 md:space-y-3 md:grid md:grid-cols-2 md:gap-3">
@@ -951,7 +1283,10 @@ function GoLivePanel({
   title,
   category,
   streamKey,
+  rtmpUrl,
   copied,
+  loading,
+  error,
   onTitleChange,
   onCategoryChange,
   onGenerateKey,
@@ -964,10 +1299,13 @@ function GoLivePanel({
   title: string
   category: string
   streamKey: string | null
+  rtmpUrl: string
   copied: boolean
+  loading: boolean
+  error: string | null
   onTitleChange: (v: string) => void
   onCategoryChange: (v: string) => void
-  onGenerateKey: () => void
+  onGenerateKey: () => void | Promise<void>
   onCopy: () => void
   onOpenLive: () => void
   onApplyStreamer: () => void
@@ -1006,25 +1344,31 @@ function GoLivePanel({
       </div>
       <div className="p-3 md:p-4 rounded-xl bg-secondary/30 text-xs md:text-sm space-y-1 font-mono break-all">
         <p>
-          <span className="text-muted-foreground">Server:</span> rtmp://live.prysym.tv/app
+          <span className="text-muted-foreground">Server:</span> {rtmpUrl}
         </p>
         <p>
           <span className="text-muted-foreground">Key:</span> {streamKey ?? "Generate below"}
         </p>
       </div>
+      {error && <p className="text-sm text-destructive">{error}</p>}
       {streamKey ? (
         <div className="flex gap-2">
           <Button variant="secondary" onClick={onCopy} className="flex-1 rounded-full gap-2">
             {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            {copied ? "Copied" : "Copy Key"}
+            {copied ? "Copied" : "Copy server & key"}
           </Button>
           <Button onClick={onOpenLive} className="flex-1 rounded-full">
             Open Live Page
           </Button>
         </div>
       ) : (
-        <Button onClick={onGenerateKey} disabled={!title} className="w-full rounded-full gap-2">
-          <Key className="w-4 h-4" /> Generate Stream Key
+        <Button
+          onClick={() => void onGenerateKey()}
+          disabled={!title.trim() || loading}
+          className="w-full rounded-full gap-2"
+        >
+          <Key className="w-4 h-4" />
+          {loading ? "Creating stream…" : "Generate Stream Key"}
         </Button>
       )}
       <p className="text-xs text-muted-foreground">Paste the server and key into OBS → Settings → Stream.</p>
@@ -1039,6 +1383,8 @@ function UploadPanel({
   progress,
   error,
   uploading,
+  processing,
+  processingStatus,
   done,
   onSelect,
   onTitleChange,
@@ -1051,6 +1397,8 @@ function UploadPanel({
   progress: number
   error: string | null
   uploading: boolean
+  processing: boolean
+  processingStatus: string | null
   done: boolean
   onSelect: (id: string) => void
   onTitleChange: (v: string) => void
@@ -1061,8 +1409,25 @@ function UploadPanel({
     return (
       <div className="py-10 text-center">
         <Check className="w-12 h-12 text-primary mx-auto mb-3" />
-        <p className="font-semibold">Upload queued</p>
-        <p className="text-sm text-muted-foreground mt-1">Processing will finish shortly.</p>
+        <p className="font-semibold">Upload complete</p>
+        <p className="text-sm text-muted-foreground mt-1">Your video is ready to watch.</p>
+      </div>
+    )
+  }
+
+  if (processing) {
+    return (
+      <div className="py-10 text-center px-4">
+        <div className="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="font-semibold">Processing video</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          {processingStatus === "ready"
+            ? "Finishing up…"
+            : "Transcoding for playback. This may take a few minutes."}
+        </p>
+        {processingStatus && processingStatus !== "ready" && (
+          <p className="text-xs text-muted-foreground mt-2 capitalize">Status: {processingStatus}</p>
+        )}
       </div>
     )
   }
@@ -1123,7 +1488,7 @@ function UploadPanel({
           {error && <p className="text-sm text-destructive text-center">{error}</p>}
           <Button
             onClick={onUpload}
-            disabled={!title || !file || uploading}
+            disabled={!title || !file || uploading || processing}
             className="w-full rounded-full md:h-12 md:text-base"
           >
             {uploading ? `Uploading${progress ? ` ${progress}%` : "..."}` : "Start Upload"}
@@ -1271,6 +1636,177 @@ function VerticalSeriesPanel({
             Upload & attach
           </Button>
         </section>
+      )}
+    </div>
+  )
+}
+
+function PodcastCreatorPanel({
+  shows,
+  showTitle,
+  showCategory,
+  episodeShowId,
+  episodeTitle,
+  audioFile,
+  busy,
+  message,
+  onShowTitleChange,
+  onShowCategoryChange,
+  onEpisodeShowIdChange,
+  onEpisodeTitleChange,
+  onAudioFileChange,
+  onCreateShow,
+  onUploadEpisode,
+}: {
+  shows: MyPodcastShow[]
+  showTitle: string
+  showCategory: string
+  episodeShowId: string
+  episodeTitle: string
+  audioFile: File | null
+  busy: boolean
+  message: string | null
+  onShowTitleChange: (v: string) => void
+  onShowCategoryChange: (v: string) => void
+  onEpisodeShowIdChange: (v: string) => void
+  onEpisodeTitleChange: (v: string) => void
+  onAudioFileChange: (f: File | null) => void
+  onCreateShow: () => void | Promise<void>
+  onUploadEpisode: () => void | Promise<void>
+}) {
+  return (
+    <div className="pt-2 space-y-6">
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold">New show</h3>
+        <input
+          value={showTitle}
+          onChange={(e) => onShowTitleChange(e.target.value)}
+          placeholder="Show title"
+          className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+        />
+        <input
+          value={showCategory}
+          onChange={(e) => onShowCategoryChange(e.target.value)}
+          placeholder="Category"
+          className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+        />
+        <Button onClick={() => void onCreateShow()} disabled={busy || !showTitle.trim()} className="w-full rounded-full">
+          Create show
+        </Button>
+      </section>
+
+      {shows.length > 0 && (
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold">Upload episode</h3>
+          <select
+            value={episodeShowId}
+            onChange={(e) => onEpisodeShowIdChange(e.target.value)}
+            className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+          >
+            <option value="">Select show</option>
+            {shows.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.title}
+              </option>
+            ))}
+          </select>
+          <input
+            value={episodeTitle}
+            onChange={(e) => onEpisodeTitleChange(e.target.value)}
+            placeholder="Episode title"
+            className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+          />
+          <label className="block p-6 rounded-xl border-2 border-dashed border-border text-center cursor-pointer hover:border-primary/50">
+            <input
+              type="file"
+              accept="audio/*"
+              className="hidden"
+              onChange={(e) => onAudioFileChange(e.target.files?.[0] ?? null)}
+            />
+            <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm">{audioFile?.name ?? "Choose audio file"}</p>
+          </label>
+          <Button
+            onClick={() => void onUploadEpisode()}
+            disabled={busy || !episodeShowId || !episodeTitle.trim() || !audioFile}
+            className="w-full rounded-full"
+          >
+            Publish episode
+          </Button>
+        </section>
+      )}
+
+      {shows.length > 0 && (
+        <section>
+          <h3 className="text-sm font-semibold mb-2">Your shows</h3>
+          <ul className="space-y-2">
+            {shows.map((s) => (
+              <li key={s.id} className="p-3 rounded-xl bg-secondary/50 text-sm">
+                <p className="font-medium">{s.title}</p>
+                <p className="text-xs text-muted-foreground">
+                  {s._count?.episodes ?? 0} episode{(s._count?.episodes ?? 0) === 1 ? "" : "s"}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {message && <p className="text-sm text-center text-muted-foreground">{message}</p>}
+    </div>
+  )
+}
+
+function PlaylistsManagePanel({
+  playlists,
+  newTitle,
+  busy,
+  onNewTitleChange,
+  onCreate,
+  onDelete,
+}: {
+  playlists: PlaylistSummary[]
+  newTitle: string
+  busy: boolean
+  onNewTitleChange: (v: string) => void
+  onCreate: () => void | Promise<void>
+  onDelete: (id: string) => void | Promise<void>
+}) {
+  return (
+    <div className="pt-2 space-y-4">
+      <div className="flex gap-2">
+        <input
+          value={newTitle}
+          onChange={(e) => onNewTitleChange(e.target.value)}
+          placeholder="Playlist name"
+          className="flex-1 h-11 px-4 rounded-xl bg-secondary text-sm"
+        />
+        <Button onClick={() => void onCreate()} disabled={busy || !newTitle.trim()} className="rounded-full shrink-0">
+          Create
+        </Button>
+      </div>
+      {playlists.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-8">No playlists yet.</p>
+      ) : (
+        <ul className="space-y-2">
+          {playlists.map((p) => (
+            <li key={p.id} className="flex items-center gap-2 p-3 rounded-xl bg-secondary/50">
+              <Link href={`/playlist/${p.id}`} className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{p.title}</p>
+                <p className="text-xs text-muted-foreground">{p.itemCount ?? 0} items</p>
+              </Link>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0 text-destructive"
+                disabled={busy}
+                onClick={() => void onDelete(p.id)}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   )

@@ -2,8 +2,10 @@
 
 import { Bell, Cast, Search } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { NotificationsModal } from "@/components/notifications-modal"
+import { useAuth } from "@/contexts/auth-context"
+import { fetchNotifications } from "@/lib/api/notifications"
 
 interface HeaderProps {
   onSearchClick: () => void
@@ -15,7 +17,26 @@ interface HeaderProps {
 export const APP_HEADER_HEIGHT_CLASS = "h-[4.5rem]"
 
 export function Header({ onSearchClick, offsetContent = true }: HeaderProps) {
+  const { isAuthenticated } = useAuth()
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  const refreshUnread = useCallback(async () => {
+    if (!isAuthenticated) {
+      setUnreadCount(0)
+      return
+    }
+    try {
+      const res = await fetchNotifications(1, 50)
+      setUnreadCount(res.items.filter((n) => !n.isRead).length)
+    } catch {
+      setUnreadCount(0)
+    }
+  }, [isAuthenticated])
+
+  useEffect(() => {
+    void refreshUnread()
+  }, [refreshUnread, isAuthenticated])
 
   return (
     <>
@@ -37,9 +58,12 @@ export function Header({ onSearchClick, offsetContent = true }: HeaderProps) {
               type="button"
               onClick={() => setIsNotificationsOpen(true)}
               className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors relative"
+              aria-label="Notifications"
             >
               <Bell className="w-5 h-5 text-foreground" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
+              )}
             </button>
             <button
               type="button"
@@ -52,11 +76,11 @@ export function Header({ onSearchClick, offsetContent = true }: HeaderProps) {
         </div>
       </header>
 
-      {offsetContent ? (
-        <div className={APP_HEADER_HEIGHT_CLASS} aria-hidden="true" />
-      ) : null}
-
-      <NotificationsModal isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} />
+      <NotificationsModal
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        onUnreadChange={setUnreadCount}
+      />
     </>
   )
 }

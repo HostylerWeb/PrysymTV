@@ -1,11 +1,33 @@
 import { randomUUID } from 'crypto';
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { StreamStatus } from '@prisma/client';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { StreamStatus, StreamerStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+
+type MediamtxAuthBody = {
+  user?: string;
+  password?: string;
+  ip?: string;
+  action?: string;
+  path?: string;
+  protocol?: string;
+  id?: string;
+  query?: string;
+};
 
 @Injectable()
 export class StreamsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(StreamsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
 
   async listLive() {
     const items = await this.prisma.stream.findMany({
@@ -28,11 +50,18 @@ export class StreamsService {
   }
 
   async getOne(idOrSlug: string) {
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        idOrSlug,
+      );
+
     const stream = await this.prisma.stream.findFirst({
-      where: {
-        OR: [{ id: idOrSlug }, { creator: { username: idOrSlug } }],
-        status: { in: [StreamStatus.live, StreamStatus.ended] },
-      },
+      where: isUuid
+        ? { id: idOrSlug }
+        : {
+            creator: { username: idOrSlug.toLowerCase() },
+            status: { in: [StreamStatus.live, StreamStatus.ended] },
+          },
       orderBy: { startedAt: 'desc' },
       include: {
         creator: {
@@ -50,21 +79,117 @@ export class StreamsService {
     return this.mapStream(stream);
   }
 
-  async initStream(creatorId: string, title: string) {
+  async initStream(creatorId: string, title: string, category?: string) {
+    const creator = await this.prisma.user.findUnique({
+      where: { id: creatorId },
+      select: { streamerStatus: true, isBanned: true },
+    });
+    if (!creator) throw new NotFoundException('User not found');
+    if (creator.isBanned) {
+      throw new ForbiddenException('Account cannot start streams');
+    }
+    if (creator.streamerStatus !== StreamerStatus.approved) {
+      throw new ForbiddenException(
+        'Only approved streamers can go live. Your application must be approved first.',
+      );
+    }
+
     const stream = await this.prisma.stream.create({
       data: {
         creatorId,
         title,
+        category: category?.trim() || 'Live',
         status: StreamStatus.scheduled,
         temporaryStreamToken: `sk_${randomUUID().replace(/-/g, '')}`,
       },
     });
+    const rtmpBase =
+      this.config.get<string>('RTMP_INGEST_URL') ?? 'rtmp://localhost:1935/live';
     return {
       streamId: stream.id,
       streamKey: stream.temporaryStreamToken,
-      rtmpUrl: process.env.RTMP_INGEST_URL ?? 'rtmp://live.prysym.tv/app',
+      rtmpUrl: rtmpBase.replace(/\/$/, ''),
       status: stream.status,
     };
+  }
+
+  /** MediaMTX HTTP auth — allow publish only with a valid stream key path. */
+  async mediamtxAuth(body: MediamtxAuthBody) {
+    const action = body.action ?? 'publish';
+    const path = body.path ?? '';
+
+    if (action === 'read' || action === 'playback') {
+      return { allowed: true };
+    }
+
+    if (action !== 'publish') {
+      return { allowed: false };
+    }
+
+    const streamKey = this.parseStreamKeyFromPath(path);
+    if (!streamKey) return { allowed: false };
+
+    const stream = await this.prisma.stream.findFirst({
+      where: {
+        temporaryStreamToken: streamKey,
+        status: { in: [StreamStatus.scheduled, StreamStatus.live] },
+      },
+    });
+    return { allowed: !!stream };
+  }
+
+  /** MediaMTX runOnReady — HLS is available; mark stream live. */
+  async mediamtxReady(path: string) {
+    const streamKey = this.parseStreamKeyFromPath(path);
+    if (!streamKey) return { ok: false };
+
+    const hlsBase = (
+      this.config.get<string>('MEDIAMTX_HLS_PUBLIC_URL') ?? 'http://localhost:8888'
+    ).replace(/\/$/, '');
+    const hlsPlaybackUrl = `${hlsBase}/live/${streamKey}/index.m3u8`;
+
+    const updated = await this.prisma.stream.updateMany({
+      where: {
+        temporaryStreamToken: streamKey,
+        status: { in: [StreamStatus.scheduled, StreamStatus.live] },
+      },
+      data: {
+        status: StreamStatus.live,
+        hlsPlaybackUrl,
+        startedAt: new Date(),
+      },
+    });
+
+    if (updated.count > 0) {
+      this.logger.log(`Stream live: ${streamKey} → ${hlsPlaybackUrl}`);
+    }
+    return { ok: true, hlsPlaybackUrl };
+  }
+
+  /** MediaMTX runOnNotReady — publisher disconnected. */
+  async mediamtxDone(path: string) {
+    const streamKey = this.parseStreamKeyFromPath(path);
+    if (!streamKey) return { ok: false };
+
+    await this.prisma.stream.updateMany({
+      where: {
+        temporaryStreamToken: streamKey,
+        status: { in: [StreamStatus.live, StreamStatus.scheduled] },
+      },
+      data: {
+        status: StreamStatus.ended,
+        endedAt: new Date(),
+      },
+    });
+
+    this.logger.log(`Stream ended: ${streamKey}`);
+    return { ok: true };
+  }
+
+  private parseStreamKeyFromPath(path: string): string | null {
+    const normalized = path.replace(/^\/+/, '').trim();
+    const match = normalized.match(/^live\/([^/]+)/i);
+    return match?.[1] ?? null;
   }
 
   private mapStream(

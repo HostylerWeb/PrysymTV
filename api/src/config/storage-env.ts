@@ -67,10 +67,19 @@ export function getStorageSettings(config: ConfigService): StorageSettings {
 }
 
 export function getVideoProcessingSettings(config: ConfigService) {
+  const ffmpegPath = config.get<string>('FFMPEG_PATH') ?? 'ffmpeg';
+  const ffprobeExplicit = config.get<string>('FFPROBE_PATH')?.trim();
+  const ffprobePath =
+    ffprobeExplicit ||
+    (ffmpegPath.toLowerCase().endsWith('ffmpeg')
+      ? ffmpegPath.replace(/ffmpeg$/i, 'ffprobe')
+      : 'ffprobe');
+
   return {
     mode: (config.get<string>('VIDEO_PROCESSING_MODE') ?? 'skip') as 'skip' | 'ffmpeg',
     maxRetries: Number(config.get<string>('VIDEO_PROCESSING_MAX_RETRIES') ?? '3'),
-    ffmpegPath: config.get<string>('FFMPEG_PATH') ?? 'ffmpeg',
+    ffmpegPath,
+    ffprobePath,
     tmpDir: config.get<string>('VIDEO_PROCESSING_TMP_DIR') ?? '',
     queueName: config.get<string>('VIDEO_PROCESSING_QUEUE_NAME') ?? 'video-processing',
   };

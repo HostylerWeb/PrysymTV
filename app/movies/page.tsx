@@ -58,18 +58,39 @@ export default function MoviesPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [featuredMovie, setFeaturedMovie] = useState(defaultFeatured)
   const [movies, setMovies] = useState(defaultMovies)
+  const [trendingFromApi, setTrendingFromApi] = useState(trendingMovies)
+  const [newReleasesFromApi, setNewReleasesFromApi] = useState(newReleases)
 
   useEffect(() => {
     void fetchMoviesFeed(1).then((res) => {
       if (!res.items.length) return
-      setMovies(
-        res.items.map((m) => ({
+      const mapped = res.items.map((m) => ({
+        id: m.id,
+        title: m.title,
+        poster: videoThumbnail(m.thumbnailUrl),
+        year: String(m.releaseYear ?? new Date().getFullYear()),
+        rating: "8.5",
+        genre: m.category ?? "Drama",
+        views: formatViewCount(m.viewsCount),
+      }))
+      setMovies(mapped)
+      setTrendingFromApi(
+        mapped.slice(0, 3).map((m) => ({
           id: m.id,
           title: m.title,
-          poster: videoThumbnail(m.thumbnailUrl),
-          year: String(m.releaseYear ?? new Date().getFullYear()),
-          rating: "8.5",
-          genre: m.category ?? "Drama",
+          poster: m.poster,
+          rating: m.rating,
+          views: m.views,
+        })),
+      )
+      setNewReleasesFromApi(
+        mapped.slice(0, 4).map((m) => ({
+          id: m.id,
+          title: m.title,
+          poster: m.poster,
+          year: m.year,
+          rating: m.rating,
+          isNew: true,
         })),
       )
     })
@@ -174,7 +195,7 @@ export default function MoviesPage() {
           <button className="text-sm text-primary font-medium">See All</button>
         </div>
         <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4">
-          {trendingMovies.map((movie, index) => (
+          {trendingFromApi.map((movie, index) => (
             <Link key={movie.id} href={`/movie/${movie.id}`}>
               <div className="flex-shrink-0 w-[260px] cursor-pointer group">
                 <div className="relative aspect-video rounded-lg overflow-hidden bg-muted mb-2">
@@ -216,7 +237,7 @@ export default function MoviesPage() {
           <button className="text-sm text-primary font-medium">See All</button>
         </div>
         <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4">
-          {newReleases.map((movie) => (
+          {newReleasesFromApi.map((movie) => (
             <Link key={movie.id} href={`/movie/${movie.id}`}>
               <div className="flex-shrink-0 w-[130px] cursor-pointer group">
                 <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-muted mb-2">

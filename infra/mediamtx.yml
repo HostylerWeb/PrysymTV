@@ -1,0 +1,22 @@
+# Prysym TV — local MediaMTX (RTMP ingest → HLS playback)
+# OBS: Server = rtmp://localhost:1935/live  |  Stream key = value from Go Live API
+
+logLevel: info
+
+rtmp: yes
+rtmpAddress: :1935
+
+hls: yes
+hlsAddress: :8888
+hlsAlwaysRemux: yes
+
+webrtc: no
+
+authMethod: http
+authHTTPAddress: http://host.docker.internal:4000/api/v1/streams/mediamtx/auth
+
+paths:
+  ~^live/(.+)$:
+    source: publisher
+    runOnReady: curl -fsS -X POST "http://host.docker.internal:4000/api/v1/streams/webhooks/ready?path=$MTX_PATH"
+    runOnNotReady: curl -fsS -X POST "http://host.docker.internal:4000/api/v1/streams/webhooks/done?path=$MTX_PATH"

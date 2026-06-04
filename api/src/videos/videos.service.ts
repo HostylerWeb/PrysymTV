@@ -24,11 +24,6 @@ import { UploadInitDto } from './dto/upload-init.dto';
 
 @Injectable()
 export class VideosService {
-  private readonly uploadSessions = new Map<
-    string,
-    { userId: string; objectKey: string }
-  >();
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
@@ -59,9 +54,9 @@ export class VideosService {
       dto.fileName,
     );
 
-    this.uploadSessions.set(video.id, {
-      userId,
-      objectKey: target.objectKey,
+    await this.prisma.video.update({
+      where: { id: video.id },
+      data: { rawObjectKey: target.objectKey },
     });
 
     return {
@@ -77,7 +72,6 @@ export class VideosService {
   }
 
   async uploadComplete(userId: string, dto: UploadCompleteDto) {
-    const session = this.uploadSessions.get(dto.videoId);
     const video = await this.prisma.video.findUnique({
       where: { id: dto.videoId },
     });
@@ -87,10 +81,9 @@ export class VideosService {
     }
 
     const objectKey =
-      dto.objectKey ?? session?.objectKey ?? this.storage.buildRawKey(dto.videoId);
-    if (session && session.userId !== userId) {
-      throw new ForbiddenException('Not your upload');
-    }
+      dto.objectKey ??
+      video.rawObjectKey ??
+      this.storage.buildRawKey(dto.videoId);
 
     const exists = await this.storage.objectExists(objectKey);
     if (!exists) {
@@ -99,14 +92,13 @@ export class VideosService {
       );
     }
 
-    if (this.storage.getSettings().driver === 'local') {
-      const size = await this.storage.getLocalFileSize(objectKey);
-      if (size > this.storage.getSettings().maxUploadBytes) {
-        throw new BadRequestException('File exceeds maximum upload size');
-      }
+    const size = await this.storage.getObjectSize(objectKey);
+    if (size <= 0) {
+      throw new BadRequestException('Uploaded file is empty');
     }
-
-    this.uploadSessions.delete(dto.videoId);
+    if (size > this.storage.getSettings().maxUploadBytes) {
+      throw new BadRequestException('File exceeds maximum upload size');
+    }
 
     const jobData: VideoProcessingJobData = {
       videoId: dto.videoId,
@@ -153,6 +145,7 @@ export class VideosService {
       likesCount: number;
       commentsCount: number;
       type: string;
+      status: string;
       category: string | null;
       releaseYear: number | null;
       ageRating: string | null;

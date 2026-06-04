@@ -350,6 +350,98 @@ async function main() {
     update: { totalEpisodes: 5 },
   });
 
+  const demoAudio =
+    'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+  const podcastCover =
+    'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=800&h=800&fit=crop';
+
+  const techShow = await prisma.podcastShow.upsert({
+    where: { id: 'b1000000-0000-4000-8000-000000000001' },
+    create: {
+      id: 'b1000000-0000-4000-8000-000000000001',
+      creatorId: progamer.id,
+      title: 'The Tech Horizon',
+      description:
+        'Weekly deep-dives into the technologies reshaping our world — AI, startups, and the future of work.',
+      coverUrl: podcastCover,
+      category: 'Tech',
+      followersCount: 1_200_000,
+      visibility: 'public',
+    },
+    update: { followersCount: 1_200_000 },
+  });
+
+  const crimeShow = await prisma.podcastShow.upsert({
+    where: { id: 'b1000000-0000-4000-8000-000000000002' },
+    create: {
+      id: 'b1000000-0000-4000-8000-000000000002',
+      creatorId: progamer.id,
+      title: 'Crime & Consequence',
+      description: 'True crime stories with investigative depth.',
+      coverUrl:
+        'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=800&h=800&fit=crop',
+      category: 'True Crime',
+      followersCount: 890_000,
+      visibility: 'public',
+    },
+    update: { followersCount: 890_000 },
+  });
+
+  const podcastEpisodesSeed = [
+    {
+      id: 'e1000000-0000-4000-8000-000000000001',
+      showId: techShow.id,
+      title: 'AI & The Future of Work',
+      description: 'What automation means for creators, developers, and everyday jobs.',
+      playsCount: 310_000,
+      durationSeconds: 4440,
+      daysAgo: 2,
+    },
+    {
+      id: 'e1000000-0000-4000-8000-000000000002',
+      showId: crimeShow.id,
+      title: 'The Vanishing: A 30-Year Cold Case Solved',
+      description: 'New DNA evidence closes a case that haunted a small town.',
+      playsCount: 142_000,
+      durationSeconds: 3480,
+      daysAgo: 0,
+    },
+    {
+      id: 'e1000000-0000-4000-8000-000000000003',
+      showId: techShow.id,
+      title: 'Building in Public: Lessons from Year One',
+      description: 'Shipping fast without burning out your community.',
+      playsCount: 98_000,
+      durationSeconds: 3060,
+      daysAgo: 5,
+    },
+  ];
+
+  for (const ep of podcastEpisodesSeed) {
+    await prisma.podcastEpisode.upsert({
+      where: { id: ep.id },
+      create: {
+        id: ep.id,
+        showId: ep.showId,
+        creatorId: progamer.id,
+        title: ep.title,
+        description: ep.description,
+        coverUrl: podcastCover,
+        audioUrl: demoAudio,
+        durationSeconds: ep.durationSeconds,
+        playsCount: ep.playsCount,
+        status: ContentStatus.ready,
+        visibility: 'public',
+        publishedAt: new Date(Date.now() - ep.daysAgo * 86_400_000),
+      },
+      update: {
+        status: ContentStatus.ready,
+        audioUrl: demoAudio,
+        playsCount: ep.playsCount,
+      },
+    });
+  }
+
   for (let ep = 1; ep <= 5; ep++) {
     await prisma.verticalEpisode.upsert({
       where: {
@@ -372,7 +464,7 @@ async function main() {
   }
 
   console.log(
-    'Seeded: gifts, coins, revenue rules, GAF, ads, demo user/stream/videos, vertical series.',
+    'Seeded: gifts, coins, revenue rules, GAF, ads, demo user/stream/videos, podcasts, vertical series.',
   );
 }
 

@@ -80,8 +80,25 @@ From the **repo root**:
 
 ```bash
 docker compose up -d
-docker compose ps   # postgres + redis should be "healthy"
+docker compose ps   # postgres + redis + mediamtx should be "healthy" / running
 ```
+
+Optional **live ingest** (Sprint C — RTMP → HLS):
+
+```bash
+docker compose up -d mediamtx
+```
+
+Add to `api/.env`:
+
+```env
+RTMP_INGEST_URL=rtmp://localhost:1935/live
+MEDIAMTX_HLS_PUBLIC_URL=http://localhost:8888
+```
+
+In **OBS** (or any RTMP publisher): Server = `rtmp://localhost:1935/live`, Stream Key = value from **Profile → Settings → Go Live** after you generate a key. When publishing starts, the API sets `hlsPlaybackUrl` and the live page plays HLS from `http://localhost:8888/live/{streamKey}/index.m3u8`.
+
+**Streamer approval (dev):** set `AUTO_APPROVE_STREAMER=true` in `api/.env`. New applications are approved immediately; existing `pending` users are upgraded on the next `GET /users/me` (refresh profile). Production will use the admin dashboard later.
 
 ### Prepare the database (first time only)
 
@@ -158,7 +175,7 @@ pnpm dev
 
 Default URL: **http://localhost:3001** (Next.js may pick 3000 if free; check terminal output).
 
-The UI still uses **mock data** until you wire `NEXT_PUBLIC_API_URL` in the app code. Auth and API integration are documented in [backend-development-plan.md](./backend-development-plan.md) Section 14.
+Set `NEXT_PUBLIC_API_URL` in `.env.local` so the UI talks to the API (auth, feed, uploads, billing). Some screens still fall back to mocks when the API is unreachable — see [backend-development-plan.md](./backend-development-plan.md) Section 14.
 
 ### Other frontend commands
 
@@ -242,6 +259,80 @@ Ensure `api/.env` defines `DATABASE_URL` before any Prisma CLI command.
 
 ---
 
+## 7. Video uploads (R2 + FFmpeg)
+
+Creators upload from **Profile → Settings → Your Videos → Upload**. Flow:
+
+1. `POST /videos/upload/init` (Bearer) → `uploadUrl`, `objectKey`, `videoId`
+2. Browser **PUT** file to R2 (presigned) or **POST** multipart to `/media/upload/:videoId` (local only)
+3. `POST /videos/upload/complete` → BullMQ transcodes and sets `status: ready`
+
+### Prerequisites
+
+```bash
+# Ubuntu/Debian
+sudo apt install ffmpeg
+
+ffmpeg -version
+ffprobe -version
+```
+
+Redis must be running (`docker compose up -d`). Set in `api/.env`:
+
+```env
+VIDEO_PROCESSING_MODE=ffmpeg
+FFMPEG_PATH=ffmpeg
+FFPROBE_PATH=ffprobe
+REDIS_URL=redis://localhost:6380
+```
+
+### Local dev (`STORAGE_DRIVER=local`)
+
+Default in `api/.env`. Files land under `api/storage/` and are served at  
+`http://localhost:4000/api/v1/media/files/...`.
+
+### Cloudflare R2 (`STORAGE_DRIVER=s3`)
+
+1. Create an R2 bucket and API token (Object Read & Write).
+2. Enable **public access** via custom domain or R2.dev subdomain for `S3_PUBLIC_BASE_URL`.
+3. CORS on the bucket (allow `PUT` from your frontend origin):
+
+```json
+[
+  {
+    "AllowedOrigins": ["http://localhost:3001", "https://your-domain.com"],
+    "AllowedMethods": ["GET", "PUT", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+4. In `api/.env`:
+
+```env
+STORAGE_DRIVER=s3
+S3_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+S3_REGION=auto
+S3_BUCKET=your-bucket
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+S3_PUBLIC_BASE_URL=https://pub-xxxx.r2.dev
+VIDEO_PROCESSING_MODE=ffmpeg
+```
+
+5. Restart API. Uploads use presigned PUT; processing writes HLS under `uploads/hls/{videoId}/` and thumbnails under `uploads/thumbnails/`.
+
+### Processing modes
+
+| Mode | Use when |
+|------|----------|
+| `ffmpeg` | Production — HLS ladder, real thumbnail, `durationSeconds` |
+| `skip` | Fast dev without transcode (raw MP4 URL as playback) |
+
+---
+
 ## 8. Stack versions
 
 | Layer | Stack |
@@ -260,7 +351,7 @@ cd api && npm audit # API (Prisma CLI may show dev-only advisories — do not us
 
 ---
 
-## 7. Production notes (later)
+## 9. Production notes (later)
 
 - Use strong `JWT_*_SECRET` values and HTTPS.
 - Set `NODE_ENV=production` on the API (secure cookies).

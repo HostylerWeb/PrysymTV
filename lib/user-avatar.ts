@@ -1,0 +1,29 @@
+/** Stock photos previously used as defaults — treat as missing so users get initials. */
+const LEGACY_STOCK_AVATAR_MARKERS = [
+  "photo-1472099645785",
+  "photo-1535713875002",
+];
+
+function isLegacyStockAvatar(url: string): boolean {
+  return LEGACY_STOCK_AVATAR_MARKERS.some((m) => url.includes(m));
+}
+
+/** Neutral initials avatar when the user has not uploaded a photo. */
+export function defaultAvatarUrl(seed: string): string {
+  const fromEnv = process.env.NEXT_PUBLIC_DEFAULT_AVATAR_URL?.trim();
+  if (fromEnv) return fromEnv;
+
+  const safeSeed = encodeURIComponent(
+    (seed || "user").replace(/^@/, "").slice(0, 32) || "user",
+  );
+  return `https://api.dicebear.com/7.x/initials/svg?seed=${safeSeed}&backgroundColor=6366f1,475569`;
+}
+
+export function userAvatarUrl(
+  avatarUrl: string | null | undefined,
+  seed: string,
+): string {
+  const trimmed = avatarUrl?.trim();
+  if (trimmed && !isLegacyStockAvatar(trimmed)) return trimmed;
+  return defaultAvatarUrl(seed);
+}

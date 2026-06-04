@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import { X, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { fetchCoinPackages, type CoinPackage } from "@/lib/api/billing"
-import { COIN_PACKAGES } from "@/lib/mock-data"
 
 interface CoinsModalProps {
   isOpen: boolean
@@ -25,19 +24,7 @@ export function CoinsModal({
 
   useEffect(() => {
     if (!isOpen) return
-    void fetchCoinPackages().then((items) => {
-      if (items.length) setPackages(items)
-      else {
-        setPackages(
-          COIN_PACKAGES.map((p) => ({
-            id: p.id,
-            coins: p.coins,
-            priceUsd: p.price,
-            label: p.id,
-          })),
-        )
-      }
-    })
+    void fetchCoinPackages().then((items) => setPackages(items))
   }, [isOpen])
 
   if (!isOpen) return null
@@ -87,6 +74,11 @@ export function CoinsModal({
 
         <div className="px-4 pb-4">
           <h4 className="text-sm font-semibold text-foreground mb-3">Choose a Package</h4>
+          {packages.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Coin packages are unavailable. Make sure the API is running.
+            </p>
+          ) : (
           <div className="grid grid-cols-2 gap-3">
             {packages.map((pkg, i) => {
               const price =
@@ -112,6 +104,7 @@ export function CoinsModal({
               )
             })}
           </div>
+          )}
         </div>
 
         <div className="px-4 py-6 border-t border-border">

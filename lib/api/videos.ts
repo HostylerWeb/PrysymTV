@@ -30,6 +30,34 @@ export type UploadCompleteResponse = {
   message: string;
 };
 
+export type VideoDetail = {
+  id: string;
+  title: string;
+  description: string | null;
+  thumbnailUrl: string | null;
+  hlsMasterUrl: string | null;
+  playbackUrl: string | null;
+  videoUrl: string | null;
+  durationSeconds: number;
+  viewsCount: number;
+  likesCount: number;
+  commentsCount?: number;
+  type: string;
+  status: string;
+  category?: string | null;
+  releaseYear?: number | null;
+  ageRating?: string | null;
+  tagline?: string | null;
+  creator: {
+    id: string;
+    username: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+  };
+};
+
+export type UploadFlowResult = UploadCompleteResponse;
+
 export async function initVideoUpload(body: UploadInitBody) {
   return apiRequest<UploadInitResponse>("/videos/upload/init", {
     method: "POST",
@@ -100,7 +128,7 @@ export async function uploadVideoFlow(
   body: UploadInitBody,
   file: File,
   onProgress?: (percent: number) => void,
-) {
+): Promise<UploadFlowResult> {
   const init = await initVideoUpload({
     ...body,
     mimeType: body.mimeType || file.type,
@@ -111,6 +139,36 @@ export async function uploadVideoFlow(
     videoId: init.videoId,
     objectKey: init.objectKey,
   });
+}
+
+export function fetchVideoDetail(id: string) {
+  return apiRequest<VideoDetail>(`/videos/${id}`, { auth: false });
+}
+
+export async function pollVideoUntilReady(
+  videoId: string,
+  options?: {
+    intervalMs?: number;
+    maxAttempts?: number;
+    onStatus?: (status: string) => void;
+  },
+): Promise<VideoDetail> {
+  const intervalMs = options?.intervalMs ?? 2500;
+  const maxAttempts = options?.maxAttempts ?? 120;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const video = await fetchVideoDetail(videoId);
+    options?.onStatus?.(video.status);
+    if (video.status === "ready") return video;
+    if (video.status === "failed") {
+      throw new Error("Video processing failed. Try uploading again.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+
+  throw new Error(
+    "Processing is taking longer than expected. Your video will appear when ready.",
+  );
 }
 
 export function getVideoUploadMaxBytes(): number | undefined {

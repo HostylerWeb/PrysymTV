@@ -6,6 +6,7 @@ import {
   trackAdImpression,
   type ServedAd,
 } from "@/lib/api/ads"
+import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 
 type VerticalEpisodeAdGateProps = {
   seriesId?: string
@@ -19,16 +20,21 @@ export function VerticalEpisodeAdGate({
   creatorId,
   onComplete,
 }: VerticalEpisodeAdGateProps) {
+  const showAds = useShouldShowAds()
   const [ad, setAd] = useState<ServedAd | null | undefined>(undefined)
   const [countdown, setCountdown] = useState(5)
 
   useEffect(() => {
+    if (!showAds) {
+      onComplete()
+      return
+    }
     void fetchServedAd("vertical_episode").then((served) => {
       setAd(served)
       if (served) setCountdown(served.skipAfterSeconds || 5)
       else onComplete()
     })
-  }, [onComplete])
+  }, [onComplete, showAds])
 
   useEffect(() => {
     if (!ad || !creatorId) return
