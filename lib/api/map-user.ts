@@ -6,6 +6,7 @@ export function mapMeToUser(me: MeResponse): User {
   const status = me.streamerStatus;
   return {
     id: me.id,
+    role: me.role,
     name: me.displayName || me.username,
     username: me.username.startsWith("@") ? me.username : `@${me.username}`,
     email: me.email,

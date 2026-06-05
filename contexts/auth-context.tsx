@@ -15,6 +15,7 @@ import { mapMeToUser } from "@/lib/api/map-user"
 
 export interface User {
   id: string
+  role: string
   name: string
   username: string
   email: string

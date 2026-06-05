@@ -3,7 +3,7 @@ import { PayoutMethod } from '@prisma/client';
 
 export class RequestPayoutDto {
   @IsNumber()
-  @Min(50)
+  @Min(1)
   amountUsd!: number;
 
   @IsEnum(PayoutMethod)

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AdCampaignStatus, AdPlacement } from '@prisma/client';
 import { isPremiumActive } from '../common/utils/premium.util';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type ServedAd = {
@@ -15,12 +16,20 @@ export type ServedAd = {
 
 @Injectable()
 export class AdsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly platformSettings: PlatformSettingsService,
+  ) {}
 
   async serve(
     placement: AdPlacement,
     viewerUserId?: string,
   ): Promise<{ ad: ServedAd | null; adFree?: boolean }> {
+    const adsConfig = await this.platformSettings.getAds();
+    if (!adsConfig.placements[placement]) {
+      return { ad: null };
+    }
+
     if (viewerUserId) {
       const viewer = await this.prisma.user.findUnique({
         where: { id: viewerUserId },
@@ -77,9 +86,9 @@ export class AdsService {
         mediaType,
         skipAfterSeconds:
           placement === AdPlacement.movie_preroll
-            ? 15
+            ? adsConfig.moviePrerollSkipSeconds
             : placement === AdPlacement.shorts_interstitial
-              ? 5
+              ? adsConfig.shortsSkipSeconds
               : 0,
       },
     };

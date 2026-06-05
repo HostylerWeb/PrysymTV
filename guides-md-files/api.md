@@ -58,6 +58,7 @@
 | `GET` | `/videos/feed/shorts` | ✅ Optional JWT → per-item `liked`, `saved`, `disliked` |
 | `GET` | `/videos/feed/movies` | ✅ |
 | `GET` | `/videos/feed/movies/featured` | ✅ |
+| `GET` | `/videos/feed/videos` | ✅ Long-form browse — `vertical`, `sort`, `mode`, `page`, `limit`, `q` |
 | `GET` | `/videos/:id/comments` | ✅ Optional JWT → each comment/reply includes `liked` |
 | `POST` | `/videos/:id/comments` | ✅ Bearer; `{ body, parentId? }` |
 | `POST` | `/videos/comments/:commentId/like` | ✅ Toggle comment like |
@@ -136,14 +137,39 @@
 | `POST` | `/verticals/series` | ✅ Create series (Bearer) |
 | `POST` | `/verticals/series/:slug/episodes` | ✅ Add episode (Bearer) |
 | `PUT` | `/verticals/episodes/:episodeId/video` | ✅ Attach uploaded `videoId` (Bearer) |
-| `GET` | `/programs` | ✅ API only (no frontend hub) |
-| `GET` | `/programs/:slug` | ✅ API only |
-| `GET` | `/admin/analytics/overview` | 🚧 |
+| `GET` | `/programs` | ✅ |
+| `GET` | `/programs/:slug` | ✅ Videos + `live_events` for pillar |
+| `GET` | `/admin/analytics/overview` | 🚧 Stub |
+| `GET` | `/admin/analytics/revenue` | 📋 Time series |
+| `GET` | `/admin/analytics/content` | 📋 Top content |
 | `GET` | `/admin/revenue-split-rules` | ✅ |
-| `PUT` | `/admin/revenue-split-rules/:ruleKey` | ✅ |
+| `PUT` | `/admin/revenue-split-rules/:ruleKey` | ✅ Bps sum 10000 |
+| `GET` | `/admin/reports` | 📋 Moderation queue |
+| `GET` | `/admin/reports/:id` | 📋 Hydrated report |
+| `PUT` | `/admin/reports/:id` | 📋 `{ action: dismiss \| delete_content \| ban_user }` |
+| `GET` | `/admin/users` | 📋 Paginated search |
+| `GET` | `/admin/users/:id` | 📋 User detail |
+| `PUT` | `/admin/users/:id/ban` | 📋 |
+| `PUT` | `/admin/users/:id/verify` | 📋 |
+| `PUT` | `/admin/users/:id/streamer-status` | 📋 |
+| `GET` | `/admin/streamer-applications` | 📋 |
+| `GET` | `/admin/streamer-applications/:id` | 📋 |
+| `PUT` | `/admin/streamer-applications/:id` | 📋 |
+| `GET` | `/admin/payouts` | 📋 |
+| `PUT` | `/admin/payouts/:id` | 📋 |
+| `POST` | `/admin/streams/:id/kill` | 📋 |
+| `DELETE` | `/admin/videos/:id` | 📋 |
+| `DELETE` | `/admin/comments/:id` | 📋 |
 | `GET` | `/admin/ads/campaigns` | ✅ |
 | `POST` | `/admin/ads/campaigns` | ✅ |
-| `PUT` | `/admin/ads/campaigns/:id/status` | ✅ |
+| `PUT` | `/admin/ads/campaigns/:id/status` | ✅ `{ status }` |
+| `PUT` | `/admin/ads/campaigns/:id` | 📋 Full edit |
+| `GET` | `/admin/config` | 📋 Aggregated platform settings |
+| `PUT` | `/admin/config/:section` | 📋 `revenue` \| `ads` \| `economy` \| `scorecard` \| `programs` |
+| `GET` | `/admin/coin-packages` | 📋 |
+| `PUT` | `/admin/coin-packages/:id` | 📋 |
+| `GET` | `/admin/gift-catalog` | 📋 |
+| `PUT` | `/admin/gift-catalog/:id` | 📋 |
 
 ---
 
@@ -445,12 +471,41 @@ Frontend: show **`vertical_episode`** ad before each episode. Logged-in users pe
 
 ## Programs (`/programs`)
 
-Founder pillars: Podcasts, Sports, Concerts, Community, Education. **Backend only** — no `/programs` pages in the web app (use `/podcasts`, category feeds, etc.).
+Founder pillars: Podcasts, Sports, Concerts, Community, Education. Consumer discovery: `/videos?category={slug}` (Sports, Concerts, etc.); Podcasts remain `/podcasts`.
 
 | Route | Status |
 |-------|--------|
 | `GET /programs` | ✅ |
 | `GET /programs/:slug` | ✅ Videos + `live_events` for that vertical |
+
+### `GET /videos/feed/videos` ✅
+
+Long-form video browse (`type = video`). Returns live streams when `mode` includes live.
+
+**Query:** `page`, `limit` (max 48), `vertical` (`general` \| `sports` \| `concert` \| `community_event` \| `education` \| …), `sort` (`views` \| `newest`), `mode` (`all` \| `videos` \| `live`), `q` (title search)
+
+```json
+{
+  "videos": {
+    "items": [ "…VideoCard with vertical…" ],
+    "meta": { "page": 1, "limit": 24, "total": 42 }
+  },
+  "live": {
+    "items": [
+      {
+        "contentType": "live",
+        "id": "uuid",
+        "slug": "creator_username",
+        "title": "Stream title",
+        "thumbnailUrl": null,
+        "viewerCount": 120,
+        "streamer": "Creator Name",
+        "vertical": "sports"
+      }
+    ]
+  }
+}
+```
 
 ---
 
@@ -468,18 +523,35 @@ Founder pillars: Podcasts, Sports, Concerts, Community, Education. **Backend onl
 
 ## Admin (`/admin`)
 
-**Auth:** Bearer + role `admin`
+**Auth:** Bearer + role `admin` on all routes.
 
-| Route | Status |
+**Frontend:** Operator console at `/admin` (see [`admin-dashboard-plan.md`](./admin-dashboard-plan.md)).
+
+### Implemented
+
+| Route | Notes |
 |-------|--------|
-| `GET /admin/analytics/overview` | 🚧 |
-| `GET /admin/revenue-split-rules` | ✅ |
-| `PUT /admin/revenue-split-rules/:ruleKey` | ✅ Bps must sum to 10000 |
-| `GET /admin/ads/campaigns` | ✅ |
-| `POST /admin/ads/campaigns` | ✅ |
-| `PUT /admin/ads/campaigns/:id/status` | ✅ `{ status }` |
+| `GET /admin/analytics/overview` | 🚧 Stub — `{ dau: 0, revenueToday: 0 }` |
+| `GET /admin/revenue-split-rules` | List all split rules |
+| `PUT /admin/revenue-split-rules/:ruleKey` | `{ name?, description?, creatorBps?, platformBps?, gafBps?, creatorDevFundBps? }` — must sum to 10000 bps |
+| `GET /admin/ads/campaigns` | All campaigns |
+| `POST /admin/ads/campaigns` | Create — `advertiserName`, `title`, `mediaUrl`, `clickThroughUrl`, `placement`, `targetImpressions`, `budgetUsd`, `startsAt`, `endsAt` |
+| `PUT /admin/ads/campaigns/:id/status` | `{ status: draft \| active \| paused \| completed }` |
 
-**Seeded rule keys:** `live_event`, `viewer_support`, `insider_membership`, `ad_gaf_allocation`, `sponsorship`, `creator_subscription`, `coin_purchase`, `store_merchandise`
+### Planned (admin dashboard UI — API TBD)
+
+| Area | Routes |
+|------|--------|
+| Moderation | `GET/PUT /admin/reports`, `DELETE /admin/videos/:id`, `DELETE /admin/comments/:id` |
+| Users | `GET /admin/users`, `GET /admin/users/:id`, `PUT …/ban`, `PUT …/verify`, `PUT …/streamer-status`, `PUT …/partner-tier` |
+| Streamers | `GET/PUT /admin/streamer-applications/:id` |
+| Live | `POST /admin/streams/:id/kill` |
+| Payouts | `GET/PUT /admin/payouts/:id` |
+| Analytics | `GET /admin/analytics/revenue`, `GET /admin/analytics/content` |
+| Platform config | `GET/PUT /admin/config/:section` — ads network knobs, economy, scorecard, program categories |
+| Economy | `GET/PUT /admin/coin-packages`, `GET/PUT /admin/gift-catalog` |
+
+**Seeded `revenue_split_rules` keys:** `live_event`, `viewer_support`, `insider_membership`, `ad_gaf_allocation`, `sponsorship`, `creator_subscription`, `coin_purchase`, `store_merchandise`
 
 ---
 
@@ -581,4 +653,4 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 
 ---
 
-*Last updated: 2026-05-31 — Sprints D–F: reports, notifications, premium ad-free, streamer gate, playlist CRUD, podcast creator APIs, channel memberships, creator balance/payout request, Stripe fulfill hardening. Production Stripe: [`stripe-production.md`](./stripe-production.md).*
+*Last updated: 2026-06-01 — Videos browse feed (`GET /videos/feed/videos`), `/videos` hub with program categories, admin dashboard plan + planned `/admin/*` routes. Production Stripe: [`stripe-production.md`](./stripe-production.md).*

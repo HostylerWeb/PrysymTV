@@ -15,6 +15,7 @@ import {
   TransactionType,
 } from '@prisma/client';
 import Stripe from 'stripe';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RevenueSplitService } from '../revenue/revenue-split.service';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
@@ -57,6 +58,7 @@ export class BillingService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly platformSettings: PlatformSettingsService,
     private readonly revenueSplit: RevenueSplitService,
     private readonly config: ConfigService,
   ) {
@@ -281,8 +283,20 @@ export class BillingService {
     return { checkoutUrl: session.url, sessionId: session.id };
   }
 
-  private async createPremiumCheckout(userId: string, tierId: string) {
+  private async resolvePremiumPlan(tierId: string) {
     const plan = PREMIUM_PLANS[tierId];
+    if (!plan) return null;
+    const prices = await this.platformSettings.getPremiumPrices();
+    const priceMap: Record<string, number> = {
+      basic: prices.basic,
+      premium: prices.premium,
+      ultimate: prices.ultimate,
+    };
+    return { ...plan, priceUsd: priceMap[tierId] ?? plan.priceUsd };
+  }
+
+  private async createPremiumCheckout(userId: string, tierId: string) {
+    const plan = await this.resolvePremiumPlan(tierId);
     if (!plan) throw new NotFoundException('Premium plan not found');
 
     const frontend = this.config.get<string>('FRONTEND_URL', 'http://localhost:3001');
@@ -427,12 +441,13 @@ export class BillingService {
     if (productType === 'premium') {
       const tier = session.metadata?.tier as PremiumTier | undefined;
       const packageId = session.metadata?.packageId ?? 'premium';
-      const plan = tier ? PREMIUM_PLANS[packageId] ?? { tier, priceUsd: 4.99 } : null;
+      const plan = tier ? await this.resolvePremiumPlan(packageId) : null;
       if (!tier) throw new BadRequestException('Invalid premium metadata');
+      const prices = await this.platformSettings.getPremiumPrices();
       await this.grantPremium(
         userId,
         tier,
-        plan?.priceUsd ?? 4.99,
+        plan?.priceUsd ?? prices.premium,
         sessionId,
       );
     } else if (productType === 'creator_subscription') {

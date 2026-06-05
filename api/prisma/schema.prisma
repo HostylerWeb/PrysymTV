@@ -438,6 +438,7 @@ model User {
   taxProfile            CreatorTaxProfile?
   fraudSignals          FraudSignal[]
   revenueSplitUpdates   RevenueSplitRule[]    @relation("SplitRuleUpdater")
+  platformSettingsUpdated PlatformSetting[]   @relation("PlatformSettingUpdater")
   advertiserAccounts    AdvertiserAccount[]
   programVerticals      CreatorProgramVertical[]
   contentAdEvents       ContentAdEvent[]      @relation("CreatorAdEvents")
@@ -1334,4 +1335,14 @@ model PlatformAnnouncement {
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@map("platform_announcements")
+}
+
+model PlatformSetting {
+  key         String   @id
+  value       Json
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedById String?  @map("updated_by") @db.Uuid
+  updatedBy   User?    @relation("PlatformSettingUpdater", fields: [updatedById], references: [id])
+
+  @@map("platform_settings")
 }

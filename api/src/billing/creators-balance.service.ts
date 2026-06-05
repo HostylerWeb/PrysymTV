@@ -9,14 +9,16 @@ import {
   PayoutStatus,
   Prisma,
 } from '@prisma/client';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestPayoutDto } from './dto/request-payout.dto';
 
-const MIN_PAYOUT_USD = new Prisma.Decimal('50');
-
 @Injectable()
 export class CreatorsBalanceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly platformSettings: PlatformSettingsService,
+  ) {}
 
   async getBalance(creatorId: string) {
     const user = await this.prisma.user.findUnique({
@@ -25,7 +27,10 @@ export class CreatorsBalanceService {
     });
     if (!user) throw new NotFoundException('Creator not found');
 
-    const available = await this.computeAvailableBalance(creatorId);
+    const [available, minPayoutUsd] = await Promise.all([
+      this.computeAvailableBalance(creatorId),
+      this.platformSettings.getMinPayoutUsd(),
+    ]);
 
     const [lifetimeCredits, pendingPayoutRows] = await Promise.all([
       this.prisma.creatorBalanceLedger.aggregate({
@@ -44,7 +49,7 @@ export class CreatorsBalanceService {
 
     return {
       availableUsd: available.toFixed(2),
-      minimumPayoutUsd: MIN_PAYOUT_USD.toFixed(2),
+      minimumPayoutUsd: minPayoutUsd.toFixed(2),
       lifetimeCreditsUsd:
         lifetimeCredits._sum.amountUsd?.toFixed(4) ?? '0.0000',
       pendingPayouts: pendingPayoutRows.map((p) => ({
@@ -58,10 +63,12 @@ export class CreatorsBalanceService {
   }
 
   async requestPayout(creatorId: string, dto: RequestPayoutDto) {
+    const minPayoutUsd = await this.platformSettings.getMinPayoutUsd();
+    const minPayout = new Prisma.Decimal(minPayoutUsd);
     const amount = new Prisma.Decimal(dto.amountUsd);
-    if (amount.lt(MIN_PAYOUT_USD)) {
+    if (amount.lt(minPayout)) {
       throw new BadRequestException(
-        `Minimum payout is $${MIN_PAYOUT_USD.toFixed(2)}`,
+        `Minimum payout is $${minPayout.toFixed(2)}`,
       );
     }
 

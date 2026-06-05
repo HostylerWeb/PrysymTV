@@ -172,7 +172,7 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
   const name = profile.displayName ?? slug
   const username = `@${profile.username}`
   const avatar = userAvatarUrl(profile.avatarUrl, slug)
-  const banner = profile.bannerUrl ?? ""
+  const banner = profile.bannerUrl?.trim() || null
   const bio = profile.bio ?? ""
   const subscribers = formatViewCount(profile.followersCount)
   const videosCount = String(profile.videosCount)
@@ -231,8 +231,10 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <div className="max-w-6xl mx-auto w-full">
-        <div className="relative w-full h-32 md:h-64 md:mt-4 md:rounded-2xl overflow-hidden">
-          <img src={banner} alt="" className="w-full h-full object-cover" />
+        <div className="relative w-full h-32 md:h-64 md:mt-4 md:rounded-2xl overflow-hidden bg-gradient-to-br from-primary/25 via-secondary to-background">
+          {banner ? (
+            <img src={banner} alt="" className="w-full h-full object-cover" />
+          ) : null}
           <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
           <div className="absolute top-0 left-0 right-0 flex justify-between p-4">
             <Link href="/"><button type="button" className="w-10 h-10 rounded-full bg-background/30 backdrop-blur-sm flex items-center justify-center"><ChevronLeft className="w-6 h-6 text-white" /></button></Link>

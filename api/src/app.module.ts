@@ -28,6 +28,7 @@ import { StorageModule } from './storage/storage.module';
 import { RevenueModule } from './revenue/revenue.module';
 import { VerticalsModule } from './verticals/verticals.module';
 import { ProgramsModule } from './programs/programs.module';
+import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { ReportsModule } from './reports/reports.module';
 
 @Module({
@@ -72,6 +73,7 @@ import { ReportsModule } from './reports/reports.module';
     ]),
     MailModule,
     PrismaModule,
+    PlatformSettingsModule,
     HealthModule,
     AuthModule,
     UsersModule,

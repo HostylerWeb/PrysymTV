@@ -279,6 +279,22 @@ async function main() {
     },
   });
 
+  await prisma.user.upsert({
+    where: { username: 'admin' },
+    create: {
+      username: 'admin',
+      email: 'admin@prysym.tv',
+      passwordHash,
+      displayName: 'Platform Admin',
+      role: 'admin',
+      isVerified: true,
+    },
+    update: {
+      role: 'admin',
+      displayName: 'Platform Admin',
+    },
+  });
+
   const liveExists = await prisma.stream.findFirst({
     where: { creatorId: progamer.id, status: StreamStatus.live },
   });
@@ -463,8 +479,69 @@ async function main() {
     });
   }
 
+  const platformDefaults = {
+    economy: {
+      minPayoutUsd: 50,
+      insiderPriceUsd: 4.99,
+      premiumBasicPriceUsd: 2.99,
+      premiumPriceUsd: 4.99,
+      ultimatePriceUsd: 9.99,
+    },
+    ads: {
+      shortsInterstitialEveryNSwipes: 8,
+      moviePrerollSkipSeconds: 15,
+      shortsSkipSeconds: 5,
+      gafRuleKey: 'ad_gaf_allocation',
+      placements: {
+        home_banner: true,
+        shorts_interstitial: true,
+        movie_preroll: true,
+        vertical_episode: true,
+      },
+    },
+    analytics: {
+      defaultRange: '30d',
+      kpiVisibility: {
+        dau: true,
+        liveNow: true,
+        revenueToday: true,
+        pendingReports: true,
+        pendingPayouts: true,
+      },
+      alertPendingReportsThreshold: 50,
+    },
+    scorecard: {
+      scorecardDisplay: {
+        showZeroRevenueLines: 'hide',
+        defaultImpactPeriod: '30d',
+      },
+      moduleScorecard: [
+        { module: 1, name: 'Creator Management', percent: 70, notes: 'Streamer apply + profiles done' },
+        { module: 2, name: 'Revenue Distribution', percent: 40, notes: 'Engine + gifts wired' },
+        { module: 3, name: 'Advertising', percent: 50, notes: 'Serve/track + admin campaigns' },
+        { module: 6, name: 'Donation & Tip Engine', percent: 25, notes: 'Gifts only' },
+        { module: 8, name: 'Impact Dashboard', percent: 30, notes: 'UI shell, data pipeline TBD' },
+      ],
+    },
+    programs: [
+      { slug: 'podcasts', vertical: 'podcast', label: 'Podcasts', description: 'Shows and audio episodes from creators', href: '/podcasts', isActive: true, sortOrder: 0 },
+      { slug: 'sports', vertical: 'sports', label: 'Sports', description: 'Live games, highlights, and sports talk', href: '/videos?category=sports', isActive: true, sortOrder: 1 },
+      { slug: 'concerts', vertical: 'concert', label: 'Concerts', description: 'Live and on-demand concert experiences', href: '/videos?category=concerts', isActive: true, sortOrder: 2 },
+      { slug: 'community', vertical: 'community_event', label: 'Community Events', description: 'Local and community programming', href: '/videos?category=community', isActive: true, sortOrder: 3 },
+      { slug: 'education', vertical: 'education', label: 'Educational Programs', description: 'Courses, workshops, and learning content', href: '/videos?category=education', isActive: true, sortOrder: 4 },
+    ],
+  };
+
+  for (const [key, value] of Object.entries(platformDefaults)) {
+    await prisma.platformSetting.upsert({
+      where: { key },
+      create: { key, value },
+      update: {},
+    });
+  }
+
   console.log(
-    'Seeded: gifts, coins, revenue rules, GAF, ads, demo user/stream/videos, podcasts, vertical series.',
+    'Seeded: gifts, coins, revenue rules, GAF, ads, platform settings, demo user/stream/videos, podcasts, vertical series.',
   );
 }
 

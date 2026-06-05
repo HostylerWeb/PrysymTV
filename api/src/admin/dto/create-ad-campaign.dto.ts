@@ -1,9 +1,10 @@
-import { AdPlacement } from '@prisma/client';
+import { AdCampaignStatus, AdPlacement } from '@prisma/client';
 import {
   IsDateString,
   IsEnum,
   IsInt,
   IsNumber,
+  IsOptional,
   IsString,
   IsUrl,
   Min,
@@ -38,4 +39,8 @@ export class CreateAdCampaignDto {
 
   @IsDateString()
   endsAt!: string;
+
+  @IsOptional()
+  @IsEnum(AdCampaignStatus)
+  status?: AdCampaignStatus;
 }
