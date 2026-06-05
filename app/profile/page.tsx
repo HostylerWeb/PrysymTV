@@ -88,7 +88,7 @@ function ProfilePageContent() {
   const [activeTab, setActiveTab] = useState("videos")
   const [showSettings, setShowSettings] = useState(false)
   const [settingsOpenTo, setSettingsOpenTo] = useState<ProfileSettingsScreen | undefined>()
-  const [navTab, setNavTab] = useState("profile")
+  const [navTab, setNavTab] = useState("")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isCoinsModalOpen, setIsCoinsModalOpen] = useState(false)
   const [coinsPurchasing, setCoinsPurchasing] = useState(false)

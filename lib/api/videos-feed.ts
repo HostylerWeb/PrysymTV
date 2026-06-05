@@ -57,6 +57,61 @@ export function fetchFeaturedMovie() {
   );
 }
 
+export type LiveBrowseItem = {
+  contentType: "live";
+  id: string;
+  slug: string;
+  title: string;
+  thumbnailUrl: string | null;
+  viewerCount: number;
+  category: string | null;
+  vertical: string | null;
+  streamer: string;
+  streamerSlug: string;
+  streamerAvatar: string | null;
+  creatorId: string;
+};
+
+export type VideosBrowseResponse = {
+  videos: {
+    items: VideoCard[];
+    meta: { page: number; limit: number; total: number };
+  };
+  live: { items: LiveBrowseItem[] };
+};
+
+const EMPTY_BROWSE: VideosBrowseResponse = {
+  videos: { items: [], meta: { page: 1, limit: 24, total: 0 } },
+  live: { items: [] },
+};
+
+export function fetchVideosBrowse(params: {
+  page?: number;
+  limit?: number;
+  vertical?: string;
+  sort?: "views" | "newest";
+  mode?: "all" | "videos" | "live";
+  q?: string;
+}) {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.vertical) qs.set("vertical", params.vertical);
+  if (params.sort) qs.set("sort", params.sort);
+  if (params.mode) qs.set("mode", params.mode);
+  if (params.q?.trim()) qs.set("q", params.q.trim());
+  const query = qs.toString();
+
+  return withApiFallback(
+    () =>
+      apiRequest<VideosBrowseResponse>(
+        `/videos/feed/videos${query ? `?${query}` : ""}`,
+        { auth: false },
+      ),
+    EMPTY_BROWSE,
+  );
+}
+
 export function recordVideoView(id: string) {
   return apiRequest<{ success: boolean; viewsCount: number }>(`/videos/${id}/view`, {
     method: "POST",

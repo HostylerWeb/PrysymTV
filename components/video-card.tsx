@@ -12,10 +12,13 @@ interface VideoCardProps {
   duration?: string
   views?: string
   channel?: string
+  channelAvatar?: string
   isLive?: boolean
   liveViewers?: string
   type: "movie" | "video" | "live"
   progress?: number
+  /** carousel = fixed width row item; grid = full cell width */
+  layout?: "carousel" | "grid"
 }
 
 export function VideoCard({
@@ -29,10 +32,18 @@ export function VideoCard({
   liveViewers,
   type,
   progress,
+  channelAvatar,
+  layout = "carousel",
 }: VideoCardProps) {
+  const isGrid = layout === "grid"
   return (
     <Link href={type === "movie" ? `/movie/${id}` : isLive ? `/live/${id}` : `/watch/${id}`}>
-      <div className="group flex-shrink-0 w-[280px] md:w-[320px] cursor-pointer">
+      <div
+        className={cn(
+          "group cursor-pointer",
+          isGrid ? "w-full" : "flex-shrink-0 w-[280px] md:w-[320px]",
+        )}
+      >
         {/* Thumbnail */}
         <div className="relative aspect-video rounded-lg overflow-hidden bg-muted mb-2">
           <img
@@ -75,10 +86,10 @@ export function VideoCard({
 
         {/* Info */}
         <div className="flex gap-3">
-          {type === "video" && (
+          {(type === "video" || type === "live") && (
             <div className="w-9 h-9 rounded-full bg-muted flex-shrink-0 overflow-hidden">
               <img
-                src={userAvatarUrl(null, channel)}
+                src={channelAvatar ?? userAvatarUrl(null, channel)}
                 alt={channel}
                 className="w-full h-full object-cover"
               />

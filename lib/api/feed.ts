@@ -42,6 +42,7 @@ export type VideoCard = {
   disliked?: boolean;
   type: string;
   category: string | null;
+  vertical?: string | null;
   channel: string;
   channelSlug: string;
   creatorId: string;

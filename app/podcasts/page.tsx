@@ -605,13 +605,7 @@ export default function PodcastsPage() {
 
       <BottomNavigation
         activeTab={activeTab}
-        onTabChange={(tab) => {
-          setActiveTab(tab)
-          if (tab === "home") window.location.href = "/"
-          if (tab === "movies") window.location.href = "/movies"
-          if (tab === "shorts") window.location.href = "/shorts"
-          if (tab === "profile") window.location.href = "/profile"
-        }}
+        onTabChange={setActiveTab}
       />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </main>

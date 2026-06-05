@@ -22,28 +22,28 @@ export const PLATFORM_PROGRAMS: ProgramMeta[] = [
     vertical: ContentVertical.sports,
     label: 'Sports',
     description: 'Live games, highlights, and sports talk',
-    href: '/programs/sports',
+    href: '/videos?category=sports',
   },
   {
     slug: 'concerts',
     vertical: ContentVertical.concert,
     label: 'Concerts',
     description: 'Live and on-demand concert experiences',
-    href: '/programs/concerts',
+    href: '/videos?category=concerts',
   },
   {
     slug: 'community',
     vertical: ContentVertical.community_event,
     label: 'Community Events',
     description: 'Local and community programming',
-    href: '/programs/community',
+    href: '/videos?category=community',
   },
   {
     slug: 'education',
     vertical: ContentVertical.education,
     label: 'Educational Programs',
     description: 'Courses, workshops, and learning content',
-    href: '/programs/education',
+    href: '/videos?category=education',
   },
 ];
 

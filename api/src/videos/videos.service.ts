@@ -7,11 +7,14 @@ import {
 } from '@nestjs/common';
 import {
   ContentStatus,
+  ContentVertical,
   DislikeTargetType,
   LikeTargetType,
+  Prisma,
   ReportReason,
   ReportTargetType,
   SavedItemType,
+  StreamStatus,
   VideoType,
 } from '@prisma/client';
 import {
@@ -323,6 +326,167 @@ export class VideosService {
       select: VIDEO_CARD_SELECT,
     });
     return { item: item ? mapVideoCard(item) : null };
+  }
+
+  async videosBrowseFeed(params: {
+    page?: number;
+    limit?: number;
+    vertical?: string;
+    sort?: string;
+    mode?: string;
+    q?: string;
+  }) {
+    const page = Math.max(1, params.page ?? 1);
+    const limit = Math.min(Math.max(1, params.limit ?? 24), 48);
+    const mode = params.mode === 'live' || params.mode === 'videos' ? params.mode : 'all';
+    const sort = params.sort === 'newest' ? 'newest' : 'views';
+    const orderBy =
+      sort === 'newest'
+        ? ({ createdAt: 'desc' } as const)
+        : ({ viewsCount: 'desc' } as const);
+
+    const videoWhere: Prisma.VideoWhereInput = {
+      type: VideoType.video,
+      status: ContentStatus.ready,
+      visibility: 'public',
+    };
+
+    const vertical = params.vertical?.trim();
+    if (vertical && vertical !== 'all') {
+      const allowed = Object.values(ContentVertical);
+      if (allowed.includes(vertical as ContentVertical)) {
+        videoWhere.vertical = vertical as ContentVertical;
+      }
+    }
+
+    const q = params.q?.trim();
+    if (q) {
+      videoWhere.title = { contains: q, mode: 'insensitive' };
+    }
+
+    const streamWhere: Prisma.StreamWhereInput = {
+      status: StreamStatus.live,
+    };
+    if (vertical && vertical !== 'all') {
+      const allowed = Object.values(ContentVertical);
+      if (allowed.includes(vertical as ContentVertical)) {
+        streamWhere.vertical = vertical as ContentVertical;
+      }
+    }
+
+    const emptyVideos = {
+      items: [] as ReturnType<typeof mapVideoCard>[],
+      meta: { page, limit, total: 0 },
+    };
+    const emptyLive = { items: [] as Array<Record<string, unknown>> };
+
+    if (mode === 'live') {
+      const streams = await this.prisma.stream.findMany({
+        where: streamWhere,
+        orderBy: { viewerCount: 'desc' },
+        take: limit,
+        include: {
+          creator: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      });
+      return {
+        videos: emptyVideos,
+        live: { items: streams.map((s) => this.mapLiveBrowseItem(s)) },
+      };
+    }
+
+    if (mode === 'videos') {
+      const skip = (page - 1) * limit;
+      const [items, total] = await Promise.all([
+        this.prisma.video.findMany({
+          where: videoWhere,
+          orderBy,
+          skip,
+          take: limit,
+          select: VIDEO_CARD_SELECT,
+        }),
+        this.prisma.video.count({ where: videoWhere }),
+      ]);
+      return {
+        videos: {
+          items: items.map(mapVideoCard),
+          meta: { page, limit, total },
+        },
+        live: emptyLive,
+      };
+    }
+
+    const skip = (page - 1) * limit;
+    const [videoItems, videoTotal, streams] = await Promise.all([
+      this.prisma.video.findMany({
+        where: videoWhere,
+        orderBy,
+        skip,
+        take: limit,
+        select: VIDEO_CARD_SELECT,
+      }),
+      this.prisma.video.count({ where: videoWhere }),
+      this.prisma.stream.findMany({
+        where: streamWhere,
+        orderBy: { viewerCount: 'desc' },
+        take: 12,
+        include: {
+          creator: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      videos: {
+        items: videoItems.map(mapVideoCard),
+        meta: { page, limit, total: videoTotal },
+      },
+      live: { items: streams.map((s) => this.mapLiveBrowseItem(s)) },
+    };
+  }
+
+  private mapLiveBrowseItem(s: {
+    id: string;
+    title: string;
+    thumbnailUrl: string | null;
+    viewerCount: number;
+    category: string | null;
+    vertical: ContentVertical | null;
+    creator: {
+      id: string;
+      username: string;
+      displayName: string | null;
+      avatarUrl: string | null;
+    };
+  }) {
+    return {
+      contentType: 'live' as const,
+      id: s.id,
+      slug: s.creator.username,
+      title: s.title,
+      thumbnailUrl: s.thumbnailUrl,
+      viewerCount: s.viewerCount,
+      category: s.category,
+      vertical: s.vertical,
+      streamer: s.creator.displayName ?? s.creator.username,
+      streamerSlug: s.creator.username,
+      streamerAvatar: s.creator.avatarUrl,
+      creatorId: s.creator.id,
+    };
   }
 
   async recordView(videoId: string) {

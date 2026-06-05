@@ -1,7 +1,8 @@
 "use client"
 
-import { Bell, Cast, Search } from "lucide-react"
+import { Bell, Cast, Search, User } from "lucide-react"
 import Link from "next/link"
+import { userAvatarUrl } from "@/lib/user-avatar"
 import { useCallback, useEffect, useState } from "react"
 import { NotificationsModal } from "@/components/notifications-modal"
 import { useAuth } from "@/contexts/auth-context"
@@ -17,7 +18,7 @@ interface HeaderProps {
 export const APP_HEADER_HEIGHT_CLASS = "h-[4.5rem]"
 
 export function Header({ onSearchClick, offsetContent = true }: HeaderProps) {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
 
@@ -54,6 +55,22 @@ export function Header({ onSearchClick, offsetContent = true }: HeaderProps) {
             >
               <Cast className="w-5 h-5 text-foreground" />
             </button>
+            <Link
+              href="/profile"
+              className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors overflow-hidden border border-border/60"
+              aria-label="Profile"
+              title="Profile"
+            >
+              {isAuthenticated && user ? (
+                <img
+                  src={user.avatar}
+                  alt={user.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <User className="w-5 h-5 text-foreground" />
+              )}
+            </Link>
             <button
               type="button"
               onClick={() => setIsNotificationsOpen(true)}

@@ -59,6 +59,25 @@ export class VideosController {
     return this.videos.featuredMovie();
   }
 
+  @Get('feed/videos')
+  videosBrowse(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('vertical') vertical?: string,
+    @Query('sort') sort?: string,
+    @Query('mode') mode?: string,
+    @Query('q') q?: string,
+  ) {
+    return this.videos.videosBrowseFeed({
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 24,
+      vertical,
+      sort,
+      mode,
+      q,
+    });
+  }
+
   @Post('comments/:commentId/like')
   @UseGuards(JwtAuthGuard)
   likeComment(
