@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   ContentStatus,
   LikeTargetType,
+  SavedItemType,
   Visibility,
 } from '@prisma/client';
 import { mkdtemp, rm } from 'fs/promises';
@@ -239,7 +240,7 @@ export class PodcastsService {
     };
   }
 
-  async episodesFeed(page = 1, limit = 20) {
+  async episodesFeed(page = 1, limit = 20, viewerId?: string) {
     const skip = (page - 1) * limit;
     const [items, total] = await Promise.all([
       this.prisma.podcastEpisode.findMany({
@@ -256,7 +257,39 @@ export class PodcastsService {
         where: { status: ContentStatus.ready, visibility: Visibility.public },
       }),
     ]);
-    return { items, meta: { page, limit, total } };
+
+    let likedIds = new Set<string>();
+    let savedIds = new Set<string>();
+    if (viewerId && items.length > 0) {
+      const ids = items.map((e) => e.id);
+      const [likes, saves] = await Promise.all([
+        this.prisma.like.findMany({
+          where: {
+            userId: viewerId,
+            targetType: LikeTargetType.podcast_episode,
+            targetId: { in: ids },
+          },
+        }),
+        this.prisma.savedItem.findMany({
+          where: {
+            userId: viewerId,
+            itemType: SavedItemType.podcast_episode,
+            itemId: { in: ids },
+          },
+        }),
+      ]);
+      likedIds = new Set(likes.map((l) => l.targetId));
+      savedIds = new Set(saves.map((s) => s.itemId));
+    }
+
+    return {
+      items: items.map((e) => ({
+        ...e,
+        liked: likedIds.has(e.id),
+        saved: savedIds.has(e.id),
+      })),
+      meta: { page, limit, total },
+    };
   }
 
   async getEpisode(id: string, viewerId?: string) {
@@ -278,20 +311,33 @@ export class PodcastsService {
     }
 
     let liked = false;
+    let saved = false;
     if (viewerId) {
-      const like = await this.prisma.like.findUnique({
-        where: {
-          userId_targetType_targetId: {
-            userId: viewerId,
-            targetType: LikeTargetType.podcast_episode,
-            targetId: id,
+      const [like, save] = await Promise.all([
+        this.prisma.like.findUnique({
+          where: {
+            userId_targetType_targetId: {
+              userId: viewerId,
+              targetType: LikeTargetType.podcast_episode,
+              targetId: id,
+            },
           },
-        },
-      });
+        }),
+        this.prisma.savedItem.findUnique({
+          where: {
+            userId_itemType_itemId: {
+              userId: viewerId,
+              itemType: SavedItemType.podcast_episode,
+              itemId: id,
+            },
+          },
+        }),
+      ]);
       liked = !!like;
+      saved = !!save;
     }
 
-    return { ...episode, liked };
+    return { ...episode, liked, saved };
   }
 
   async recordPlay(id: string) {
@@ -359,6 +405,47 @@ export class PodcastsService {
       }),
     ]);
     return { liked: true };
+  }
+
+  async toggleSave(userId: string, episodeId: string) {
+    const episode = await this.prisma.podcastEpisode.findUnique({
+      where: { id: episodeId },
+    });
+    if (!episode || episode.status !== ContentStatus.ready) {
+      throw new NotFoundException('Episode not found');
+    }
+
+    const existing = await this.prisma.savedItem.findUnique({
+      where: {
+        userId_itemType_itemId: {
+          userId,
+          itemType: SavedItemType.podcast_episode,
+          itemId: episodeId,
+        },
+      },
+    });
+
+    if (existing) {
+      await this.prisma.savedItem.delete({
+        where: {
+          userId_itemType_itemId: {
+            userId,
+            itemType: SavedItemType.podcast_episode,
+            itemId: episodeId,
+          },
+        },
+      });
+      return { saved: false };
+    }
+
+    await this.prisma.savedItem.create({
+      data: {
+        userId,
+        itemType: SavedItemType.podcast_episode,
+        itemId: episodeId,
+      },
+    });
+    return { saved: true };
   }
 
   private async assertEpisodeOwner(userId: string, episodeId: string) {

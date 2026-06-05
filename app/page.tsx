@@ -129,25 +129,16 @@ export default function Home() {
           type: "video" as const,
         })),
       )
-      const movies = feed.movies.map((m) => ({
+      const mapMovie = (m: (typeof feed.movies)[number]) => ({
         id: m.id,
         title: m.title,
-        poster: m.thumbnailUrl ?? "",
+        poster: videoThumbnail(m.thumbnailUrl),
         year: String(m.releaseYear ?? new Date().getFullYear()),
-        rating: 8,
+        rating: m.likesCount ?? 0,
         genre: m.category ?? "Movie",
-      }))
-      setTopMovies(movies)
-      setNewReleases(
-        feed.newReleases.map((m) => ({
-          id: m.id,
-          title: m.title,
-          poster: m.thumbnailUrl ?? "",
-          year: String(new Date().getFullYear()),
-          rating: 8,
-          genre: m.category ?? "Movie",
-        })),
-      )
+      })
+      setTopMovies(feed.movies.map(mapMovie))
+      setNewReleases(feed.newReleases.map(mapMovie))
     })
   }, [])
 

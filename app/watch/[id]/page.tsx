@@ -19,20 +19,25 @@ import { useAuth } from "@/contexts/auth-context"
 import {
   fetchVideo,
   fetchMoviesFeed,
+  recordVideoView,
   toggleVideoLike,
   toggleVideoSave,
+  toggleVideoDislike,
 } from "@/lib/api/videos-feed"
 import {
   fetchVideoComments,
   normalizeVideoComment,
   postVideoComment,
+  toggleCommentLike,
   type VideoComment,
 } from "@/lib/api/comments"
 import { ApiError } from "@/lib/api-client"
 import { saveWatchProgress } from "@/lib/api/history"
 import { RelativeTime } from "@/components/relative-time"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
+import { bumpLikeCount } from "@/lib/engagement-count"
 import { userAvatarUrl } from "@/lib/user-avatar"
+import { followUser, unfollowUser } from "@/lib/api/users"
 
 type WatchVideo = {
   id: string
@@ -46,6 +51,7 @@ type WatchVideo = {
   channel: string
   channelSlug: string
   creatorId: string
+  channelAvatar: string
 }
 
 function mapApiToWatch(v: Awaited<ReturnType<typeof fetchVideo>>): WatchVideo {
@@ -62,12 +68,13 @@ function mapApiToWatch(v: Awaited<ReturnType<typeof fetchVideo>>): WatchVideo {
     channel: creator.displayName ?? creator.username,
     channelSlug: creator.username,
     creatorId: creator.id,
+    channelAvatar: userAvatarUrl(creator.avatarUrl, creator.username),
   }
 }
 
 export default function WatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
   const videoRef = useRef<HTMLVideoElement>(null)
   const [video, setVideo] = useState<WatchVideo | null>(null)
   const [suggested, setSuggested] = useState<
@@ -78,8 +85,11 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
   const [duration, setDuration] = useState(0)
   const [showControls, setShowControls] = useState(true)
   const [isLiked, setIsLiked] = useState(false)
+  const [likesCount, setLikesCount] = useState(0)
+  const [isDisliked, setIsDisliked] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
   const [isSubscribed, setIsSubscribed] = useState(false)
+  const [replyingTo, setReplyingTo] = useState<{ id: string; user: string } | null>(null)
   const [showComments, setShowComments] = useState(true)
   const [commentText, setCommentText] = useState("")
   const [comments, setComments] = useState<VideoComment[]>([])
@@ -92,15 +102,32 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [isPlaylistOpen, setIsPlaylistOpen] = useState(false)
   const progressSent = useRef(0)
+  const viewRecorded = useRef(false)
 
   useEffect(() => {
+    viewRecorded.current = false
+  }, [id])
+
+  useEffect(() => {
+    if (authLoading) return
     let cancelled = false
     async function load() {
       setLoading(true)
+      setIsLiked(false)
+      setLikesCount(0)
+      setIsDisliked(false)
+      setIsSaved(false)
+      setIsSubscribed(false)
+      setReplyingTo(null)
       try {
         const api = await fetchVideo(id)
         if (cancelled) return
         setVideo(mapApiToWatch(api))
+        setLikesCount(api.likesCount ?? 0)
+        setIsLiked(api.liked ?? false)
+        setIsDisliked(api.disliked ?? false)
+        setIsSaved(api.saved ?? false)
+        setIsSubscribed(api.isFollowing ?? false)
       } catch {
         if (!cancelled) setVideo(null)
       }
@@ -138,7 +165,7 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
     return () => {
       cancelled = true
     }
-  }, [id])
+  }, [id, authLoading, isAuthenticated])
 
   const persistProgress = useCallback(
     (seconds: number, dur: number, completed = false) => {
@@ -163,9 +190,17 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
 
   const handleLike = () => {
     requireAuth(() => {
+      const wasLiked = isLiked
       void toggleVideoLike(id)
-        .then((r) => setIsLiked(r.liked))
-        .catch(() => setIsLiked((p) => !p))
+        .then((r) => {
+          setIsLiked(r.liked)
+          setLikesCount((c) => bumpLikeCount(c, wasLiked, r.liked))
+          if (r.disliked === false) setIsDisliked(false)
+        })
+        .catch(() => {
+          setIsLiked((p) => !p)
+          setLikesCount((c) => bumpLikeCount(c, wasLiked, !wasLiked))
+        })
     })
   }
 
@@ -174,6 +209,54 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
       void toggleVideoSave(id)
         .then((r) => setIsSaved(r.saved))
         .catch(() => setIsSaved((p) => !p))
+    })
+  }
+
+  const handleDislike = () => {
+    requireAuth(() => {
+      const wasLiked = isLiked
+      void toggleVideoDislike(id)
+        .then((r) => {
+          setIsDisliked(r.disliked)
+          if (r.liked === false && wasLiked) {
+            setIsLiked(false)
+            setLikesCount((c) => Math.max(0, c - 1))
+          }
+        })
+        .catch(() => setIsDisliked((p) => !p))
+    })
+  }
+
+  const recordViewOnce = useCallback(() => {
+    if (viewRecorded.current) return
+    viewRecorded.current = true
+    void recordVideoView(id).catch(() => {})
+  }, [id])
+
+  const handleCommentLike = (commentId: string) => {
+    requireAuth(() => {
+      void toggleCommentLike(commentId)
+        .then((r) => {
+          setComments((prev) =>
+            prev.map((c) => {
+              if (c.id === commentId) {
+                return { ...c, liked: r.liked, likesCount: r.likesCount }
+              }
+              if (c.replies?.length) {
+                return {
+                  ...c,
+                  replies: c.replies.map((reply) =>
+                    reply.id === commentId
+                      ? { ...reply, liked: r.liked, likesCount: r.likesCount }
+                      : reply,
+                  ),
+                }
+              }
+              return c
+            }),
+          )
+        })
+        .catch(() => {})
     })
   }
 
@@ -187,10 +270,21 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
     setCommentPosting(true)
     setCommentError(null)
     try {
-      const created = await postVideoComment(id, text)
+      const created = await postVideoComment(id, text, replyingTo?.id)
       const normalized = normalizeVideoComment(created as unknown as Record<string, unknown>)
-      setComments((prev) => [normalized, ...prev.filter((c) => c.id !== normalized.id)])
+      if (replyingTo) {
+        setComments((prev) =>
+          prev.map((c) =>
+            c.id === replyingTo.id
+              ? { ...c, replies: [...(c.replies ?? []), normalized] }
+              : c,
+          ),
+        )
+      } else {
+        setComments((prev) => [normalized, ...prev.filter((c) => c.id !== normalized.id)])
+      }
       setCommentText("")
+      setReplyingTo(null)
     } catch (e) {
       const msg =
         e instanceof ApiError
@@ -225,9 +319,11 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
             className="w-full h-full object-contain"
             controls={false}
             videoRef={videoRef}
+            onPlay={() => recordViewOnce()}
             onTimeUpdate={(t, d) => {
               setCurrentTime(t)
               setDuration(d)
+              recordViewOnce()
               persistProgress(t, d)
             }}
             onEnded={() => persistProgress(duration, duration, true)}
@@ -276,9 +372,11 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
 
           <div className="flex gap-2 overflow-x-auto pb-3">
             <button type="button" onClick={handleLike} className={cn("flex items-center gap-2 px-4 py-2 rounded-full text-sm", isLiked ? "bg-primary text-primary-foreground" : "bg-secondary")}>
-              <ThumbsUp className="w-4 h-4" /> {video.likes}
+              <ThumbsUp className="w-4 h-4" /> {formatViewCount(likesCount)}
             </button>
-            <button type="button" className="flex items-center gap-2 px-4 py-2 rounded-full bg-secondary text-sm"><ThumbsDown className="w-4 h-4" /></button>
+            <button type="button" onClick={handleDislike} className={cn("flex items-center gap-2 px-4 py-2 rounded-full text-sm", isDisliked ? "bg-primary text-primary-foreground" : "bg-secondary")}>
+              <ThumbsDown className="w-4 h-4" />
+            </button>
             <button type="button" onClick={() => setIsShareOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-full bg-secondary text-sm"><Share2 className="w-4 h-4" /> Share</button>
             <button type="button" onClick={handleSave} className={cn("flex items-center gap-2 px-4 py-2 rounded-full text-sm", isSaved ? "bg-primary text-primary-foreground" : "bg-secondary")}>
               <Bookmark className="w-4 h-4" /> Save
@@ -294,14 +392,24 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
 
           <div className="flex items-center justify-between py-3 border-y border-border">
             <Link href={`/creator/${video.channelSlug}`} className="flex items-center gap-3">
-              <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${video.channel}`} alt="" className="w-10 h-10 rounded-full" />
+              <img src={video.channelAvatar} alt="" className="w-10 h-10 rounded-full object-cover" />
               <div>
                 <h3 className="text-sm font-medium">{video.channel}</h3>
                 <p className="text-xs text-muted-foreground">Creator</p>
               </div>
             </Link>
-            <Button onClick={() => requireAuth(() => setIsSubscribed(!isSubscribed))} className="rounded-full">
-              {isSubscribed ? "Subscribed" : "Subscribe"}
+            <Button
+              onClick={() =>
+                requireAuth(() => {
+                  const next = !isSubscribed
+                  void (next ? followUser(video.channelSlug) : unfollowUser(video.channelSlug))
+                    .then(() => setIsSubscribed(next))
+                    .catch(() => setIsSubscribed(next))
+                })
+              }
+              className="rounded-full"
+            >
+              {isSubscribed ? "Following" : "Follow"}
             </Button>
           </div>
 
@@ -316,6 +424,12 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
               <>
                 {isAuthenticated ? (
                   <div className="mb-4 space-y-2">
+                    {replyingTo && (
+                      <div className="flex items-center justify-between text-xs text-muted-foreground px-2">
+                        <span>Replying to <span className="font-semibold">{replyingTo.user}</span></span>
+                        <button type="button" onClick={() => setReplyingTo(null)}>Cancel</button>
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <input
                         value={commentText}
@@ -329,7 +443,7 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
                             void submitComment()
                           }
                         }}
-                        placeholder="Add a comment..."
+                        placeholder={replyingTo ? "Add a reply..." : "Add a comment..."}
                         disabled={commentPosting}
                         className="flex-1 bg-secondary/50 rounded-full px-4 py-2 text-sm disabled:opacity-60"
                       />
@@ -356,22 +470,72 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
                     <p className="text-sm text-muted-foreground px-2">No comments yet. Be the first.</p>
                   )}
                   {comments.map((c) => (
-                    <div key={c.id} className="flex gap-2">
-                      <img
-                        src={userAvatarUrl(c.user.avatarUrl, c.user.username)}
-                        alt=""
-                        className="w-8 h-8 rounded-full object-cover"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">
-                          {c.user.displayName ?? c.user.username}
-                          <RelativeTime
-                            date={c.createdAt}
-                            className="ml-2 text-xs font-normal text-muted-foreground"
-                          />
-                        </p>
-                        <p className="text-sm text-muted-foreground">{c.body}</p>
+                    <div key={c.id} className="space-y-2">
+                      <div className="flex gap-2">
+                        <img
+                          src={userAvatarUrl(c.user.avatarUrl, c.user.username)}
+                          alt=""
+                          className="w-8 h-8 rounded-full object-cover"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">
+                            {c.user.displayName ?? c.user.username}
+                            <RelativeTime
+                              date={c.createdAt}
+                              className="ml-2 text-xs font-normal text-muted-foreground"
+                            />
+                          </p>
+                          <p className="text-sm text-muted-foreground">{c.body}</p>
+                          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                            <button
+                              type="button"
+                              className={cn(c.liked && "text-primary")}
+                              onClick={() => handleCommentLike(c.id)}
+                            >
+                              Like{c.likesCount > 0 ? ` · ${c.likesCount}` : ""}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                requireAuth(() =>
+                                  setReplyingTo({
+                                    id: c.id,
+                                    user: c.user.displayName ?? c.user.username,
+                                  }),
+                                )
+                              }
+                            >
+                              Reply
+                            </button>
+                          </div>
+                        </div>
                       </div>
+                      {(c.replies ?? []).map((reply) => (
+                        <div key={reply.id} className="flex gap-2 ml-10">
+                          <img
+                            src={userAvatarUrl(reply.user.avatarUrl, reply.user.username)}
+                            alt=""
+                            className="w-7 h-7 rounded-full object-cover"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium">
+                              {reply.user.displayName ?? reply.user.username}
+                              <RelativeTime
+                                date={reply.createdAt}
+                                className="ml-2 text-xs font-normal text-muted-foreground"
+                              />
+                            </p>
+                            <p className="text-sm text-muted-foreground">{reply.body}</p>
+                            <button
+                              type="button"
+                              className={cn("text-xs text-muted-foreground mt-1", reply.liked && "text-primary")}
+                              onClick={() => handleCommentLike(reply.id)}
+                            >
+                              Like{reply.likesCount > 0 ? ` · ${reply.likesCount}` : ""}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ))}
                 </div>
@@ -409,7 +573,12 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
         targetId={video.id}
         targetLabel={video.title}
       />
-      <ShareSheet isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} title={video.title} />
+      <ShareSheet
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        title={video.title}
+        targetId={video.id}
+      />
       {video && (
         <AddToPlaylistSheet
           isOpen={isPlaylistOpen}

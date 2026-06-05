@@ -67,6 +67,20 @@ export class ReportsService {
         if (!comment) throw new NotFoundException('Comment not found');
         return;
       }
+      case ReportTargetType.podcast_episode: {
+        const episode = await this.prisma.podcastEpisode.findUnique({
+          where: { id: targetId },
+        });
+        if (!episode) throw new NotFoundException('Podcast episode not found');
+        return;
+      }
+      case ReportTargetType.vertical_episode: {
+        const episode = await this.prisma.verticalEpisode.findUnique({
+          where: { id: targetId },
+        });
+        if (!episode) throw new NotFoundException('Vertical episode not found');
+        return;
+      }
       default:
         throw new BadRequestException('Invalid report target');
     }

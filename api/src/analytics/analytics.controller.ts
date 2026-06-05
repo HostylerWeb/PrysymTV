@@ -1,6 +1,8 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -13,12 +15,12 @@ export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 
   @Post('track')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   track(
-    @CurrentUser() user: AuthUserPayload,
+    @Req() req: Request & { user?: AuthUserPayload | null },
     @Body() body: TrackEventsDto,
   ) {
-    return this.analytics.trackBatch(user.id, body);
+    return this.analytics.trackBatch(req.user?.id, body);
   }
 
   /** Creator Impact Dashboard™ — performance, ad views on your videos, revenue, impact. */

@@ -17,6 +17,7 @@ import {
   fetchPublicProfile,
   followUser,
   unfollowUser,
+  toggleCreatorLiveAlerts,
   type PublicCreatorProfile,
 } from "@/lib/api/users"
 import {
@@ -25,7 +26,6 @@ import {
 import { fulfillCheckout } from "@/lib/api/billing"
 import { fetchPodcastShows } from "@/lib/api/podcasts"
 import { fetchCreatorPlaylists } from "@/lib/api/playlists"
-import { withApiFallback } from "@/lib/api/fallback"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
 import { userAvatarUrl } from "@/lib/user-avatar"
 
@@ -78,18 +78,24 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
     let cancelled = false
     async function load() {
       setLoading(true)
-      const p = await withApiFallback(
-        () => fetchPublicProfile(slug),
-        null as PublicCreatorProfile | null,
-      )
-      const v = await withApiFallback(
-        () => fetchCreatorVideos(slug),
-        { items: [], meta: { page: 1, limit: 24, total: 0 } },
-      )
+      let p: PublicCreatorProfile | null = null
+      let v = { items: [] as Awaited<ReturnType<typeof fetchCreatorVideos>>["items"], meta: { page: 1, limit: 24, total: 0 } }
+      try {
+        p = await fetchPublicProfile(slug)
+      } catch {
+        p = null
+      }
+      try {
+        const videosRes = await fetchCreatorVideos(slug)
+        v = videosRes
+      } catch {
+        /* empty videos */
+      }
       if (cancelled) return
       setProfile(p)
       setIsFollowing(p?.isFollowing ?? false)
       setIsChannelMember(p?.isChannelMember ?? false)
+      setNotificationsOn(p?.liveAlertsOn ?? false)
       setVideos(
         v.items.map((item) => ({
           id: item.id,
@@ -215,7 +221,11 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
   }
 
   const handleNotifyToggle = () => {
-    requireAuth(() => setNotificationsOn((prev) => !prev))
+    requireAuth(() => {
+      void toggleCreatorLiveAlerts(profile.username)
+        .then((r) => setNotificationsOn(r.enabled))
+        .catch(() => setNotificationsOn((prev) => !prev))
+    })
   }
 
   return (

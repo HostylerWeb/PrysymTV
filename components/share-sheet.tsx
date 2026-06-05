@@ -3,12 +3,14 @@
 import { X, Link2, Check, MessageCircle, Facebook, Mail } from "lucide-react"
 import { useState } from "react"
 import { buildShareLinks, openShareLink, type SharePlatform } from "@/lib/share-links"
+import { trackShare } from "@/lib/api/analytics"
 
 interface ShareSheetProps {
   isOpen: boolean
   onClose: () => void
   title: string
   url?: string
+  targetId?: string
   onShared?: () => void
 }
 
@@ -50,27 +52,34 @@ function ShareIcon({ id }: { id: SharePlatform }) {
   }
 }
 
-export function ShareSheet({ isOpen, onClose, title, url, onShared }: ShareSheetProps) {
+export function ShareSheet({ isOpen, onClose, title, url, targetId, onShared }: ShareSheetProps) {
   const [copied, setCopied] = useState(false)
   const shareUrl = url ?? (typeof window !== "undefined" ? window.location.href : "")
   const links = buildShareLinks(shareUrl, title)
 
   if (!isOpen) return null
 
+  const recordShare = (platform?: string) => {
+    if (targetId) {
+      void trackShare(targetId, { platform, title })
+    }
+    onShared?.()
+  }
+
   const copyLink = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl)
       setCopied(true)
-      onShared?.()
+      recordShare("copy")
       setTimeout(() => setCopied(false), 2000)
     } catch {
       /* clipboard unavailable */
     }
   }
 
-  const handleSocial = (href: string) => {
+  const handleSocial = (href: string, platform: SharePlatform) => {
     openShareLink(href)
-    onShared?.()
+    recordShare(platform)
   }
 
   return (
@@ -99,7 +108,7 @@ export function ShareSheet({ isOpen, onClose, title, url, onShared }: ShareSheet
             <button
               key={link.id}
               type="button"
-              onClick={() => handleSocial(link.href)}
+              onClick={() => handleSocial(link.href, link.id)}
               className="flex flex-col items-center gap-2 group"
             >
               <span

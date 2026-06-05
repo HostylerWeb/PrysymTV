@@ -6,9 +6,12 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { AttachEpisodeVideoDto } from './dto/attach-episode-video.dto';
@@ -61,12 +64,46 @@ export class VerticalsController {
     return this.verticals.attachEpisodeVideo(user.id, episodeId, body);
   }
 
+  @Post('episodes/:episodeId/view')
+  recordEpisodeView(@Param('episodeId') episodeId: string) {
+    return this.verticals.recordEpisodeView(episodeId);
+  }
+
+  @Post('episodes/:episodeId/like')
+  @UseGuards(JwtAuthGuard)
+  likeEpisode(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('episodeId') episodeId: string,
+  ) {
+    return this.verticals.toggleEpisodeLike(user.id, episodeId);
+  }
+
+  @Post('episodes/:episodeId/save')
+  @UseGuards(JwtAuthGuard)
+  saveEpisode(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('episodeId') episodeId: string,
+  ) {
+    return this.verticals.toggleEpisodeSave(user.id, episodeId);
+  }
+
+  @Post('series/:seriesId/save')
+  @UseGuards(JwtAuthGuard)
+  saveSeries(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('seriesId') seriesId: string,
+  ) {
+    return this.verticals.toggleSeriesSave(user.id, seriesId);
+  }
+
   @Get(':slug/episodes/:episodeNumber')
+  @UseGuards(OptionalJwtAuthGuard)
   episode(
     @Param('slug') slug: string,
     @Param('episodeNumber', ParseIntPipe) episodeNumber: number,
+    @Req() req: Request & { user?: AuthUserPayload | null },
   ) {
-    return this.verticals.getEpisode(slug, episodeNumber);
+    return this.verticals.getEpisode(slug, episodeNumber, req.user?.id);
   }
 
   @Get(':slug')

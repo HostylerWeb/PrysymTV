@@ -14,39 +14,20 @@ import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-me
 
 const genres = ["All", "Action", "Comedy", "Drama", "Thriller", "Sci-Fi", "Horror", "Romance", "Documentary"]
 
-const defaultFeatured = {
-  title: "The Last Frontier",
-  poster: "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800&h=450&fit=crop",
-  year: "2024",
-  rating: "9.2",
-  duration: "2h 34m",
-  genre: "Sci-Fi",
-  description: "An epic journey through uncharted territories where courage meets destiny. Follow the remarkable story of explorers facing the unknown."
+type MovieCard = {
+  id: string
+  title: string
+  poster: string
+  year: string
+  genre: string
+  views: string
+  likes: string
 }
 
-const defaultMovies = [
-  { id: "1", title: "Interstellar", poster: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=300&h=450&fit=crop", year: "2023", rating: "9.0", genre: "Sci-Fi" },
-  { id: "2", title: "The Dark Knight", poster: "https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=300&h=450&fit=crop", year: "2022", rating: "9.1", genre: "Action" },
-  { id: "3", title: "Inception", poster: "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=300&h=450&fit=crop", year: "2023", rating: "8.8", genre: "Thriller" },
-  { id: "4", title: "Pulp Fiction", poster: "https://images.unsplash.com/photo-1485846234645-a62644f84728?w=300&h=450&fit=crop", year: "2022", rating: "8.9", genre: "Drama" },
-  { id: "5", title: "The Matrix", poster: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=300&h=450&fit=crop", year: "2024", rating: "8.7", genre: "Sci-Fi" },
-  { id: "6", title: "Fight Club", poster: "https://images.unsplash.com/photo-1509281373149-e957c6296406?w=300&h=450&fit=crop", year: "2023", rating: "8.8", genre: "Drama" },
-  { id: "7", title: "Forrest Gump", poster: "https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=300&h=450&fit=crop", year: "2022", rating: "8.8", genre: "Drama" },
-  { id: "8", title: "The Godfather", poster: "https://images.unsplash.com/photo-1542204165-65bf26472b9b?w=300&h=450&fit=crop", year: "2021", rating: "9.2", genre: "Drama" },
-]
-
-const trendingMovies = [
-  { id: "1", title: "Dune: Part Two", poster: "https://images.unsplash.com/photo-1547499417-29204c97a0c6?w=300&h=170&fit=crop", rating: "9.3", views: "15.2M" },
-  { id: "2", title: "Oppenheimer", poster: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=300&h=170&fit=crop", rating: "9.1", views: "12.8M" },
-  { id: "3", title: "Barbie", poster: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=300&h=170&fit=crop", rating: "8.5", views: "18.5M" },
-]
-
-const newReleases = [
-  { id: "1", title: "Deadpool 3", poster: "https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=300&h=450&fit=crop", year: "2024", rating: "8.9", isNew: true },
-  { id: "2", title: "Avatar 3", poster: "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=300&h=450&fit=crop", year: "2024", rating: "9.0", isNew: true },
-  { id: "3", title: "Mission Impossible", poster: "https://images.unsplash.com/photo-1509347528160-9a9e33742cdb?w=300&h=450&fit=crop", year: "2024", rating: "8.7", isNew: true },
-  { id: "4", title: "Guardians Vol. 4", poster: "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=300&h=450&fit=crop", year: "2024", rating: "8.6", isNew: true },
-]
+type FeaturedMovie = MovieCard & {
+  duration: string
+  description: string
+}
 
 export default function MoviesPage() {
   const [activeTab, setActiveTab] = useState("movies")
@@ -56,56 +37,44 @@ export default function MoviesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  const [featuredMovie, setFeaturedMovie] = useState(defaultFeatured)
-  const [movies, setMovies] = useState(defaultMovies)
-  const [trendingFromApi, setTrendingFromApi] = useState(trendingMovies)
-  const [newReleasesFromApi, setNewReleasesFromApi] = useState(newReleases)
+  const [loading, setLoading] = useState(true)
+  const [featuredMovie, setFeaturedMovie] = useState<FeaturedMovie | null>(null)
+  const [movies, setMovies] = useState<MovieCard[]>([])
+  const [trendingFromApi, setTrendingFromApi] = useState<MovieCard[]>([])
+  const [newReleasesFromApi, setNewReleasesFromApi] = useState<MovieCard[]>([])
 
   useEffect(() => {
-    void fetchMoviesFeed(1).then((res) => {
-      if (!res.items.length) return
-      const mapped = res.items.map((m) => ({
-        id: m.id,
-        title: m.title,
-        poster: videoThumbnail(m.thumbnailUrl),
-        year: String(m.releaseYear ?? new Date().getFullYear()),
-        rating: "8.5",
-        genre: m.category ?? "Drama",
-        views: formatViewCount(m.viewsCount),
-      }))
-      setMovies(mapped)
-      setTrendingFromApi(
-        mapped.slice(0, 3).map((m) => ({
+    void Promise.all([fetchMoviesFeed(1), fetchFeaturedMovie()])
+      .then(([res, featured]) => {
+        const mapRow = (m: (typeof res.items)[number]): MovieCard => ({
           id: m.id,
           title: m.title,
-          poster: m.poster,
-          rating: m.rating,
-          views: m.views,
-        })),
-      )
-      setNewReleasesFromApi(
-        mapped.slice(0, 4).map((m) => ({
-          id: m.id,
-          title: m.title,
-          poster: m.poster,
-          year: m.year,
-          rating: m.rating,
-          isNew: true,
-        })),
-      )
-    })
-    void fetchFeaturedMovie().then(({ item }) => {
-      if (!item) return
-      setFeaturedMovie({
-        title: item.title,
-        poster: videoThumbnail(item.thumbnailUrl),
-        year: String(item.releaseYear ?? "2024"),
-        rating: "9.0",
-        duration: formatDuration(item.durationSeconds),
-        genre: item.category ?? "Drama",
-        description: item.tagline ?? item.title,
+          poster: videoThumbnail(m.thumbnailUrl),
+          year: String(m.releaseYear ?? new Date().getFullYear()),
+          genre: m.category ?? "Drama",
+          views: formatViewCount(m.viewsCount),
+          likes: formatViewCount(m.likesCount ?? 0),
+        })
+        const mapped = res.items.map(mapRow)
+        setMovies(mapped)
+        setTrendingFromApi(mapped.slice(0, 3))
+        setNewReleasesFromApi(mapped.slice(0, 4))
+        if (featured.item) {
+          const item = featured.item
+          setFeaturedMovie({
+            ...mapRow(item),
+            duration: formatDuration(item.durationSeconds),
+            description: item.tagline ?? item.title,
+          })
+        } else if (mapped[0]) {
+          setFeaturedMovie({
+            ...mapped[0],
+            duration: formatDuration(res.items[0]?.durationSeconds ?? 0),
+            description: res.items[0]?.tagline ?? mapped[0].title,
+          })
+        }
       })
-    })
+      .finally(() => setLoading(false))
   }, [])
 
   const filteredMovies = movies.filter(movie => {
@@ -114,7 +83,7 @@ export default function MoviesPage() {
     const matchesYear = activeYear === "All Years" || movie.year === activeYear;
     return matchesGenre && matchesSearch && matchesYear;
   }).sort((a, b) => {
-    if (sortBy === "Rating") return Number(b.rating) - Number(a.rating);
+    if (sortBy === "Rating") return Number(b.likes.replace(/\D/g, "") || 0) - Number(a.likes.replace(/\D/g, "") || 0);
     if (sortBy === "Newest") return Number(b.year) - Number(a.year);
     if (sortBy === "A-Z") return a.title.localeCompare(b.title);
     return 0; // Popularity
@@ -124,7 +93,13 @@ export default function MoviesPage() {
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <Header onSearchClick={() => setIsSearchOpen(true)} />
       <div className="max-w-7xl mx-auto w-full">
-      {/* Featured Movie Hero */}
+      {loading ? (
+        <div className="py-24 text-center text-muted-foreground">Loading movies…</div>
+      ) : !featuredMovie && movies.length === 0 ? (
+        <div className="py-24 text-center text-muted-foreground px-4">
+          No movies published yet. Upload a movie from your profile settings.
+        </div>
+      ) : featuredMovie ? (
       <div className="relative w-full aspect-[16/10] md:aspect-[21/9]">
         <img
           src={featuredMovie.poster}
@@ -142,16 +117,14 @@ export default function MoviesPage() {
           </div>
           <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-2">{featuredMovie.title}</h1>
           <div className="flex items-center gap-3 text-sm text-foreground/80 mb-3">
-            <span className="flex items-center gap-1">
-              <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-              {featuredMovie.rating}
-            </span>
+            <span>{featuredMovie.views} views</span>
+            <span>{featuredMovie.likes} likes</span>
             <span>{featuredMovie.year}</span>
             <span>{featuredMovie.duration}</span>
           </div>
           <p className="text-sm text-foreground/70 line-clamp-2 max-w-lg mb-4">{featuredMovie.description}</p>
           <div className="flex items-center gap-3">
-            <Link href="/movie/the-last-frontier">
+            <Link href={`/movie/${featuredMovie.id}`}>
               <Button className="rounded-full gap-2">
                 <Play className="w-5 h-5 fill-current" />
                 Play Now
@@ -167,6 +140,7 @@ export default function MoviesPage() {
           </div>
         </div>
       </div>
+      ) : null}
 
       {/* Genre Filter */}
       <div className="px-4 py-4">
@@ -188,11 +162,10 @@ export default function MoviesPage() {
         </div>
       </div>
 
-      {/* Trending Now */}
+      {trendingFromApi.length > 0 && (
       <div className="px-4 mb-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-foreground">Trending Now</h2>
-          <button className="text-sm text-primary font-medium">See All</button>
         </div>
         <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4">
           {trendingFromApi.map((movie, index) => (
@@ -211,11 +184,8 @@ export default function MoviesPage() {
                   <div className="absolute bottom-2 left-2 right-2">
                     <h3 className="text-sm font-semibold text-white mb-1">{movie.title}</h3>
                     <div className="flex items-center gap-2 text-xs text-white/80">
-                      <span className="flex items-center gap-1">
-                        <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                        {movie.rating}
-                      </span>
                       <span>{movie.views} views</span>
+                      <span>{movie.likes} likes</span>
                     </div>
                   </div>
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -229,12 +199,12 @@ export default function MoviesPage() {
           ))}
         </div>
       </div>
+      )}
 
-      {/* New Releases */}
+      {newReleasesFromApi.length > 0 && (
       <div className="px-4 mb-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-foreground">New Releases</h2>
-          <button className="text-sm text-primary font-medium">See All</button>
         </div>
         <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4">
           {newReleasesFromApi.map((movie) => (
@@ -246,14 +216,11 @@ export default function MoviesPage() {
                     alt={movie.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                   />
-                  {movie.isNew && (
-                    <span className="absolute top-2 left-2 bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded">
-                      NEW
-                    </span>
-                  )}
-                  <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-background/80 backdrop-blur-sm px-1.5 py-0.5 rounded">
-                    <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                    <span className="text-xs font-medium text-foreground">{movie.rating}</span>
+                  <span className="absolute top-2 left-2 bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded">
+                    NEW
+                  </span>
+                  <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-background/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-xs font-medium text-foreground">
+                    {movie.views}
                   </div>
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <Play className="w-10 h-10 text-white fill-white" />
@@ -266,6 +233,7 @@ export default function MoviesPage() {
           ))}
         </div>
       </div>
+      )}
 
       {/* All Movies Section */}
       <div className="px-4">
@@ -371,9 +339,8 @@ export default function MoviesPage() {
                       alt={movie.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
-                    <div className="absolute top-2 left-2 flex items-center gap-0.5 bg-background/80 backdrop-blur-sm px-1.5 py-0.5 rounded">
-                      <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                      <span className="text-xs font-medium text-foreground">{movie.rating}</span>
+                    <div className="absolute top-2 left-2 bg-background/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-xs font-medium text-foreground">
+                      {movie.views}
                     </div>
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <Play className="w-10 h-10 text-white fill-white" />
@@ -404,16 +371,10 @@ export default function MoviesPage() {
                   <div className="flex-1 min-w-0 py-1">
                     <h3 className="text-sm font-semibold text-foreground mb-1">{movie.title}</h3>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-                      <span className="flex items-center gap-1">
-                        <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                        {movie.rating}
-                      </span>
+                      <span>{movie.views} views</span>
                       <span>{movie.year}</span>
                       <span className="px-2 py-0.5 rounded bg-secondary">{movie.genre}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground line-clamp-2">
-                      An incredible cinematic experience that will keep you on the edge of your seat.
-                    </p>
                   </div>
                   <Button variant="secondary" size="icon" className="rounded-full self-center">
                     <Play className="w-5 h-5 fill-current" />

@@ -1,7 +1,7 @@
 "use client"
 
 import { use, useState, useEffect, useRef, useCallback } from "react"
-import { ChevronLeft, Play, Pause, Heart, Share2, Plus } from "lucide-react"
+import { ChevronLeft, Play, Pause, Heart, Share2, Plus, Bookmark, Flag } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { Header } from "@/components/header"
@@ -9,12 +9,15 @@ import { Footer } from "@/components/footer"
 import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
 import { ShareSheet } from "@/components/share-sheet"
+import { ReportModal } from "@/components/report-modal"
+import { AuthModal } from "@/components/auth-modal"
 import { useAuth } from "@/contexts/auth-context"
 import {
   fetchPodcastEpisode,
   mapPodcastEpisodeDetail,
   recordPodcastPlay,
   togglePodcastLike,
+  togglePodcastSave,
 } from "@/lib/api/podcasts"
 import { AddToPlaylistSheet } from "@/components/add-to-playlist-sheet"
 import { saveWatchProgress } from "@/lib/api/history"
@@ -23,7 +26,7 @@ import { userAvatarUrl } from "@/lib/user-avatar"
 
 export default function PodcastEpisodePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
   const audioRef = useRef<HTMLAudioElement>(null)
   const progressSent = useRef(0)
 
@@ -33,23 +36,35 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [isPlaylistOpen, setIsPlaylistOpen] = useState(false)
+  const [isReportOpen, setIsReportOpen] = useState(false)
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [liked, setLiked] = useState(false)
+  const [saved, setSaved] = useState(false)
   const [navTab, setNavTab] = useState("podcasts")
   const playRecorded = useRef(false)
 
   useEffect(() => {
+    if (authLoading) return
     let cancelled = false
-    void fetchPodcastEpisode(id).then((raw) => {
-      if (cancelled) return
-      const mapped = mapPodcastEpisodeDetail(raw)
-      setEpisode(mapped)
-      setLiked(mapped.liked)
-      setLoading(false)
-    })
+    setLoading(true)
+    void fetchPodcastEpisode(id)
+      .then((raw) => {
+        if (cancelled) return
+        const mapped = mapPodcastEpisodeDetail(raw)
+        setEpisode(mapped)
+        setLiked(mapped.liked)
+        setSaved(mapped.saved)
+      })
+      .catch(() => {
+        if (!cancelled) setEpisode(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
     return () => {
       cancelled = true
     }
-  }, [id])
+  }, [id, authLoading, isAuthenticated])
 
   useEffect(() => {
     if (!episode || playRecorded.current) return
@@ -89,7 +104,7 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
     )
   }
 
-  const hostSlug = episode.hostSlug ?? "progamerx"
+  const hostSlug = episode.hostSlug
 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
@@ -143,7 +158,10 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
           <button
             type="button"
             onClick={() => {
-              if (!isAuthenticated) return
+              if (!isAuthenticated) {
+                setIsAuthModalOpen(true)
+                return
+              }
               void togglePodcastLike(episode.id)
                 .then((r) => setLiked(r.liked))
                 .catch(() => {})
@@ -157,6 +175,24 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
           </button>
           <button
             type="button"
+            onClick={() => {
+              if (!isAuthenticated) {
+                setIsAuthModalOpen(true)
+                return
+              }
+              void togglePodcastSave(episode.id)
+                .then((r) => setSaved(r.saved))
+                .catch(() => {})
+            }}
+            className={cn(
+              "w-12 h-12 rounded-full flex items-center justify-center",
+              saved ? "bg-primary text-primary-foreground" : "bg-secondary",
+            )}
+          >
+            <Bookmark className={cn("w-5 h-5", saved && "fill-current")} />
+          </button>
+          <button
+            type="button"
             onClick={() => setIsShareOpen(true)}
             className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center"
           >
@@ -165,25 +201,40 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
           <button
             type="button"
             onClick={() => {
-              if (!isAuthenticated) return
+              if (!isAuthenticated) {
+                setIsAuthModalOpen(true)
+                return
+              }
               setIsPlaylistOpen(true)
             }}
             className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center"
           >
             <Plus className="w-5 h-5" />
           </button>
+          <button
+            type="button"
+            onClick={() => setIsReportOpen(true)}
+            className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center"
+            aria-label="Report episode"
+          >
+            <Flag className="w-5 h-5" />
+          </button>
         </div>
-        <Link
-          href={`/creator/${hostSlug}`}
-          className="flex items-center gap-3 p-4 rounded-xl bg-secondary/30 hover:bg-secondary/60 transition-colors"
-        >
-          <img
-            src={userAvatarUrl(null, hostSlug)}
-            alt=""
-            className="w-10 h-10 rounded-full object-cover"
-          />
-          <span className="text-sm font-medium">Hosted by {episode.hostName}</span>
-        </Link>
+        {hostSlug ? (
+          <Link
+            href={`/creator/${hostSlug}`}
+            className="flex items-center gap-3 p-4 rounded-xl bg-secondary/30 hover:bg-secondary/60 transition-colors"
+          >
+            <img
+              src={userAvatarUrl(null, hostSlug)}
+              alt=""
+              className="w-10 h-10 rounded-full object-cover"
+            />
+            <span className="text-sm font-medium">Hosted by {episode.hostName}</span>
+          </Link>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center">Hosted by {episode.hostName}</p>
+        )}
       </div>
       <Footer />
       <BottomNavigation activeTab={navTab} onTabChange={setNavTab} />
@@ -192,6 +243,7 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
         isOpen={isShareOpen}
         onClose={() => setIsShareOpen(false)}
         title={episode.title}
+        targetId={episode.id}
         url={
           typeof window !== "undefined"
             ? `${window.location.origin}/podcast/${episode.id}`
@@ -204,6 +256,14 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
         itemType="podcast_episode"
         itemId={episode.id}
         itemTitle={episode.title}
+      />
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      <ReportModal
+        isOpen={isReportOpen}
+        onClose={() => setIsReportOpen(false)}
+        targetType="podcast_episode"
+        targetId={episode.id}
+        targetLabel={episode.title}
       />
     </main>
   )

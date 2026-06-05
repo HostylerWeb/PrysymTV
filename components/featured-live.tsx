@@ -4,7 +4,7 @@ import { Play, Users, Volume2, VolumeX, Maximize, Radio } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
 import Link from "next/link"
-import { formatViewCount } from "@/lib/format-media"
+import { formatViewCount, videoThumbnail } from "@/lib/format-media"
 
 export type FeaturedLiveStream = {
   id: string
@@ -24,9 +24,7 @@ export function FeaturedLive({ stream }: FeaturedLiveProps) {
 
   if (!stream) return null
 
-  const thumb =
-    stream.thumbnailUrl ??
-    "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=675&fit=crop"
+  const thumb = videoThumbnail(stream.thumbnailUrl)
 
   return (
     <section className="relative w-full pt-4 md:pt-6 pb-8 px-4">

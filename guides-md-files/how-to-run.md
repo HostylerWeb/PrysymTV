@@ -104,7 +104,7 @@ In **OBS** (or any RTMP publisher): Server = `rtmp://localhost:1935/live`, Strea
 
 ```bash
 cd api
-npm run db:migrate    # Prisma migrations (incl. phase2 economy / revenue_split_rules)
+npm run db:migrate    # Prisma migrations (economy, verticals, engagement_gaps, etc.)
 npm run db:seed       # gifts, coins, revenue split rules, GAF programs
 npm run db:generate   # run after schema changes
 cd ..

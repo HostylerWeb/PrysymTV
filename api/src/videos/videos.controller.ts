@@ -5,9 +5,12 @@ import {
   Param,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { CreateCommentDto } from './dto/create-comment.dto';
@@ -35,8 +38,12 @@ export class VideosController {
   }
 
   @Get('feed/shorts')
-  shortsFeed(@Query('cursor') cursor?: string) {
-    return this.videos.shortsFeed(cursor);
+  @UseGuards(OptionalJwtAuthGuard)
+  shortsFeed(
+    @Query('cursor') cursor?: string,
+    @Req() req?: Request & { user?: AuthUserPayload | null },
+  ) {
+    return this.videos.shortsFeed(cursor, 20, req?.user?.id);
   }
 
   @Get('feed/movies')
@@ -52,9 +59,28 @@ export class VideosController {
     return this.videos.featuredMovie();
   }
 
+  @Post('comments/:commentId/like')
+  @UseGuards(JwtAuthGuard)
+  likeComment(
+    @Param('commentId') commentId: string,
+    @CurrentUser() user: AuthUserPayload,
+  ) {
+    return this.videos.toggleCommentLike(user.id, commentId);
+  }
+
   @Get(':id/comments')
-  comments(@Param('id') id: string, @Query('page') page?: string) {
-    return this.videos.listComments(id, page ? parseInt(page, 10) : 1);
+  @UseGuards(OptionalJwtAuthGuard)
+  comments(
+    @Param('id') id: string,
+    @Query('page') page?: string,
+    @Req() req?: Request & { user?: AuthUserPayload | null },
+  ) {
+    return this.videos.listComments(
+      id,
+      page ? parseInt(page, 10) : 1,
+      30,
+      req?.user?.id,
+    );
   }
 
   @Post(':id/comments')
@@ -67,15 +93,30 @@ export class VideosController {
     return this.videos.createComment(user.id, id, body.body, body.parentId);
   }
 
+  @Post(':id/view')
+  recordView(@Param('id') id: string) {
+    return this.videos.recordView(id);
+  }
+
   @Get(':id')
-  getOne(@Param('id') id: string) {
-    return this.videos.getOne(id);
+  @UseGuards(OptionalJwtAuthGuard)
+  getOne(
+    @Param('id') id: string,
+    @Req() req: Request & { user?: AuthUserPayload | null },
+  ) {
+    return this.videos.getOne(id, req.user?.id);
   }
 
   @Post(':id/like')
   @UseGuards(JwtAuthGuard)
   like(@Param('id') id: string, @CurrentUser() user: AuthUserPayload) {
     return this.videos.toggleLike(user.id, id);
+  }
+
+  @Post(':id/dislike')
+  @UseGuards(JwtAuthGuard)
+  dislike(@Param('id') id: string, @CurrentUser() user: AuthUserPayload) {
+    return this.videos.toggleDislike(user.id, id);
   }
 
   @Post(':id/save')

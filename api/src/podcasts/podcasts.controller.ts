@@ -67,10 +67,16 @@ export class PodcastsController {
   }
 
   @Get('episodes/feed')
-  episodesFeed(@Query('page') page?: string, @Query('limit') limit?: string) {
+  @UseGuards(OptionalJwtAuthGuard)
+  episodesFeed(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Req() req?: Request & { user?: AuthUserPayload | null },
+  ) {
     return this.podcasts.episodesFeed(
       page ? parseInt(page, 10) : 1,
       limit ? parseInt(limit, 10) : 20,
+      req?.user?.id,
     );
   }
 
@@ -92,6 +98,12 @@ export class PodcastsController {
   @UseGuards(JwtAuthGuard)
   like(@CurrentUser() user: AuthUserPayload, @Param('id') id: string) {
     return this.podcasts.toggleLike(user.id, id);
+  }
+
+  @Post('episodes/:id/save')
+  @UseGuards(JwtAuthGuard)
+  save(@CurrentUser() user: AuthUserPayload, @Param('id') id: string) {
+    return this.podcasts.toggleSave(user.id, id);
   }
 
   @Post('episodes/:id/upload/init')

@@ -19,6 +19,59 @@ import { UpdatePlaylistDto } from './dto/update-playlist.dto';
 export class PlaylistsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async discoverPublic(limit = 12) {
+    const playlists = await this.prisma.playlist.findMany({
+      where: { visibility: Visibility.public },
+      orderBy: [{ updatedAt: 'desc' }],
+      take: Math.min(Math.max(limit, 1), 48),
+      include: {
+        creator: { select: { username: true, displayName: true } },
+        _count: { select: { items: true } },
+        items: {
+          take: 1,
+          orderBy: { sortOrder: 'asc' },
+          select: { itemType: true, itemId: true },
+        },
+      },
+    });
+
+    const withItems = playlists.filter((p) => p._count.items > 0);
+    withItems.sort((a, b) => b._count.items - a._count.items);
+
+    const coverUrls = await Promise.all(
+      withItems.map(async (p) => {
+        if (p.coverUrl) return p.coverUrl;
+        const first = p.items[0];
+        if (!first) return null;
+        if (first.itemType === PlaylistItemType.video) {
+          const v = await this.prisma.video.findUnique({
+            where: { id: first.itemId },
+            select: { thumbnailUrl: true },
+          });
+          return v?.thumbnailUrl ?? null;
+        }
+        const ep = await this.prisma.podcastEpisode.findUnique({
+          where: { id: first.itemId },
+          select: { coverUrl: true, show: { select: { coverUrl: true } } },
+        });
+        return ep?.coverUrl ?? ep?.show.coverUrl ?? null;
+      }),
+    );
+
+    return {
+      items: withItems.slice(0, limit).map((p, i) => ({
+        id: p.id,
+        title: p.title,
+        description: p.description,
+        coverUrl: coverUrls[i],
+        type: p.type,
+        itemCount: p._count.items,
+        creatorSlug: p.creator.username,
+        creatorName: p.creator.displayName ?? p.creator.username,
+      })),
+    };
+  }
+
   async listMine(userId: string) {
     const playlists = await this.prisma.playlist.findMany({
       where: { creatorId: userId },

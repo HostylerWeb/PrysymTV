@@ -13,6 +13,16 @@ export async function clearHistory() {
   });
 }
 
+export async function deleteHistoryItem(
+  contentType: "video" | "podcast_episode" | "vertical_episode",
+  contentId: string,
+) {
+  return apiRequest<{ success: boolean }>(
+    `/history/${contentType}/${contentId}`,
+    { method: "DELETE" },
+  );
+}
+
 export async function saveWatchProgress(body: {
   contentType: "video" | "podcast_episode" | "vertical_episode";
   contentId: string;

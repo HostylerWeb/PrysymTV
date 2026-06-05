@@ -82,10 +82,29 @@ export class UsersService {
     };
   }
 
+  async initStreamerIdUpload(
+    userId: string,
+    mimeType: string,
+    fileName?: string,
+  ) {
+    const ext = this.storage.extensionFromFileName(fileName) || '.jpg';
+    const objectKey = `uploads/streamer-ids/${userId}${ext}`;
+    const target = await this.storage.createUploadTargetForKey(
+      objectKey,
+      mimeType,
+    );
+    return {
+      ...target,
+      publicUrl: this.storage.getPublicUrl(objectKey),
+      kind: 'streamer_id' as const,
+    };
+  }
+
   async assertProfileObjectKey(userId: string, objectKey: string) {
     const allowed = [
       `uploads/avatars/${userId}`,
       `uploads/banners/${userId}`,
+      `uploads/streamer-ids/${userId}`,
     ];
     const key = objectKey.replace(/^\/+/, '');
     const ok = allowed.some(
@@ -214,16 +233,28 @@ export class UsersService {
 
     let isFollowing = false;
     let isChannelMember = false;
+    let liveAlertsOn = false;
     if (viewerId && viewerId !== user.id) {
-      const row = await this.prisma.follow.findUnique({
-        where: {
-          followerId_followingId: {
-            followerId: viewerId,
-            followingId: user.id,
+      const [row, alert] = await Promise.all([
+        this.prisma.follow.findUnique({
+          where: {
+            followerId_followingId: {
+              followerId: viewerId,
+              followingId: user.id,
+            },
           },
-        },
-      });
+        }),
+        this.prisma.creatorLiveAlert.findUnique({
+          where: {
+            userId_creatorId: {
+              userId: viewerId,
+              creatorId: user.id,
+            },
+          },
+        }),
+      ]);
       isFollowing = !!row;
+      liveAlertsOn = !!alert;
       isChannelMember = await this.billing.isActiveCreatorMember(
         viewerId,
         user.id,
@@ -247,7 +278,46 @@ export class UsersService {
       socialLinks: user.socialLinks,
       isFollowing,
       isChannelMember,
+      liveAlertsOn,
     };
+  }
+
+  async toggleLiveAlert(subscriberId: string, username: string) {
+    const creator = await this.prisma.user.findFirst({
+      where: { username: username.toLowerCase() },
+    });
+    if (!creator || creator.isBanned) {
+      throw new NotFoundException('Creator not found');
+    }
+    if (creator.id === subscriberId) {
+      throw new BadRequestException('Cannot subscribe to your own alerts');
+    }
+
+    const existing = await this.prisma.creatorLiveAlert.findUnique({
+      where: {
+        userId_creatorId: {
+          userId: subscriberId,
+          creatorId: creator.id,
+        },
+      },
+    });
+
+    if (existing) {
+      await this.prisma.creatorLiveAlert.delete({
+        where: {
+          userId_creatorId: {
+            userId: subscriberId,
+            creatorId: creator.id,
+          },
+        },
+      });
+      return { enabled: false };
+    }
+
+    await this.prisma.creatorLiveAlert.create({
+      data: { userId: subscriberId, creatorId: creator.id },
+    });
+    return { enabled: true };
   }
 
   async getPublicPlaylists(username: string) {
@@ -332,11 +402,51 @@ export class UsersService {
     const videoIds = saved
       .filter((s) => s.itemType === 'video' || s.itemType === 'movie')
       .map((s) => s.itemId);
-    const videos =
-      videoIds.length > 0
-        ? await this.prisma.video.findMany({ where: { id: { in: videoIds } } })
-        : [];
+    const podcastIds = saved
+      .filter((s) => s.itemType === 'podcast_episode')
+      .map((s) => s.itemId);
+    const verticalEpisodeIds = saved
+      .filter((s) => s.itemType === 'vertical_episode')
+      .map((s) => s.itemId);
+    const verticalSeriesIds = saved
+      .filter((s) => s.itemType === 'vertical_series')
+      .map((s) => s.itemId);
+
+    const [videos, podcasts, verticalEpisodes, verticalSeries] =
+      await Promise.all([
+        videoIds.length > 0
+          ? this.prisma.video.findMany({ where: { id: { in: videoIds } } })
+          : Promise.resolve([]),
+        podcastIds.length > 0
+          ? this.prisma.podcastEpisode.findMany({
+              where: { id: { in: podcastIds } },
+              include: {
+                show: { select: { id: true, title: true, coverUrl: true } },
+              },
+            })
+          : Promise.resolve([]),
+        verticalEpisodeIds.length > 0
+          ? this.prisma.verticalEpisode.findMany({
+              where: { id: { in: verticalEpisodeIds } },
+              include: {
+                series: {
+                  select: { id: true, slug: true, title: true, posterUrl: true },
+                },
+              },
+            })
+          : Promise.resolve([]),
+        verticalSeriesIds.length > 0
+          ? this.prisma.verticalSeries.findMany({
+              where: { id: { in: verticalSeriesIds } },
+            })
+          : Promise.resolve([]),
+      ]);
+
     const videoById = new Map(videos.map((v) => [v.id, v]));
+    const podcastById = new Map(podcasts.map((p) => [p.id, p]));
+    const verticalEpisodeById = new Map(verticalEpisodes.map((e) => [e.id, e]));
+    const verticalSeriesById = new Map(verticalSeries.map((s) => [s.id, s]));
+
     const items = saved.map((s) => ({
       itemType: s.itemType,
       itemId: s.itemId,
@@ -344,6 +454,18 @@ export class UsersService {
       video:
         s.itemType === 'video' || s.itemType === 'movie'
           ? (videoById.get(s.itemId) ?? null)
+          : null,
+      podcastEpisode:
+        s.itemType === 'podcast_episode'
+          ? (podcastById.get(s.itemId) ?? null)
+          : null,
+      verticalEpisode:
+        s.itemType === 'vertical_episode'
+          ? (verticalEpisodeById.get(s.itemId) ?? null)
+          : null,
+      verticalSeries:
+        s.itemType === 'vertical_series'
+          ? (verticalSeriesById.get(s.itemId) ?? null)
           : null,
     }));
     return { items, meta: { page, limit, total } };
@@ -363,16 +485,54 @@ export class UsersService {
     const videoIds = likes
       .filter((l) => l.targetType === 'video')
       .map((l) => l.targetId);
-    const videos =
+    const podcastIds = likes
+      .filter((l) => l.targetType === 'podcast_episode')
+      .map((l) => l.targetId);
+    const verticalEpisodeIds = likes
+      .filter((l) => l.targetType === 'vertical_episode')
+      .map((l) => l.targetId);
+
+    const [videos, podcasts, verticalEpisodes] = await Promise.all([
       videoIds.length > 0
-        ? await this.prisma.video.findMany({ where: { id: { in: videoIds } } })
-        : [];
+        ? this.prisma.video.findMany({ where: { id: { in: videoIds } } })
+        : Promise.resolve([]),
+      podcastIds.length > 0
+        ? this.prisma.podcastEpisode.findMany({
+            where: { id: { in: podcastIds } },
+            include: {
+              show: { select: { id: true, title: true, coverUrl: true } },
+            },
+          })
+        : Promise.resolve([]),
+      verticalEpisodeIds.length > 0
+        ? this.prisma.verticalEpisode.findMany({
+            where: { id: { in: verticalEpisodeIds } },
+            include: {
+              series: {
+                select: { id: true, slug: true, title: true, posterUrl: true },
+              },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+
     const videoById = new Map(videos.map((v) => [v.id, v]));
+    const podcastById = new Map(podcasts.map((p) => [p.id, p]));
+    const verticalEpisodeById = new Map(verticalEpisodes.map((e) => [e.id, e]));
+
     const items = likes.map((l) => ({
       targetType: l.targetType,
       targetId: l.targetId,
       createdAt: l.createdAt,
       video: l.targetType === 'video' ? (videoById.get(l.targetId) ?? null) : null,
+      podcastEpisode:
+        l.targetType === 'podcast_episode'
+          ? (podcastById.get(l.targetId) ?? null)
+          : null,
+      verticalEpisode:
+        l.targetType === 'vertical_episode'
+          ? (verticalEpisodeById.get(l.targetId) ?? null)
+          : null,
     }));
     return { items, meta: { page, limit, total } };
   }

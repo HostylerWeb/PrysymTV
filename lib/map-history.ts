@@ -3,6 +3,8 @@ import { historyProgressPercent, videoThumbnail } from "@/lib/format-media";
 
 export type SettingsHistoryItem = {
   id: string;
+  contentType: "video" | "podcast_episode" | "vertical_episode";
+  contentId: string;
   title: string;
   thumbnail: string;
   channel: string;
@@ -34,6 +36,8 @@ export function mapHistoryToSettingsItems(
         "Video";
       mapped.push({
         id: `${item.contentType}-${item.contentId}`,
+        contentType: item.contentType as SettingsHistoryItem["contentType"],
+        contentId: item.contentId,
         title: item.video.title,
         thumbnail: videoThumbnail(item.video.thumbnailUrl),
         channel,
@@ -49,6 +53,8 @@ export function mapHistoryToSettingsItems(
       );
       mapped.push({
         id: `${item.contentType}-${item.contentId}`,
+        contentType: item.contentType as SettingsHistoryItem["contentType"],
+        contentId: item.contentId,
         title: item.podcastEpisode.title,
         thumbnail: videoThumbnail(item.podcastEpisode.coverUrl),
         channel: item.podcastEpisode.show?.title ?? "Podcast",
@@ -65,6 +71,8 @@ export function mapHistoryToSettingsItems(
       );
       mapped.push({
         id: `${item.contentType}-${item.contentId}`,
+        contentType: item.contentType as SettingsHistoryItem["contentType"],
+        contentId: item.contentId,
         title: ep.title,
         thumbnail: videoThumbnail(ep.thumbnailUrl ?? ep.series.posterUrl),
         channel: `${ep.series.title} · Ep ${ep.episodeNumber}`,

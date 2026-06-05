@@ -2,16 +2,24 @@
 
 import { use, useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ChevronLeft, ChevronUp } from "lucide-react"
+import { ChevronLeft, ChevronUp, Heart, Bookmark, Flag } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { VerticalEpisodeAdGate } from "@/components/vertical-episode-ad-gate"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
 import {
   fetchVerticalEpisode,
+  recordVerticalEpisodeView,
+  toggleVerticalEpisodeLike,
+  toggleVerticalEpisodeSave,
+  toggleVerticalSeriesSave,
   type VerticalEpisodePlayback,
 } from "@/lib/api/verticals"
 import { saveVerticalProgress } from "@/lib/vertical-progress"
 import { saveWatchProgress } from "@/lib/api/history"
+import { bumpLikeCount } from "@/lib/engagement-count"
 import { useAuth } from "@/contexts/auth-context"
+import { AuthModal } from "@/components/auth-modal"
+import { ReportModal } from "@/components/report-modal"
 
 export default function VerticalWatchPage({
   params,
@@ -19,26 +27,53 @@ export default function VerticalWatchPage({
   params: Promise<{ slug: string; episode: string }>
 }) {
   const { slug, episode: episodeStr } = use(params)
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
   const episodeNum = parseInt(episodeStr, 10)
   const [data, setData] = useState<VerticalEpisodePlayback | null>(null)
   const [showAd, setShowAd] = useState(true)
   const [canPlay, setCanPlay] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isLiked, setIsLiked] = useState(false)
+  const [isSaved, setIsSaved] = useState(false)
+  const [seriesSaved, setSeriesSaved] = useState(false)
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const [isReportOpen, setIsReportOpen] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const viewRecorded = useRef(false)
 
   useEffect(() => {
+    if (authLoading) return
     setShowAd(true)
     setCanPlay(false)
     setError(null)
+    viewRecorded.current = false
     void fetchVerticalEpisode(slug, episodeNum)
-      .then(setData)
+      .then((res) => {
+        setData(res)
+        setIsLiked(res.episode.liked ?? false)
+        setIsSaved(res.episode.saved ?? false)
+        setSeriesSaved(res.series.saved ?? false)
+      })
       .catch(() => setError("Episode not found"))
-  }, [slug, episodeNum])
+  }, [slug, episodeNum, authLoading, isAuthenticated])
 
   const onAdComplete = () => {
     setShowAd(false)
     setCanPlay(true)
+  }
+
+  const recordViewOnce = (episodeId: string) => {
+    if (viewRecorded.current) return
+    viewRecorded.current = true
+    void recordVerticalEpisodeView(episodeId).catch(() => {})
+  }
+
+  const requireAuth = (action: () => void) => {
+    if (!isAuthenticated) {
+      setIsAuthModalOpen(true)
+      return
+    }
+    action()
   }
 
   const goNextEpisode = () => {
@@ -46,9 +81,13 @@ export default function VerticalWatchPage({
     const nextNum = data.nextEpisode.episodeNumber
     setShowAd(true)
     setCanPlay(false)
+    viewRecorded.current = false
     void fetchVerticalEpisode(slug, nextNum)
       .then((res) => {
         setData(res)
+        setIsLiked(res.episode.liked ?? false)
+        setIsSaved(res.episode.saved ?? false)
+        setSeriesSaved(res.series.saved ?? false)
         window.history.replaceState(null, "", `/verticals/watch/${slug}/${nextNum}`)
       })
       .catch(() => setError("Episode not found"))
@@ -91,9 +130,90 @@ export default function VerticalWatchPage({
             <ChevronLeft className="w-5 h-5" />
           </button>
         </Link>
-        <span className="text-white text-sm font-medium truncate px-2">
-          {series.title} · Ep {episode.episodeNumber}
-        </span>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-white text-sm font-medium truncate px-2">
+            {series.title} · Ep {episode.episodeNumber}
+          </span>
+          {canPlay && !showAd && (
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() =>
+                  requireAuth(() => {
+                    const wasLiked = isLiked
+                    void toggleVerticalEpisodeLike(episode.id)
+                      .then((r) => {
+                        setIsLiked(r.liked)
+                        setData((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                episode: {
+                                  ...prev.episode,
+                                  liked: r.liked,
+                                  likesCount: bumpLikeCount(
+                                    prev.episode.likesCount ?? 0,
+                                    wasLiked,
+                                    r.liked,
+                                  ),
+                                },
+                              }
+                            : prev,
+                        )
+                      })
+                      .catch(() => {})
+                  })
+                }
+                className={cn(
+                  "w-9 h-9 rounded-full flex items-center justify-center",
+                  isLiked ? "bg-primary" : "bg-black/50",
+                )}
+              >
+                <Heart className={cn("w-4 h-4 text-white", isLiked && "fill-white")} />
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  requireAuth(() =>
+                    void toggleVerticalEpisodeSave(episode.id)
+                      .then((r) => setIsSaved(r.saved))
+                      .catch(() => {}),
+                  )
+                }
+                className={cn(
+                  "w-9 h-9 rounded-full flex items-center justify-center",
+                  isSaved ? "bg-primary" : "bg-black/50",
+                )}
+              >
+                <Bookmark className={cn("w-4 h-4 text-white", isSaved && "fill-white")} />
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  requireAuth(() =>
+                    void toggleVerticalSeriesSave(series.id)
+                      .then((r) => setSeriesSaved(r.saved))
+                      .catch(() => {}),
+                  )
+                }
+                className={cn(
+                  "px-2 h-9 rounded-full text-[10px] font-medium text-white",
+                  seriesSaved ? "bg-primary" : "bg-black/50",
+                )}
+              >
+                {seriesSaved ? "Series saved" : "Save series"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsReportOpen(true)}
+                className="w-9 h-9 rounded-full bg-black/50 flex items-center justify-center"
+                aria-label="Report"
+              >
+                <Flag className="w-4 h-4 text-white" />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {canPlay && !showAd && (
@@ -107,7 +227,9 @@ export default function VerticalWatchPage({
                 autoPlay
                 controls
                 videoRef={videoRef}
+                onPlay={() => recordViewOnce(episode.id)}
                 onTimeUpdate={(t, d) => {
+                  recordViewOnce(episode.id)
                   const progressSeconds = Math.floor(t)
                   const durationSeconds = Math.floor(d) || episode.durationSeconds
                   if (!isAuthenticated) {
@@ -158,6 +280,17 @@ export default function VerticalWatchPage({
             <p className="text-center text-white/60 text-sm pb-8">End of season</p>
           )}
         </>
+      )}
+
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      {data && (
+        <ReportModal
+          isOpen={isReportOpen}
+          onClose={() => setIsReportOpen(false)}
+          targetType="vertical_episode"
+          targetId={data.episode.id}
+          targetLabel={`${data.series.title} · ${data.episode.title}`}
+        />
       )}
     </main>
   )

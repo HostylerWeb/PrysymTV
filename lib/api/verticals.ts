@@ -37,6 +37,7 @@ export type VerticalEpisodePlayback = {
     title: string
     creatorId: string | null
     posterUrl?: string | null
+    saved?: boolean
   };
   episode: {
     id: string;
@@ -45,22 +46,13 @@ export type VerticalEpisodePlayback = {
     videoUrl: string | null;
     durationSeconds: number;
     cliffhanger: string | null;
+    viewsCount?: number;
+    likesCount?: number;
+    liked?: boolean;
+    saved?: boolean;
   };
   nextEpisode: { episodeNumber: number; title: string } | null;
 };
-
-const MOCK_SERIES: VerticalSeriesCard[] = [
-  {
-    id: "mock-1",
-    slug: "midnight-contract",
-    title: "Midnight Contract",
-    tagline: "Every choice has a price",
-    posterUrl:
-      "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&h=900&fit=crop",
-    genre: "Thriller",
-    totalEpisodes: 5,
-  },
-];
 
 export function fetchVerticalSeriesList() {
   return withApiFallback(
@@ -76,6 +68,30 @@ export function fetchVerticalSeries(slug: string) {
 export function fetchVerticalEpisode(slug: string, episodeNumber: number) {
   return apiRequest<VerticalEpisodePlayback>(
     `/verticals/${slug}/episodes/${episodeNumber}`,
-    { auth: false },
   );
+}
+
+export function recordVerticalEpisodeView(episodeId: string) {
+  return apiRequest<{ success: boolean; viewsCount: number }>(
+    `/verticals/episodes/${episodeId}/view`,
+    { method: "POST", auth: false },
+  );
+}
+
+export function toggleVerticalEpisodeLike(episodeId: string) {
+  return apiRequest<{ liked: boolean }>(`/verticals/episodes/${episodeId}/like`, {
+    method: "POST",
+  });
+}
+
+export function toggleVerticalEpisodeSave(episodeId: string) {
+  return apiRequest<{ saved: boolean }>(`/verticals/episodes/${episodeId}/save`, {
+    method: "POST",
+  });
+}
+
+export function toggleVerticalSeriesSave(seriesId: string) {
+  return apiRequest<{ saved: boolean }>(`/verticals/series/${seriesId}/save`, {
+    method: "POST",
+  });
 }

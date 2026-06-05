@@ -27,13 +27,22 @@ import { useAuth } from "@/contexts/auth-context"
 import { AdInterstitial } from "@/components/ad-interstitial"
 import { ShareSheet } from "@/components/share-sheet"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
-import { fetchShortsFeed, toggleVideoLike, toggleVideoSave } from "@/lib/api/videos-feed"
+import {
+  fetchShortsFeed,
+  recordVideoView,
+  toggleVideoLike,
+  toggleVideoSave,
+  type ShortVideoCard,
+} from "@/lib/api/videos-feed"
 import {
   fetchVideoComments,
   normalizeVideoComment,
   postVideoComment,
+  toggleCommentLike as apiToggleCommentLike,
   type VideoComment,
 } from "@/lib/api/comments"
+import { followUser, unfollowUser } from "@/lib/api/users"
+import { ReportModal } from "@/components/report-modal"
 import { ApiError } from "@/lib/api-client"
 import { RelativeTime } from "@/components/relative-time"
 import { formatViewCount } from "@/lib/format-media"
@@ -44,8 +53,6 @@ import {
   formatEngagementCount,
   type EngagementCounts,
 } from "@/lib/engagement-count"
-import type { VideoCard } from "@/lib/api/feed"
-
 export type ShortItem = {
   id: string
   videoUrl: string
@@ -61,7 +68,7 @@ export type ShortItem = {
   isFollowing: boolean
 }
 
-function mapShortFromApi(card: VideoCard): ShortItem {
+function mapShortFromApi(card: ShortVideoCard): ShortItem {
   return {
     id: card.id,
     videoUrl: card.playbackUrl ?? card.videoUrl ?? "",
@@ -69,8 +76,8 @@ function mapShortFromApi(card: VideoCard): ShortItem {
     userSlug: card.channelSlug,
     userAvatar: userAvatarUrl(null, card.channelSlug),
     caption: card.title,
-    likes: formatViewCount(card.viewsCount),
-    comments: "0",
+    likes: formatViewCount(card.likesCount ?? 0),
+    comments: formatViewCount(card.commentsCount ?? 0),
     shares: "0",
     saves: "0",
     music: `Original Sound - ${card.channelSlug}`,
@@ -87,6 +94,7 @@ interface ShortVideoProps {
   onShare: () => void
   onSave: () => void
   onFollow: () => void
+  onReport: () => void
   isLiked: boolean
   isSaved: boolean
   isFollowing: boolean
@@ -103,6 +111,7 @@ function ShortVideo({
   onShare, 
   onSave, 
   onFollow,
+  onReport,
   isLiked,
   isSaved,
   isFollowing,
@@ -198,7 +207,7 @@ function ShortVideo({
               <Volume2 className="w-6 h-6 text-white" />
             )}
           </button>
-          <button className="p-2">
+          <button type="button" className="p-2" onClick={onReport}>
             <MoreVertical className="w-6 h-6 text-white" />
           </button>
         </div>
@@ -314,7 +323,7 @@ function ShortVideo({
 }
 
 export default function ShortsPage() {
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const [shortsData, setShortsData] = useState<ShortItem[]>([])
   const [feedLoaded, setFeedLoaded] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
@@ -327,12 +336,23 @@ export default function ShortsPage() {
   const [activeShortForComments, setActiveShortForComments] = useState<string | null>(null)
 
   useEffect(() => {
+    if (authLoading) return
+    let cancelled = false
+    setFeedLoaded(false)
     void fetchShortsFeed()
       .then((res) => {
+        if (cancelled) return
         setShortsData(res.items.map(mapShortFromApi))
+        setLikedShorts(new Set(res.items.filter((i) => i.liked).map((i) => i.id)))
+        setSavedShorts(new Set(res.items.filter((i) => i.saved).map((i) => i.id)))
       })
-      .finally(() => setFeedLoaded(true))
-  }, [])
+      .finally(() => {
+        if (!cancelled) setFeedLoaded(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [authLoading, isAuthenticated])
   const [newComment, setNewComment] = useState("")
   const [replyingTo, setReplyingTo] = useState<{ id: string; user: string } | null>(null)
   const [comments, setComments] = useState<Record<string, VideoComment[]>>({})
@@ -346,8 +366,11 @@ export default function ShortsPage() {
   const [showAd, setShowAd] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [shareTarget, setShareTarget] = useState<{ id: string; title: string; url: string } | null>(null)
+  const [isReportOpen, setIsReportOpen] = useState(false)
+  const [reportTarget, setReportTarget] = useState<{ id: string; title: string } | null>(null)
   const [engagement, setEngagement] = useState<Record<string, EngagementCounts>>({})
   const shortsViewCount = useRef(0)
+  const viewRecorded = useRef(new Set<string>())
 
   useEffect(() => {
     setEngagement((prev) => {
@@ -379,6 +402,13 @@ export default function ShortsPage() {
   const onShareComplete = () => {
     if (shareTarget?.id) bumpEngagement(shareTarget.id, "shares", 1)
   }
+
+  useEffect(() => {
+    const short = shortsData[activeIndex]
+    if (!short || viewRecorded.current.has(short.id)) return
+    viewRecorded.current.add(short.id)
+    void recordVideoView(short.id).catch(() => {})
+  }, [activeIndex, shortsData])
 
   const handleScroll = () => {
     if (containerRef.current) {
@@ -461,16 +491,29 @@ export default function ShortsPage() {
       })
   }
 
-  const toggleFollow = (username: string) => {
-    setFollowedUsers(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(username)) {
-        newSet.delete(username)
-      } else {
-        newSet.add(username)
-      }
-      return newSet
-    })
+  const toggleFollow = (username: string, userSlug: string) => {
+    if (!isAuthenticated) {
+      setIsAuthModalOpen(true)
+      return
+    }
+    const wasFollowing = followedUsers.has(username)
+    void (wasFollowing ? unfollowUser(userSlug) : followUser(userSlug))
+      .then(() => {
+        setFollowedUsers((prev) => {
+          const next = new Set(prev)
+          if (wasFollowing) next.delete(username)
+          else next.add(username)
+          return next
+        })
+      })
+      .catch(() => {
+        setFollowedUsers((prev) => {
+          const next = new Set(prev)
+          if (wasFollowing) next.add(username)
+          else next.delete(username)
+          return next
+        })
+      })
   }
 
   const commentAuthorLabel = (c: VideoComment) =>
@@ -482,12 +525,23 @@ export default function ShortsPage() {
     setCommentsLoading(true)
     void fetchVideoComments(shortId)
       .then((res) => {
+        const normalized = res.items.map((item) =>
+          normalizeVideoComment(item as unknown as Record<string, unknown>),
+        )
         setComments((prev) => ({
           ...prev,
-          [shortId]: res.items.map((item) =>
-            normalizeVideoComment(item as unknown as Record<string, unknown>),
-          ),
+          [shortId]: normalized,
         }))
+        setLikedCommentIds((prev) => {
+          const next = new Set(prev)
+          for (const c of normalized) {
+            if (c.liked) next.add(c.id)
+            for (const r of c.replies ?? []) {
+              if (r.liked) next.add(r.id)
+            }
+          }
+          return next
+        })
         setEngagement((prev) => {
           const current = prev[shortId] ?? { likes: 0, comments: 0, saves: 0, shares: 0 }
           return { ...prev, [shortId]: { ...current, comments: res.meta.total } }
@@ -499,12 +553,40 @@ export default function ShortsPage() {
 
   const toggleCommentLike = (commentId: string) => {
     if (!isAuthenticated) return setIsAuthModalOpen(true)
-    setLikedCommentIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(commentId)) next.delete(commentId)
-      else next.add(commentId)
-      return next
-    })
+    void apiToggleCommentLike(commentId)
+      .then((r) => {
+        setLikedCommentIds((prev) => {
+          const next = new Set(prev)
+          if (r.liked) next.add(commentId)
+          else next.delete(commentId)
+          return next
+        })
+        if (activeShortForComments) {
+          setComments((prev) => {
+            const list = prev[activeShortForComments] ?? []
+            return {
+              ...prev,
+              [activeShortForComments]: list.map((c) => {
+                if (c.id === commentId) {
+                  return { ...c, liked: r.liked, likesCount: r.likesCount }
+                }
+                if (c.replies?.length) {
+                  return {
+                    ...c,
+                    replies: c.replies.map((reply) =>
+                      reply.id === commentId
+                        ? { ...reply, liked: r.liked, likesCount: r.likesCount }
+                        : reply,
+                    ),
+                  }
+                }
+                return c
+              }),
+            }
+          })
+        }
+      })
+      .catch(() => {})
   }
 
   const addComment = async () => {
@@ -583,7 +665,11 @@ export default function ShortsPage() {
               onComment={() => openComments(short.id)}
               onShare={() => openShare(short)}
               onSave={() => toggleSave(short.id)}
-              onFollow={() => toggleFollow(short.username)}
+              onFollow={() => toggleFollow(short.username, short.userSlug)}
+              onReport={() => {
+                setReportTarget({ id: short.id, title: short.caption })
+                setIsReportOpen(true)
+              }}
               isLiked={likedShorts.has(short.id)}
               isSaved={savedShorts.has(short.id)}
               isFollowing={followedUsers.has(short.username)}
@@ -779,8 +865,21 @@ export default function ShortsPage() {
         onClose={() => setIsShareOpen(false)}
         title={shareTarget?.title ?? "Short"}
         url={shareTarget?.url}
+        targetId={shareTarget?.id}
         onShared={onShareComplete}
       />
+      {reportTarget && (
+        <ReportModal
+          isOpen={isReportOpen}
+          onClose={() => {
+            setIsReportOpen(false)
+            setReportTarget(null)
+          }}
+          targetType="video"
+          targetId={reportTarget.id}
+          targetLabel={reportTarget.title}
+        />
+      )}
       {showAd && (
         <AdInterstitial
           onClose={() => setShowAd(false)}

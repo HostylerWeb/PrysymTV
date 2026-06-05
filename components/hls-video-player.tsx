@@ -12,6 +12,7 @@ type HlsVideoPlayerProps = {
   muted?: boolean
   playsInline?: boolean
   loop?: boolean
+  onPlay?: () => void
   onTimeUpdate?: (currentTime: number, duration: number) => void
   onEnded?: () => void
   videoRef?: React.RefObject<HTMLVideoElement | null>
@@ -26,6 +27,7 @@ export function HlsVideoPlayer({
   muted = false,
   playsInline = true,
   loop = false,
+  onPlay,
   onTimeUpdate,
   onEnded,
   videoRef: externalRef,
@@ -65,13 +67,16 @@ export function HlsVideoPlayer({
     if (!el) return
     const onTime = () => onTimeUpdate?.(el.currentTime, el.duration || 0)
     const onEnd = () => onEnded?.()
+    const onPlayEvt = () => onPlay?.()
     el.addEventListener("timeupdate", onTime)
     el.addEventListener("ended", onEnd)
+    el.addEventListener("play", onPlayEvt)
     return () => {
       el.removeEventListener("timeupdate", onTime)
       el.removeEventListener("ended", onEnd)
+      el.removeEventListener("play", onPlayEvt)
     }
-  }, [onTimeUpdate, onEnded, videoRef])
+  }, [onPlay, onTimeUpdate, onEnded, videoRef])
 
   if (!src) {
     return (

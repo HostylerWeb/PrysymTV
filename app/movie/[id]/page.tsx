@@ -1,7 +1,7 @@
 "use client"
 
 import { use, useState, useRef, useEffect, useCallback } from "react"
-import { ChevronLeft, Play, Plus, Check, Share2, Star, Clock, Calendar, Lock, Flag } from "lucide-react"
+import { ChevronLeft, Play, Plus, Check, Share2, Star, Clock, Calendar, Lock, Flag, ThumbsUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -14,9 +14,10 @@ import { ShareSheet } from "@/components/share-sheet"
 import { Footer } from "@/components/footer"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { useAuth } from "@/contexts/auth-context"
-import { fetchVideo, toggleVideoSave } from "@/lib/api/videos-feed"
+import { fetchVideo, recordVideoView, toggleVideoLike, toggleVideoSave } from "@/lib/api/videos-feed"
 import { saveWatchProgress } from "@/lib/api/history"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
+import { bumpLikeCount } from "@/lib/engagement-count"
 import type { ApiVideoDetail } from "@/lib/api/videos-feed"
 
 type MovieDisplay = {
@@ -49,7 +50,7 @@ function mapApiToMovie(v: ApiVideoDetail): MovieDisplay {
     poster: videoThumbnail(v.thumbnailUrl),
     banner: videoThumbnail(v.thumbnailUrl),
     year: String(v.releaseYear ?? new Date().getFullYear()),
-    rating: "8.5",
+    rating: v.likesCount > 0 ? formatViewCount(v.likesCount) : "—",
     genre: v.category ?? "Drama",
     genres: [v.category ?? "Drama"],
     duration: formatDuration(v.durationSeconds),
@@ -59,7 +60,10 @@ function mapApiToMovie(v: ApiVideoDetail): MovieDisplay {
     longDescription: v.description ?? "",
     director: v.creator.displayName ?? v.creator.username,
     writers: [],
-    matchScore: "95%",
+    matchScore:
+      v.viewsCount > 0
+        ? `${Math.min(99, Math.round((v.likesCount / v.viewsCount) * 100))}%`
+        : "—",
     views: formatViewCount(v.viewsCount),
     videoUrl: v.playbackUrl ?? v.videoUrl ?? v.hlsMasterUrl ?? "",
     category: "movies",
@@ -71,8 +75,10 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
   const { id } = use(params)
   const [movie, setMovie] = useState<MovieDisplay | null>(null)
   const [loading, setLoading] = useState(true)
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
   const [isInList, setIsInList] = useState(false)
+  const [isLiked, setIsLiked] = useState(false)
+  const [likesCount, setLikesCount] = useState(0)
   const [showFullDescription, setShowFullDescription] = useState(false)
   const [activeTab, setActiveTab] = useState("movies")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -83,8 +89,14 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
   const [isShareOpen, setIsShareOpen] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const progressSent = useRef(0)
+  const viewRecorded = useRef(false)
 
   useEffect(() => {
+    viewRecorded.current = false
+  }, [id])
+
+  useEffect(() => {
+    if (authLoading) return
     let cancelled = false
     async function load() {
       setLoading(true)
@@ -92,6 +104,9 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
         const api = await fetchVideo(id)
         if (cancelled) return
         setMovie(mapApiToMovie(api))
+        setLikesCount(api.likesCount ?? 0)
+        setIsInList(api.saved ?? false)
+        setIsLiked(api.liked ?? false)
       } catch {
         if (!cancelled) setMovie(null)
       } finally {
@@ -102,7 +117,7 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
     return () => {
       cancelled = true
     }
-  }, [id])
+  }, [id, authLoading, isAuthenticated])
 
   const persistProgress = useCallback(
     (seconds: number, dur: number, completed = false) => {
@@ -131,6 +146,10 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
   const startPlayback = () => {
     setShowPreroll(false)
     setIsPlaying(true)
+    if (!viewRecorded.current) {
+      viewRecorded.current = true
+      void recordVideoView(id).catch(() => {})
+    }
     setTimeout(() => videoRef.current?.play(), 100)
   }
 
@@ -198,13 +217,33 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
               <p className="text-sm text-muted-foreground italic">{movie.tagline}</p>
             </div>
             <div className="flex flex-wrap gap-2 mb-4">
-              <span className="flex items-center gap-1 bg-yellow-500/20 px-2 py-1 rounded-full text-sm"><Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />{movie.rating}</span>
+              <span className="flex items-center gap-1 bg-yellow-500/20 px-2 py-1 rounded-full text-sm"><Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />{likesCount > 0 ? formatViewCount(likesCount) : "—"}</span>
               <span className="flex items-center gap-1 bg-secondary px-2 py-1 rounded-full text-sm"><Calendar className="w-4 h-4" />{movie.year}</span>
               <span className="flex items-center gap-1 bg-secondary px-2 py-1 rounded-full text-sm"><Clock className="w-4 h-4" />{movie.duration}</span>
               <span className="px-2 py-1 rounded-full bg-secondary text-sm">{movie.ageRating}</span>
             </div>
             <div className="flex gap-3 mb-6 md:hidden">
               <Button onClick={handleWatchNow} className="flex-1 rounded-full gap-2">{isAuthenticated ? "Watch Now" : "Sign in"}</Button>
+              <button
+                type="button"
+                onClick={() =>
+                  requireAuth(() => {
+                    const wasLiked = isLiked
+                    void toggleVideoLike(id)
+                      .then((r) => {
+                        setIsLiked(r.liked)
+                        setLikesCount((c) => bumpLikeCount(c, wasLiked, r.liked))
+                      })
+                      .catch(() => {
+                        setIsLiked((p) => !p)
+                        setLikesCount((c) => bumpLikeCount(c, wasLiked, !wasLiked))
+                      })
+                  })
+                }
+                className={cn("w-12 h-12 rounded-full flex items-center justify-center", isLiked ? "bg-primary text-white" : "bg-secondary")}
+              >
+                <ThumbsUp className={cn("w-6 h-6", isLiked && "fill-current")} />
+              </button>
               <button type="button" onClick={() => requireAuth(() => void toggleVideoSave(id).then((r) => setIsInList(r.saved)).catch(() => setIsInList(!isInList)))} className={cn("w-12 h-12 rounded-full flex items-center justify-center", isInList ? "bg-primary text-white" : "bg-secondary")}>
                 {isInList ? <Check className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
               </button>
@@ -246,7 +285,12 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
         targetId={movie.id}
         targetLabel={movie.title}
       />
-      <ShareSheet isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} title={movie.title} />
+      <ShareSheet
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        title={movie.title}
+        targetId={movie.id}
+      />
     </main>
   )
 }

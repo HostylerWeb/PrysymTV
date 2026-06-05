@@ -31,6 +31,8 @@ import {
   Film,
   Headphones,
   ListMusic,
+  Link2,
+  Users,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -40,7 +42,7 @@ import { initStream, getRtmpIngestUrl } from "@/lib/api/streams"
 import { createPremiumCheckout } from "@/lib/api/billing"
 import { isPremiumActive } from "@/lib/premium"
 import { ApiError } from "@/lib/api-client"
-import { fetchHistory, clearHistory } from "@/lib/api/history"
+import { clearHistory, deleteHistoryItem, fetchHistory } from "@/lib/api/history"
 import {
   fetchNotificationPreferences,
   updateNotificationPreference,
@@ -65,7 +67,13 @@ import {
   type PlaylistSummary,
 } from "@/lib/api/playlists"
 import { fetchCreatorDashboard, type CreatorDashboardResponse } from "@/lib/api/analytics"
-import { requestCreatorPayout } from "@/lib/api/billing-monetization"
+import {
+  cancelCreatorSubscription,
+  fetchMyCreatorSubscriptions,
+  requestCreatorPayout,
+  type CreatorSubscription,
+} from "@/lib/api/billing-monetization"
+import { fetchMe, replaceSocialLinks } from "@/lib/api/users"
 import { formatViewCount } from "@/lib/format-media"
 
 export type ProfileSettingsScreen =
@@ -80,6 +88,7 @@ export type ProfileSettingsScreen =
   | "verticals"
   | "podcasts"
   | "playlists"
+  | "social"
 
 const NOTIFICATION_PREFS = [
   { id: "follow", label: "New followers", description: "When someone follows you" },
@@ -130,6 +139,7 @@ const SCREEN_TITLES: Record<Exclude<ProfileSettingsScreen, "menu">, string> = {
   verticals: "Micro-dramas",
   podcasts: "Podcasts",
   playlists: "Playlists",
+  social: "Social Links",
 }
 
 interface ProfileSettingsSheetProps {
@@ -207,6 +217,11 @@ export function ProfileSettingsSheet({
   const [myPlaylists, setMyPlaylists] = useState<PlaylistSummary[]>([])
   const [newPlaylistTitle, setNewPlaylistTitle] = useState("")
   const [playlistBusy, setPlaylistBusy] = useState(false)
+  const [socialLinks, setSocialLinks] = useState<
+    Array<{ label: string; url: string; sortOrder: number }>
+  >([])
+  const [socialBusy, setSocialBusy] = useState(false)
+  const [socialMessage, setSocialMessage] = useState<string | null>(null)
   const [mySeries, setMySeries] = useState<
     Array<{
       id: string
@@ -245,6 +260,24 @@ export function ProfileSettingsSheet({
     void fetchMyPlaylists()
       .then((res) => setMyPlaylists(res.items))
       .catch(() => setMyPlaylists([]))
+  }, [isOpen, screen])
+
+  useEffect(() => {
+    if (!isOpen || screen !== "social") return
+    void fetchMe()
+      .then((me) => {
+        const links = (me.socialLinks ?? []) as Array<{
+          label: string
+          url: string
+          sortOrder: number
+        }>
+        setSocialLinks(
+          links.length
+            ? links
+            : [{ label: "Website", url: "", sortOrder: 0 }],
+        )
+      })
+      .catch(() => setSocialLinks([{ label: "Website", url: "", sortOrder: 0 }]))
   }, [isOpen, screen])
 
   useEffect(() => {
@@ -425,6 +458,13 @@ export function ProfileSettingsSheet({
                 void clearHistory()
                   .then(() => setHistoryItems([]))
                   .catch(() => setHistoryItems([]))
+              }}
+              onDelete={(item) => {
+                void deleteHistoryItem(item.contentType, item.contentId)
+                  .then(() =>
+                    setHistoryItems((prev) => prev.filter((h) => h.id !== item.id)),
+                  )
+                  .catch(() => {})
               }}
               onOpen={(href) => {
                 handleClose()
@@ -658,6 +698,36 @@ export function ProfileSettingsSheet({
             />
           )}
 
+          {screen === "social" && (
+            <SocialLinksPanel
+              links={socialLinks}
+              busy={socialBusy}
+              message={socialMessage}
+              onChange={setSocialLinks}
+              onSave={async () => {
+                setSocialBusy(true)
+                setSocialMessage(null)
+                try {
+                  const payload = socialLinks
+                    .filter((l) => l.label.trim() && l.url.trim())
+                    .map((l, i) => ({
+                      label: l.label.trim(),
+                      url: l.url.trim(),
+                      sortOrder: i,
+                    }))
+                  await replaceSocialLinks(payload)
+                  setSocialMessage("Links saved.")
+                } catch (e) {
+                  setSocialMessage(
+                    e instanceof ApiError ? e.message : "Could not save links.",
+                  )
+                } finally {
+                  setSocialBusy(false)
+                }
+              }}
+            />
+          )}
+
           {screen === "upload" && (
             <UploadPanel
               selected={uploadType}
@@ -778,6 +848,7 @@ function MenuPanel({
     { icon: Film, label: "Micro-dramas", description: "Create vertical series & episodes", screen: "verticals" },
     { icon: Headphones, label: "Podcasts", description: "Create shows & upload episodes", screen: "podcasts" },
     { icon: ListMusic, label: "Playlists", description: "Create and manage playlists", screen: "playlists" },
+    { icon: Link2, label: "Social Links", description: "Links on your creator profile", screen: "social" },
     {
       icon: BarChart3,
       label: "Performance & Revenue",
@@ -1169,12 +1240,15 @@ function PremiumPanel({
 }) {
   if (subscribed) {
     return (
-      <div className="py-8 text-center">
-        <Check className="w-12 h-12 text-primary mx-auto mb-3" />
-        <p className="font-bold text-lg">You&apos;re Premium!</p>
-        <p className="text-sm text-muted-foreground mt-1">
-          Ad-free across Prysym TV. Channel memberships are separate (support creators on their profile).
-        </p>
+      <div className="py-8 space-y-6">
+        <div className="text-center">
+          <Check className="w-12 h-12 text-primary mx-auto mb-3" />
+          <p className="font-bold text-lg">You&apos;re Premium!</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Ad-free across Prysym TV. Channel memberships are separate (support creators on their profile).
+          </p>
+        </div>
+        <ChannelMembershipsPanel />
       </div>
     )
   }
@@ -1219,6 +1293,119 @@ function PremiumPanel({
       >
         {busy ? "Starting checkout…" : "Subscribe"}
       </Button>
+      <ChannelMembershipsPanel />
+    </div>
+  )
+}
+
+function ChannelMembershipsPanel() {
+  const [items, setItems] = useState<CreatorSubscription[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  useEffect(() => {
+    void fetchMyCreatorSubscriptions()
+      .then((res) => setItems(res.items))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return <p className="text-sm text-muted-foreground pt-4">Loading memberships…</p>
+  }
+  if (items.length === 0) return null
+
+  return (
+    <div className="pt-4 border-t border-border space-y-3">
+      <div className="flex items-center gap-2">
+        <Users className="w-4 h-4 text-primary" />
+        <h3 className="text-sm font-semibold">Channel memberships</h3>
+      </div>
+      <ul className="space-y-2">
+        {items.map((sub) => (
+          <li key={sub.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-secondary/30">
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">
+                {sub.creator?.displayName ?? sub.creator?.username ?? "Creator"}
+              </p>
+              <p className="text-xs text-muted-foreground capitalize">
+                {sub.tier} · {sub.status}
+              </p>
+            </div>
+            {sub.status === "active" ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="rounded-full shrink-0"
+                disabled={busyId === sub.id}
+                onClick={() => {
+                  setBusyId(sub.id)
+                  void cancelCreatorSubscription(sub.id)
+                    .then(() => setItems((prev) => prev.filter((s) => s.id !== sub.id)))
+                    .finally(() => setBusyId(null))
+                }}
+              >
+                Cancel
+              </Button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function SocialLinksPanel({
+  links,
+  busy,
+  message,
+  onChange,
+  onSave,
+}: {
+  links: Array<{ label: string; url: string; sortOrder: number }>
+  busy: boolean
+  message: string | null
+  onChange: (links: Array<{ label: string; url: string; sortOrder: number }>) => void
+  onSave: () => void | Promise<void>
+}) {
+  const updateLink = (index: number, field: "label" | "url", value: string) => {
+    onChange(links.map((l, i) => (i === index ? { ...l, [field]: value } : l)))
+  }
+
+  return (
+    <div className="pt-2 space-y-4">
+      <p className="text-sm text-muted-foreground">
+        These links appear on your public creator profile.
+      </p>
+      {links.map((link, i) => (
+        <div key={i} className="space-y-2 p-3 rounded-xl bg-secondary/30">
+          <input
+            value={link.label}
+            onChange={(e) => updateLink(i, "label", e.target.value)}
+            placeholder="Label (e.g. Twitter)"
+            className="w-full h-10 px-3 rounded-lg bg-secondary text-sm"
+          />
+          <input
+            value={link.url}
+            onChange={(e) => updateLink(i, "url", e.target.value)}
+            placeholder="https://"
+            className="w-full h-10 px-3 rounded-lg bg-secondary text-sm"
+          />
+        </div>
+      ))}
+      <Button
+        variant="secondary"
+        className="w-full rounded-full"
+        onClick={() =>
+          onChange([...links, { label: "", url: "", sortOrder: links.length }])
+        }
+      >
+        Add link
+      </Button>
+      <Button className="w-full rounded-full" disabled={busy} onClick={() => void onSave()}>
+        {busy ? "Saving…" : "Save links"}
+      </Button>
+      {message && <p className="text-sm text-center text-muted-foreground">{message}</p>}
     </div>
   )
 }
@@ -1227,11 +1414,13 @@ function HistoryPanel({
   items,
   loading,
   onClear,
+  onDelete,
   onOpen,
 }: {
   items: SettingsHistoryItem[]
   loading: boolean
   onClear: () => void
+  onDelete: (item: SettingsHistoryItem) => void
   onOpen: (href: string) => void
 }) {
   return (
@@ -1250,26 +1439,38 @@ function HistoryPanel({
       ) : (
         <div className="space-y-2 md:space-y-3 md:grid md:grid-cols-2 md:gap-3">
           {items.map((item) => (
-            <button
+            <div
               key={item.id}
-              type="button"
-              onClick={() => onOpen(item.href)}
-              className="w-full flex gap-3 p-2 md:p-3 rounded-xl hover:bg-secondary/50 text-left group"
+              className="w-full flex gap-3 p-2 md:p-3 rounded-xl hover:bg-secondary/50 group"
             >
-              <div className="relative w-28 md:w-36 aspect-video rounded-lg overflow-hidden shrink-0">
-                <img src={item.thumbnail} alt="" className="w-full h-full object-cover" />
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-muted">
-                  <div className="h-full bg-primary" style={{ width: `${item.progress}%` }} />
+              <button
+                type="button"
+                onClick={() => onOpen(item.href)}
+                className="flex flex-1 gap-3 text-left min-w-0"
+              >
+                <div className="relative w-28 md:w-36 aspect-video rounded-lg overflow-hidden shrink-0">
+                  <img src={item.thumbnail} alt="" className="w-full h-full object-cover" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-muted">
+                    <div className="h-full bg-primary" style={{ width: `${item.progress}%` }} />
+                  </div>
                 </div>
-              </div>
-              <div className="flex-1 py-1 min-w-0">
-                <p className="text-sm md:text-base font-medium line-clamp-2">{item.title}</p>
-                <p className="text-xs md:text-sm text-muted-foreground">
-                  {item.channel} · {item.progress}%
-                </p>
-              </div>
-              <Play className="w-4 h-4 text-primary opacity-0 group-hover:opacity-100 self-center shrink-0" />
-            </button>
+                <div className="flex-1 py-1 min-w-0">
+                  <p className="text-sm md:text-base font-medium line-clamp-2">{item.title}</p>
+                  <p className="text-xs md:text-sm text-muted-foreground">
+                    {item.channel} · {item.progress}%
+                  </p>
+                </div>
+                <Play className="w-4 h-4 text-primary opacity-0 group-hover:opacity-100 self-center shrink-0" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(item)}
+                className="shrink-0 self-center p-2 text-muted-foreground hover:text-destructive"
+                aria-label="Remove from history"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           ))}
         </div>
       )}

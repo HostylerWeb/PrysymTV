@@ -13,6 +13,10 @@ import {
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useAuth, getAuthErrorMessage } from "@/contexts/auth-context"
+import {
+  initStreamerIdUpload,
+  uploadProfileImage,
+} from "@/lib/api/profile-upload"
 
 const MIN_DESCRIPTION = 20
 
@@ -28,7 +32,7 @@ export function StreamerApplicationModal({
   const { user, applyForStreamer } = useAuth()
   const [step, setStep] = useState(1)
   const [description, setDescription] = useState("")
-  const [idPhoto, setIdPhoto] = useState<string | null>(null)
+  const [idFile, setIdFile] = useState<File | null>(null)
   const [idFileName, setIdFileName] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState("")
@@ -40,18 +44,20 @@ export function StreamerApplicationModal({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      setIdPhoto(`pending://${file.name}`)
+      setIdFile(file)
       setIdFileName(file.name)
     }
   }
 
   const handleSubmit = async () => {
-    if (!descriptionOk || !idPhoto) return
+    if (!descriptionOk || !idFile) return
 
     setIsSubmitting(true)
     setError("")
     try {
-      await applyForStreamer(description.trim(), idPhoto)
+      const init = await initStreamerIdUpload(idFile)
+      const publicUrl = await uploadProfileImage(init, idFile)
+      await applyForStreamer(description.trim(), publicUrl)
       setStep(3)
     } catch (err) {
       setError(getAuthErrorMessage(err))
@@ -63,7 +69,7 @@ export function StreamerApplicationModal({
   const handleClose = () => {
     setStep(1)
     setDescription("")
-    setIdPhoto(null)
+    setIdFile(null)
     setIdFileName("")
     setError("")
     onClose()
@@ -252,15 +258,14 @@ export function StreamerApplicationModal({
                   Upload ID verification
                 </label>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Upload a photo of your government-issued ID. File upload to
-                  secure storage is coming in Phase B; we store a reference for
-                  now.
+                  Upload a photo of your government-issued ID. Your document is
+                  stored securely and reviewed by our team.
                 </p>
 
                 <label
                   className={cn(
                     "block w-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors",
-                    idPhoto
+                    idFile
                       ? "border-primary bg-primary/5"
                       : "border-border hover:border-primary/50",
                   )}
@@ -271,7 +276,7 @@ export function StreamerApplicationModal({
                     onChange={handleFileUpload}
                     className="hidden"
                   />
-                  {idPhoto ? (
+                  {idFile ? (
                     <div className="space-y-2">
                       <FileCheck className="w-12 h-12 text-primary mx-auto" />
                       <p className="text-sm font-medium text-foreground">
@@ -306,7 +311,7 @@ export function StreamerApplicationModal({
                 <Button
                   onClick={handleSubmit}
                   className="flex-1 rounded-full"
-                  disabled={!idPhoto || isSubmitting}
+                  disabled={!idFile || isSubmitting}
                 >
                   {isSubmitting ? (
                     <Loader2 className="w-5 h-5 animate-spin" />

@@ -49,14 +49,21 @@ Run guide (frontend + Docker + env): `../guides-md-files/how-to-run.md`
 
 ## Implementation status
 
-| Week | Focus | Status |
-|------|--------|--------|
-| 1 | Auth, users, schema | ✅ Core done |
-| 2 | Uploads, storage, FFmpeg queue | ✅ Core (local/R2 env-driven) |
-| 11–20 | Economy, Store, GAF, Impact, Insider | 📋 See stakeholder doc |
-| 3 | Videos, comments, playlists | 🚧 Stubs |
-| 4 | Live streaming | 🚧 Stubs |
-| 5 | Billing, gifts | Partial (catalog) |
-| 6+ | Search, ads, admin | 🚧 Stubs |
+Canonical route list: `../guides-md-files/api.md` (updated with each API change).
 
-**Do not start with the admin dashboard** — finish auth + content APIs first; admin requires `role: admin` users and moderation workflows.
+| Area | Status |
+|------|--------|
+| Auth, password reset, users, follow | ✅ |
+| Videos, shorts, movies, comments, likes, dislikes, saves, views | ✅ |
+| Podcasts, verticals, playlists, history | ✅ |
+| Live streams, MediaMTX, Socket.IO chat | ✅ |
+| Billing, coins, premium, gifts, memberships, payouts | ✅ |
+| Search, ads, analytics, reports | ✅ |
+| Engagement hydration (optional JWT on detail/feed routes) | ✅ Backend + frontend |
+| Admin `/admin/*` | ✅ API; no admin UI yet |
+| OAuth Google/Apple | 📋 Planned |
+| Programs hub frontend | 📋 API only |
+
+**Production:** `npm run build` then `npm run start:prod` (`node dist/src/main.js`). After schema changes: `npx prisma migrate deploy`.
+
+**Do not start with the admin dashboard UI** — API routes exist; moderation UI is Sprint H.

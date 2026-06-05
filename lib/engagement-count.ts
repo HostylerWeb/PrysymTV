@@ -52,3 +52,13 @@ export function adjustEngagement(
     [field]: Math.max(0, prev[field] + delta),
   }
 }
+
+/** Update a like counter after a successful toggle API call. */
+export function bumpLikeCount(
+  count: number,
+  wasLiked: boolean,
+  nowLiked: boolean,
+): number {
+  if (wasLiked === nowLiked) return count
+  return Math.max(0, count + (nowLiked ? 1 : -1))
+}

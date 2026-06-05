@@ -3,6 +3,7 @@
 import { Play } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { userAvatarUrl } from "@/lib/user-avatar"
 
 interface VideoCardProps {
   id: string
@@ -77,7 +78,7 @@ export function VideoCard({
           {type === "video" && (
             <div className="w-9 h-9 rounded-full bg-muted flex-shrink-0 overflow-hidden">
               <img
-                src={`https://api.dicebear.com/7.x/initials/svg?seed=${channel}`}
+                src={userAvatarUrl(null, channel)}
                 alt={channel}
                 className="w-full h-full object-cover"
               />

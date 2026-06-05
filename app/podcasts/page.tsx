@@ -22,7 +22,10 @@ import {
   type PodcastEpisodeCard,
   type PodcastShowCard,
 } from "@/lib/api/podcasts"
+import { fetchDiscoverPlaylists, type PlaylistSummary } from "@/lib/api/playlists"
+import { videoThumbnail } from "@/lib/format-media"
 import { useAuth } from "@/contexts/auth-context"
+import { AuthModal } from "@/components/auth-modal"
 import { userAvatarUrl } from "@/lib/user-avatar"
 
 const categories = ["All", "True Crime", "Tech", "Business", "Comedy", "Health", "Society", "Science", "Sports", "Music"]
@@ -66,18 +69,24 @@ function PlayerBar({
   currentIndex,
   onIndexChange,
   onShare,
+  onToggleLike,
+  isAuthenticated,
+  onAuthRequired,
 }: {
   episodes: PodcastEpisodeCard[]
   currentIndex: number
   onIndexChange: (index: number) => void
   onShare: () => void
+  onToggleLike: (episodeId: string) => void
+  isAuthenticated: boolean
+  onAuthRequired: () => void
 }) {
   const episode = episodes[currentIndex]
   const audioRef = useRef<HTMLAudioElement>(null)
   const [isPlaying, setIsPlaying] = useState(true)
   const [progress, setProgress] = useState(12)
-  const [liked, setLiked] = useState(false)
   const [muted, setMuted] = useState(false)
+  const liked = episode?.liked ?? false
 
   useEffect(() => {
     const audio = audioRef.current
@@ -161,7 +170,13 @@ function PlayerBar({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => setLiked(!liked)}
+            onClick={() => {
+              if (!isAuthenticated) {
+                onAuthRequired()
+                return
+              }
+              if (episode) onToggleLike(episode.id)
+            }}
             className={cn(
               "w-8 h-8 flex items-center justify-center rounded-full transition-colors",
               liked ? "text-primary" : "text-muted-foreground hover:text-foreground",
@@ -218,8 +233,8 @@ const EMPTY_FEATURED: FeaturedPodcast = {
   id: "",
   title: "Podcasts on Prysym TV",
   host: "Creators",
-  cover: "/placeholder.svg",
-  banner: "/placeholder.svg",
+  cover: videoThumbnail(null),
+  banner: videoThumbnail(null),
   category: "All",
   episodes: 0,
   followers: "0",
@@ -229,36 +244,49 @@ const EMPTY_FEATURED: FeaturedPodcast = {
 }
 
 export default function PodcastsPage() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
   const [activeTab, setActiveTab] = useState("podcasts")
   const [activeCategory, setActiveCategory] = useState("All")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [playIndex, setPlayIndex] = useState<number | null>(null)
-  const [likedEpisodes, setLikedEpisodes] = useState<Set<string>>(new Set())
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [shows, setShows] = useState<PodcastShowCard[]>([])
   const [latestEpisodes, setLatestEpisodes] = useState<PodcastEpisodeCard[]>([])
   const [featuredPodcast, setFeaturedPodcast] = useState<FeaturedPodcast>(EMPTY_FEATURED)
+  const [curatedPlaylists, setCuratedPlaylists] = useState<PlaylistSummary[]>([])
 
   useEffect(() => {
+    if (authLoading) return
+    let cancelled = false
+    setLoading(true)
     void Promise.all([
       fetchPodcastShows(1, 24),
       fetchPodcastEpisodesFeed(1, 30),
       fetchPodcastFeatured(1),
-    ]).then(([showsRes, epsRes, featuredList]) => {
-      setShows(showsRes.items)
-      setLatestEpisodes(epsRes.items)
-      const featShow =
-        featuredList[0] ?? showsRes.items[0] ?? null
-      if (featShow) {
-        const latest =
-          epsRes.items.find((e) => e.showId === featShow.id) ?? epsRes.items[0]
-        setFeaturedPodcast(showToFeatured(featShow, latest))
-      }
-      setLoading(false)
-    })
-  }, [])
+      fetchDiscoverPlaylists(6).catch(() => ({ items: [] as PlaylistSummary[] })),
+    ])
+      .then(([showsRes, epsRes, featuredList, playlistsRes]) => {
+        if (cancelled) return
+        setCuratedPlaylists(playlistsRes.items)
+        setShows(showsRes.items)
+        setLatestEpisodes(epsRes.items)
+        const featShow =
+          featuredList[0] ?? showsRes.items[0] ?? null
+        if (featShow) {
+          const latest =
+            epsRes.items.find((e) => e.showId === featShow.id) ?? epsRes.items[0]
+          setFeaturedPodcast(showToFeatured(featShow, latest))
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [authLoading, isAuthenticated])
 
   const topCreators = useMemo(
     () =>
@@ -290,18 +318,20 @@ export default function PodcastsPage() {
     activeCategory === "All" ? shows : shows.filter((s) => s.category === activeCategory)
 
   const toggleLike = (id: string) => {
-    if (!isAuthenticated) return
+    if (!isAuthenticated) {
+      setIsAuthModalOpen(true)
+      return
+    }
     void togglePodcastLike(id)
       .then((r) => {
-        setLikedEpisodes((prev) => {
-          const next = new Set(prev)
-          if (r.liked) next.add(id)
-          else next.delete(id)
-          return next
-        })
+        setLatestEpisodes((prev) =>
+          prev.map((ep) => (ep.id === id ? { ...ep, liked: r.liked } : ep)),
+        )
       })
       .catch(() => {})
   }
+
+  const isEpisodeLiked = (ep: PodcastEpisodeCard) => ep.liked ?? false
 
   if (loading) {
     return (
@@ -472,9 +502,9 @@ export default function PodcastsPage() {
                     <span className="text-xs text-muted-foreground">{ep.plays} plays</span>
                     <button
                       onClick={e => { e.stopPropagation(); toggleLike(ep.id) }}
-                      className={cn("w-8 h-8 flex items-center justify-center rounded-full transition-colors", likedEpisodes.has(ep.id) ? "text-primary" : "text-muted-foreground hover:text-foreground")}
+                      className={cn("w-8 h-8 flex items-center justify-center rounded-full transition-colors", isEpisodeLiked(ep) ? "text-primary" : "text-muted-foreground hover:text-foreground")}
                     >
-                      <Heart className={cn("w-4 h-4", likedEpisodes.has(ep.id) && "fill-primary")} />
+                      <Heart className={cn("w-4 h-4", isEpisodeLiked(ep) && "fill-primary")} />
                     </button>
                     <span className="text-xs text-muted-foreground w-10 text-right">{ep.duration}</span>
                     <button className="w-8 h-8 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground">
@@ -517,26 +547,33 @@ export default function PodcastsPage() {
               </div>
             </div>
 
-            {/* Featured Playlist */}
+            {curatedPlaylists.length > 0 && (
             <div>
               <h2 className="text-xl font-bold text-foreground mb-4">Curated Playlists</h2>
               <div className="space-y-3">
-                {[
-                  { name: "Deep Work Sessions", count: 18, img: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=100&h=100&fit=crop" },
-                  { name: "Morning Motivation", count: 24, img: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=100&h=100&fit=crop" },
-                  { name: "Tech Founders Only", count: 31, img: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=100&h=100&fit=crop" },
-                ].map((pl) => (
-                  <div key={pl.name} className="flex items-center gap-3 p-3 rounded-2xl bg-secondary/30 hover:bg-secondary/60 transition-colors cursor-pointer group">
-                    <img src={pl.img} alt={pl.name} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
+                {curatedPlaylists.map((pl) => (
+                  <Link
+                    key={pl.id}
+                    href={`/playlist/${pl.id}`}
+                    className="flex items-center gap-3 p-3 rounded-2xl bg-secondary/30 hover:bg-secondary/60 transition-colors group"
+                  >
+                    <img
+                      src={videoThumbnail(pl.coverUrl)}
+                      alt={pl.title}
+                      className="w-12 h-12 rounded-xl object-cover flex-shrink-0"
+                    />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-foreground truncate">{pl.name}</p>
-                      <p className="text-xs text-muted-foreground">{pl.count} episodes</p>
+                      <p className="text-sm font-bold text-foreground truncate group-hover:text-primary">
+                        {pl.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{pl.itemCount} items</p>
                     </div>
                     <Play className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>
+            )}
 
           </div>
         </div>
@@ -551,8 +588,13 @@ export default function PodcastsPage() {
           currentIndex={playIndex}
           onIndexChange={setPlayIndex}
           onShare={() => setIsShareOpen(true)}
+          onToggleLike={toggleLike}
+          isAuthenticated={isAuthenticated}
+          onAuthRequired={() => setIsAuthModalOpen(true)}
         />
       )}
+
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
 
       <ShareSheet
         isOpen={isShareOpen}

@@ -44,22 +44,27 @@
 | `DELETE` | `/users/me/notifications` | ✅ |
 | `POST` | `/users/me/avatar/upload` | ✅ Presign / local profile image |
 | `POST` | `/users/me/banner/upload` | ✅ |
+| `POST` | `/users/me/streamer-id/upload` | ✅ Presign / local ID document for streamer application |
 | `GET` | `/users/:username/videos` | ✅ Public creator uploads |
 | `GET` | `/users/:username/playlists` | ✅ Public playlists |
-| `GET` | `/users/:username` | ✅ Includes `isFollowing`, `isChannelMember` |
+| `GET` | `/users/:username` | ✅ Includes `isFollowing`, `isChannelMember`, `liveAlertsOn` |
 | `POST` | `/users/:username/follow` | ✅ |
 | `DELETE` | `/users/:username/follow` | ✅ |
+| `POST` | `/users/:username/live-alerts` | ✅ Toggle live notifications for a creator (notify bell) |
 | `GET` | `/feed/home` | ✅ |
 | `GET` | `/feed/trending` | ✅ |
 | `POST` | `/videos/upload/init` | ✅ |
 | `POST` | `/videos/upload/complete` | ✅ |
-| `GET` | `/videos/feed/shorts` | ✅ |
+| `GET` | `/videos/feed/shorts` | ✅ Optional JWT → per-item `liked`, `saved`, `disliked` |
 | `GET` | `/videos/feed/movies` | ✅ |
 | `GET` | `/videos/feed/movies/featured` | ✅ |
-| `GET` | `/videos/:id/comments` | ✅ Paginated thread |
+| `GET` | `/videos/:id/comments` | ✅ Optional JWT → each comment/reply includes `liked` |
 | `POST` | `/videos/:id/comments` | ✅ Bearer; `{ body, parentId? }` |
-| `GET` | `/videos/:id` | ✅ |
-| `POST` | `/videos/:id/like` | ✅ |
+| `POST` | `/videos/comments/:commentId/like` | ✅ Toggle comment like |
+| `GET` | `/videos/:id` | ✅ Optional JWT → `liked`, `saved`, `disliked`, `isFollowing`, `dislikesCount` |
+| `POST` | `/videos/:id/view` | ✅ Increment `viewsCount` on play |
+| `POST` | `/videos/:id/like` | ✅ Toggle (clears dislike) |
+| `POST` | `/videos/:id/dislike` | ✅ Toggle (clears like) |
 | `POST` | `/videos/:id/save` | ✅ |
 | `POST` | `/videos/:id/report` | ✅ |
 | `POST` | `/media/upload/:videoId` | ✅ (local `STORAGE_DRIVER` only, multipart) |
@@ -96,10 +101,12 @@
 | `POST` | `/podcasts/shows/:showId/episodes` | ✅ |
 | `POST` | `/podcasts/episodes/:id/upload/init` | ✅ |
 | `POST` | `/podcasts/episodes/:id/upload/complete` | ✅ |
-| `GET` | `/podcasts/episodes/feed` | ✅ |
-| `GET` | `/podcasts/episodes/:id` | ✅ Optional JWT → `liked` |
+| `GET` | `/podcasts/episodes/feed` | ✅ Optional JWT → `liked`, `saved` |
+| `GET` | `/podcasts/episodes/:id` | ✅ Optional JWT → `liked`, `saved` |
 | `POST` | `/podcasts/episodes/:id/play` | ✅ |
 | `POST` | `/podcasts/episodes/:id/like` | ✅ Toggle |
+| `POST` | `/podcasts/episodes/:id/save` | ✅ Toggle favorite |
+| `GET` | `/playlists/discover` | ✅ Public playlists with items (sidebar/discover) |
 | `GET` | `/playlists/me` | ✅ |
 | `POST` | `/playlists` | ✅ |
 | `PUT` | `/playlists/:id` | ✅ |
@@ -113,14 +120,18 @@
 | `GET` | `/ads/serve` | ✅ Optional Bearer — premium users get `{ ad: null, adFree: true }` |
 | `POST` | `/ads/track/impression` | ✅ |
 | `POST` | `/ads/track/click` | ✅ |
-| `POST` | `/analytics/track` | ✅ |
+| `POST` | `/analytics/track` | ✅ Optional JWT — batch `share`, `view`, etc. |
 | `GET` | `/analytics/creators/me/dashboard` | ✅ |
 | `GET` | `/analytics/creators/me/stats` | ✅ |
 | `GET` | `/analytics/creators/me/content` | ✅ |
 | `GET` | `/analytics/creators/stats` | ✅ (legacy) |
 | `GET` | `/verticals` | ✅ Micro-drama series list |
 | `GET` | `/verticals/:slug` | ✅ Series + episodes |
-| `GET` | `/verticals/:slug/episodes/:episodeNumber` | ✅ Episode playback payload |
+| `GET` | `/verticals/:slug/episodes/:episodeNumber` | ✅ Optional JWT — `liked`, `saved`, counters |
+| `POST` | `/verticals/episodes/:episodeId/view` | ✅ Increment episode views |
+| `POST` | `/verticals/episodes/:episodeId/like` | ✅ Toggle like |
+| `POST` | `/verticals/episodes/:episodeId/save` | ✅ Toggle episode save |
+| `POST` | `/verticals/series/:seriesId/save` | ✅ Toggle series save |
 | `GET` | `/verticals/me/series` | ✅ Creator’s series (Bearer) |
 | `POST` | `/verticals/series` | ✅ Create series (Bearer) |
 | `POST` | `/verticals/series/:slug/episodes` | ✅ Add episode (Bearer) |
@@ -194,21 +205,23 @@ All `/users/me/*` routes require Bearer auth.
 | `PUT /users/me` | ✅ | `displayName`, `bio`, `avatarUrl`, `bannerUrl` |
 | `POST /users/me/avatar/upload` | ✅ | `{ mimeType, fileName? }` → presigned PUT or local `POST /media/profile-upload` |
 | `POST /users/me/banner/upload` | ✅ | Same as avatar |
+| `POST /users/me/streamer-id/upload` | ✅ | `{ mimeType, fileName? }` → presigned PUT or local `POST /media/profile-upload` with `uploads/streamer-ids/{userId}.*` key |
 | `GET/PUT /users/me/notification-preferences` | ✅ | |
 | `PUT /users/me/social-links` | ✅ | `{ links: [{ label, url, sortOrder }] }` |
 | `POST /users/apply-streamer` | ✅ | |
 | `GET /users/me/videos` | ✅ | Paginated |
-| `GET /users/me/saved` | ✅ | |
-| `GET /users/me/liked` | ✅ | |
+| `GET /users/me/saved` | ✅ | Resolves `video`, `movie`, `podcast_episode`, `vertical_episode`, `vertical_series` |
+| `GET /users/me/liked` | ✅ | Resolves `video`, `podcast_episode`, `vertical_episode` |
 | `GET /users/me/notifications` | ✅ | |
 | `PUT /users/me/notifications/:id/read` | ✅ | |
 | `PUT /users/me/notifications/read-all` | ✅ | |
 | `DELETE /users/me/notifications` | ✅ | |
-| `GET /users/:username` | ✅ | Public profile + `isLive`, `liveStreamId`, `isFollowing`, `isChannelMember` |
+| `GET /users/:username` | ✅ | Public profile + `isLive`, `liveStreamId`, `isFollowing`, `isChannelMember`, `liveAlertsOn` |
 | `GET /users/:username/playlists` | ✅ | Public playlists |
 | `GET /users/:username/videos` | ✅ | `?page=&limit=` — public ready videos |
 | `POST /users/:username/follow` | ✅ | |
 | `DELETE /users/:username/follow` | ✅ | |
+| `POST /users/:username/live-alerts` | ✅ | Toggle per-creator live notifications; subscribers get in-app `live` notification when stream goes live |
 
 ---
 
@@ -230,15 +243,20 @@ Aggregates: `liveNow`, `featuredLive`, `trending`, `newReleases`, `movies`, `fea
 |-------|--------|
 | `POST /videos/upload/init` | ✅ Creates `Video` + presigned PUT (R2/S3) or local multipart URL; stores `rawObjectKey` |
 | `POST /videos/upload/complete` | ✅ Verifies object, enqueues BullMQ `video-processing` job |
-| `GET /videos/feed/shorts` | ✅ `?cursor=` |
+| `GET /videos/feed/shorts` | ✅ `?cursor=` — optional Bearer adds `liked`, `saved`, `disliked` per card |
 | `GET /videos/feed/movies` | ✅ `?page=&limit=` |
 | `GET /videos/feed/movies/featured` | ✅ |
-| `GET /videos/:id` | ✅ Full video + creator (`playbackUrl`, `videoUrl`) |
-| `GET /videos/:id/comments` | ✅ `?page=&limit=` |
+| `GET /videos/:id` | ✅ Optional Bearer → `liked`, `saved`, `disliked`, `isFollowing`, `dislikesCount` |
+| `POST /videos/:id/view` | ✅ Increment `viewsCount` (call on playback start) |
+| `GET /videos/:id/comments` | ✅ `?page=&limit=` — optional Bearer → `liked` on each comment/reply |
 | `POST /videos/:id/comments` | ✅ `{ body, parentId? }` |
-| `POST /videos/:id/like` | ✅ Toggle |
+| `POST /videos/comments/:commentId/like` | ✅ Toggle comment like |
+| `POST /videos/:id/like` | ✅ Toggle (mutually exclusive with dislike) |
+| `POST /videos/:id/dislike` | ✅ Toggle (mutually exclusive with like) |
 | `POST /videos/:id/save` | ✅ Toggle |
 | `POST /videos/:id/report` | ✅ `{ reason?, details? }` |
+
+**Engagement model:** Likes and dislikes are stored in `likes` / `dislikes` tables with denormalized counters on `videos`. Comment likes use `likes` with `target_type: comment`.
 
 ---
 
@@ -247,7 +265,7 @@ Aggregates: `liveNow`, `featuredLive`, `trending`, `newReleases`, `movies`, `fea
 | Route | Auth | When |
 |-------|------|------|
 | `POST /media/upload/:videoId` | Bearer | `STORAGE_DRIVER=local` — multipart video after `upload/init` |
-| `POST /media/profile-upload` | Bearer | Local — avatar/banner after `POST /users/me/avatar/upload` or `banner/upload` |
+| `POST /media/profile-upload` | Bearer | Local — avatar/banner/streamer ID after respective `POST /users/me/*/upload` |
 | `POST /media/podcast-upload` | Bearer | Local — audio after `POST /podcasts/episodes/:id/upload/init` |
 
 For S3/R2, clients use presigned PUT URLs from init endpoints instead of these routes.
@@ -317,7 +335,7 @@ Bearer required.
 |-------|--------|
 | `POST /streams/init` | ✅ `{ title, category? }` — requires `streamer_status: approved`; RTMP key + MediaMTX webhooks |
 | `POST /streams/mediamtx/auth` | ✅ MediaMTX HTTP auth (no Bearer) |
-| `POST /streams/webhooks/ready` | ✅ `?path=live/{streamKey}` — marks stream live |
+| `POST /streams/webhooks/ready` | ✅ `?path=live/{streamKey}` — marks stream live; notifies `creator_live_alerts` subscribers |
 | `POST /streams/webhooks/done` | ✅ Ends stream |
 | `GET /streams/live` | ✅ All `live` streams |
 | `GET /streams/:id` | ✅ By stream UUID **or** creator `username` (e.g. `progamerx`) |
@@ -348,10 +366,11 @@ Bearer required.
 | `POST /podcasts/shows/:showId/episodes` | Bearer | ✅ Create episode shell |
 | `POST /podcasts/episodes/:id/upload/init` | Bearer | ✅ Audio upload (R2 or local `POST /media/podcast-upload`) |
 | `POST /podcasts/episodes/:id/upload/complete` | Bearer | ✅ ffprobe duration → `ready` |
-| `GET /podcasts/episodes/feed` | — | ✅ Latest episodes |
-| `GET /podcasts/episodes/:id` | Optional JWT | ✅ Episode + `liked` when authenticated |
-| `POST /podcasts/episodes/:id/play` | Optional JWT | ✅ Increment plays |
+| `GET /podcasts/episodes/feed` | Optional JWT | ✅ Latest episodes + `liked` / `saved` when authenticated |
+| `GET /podcasts/episodes/:id` | Optional JWT | ✅ Episode + `liked` + `saved` when authenticated |
+| `POST /podcasts/episodes/:id/play` | — | ✅ Increment plays |
 | `POST /podcasts/episodes/:id/like` | Bearer | ✅ Toggle like |
+| `POST /podcasts/episodes/:id/save` | Bearer | ✅ Toggle save (favorites) |
 
 Frontend: `/podcasts` (API-only, no mocks), `/podcast/:id`, profile settings **Podcasts** for show/episode upload, `POST /history/progress` with `contentType: podcast_episode`.
 
@@ -361,6 +380,7 @@ Frontend: `/podcasts` (API-only, no mocks), `/podcast/:id`, profile settings **P
 
 | Route | Auth | Status |
 |-------|------|--------|
+| `GET /playlists/discover` | — | ✅ `?limit=` — public playlists sorted by item count |
 | `GET /playlists/me` | Bearer | ✅ Owner’s playlists |
 | `POST /playlists` | Bearer | ✅ `{ title, description?, type: video\|podcast\|mixed, visibility?, coverUrl? }` |
 | `PUT /playlists/:id` | Bearer | ✅ Update metadata |
@@ -409,7 +429,11 @@ Returns `{ ad: ServedAd | null }` from active campaigns. With Bearer and active 
 |-------|--------|
 | `GET /verticals` | ✅ `{ items: VerticalSeriesCard[] }` |
 | `GET /verticals/:slug` | ✅ Series metadata + episode list |
-| `GET /verticals/:slug/episodes/:episodeNumber` | ✅ `{ series, episode, nextEpisode }` |
+| `GET /verticals/:slug/episodes/:episodeNumber` | ✅ Optional JWT — `liked`, `saved`, `viewsCount`, `likesCount` on episode; `saved` on series |
+| `POST /verticals/episodes/:episodeId/view` | ✅ Increment episode `viewsCount` |
+| `POST /verticals/episodes/:episodeId/like` | ✅ Bearer — toggle like |
+| `POST /verticals/episodes/:episodeId/save` | ✅ Bearer — toggle episode save |
+| `POST /verticals/series/:seriesId/save` | ✅ Bearer — toggle series save |
 | `GET /verticals/me/series` | ✅ Bearer — creator admin |
 | `POST /verticals/series` | ✅ `{ slug, title, tagline?, description?, genre?, posterUrl? }` |
 | `POST /verticals/series/:slug/episodes` | ✅ `{ episodeNumber, title, description?, cliffhanger?, durationSeconds? }` |
@@ -434,7 +458,7 @@ Founder pillars: Podcasts, Sports, Concerts, Community, Education. **Backend onl
 
 | Route | Status |
 |-------|--------|
-| `POST /analytics/track` | ✅ Batch events |
+| `POST /analytics/track` | ✅ Batch events — optional JWT (`share`, `view`, etc.) |
 | `GET /analytics/creators/me/dashboard` | ✅ Impact dashboard |
 | `GET /analytics/creators/me/stats` | ✅ |
 | `GET /analytics/creators/me/content` | ✅ |
@@ -553,7 +577,7 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 
 | Route | Body |
 |-------|------|
-| `POST /reports` | `{ targetType: video \| stream \| user \| comment, targetId, reason, details? }` — `reason`: `spam` \| `nudity` \| `violence` \| `harassment` \| `other` |
+| `POST /reports` | `{ targetType: video \| stream \| user \| comment \| podcast_episode \| vertical_episode, targetId, reason, details? }` — `reason`: `spam` \| `nudity` \| `violence` \| `harassment` \| `other` |
 
 ---
 

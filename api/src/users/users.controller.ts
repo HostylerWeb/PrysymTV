@@ -63,6 +63,19 @@ export class UsersController {
     );
   }
 
+  @Post('me/streamer-id/upload')
+  @UseGuards(JwtAuthGuard)
+  initStreamerIdUpload(
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: { mimeType: string; fileName?: string },
+  ) {
+    return this.users.initStreamerIdUpload(
+      user.id,
+      body.mimeType,
+      body.fileName,
+    );
+  }
+
   @Get('me/notification-preferences')
   @UseGuards(JwtAuthGuard)
   getNotificationPrefs(@CurrentUser() user: AuthUserPayload) {
@@ -213,5 +226,14 @@ export class UsersController {
     @Param('username') username: string,
   ) {
     return this.users.unfollow(user.id, username);
+  }
+
+  @Post(':username/live-alerts')
+  @UseGuards(JwtAuthGuard)
+  toggleLiveAlerts(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('username') username: string,
+  ) {
+    return this.users.toggleLiveAlert(user.id, username);
   }
 }

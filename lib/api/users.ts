@@ -54,6 +54,7 @@ export type PublicCreatorProfile = {
   isFollowing?: boolean;
   /** Paid channel membership (30-day); free follow is `isFollowing`. */
   isChannelMember?: boolean;
+  liveAlertsOn?: boolean;
   socialLinks: Array<{ label: string; url: string; sortOrder: number }>;
 };
 
@@ -103,4 +104,20 @@ export async function applyStreamer(description: string, idDocumentUrl: string) 
       body: { description, idDocumentUrl },
     },
   );
+}
+
+export function toggleCreatorLiveAlerts(username: string) {
+  return apiRequest<{ enabled: boolean }>(
+    `/users/${encodeURIComponent(username)}/live-alerts`,
+    { method: "POST" },
+  );
+}
+
+export function replaceSocialLinks(
+  links: Array<{ label: string; url: string; sortOrder: number }>,
+) {
+  return apiRequest<MeResponse>("/users/me/social-links", {
+    method: "PUT",
+    body: { links },
+  });
 }

@@ -35,6 +35,11 @@ export type VideoCard = {
   thumbnailUrl: string | null;
   durationSeconds: number;
   viewsCount: number;
+  likesCount?: number;
+  commentsCount?: number;
+  liked?: boolean;
+  saved?: boolean;
+  disliked?: boolean;
   type: string;
   category: string | null;
   channel: string;

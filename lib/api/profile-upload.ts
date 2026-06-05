@@ -7,7 +7,7 @@ export type ProfileUploadInit = {
   uploadHeaders: Record<string, string>;
   expiresIn: number;
   publicUrl: string;
-  kind: "avatar" | "banner";
+  kind: "avatar" | "banner" | "streamer_id";
 };
 
 export function initAvatarUpload(file: File) {
@@ -22,6 +22,16 @@ export function initAvatarUpload(file: File) {
 
 export function initBannerUpload(file: File) {
   return apiRequest<ProfileUploadInit>("/users/me/banner/upload", {
+    method: "POST",
+    body: {
+      mimeType: file.type || "image/jpeg",
+      fileName: file.name,
+    },
+  });
+}
+
+export function initStreamerIdUpload(file: File) {
+  return apiRequest<ProfileUploadInit>("/users/me/streamer-id/upload", {
     method: "POST",
     body: {
       mimeType: file.type || "image/jpeg",

@@ -42,10 +42,10 @@ import type {
 import {
   formatDuration,
   formatViewCount,
-  historyProgressPercent,
-  savedItemLabel,
   videoThumbnail,
 } from "@/lib/format-media"
+import { mapHistoryToSettingsItems } from "@/lib/map-history"
+import { mapLikedItemCard, mapSavedItemCard } from "@/lib/map-profile-items"
 
 const tabs = [
   { id: "videos", label: "Videos", icon: Grid3X3 },
@@ -73,6 +73,7 @@ const VALID_SETTINGS_SCREENS: ProfileSettingsScreen[] = [
   "verticals",
   "podcasts",
   "playlists",
+  "social",
 ]
 
 function ProfilePageContent() {
@@ -448,54 +449,37 @@ function ProfilePageContent() {
             <p className="text-sm text-muted-foreground py-4">Loading history…</p>
           ) : watchHistory.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4">
-              No watch history yet. Videos you play will appear here.
+              No watch history yet. Content you play will appear here.
             </p>
           ) : (
-            watchHistory
-              .filter((item) => item.video)
-              .map((item) => {
-                const video = item.video!
-                const channel =
-                  video.creator?.displayName ||
-                  (video.creator?.username
-                    ? `@${video.creator.username}`
-                    : "Prysym TV")
-                const progress = historyProgressPercent(
-                  item.progressSeconds,
-                  video.durationSeconds,
-                )
-                return (
-                  <Link
-                    key={`${item.contentType}-${item.contentId}`}
-                    href={`/watch/${item.contentId}`}
-                  >
-                    <div className="flex-shrink-0 w-44 cursor-pointer group">
-                      <div className="relative aspect-video rounded-lg overflow-hidden bg-muted mb-2">
-                        <img
-                          src={videoThumbnail(video.thumbnailUrl)}
-                          alt={video.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <div className="w-10 h-10 rounded-full bg-foreground/90 flex items-center justify-center">
-                            <Play className="w-4 h-4 text-background fill-background ml-0.5" />
-                          </div>
-                        </div>
-                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-muted">
-                          <div
-                            className="h-full bg-primary"
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
+            mapHistoryToSettingsItems(watchHistory).map((item) => (
+              <Link key={item.id} href={item.href}>
+                <div className="flex-shrink-0 w-44 cursor-pointer group">
+                  <div className="relative aspect-video rounded-lg overflow-hidden bg-muted mb-2">
+                    <img
+                      src={item.thumbnail}
+                      alt={item.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-full bg-foreground/90 flex items-center justify-center">
+                        <Play className="w-4 h-4 text-background fill-background ml-0.5" />
                       </div>
-                      <p className="text-xs font-medium text-foreground line-clamp-1">
-                        {video.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{channel}</p>
                     </div>
-                  </Link>
-                )
-              })
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-muted">
+                      <div
+                        className="h-full bg-primary"
+                        style={{ width: `${item.progress}%` }}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs font-medium text-foreground line-clamp-1">
+                    {item.title}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{item.channel}</p>
+                </div>
+              </Link>
+            ))
           )}
         </div>
       </div>
@@ -531,7 +515,7 @@ function ProfilePageContent() {
         ) : null}
 
         {activeTab === "videos" && !tabsLoading && myVideos.length === 0 ? (
-          <ProfileEmpty message="You have not uploaded any videos yet. Uploads arrive in Phase B." />
+          <ProfileEmpty message="You have not uploaded any videos yet. Open Settings → Your Videos to upload." />
         ) : null}
 
         {activeTab === "videos" && myVideos.length > 0 ? (
@@ -563,62 +547,57 @@ function ProfilePageContent() {
         ) : null}
 
         {activeTab === "saved" && !tabsLoading && savedItems.length === 0 ? (
-          <ProfileEmpty message="Nothing saved yet. Save videos from the watch page when that feature is live." />
+          <ProfileEmpty message="Nothing saved yet. Tap Save on any video, short, podcast, or vertical episode." />
         ) : null}
 
         {activeTab === "saved" && savedItems.length > 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-            {savedItems.map((item) => {
-              const href = item.video ? `/watch/${item.video.id}` : "#"
-              const title = item.video?.title ?? `Saved ${savedItemLabel(item.itemType)}`
-              const thumb = videoThumbnail(item.video?.thumbnailUrl)
-              return (
-                <Link
-                  key={`${item.itemType}-${item.itemId}`}
-                  href={href}
-                  className={!item.video ? "pointer-events-none opacity-60" : undefined}
-                >
+            {savedItems
+              .map((item) => mapSavedItemCard(item))
+              .filter((card): card is NonNullable<typeof card> => card !== null)
+              .map((card) => (
+                <Link key={card.key} href={card.href}>
                   <div className="relative aspect-video rounded-lg overflow-hidden bg-muted cursor-pointer group">
                     <img
-                      src={thumb}
-                      alt={title}
+                      src={card.thumbnail}
+                      alt={card.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
                     <div className="absolute bottom-2 left-2 right-2">
-                      <span className="text-xs text-primary font-medium">
-                        {savedItemLabel(item.itemType)}
-                      </span>
-                      <p className="text-sm text-white font-medium line-clamp-1">
-                        {title}
-                      </p>
+                      <span className="text-xs text-primary font-medium">{card.label}</span>
+                      <p className="text-sm text-white font-medium line-clamp-1">{card.title}</p>
                     </div>
                   </div>
                 </Link>
-              )
-            })}
+              ))}
           </div>
         ) : null}
 
         {activeTab === "liked" && !tabsLoading && likedItems.length === 0 ? (
-          <ProfileEmpty message="No liked videos yet." />
+          <ProfileEmpty message="Nothing liked yet. Like videos, podcasts, or vertical episodes as you browse." />
         ) : null}
 
         {activeTab === "liked" && likedItems.length > 0 ? (
           <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 md:gap-3">
             {likedItems
-              .filter((item) => item.video)
-              .map((item) => (
-                <Link key={item.targetId} href={`/watch/${item.video!.id}`}>
+              .map((item) => mapLikedItemCard(item))
+              .filter((card): card is NonNullable<typeof card> => card !== null)
+              .map((card) => (
+                <Link key={card.key} href={card.href}>
                   <div className="relative aspect-square rounded-lg overflow-hidden bg-muted cursor-pointer group">
                     <img
-                      src={videoThumbnail(item.video!.thumbnailUrl)}
-                      alt={item.video!.title}
+                      src={card.thumbnail}
+                      alt={card.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                     <div className="absolute top-2 right-2">
                       <Heart className="w-4 h-4 text-primary fill-primary" />
                     </div>
+                    <p className="absolute bottom-1.5 left-1.5 right-1.5 text-[10px] text-white line-clamp-2">
+                      {card.title}
+                    </p>
                   </div>
                 </Link>
               ))}

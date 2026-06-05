@@ -4,7 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ContentStatus, VerticalSeriesStatus } from '@prisma/client';
+import {
+  ContentStatus,
+  LikeTargetType,
+  SavedItemType,
+  VerticalSeriesStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AttachEpisodeVideoDto } from './dto/attach-episode-video.dto';
 import { CreateVerticalEpisodeDto } from './dto/create-vertical-episode.dto';
@@ -56,7 +61,7 @@ export class VerticalsService {
     return series;
   }
 
-  async getEpisode(slug: string, episodeNumber: number) {
+  async getEpisode(slug: string, episodeNumber: number, viewerId?: string) {
     const series = await this.prisma.verticalSeries.findFirst({
       where: { slug, status: VerticalSeriesStatus.published },
       select: { id: true, slug: true, title: true, creatorId: true, posterUrl: true },
@@ -81,6 +86,44 @@ export class VerticalsService {
       select: { episodeNumber: true, title: true },
     });
 
+    let liked = false;
+    let saved = false;
+    let seriesSaved = false;
+    if (viewerId) {
+      const [likeRow, episodeSave, seriesSave] = await Promise.all([
+        this.prisma.like.findUnique({
+          where: {
+            userId_targetType_targetId: {
+              userId: viewerId,
+              targetType: LikeTargetType.vertical_episode,
+              targetId: episode.id,
+            },
+          },
+        }),
+        this.prisma.savedItem.findUnique({
+          where: {
+            userId_itemType_itemId: {
+              userId: viewerId,
+              itemType: SavedItemType.vertical_episode,
+              itemId: episode.id,
+            },
+          },
+        }),
+        this.prisma.savedItem.findUnique({
+          where: {
+            userId_itemType_itemId: {
+              userId: viewerId,
+              itemType: SavedItemType.vertical_series,
+              itemId: series.id,
+            },
+          },
+        }),
+      ]);
+      liked = !!likeRow;
+      saved = !!episodeSave;
+      seriesSaved = !!seriesSave;
+    }
+
     return {
       series: {
         id: series.id,
@@ -88,6 +131,7 @@ export class VerticalsService {
         title: series.title,
         creatorId: series.creatorId,
         posterUrl: series.posterUrl,
+        saved: seriesSaved,
       },
       episode: {
         id: episode.id,
@@ -96,9 +140,162 @@ export class VerticalsService {
         videoUrl: episode.videoUrl,
         durationSeconds: episode.durationSeconds,
         cliffhanger: episode.cliffhanger,
+        viewsCount: episode.viewsCount,
+        likesCount: episode.likesCount,
+        liked,
+        saved,
       },
       nextEpisode: next,
     };
+  }
+
+  async recordEpisodeView(episodeId: string) {
+    const episode = await this.prisma.verticalEpisode.findUnique({
+      where: { id: episodeId },
+    });
+    if (!episode || episode.status !== ContentStatus.ready) {
+      throw new NotFoundException('Episode not found');
+    }
+    await this.prisma.verticalEpisode.update({
+      where: { id: episodeId },
+      data: { viewsCount: { increment: 1 } },
+    });
+    return { success: true, viewsCount: episode.viewsCount + 1 };
+  }
+
+  async toggleEpisodeLike(userId: string, episodeId: string) {
+    const episode = await this.prisma.verticalEpisode.findUnique({
+      where: { id: episodeId },
+    });
+    if (!episode || episode.status !== ContentStatus.ready) {
+      throw new NotFoundException('Episode not found');
+    }
+
+    const existing = await this.prisma.like.findUnique({
+      where: {
+        userId_targetType_targetId: {
+          userId,
+          targetType: LikeTargetType.vertical_episode,
+          targetId: episodeId,
+        },
+      },
+    });
+
+    if (existing) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.like.delete({
+          where: {
+            userId_targetType_targetId: {
+              userId,
+              targetType: LikeTargetType.vertical_episode,
+              targetId: episodeId,
+            },
+          },
+        });
+        await tx.verticalEpisode.update({
+          where: { id: episodeId },
+          data: { likesCount: { decrement: 1 } },
+        });
+      });
+      return { liked: false };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.like.create({
+        data: {
+          userId,
+          targetType: LikeTargetType.vertical_episode,
+          targetId: episodeId,
+        },
+      });
+      await tx.verticalEpisode.update({
+        where: { id: episodeId },
+        data: { likesCount: { increment: 1 } },
+      });
+    });
+    return { liked: true };
+  }
+
+  async toggleEpisodeSave(userId: string, episodeId: string) {
+    const episode = await this.prisma.verticalEpisode.findUnique({
+      where: { id: episodeId },
+    });
+    if (!episode || episode.status !== ContentStatus.ready) {
+      throw new NotFoundException('Episode not found');
+    }
+
+    const existing = await this.prisma.savedItem.findUnique({
+      where: {
+        userId_itemType_itemId: {
+          userId,
+          itemType: SavedItemType.vertical_episode,
+          itemId: episodeId,
+        },
+      },
+    });
+
+    if (existing) {
+      await this.prisma.savedItem.delete({
+        where: {
+          userId_itemType_itemId: {
+            userId,
+            itemType: SavedItemType.vertical_episode,
+            itemId: episodeId,
+          },
+        },
+      });
+      return { saved: false };
+    }
+
+    await this.prisma.savedItem.create({
+      data: {
+        userId,
+        itemType: SavedItemType.vertical_episode,
+        itemId: episodeId,
+      },
+    });
+    return { saved: true };
+  }
+
+  async toggleSeriesSave(userId: string, seriesId: string) {
+    const series = await this.prisma.verticalSeries.findUnique({
+      where: { id: seriesId },
+    });
+    if (!series || series.status !== VerticalSeriesStatus.published) {
+      throw new NotFoundException('Series not found');
+    }
+
+    const existing = await this.prisma.savedItem.findUnique({
+      where: {
+        userId_itemType_itemId: {
+          userId,
+          itemType: SavedItemType.vertical_series,
+          itemId: seriesId,
+        },
+      },
+    });
+
+    if (existing) {
+      await this.prisma.savedItem.delete({
+        where: {
+          userId_itemType_itemId: {
+            userId,
+            itemType: SavedItemType.vertical_series,
+            itemId: seriesId,
+          },
+        },
+      });
+      return { saved: false };
+    }
+
+    await this.prisma.savedItem.create({
+      data: {
+        userId,
+        itemType: SavedItemType.vertical_series,
+        itemId: seriesId,
+      },
+    });
+    return { saved: true };
   }
 
   async createSeries(creatorId: string, dto: CreateVerticalSeriesDto) {

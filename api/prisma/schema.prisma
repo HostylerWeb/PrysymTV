@@ -90,13 +90,20 @@ enum WatchContentType {
 enum LikeTargetType {
   video
   podcast_episode
+  vertical_episode
   comment
+}
+
+enum DislikeTargetType {
+  video
 }
 
 enum SavedItemType {
   video
   movie
   podcast_episode
+  vertical_episode
+  vertical_series
   live
   playlist
 }
@@ -116,6 +123,8 @@ enum ReportTargetType {
   comment
   stream
   user
+  podcast_episode
+  vertical_episode
 }
 
 enum ReportReason {
@@ -403,7 +412,10 @@ model User {
   followers             Follow[]            @relation("Following")
   following             Follow[]            @relation("Follower")
   likes                 Like[]
+  dislikes              Dislike[]
   savedItems            SavedItem[]
+  liveAlertsSubscribed  CreatorLiveAlert[] @relation("LiveAlertSubscriber")
+  liveAlertSubscribers  CreatorLiveAlert[] @relation("LiveAlertCreator")
   watchHistory          WatchHistory[]
   notifications         Notification[]      @relation("NotificationRecipient")
   notificationsActed    Notification[]      @relation("NotificationActor")
@@ -532,6 +544,7 @@ model Video {
   status          ContentStatus @default(processing)
   viewsCount      Int           @default(0) @map("views_count")
   likesCount      Int           @default(0) @map("likes_count")
+  dislikesCount   Int           @default(0) @map("dislikes_count")
   commentsCount   Int           @default(0) @map("comments_count")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
@@ -772,6 +785,28 @@ model Like {
 
   @@id([userId, targetType, targetId])
   @@map("likes")
+}
+
+model Dislike {
+  userId     String           @map("user_id") @db.Uuid
+  targetType DislikeTargetType @map("target_type")
+  targetId   String           @map("target_id") @db.Uuid
+  createdAt  DateTime         @default(now()) @map("created_at")
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, targetType, targetId])
+  @@map("dislikes")
+}
+
+model CreatorLiveAlert {
+  userId    String   @map("user_id") @db.Uuid
+  creatorId String   @map("creator_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation("LiveAlertSubscriber", fields: [userId], references: [id], onDelete: Cascade)
+  creator   User     @relation("LiveAlertCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@id([userId, creatorId])
+  @@map("creator_live_alerts")
 }
 
 model SavedItem {
@@ -1280,6 +1315,8 @@ model VerticalEpisode {
   durationSeconds Int           @default(120) @map("duration_seconds")
   cliffhanger     String?       @map("cliffhanger")
   status          ContentStatus @default(ready)
+  viewsCount      Int           @default(0) @map("views_count")
+  likesCount      Int           @default(0) @map("likes_count")
   createdAt       DateTime      @default(now()) @map("created_at")
   series          VerticalSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 

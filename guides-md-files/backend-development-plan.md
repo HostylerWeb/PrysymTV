@@ -1,6 +1,6 @@
 # Master Backend Development Plan: 0 to 100%
 
-This document serves as the ultimate blueprint and checklist for building the **Prysym TV** backend. It details the architecture, database schema, API endpoints, and a week-by-week implementation checklist. The Next.js frontend (`/app`) is **UI-complete** with mock data in `lib/mock-data.ts` plus a few inline mocks on `/profile` — this plan is aligned to every screen, modal, and settings panel the UI exposes.
+This document serves as the ultimate blueprint and checklist for building the **Prysym TV** backend. It details the architecture, database schema, API endpoints, and a week-by-week implementation checklist. The Next.js frontend (`/app`) is **UI-complete** and largely wired to the API (home, movies, shorts, podcasts, verticals, live, profile, settings). Engagement parity is complete (**§14.5**). Next up: **Admin UI** (§14.6), then production deploy. Canonical API routes: [`api.md`](./api.md).
 
 **Stakeholder / mission requirements (Onyx Repository Foundation):** See [`stakeholder-product-requirements.md`](./stakeholder-product-requirements.md) for content verticals (Sports, Concerts, Community Events, Education), **GAF**, revenue splits (80/15/5 live events, 90/5/5 viewer support), Creator Store™, Impact Dashboard™, Insider Membership, and **14 implementation modules**. That doc is the gap analysis; Section **15** below integrates it into this roadmap.
 
@@ -830,7 +830,7 @@ Legacy bullets:
 
 ## 11. FRONTEND ↔ BACKEND ROUTE MAP (UI-COMPLETE)
 
-The Next.js frontend is **100% UI-ready**. Primary mock source: `lib/mock-data.ts`. Additional inline mocks: `app/profile/page.tsx` (`userVideos`, `savedItems`, `watchHistory`).
+The Next.js frontend is **UI-complete** and consumes live APIs on most routes (`lib/api/*`). `lib/mock-data.ts` was removed. Profile tabs use `GET /users/me/*` and `GET /history`. See **§14.5** for engagement/UI items still pending on the frontend.
 
 ### 11.1 Profile settings sheet (in-app UX)
 
@@ -959,7 +959,7 @@ These frontend UI elements exist but are **deferred** unless product decides oth
 | Feature | Frontend state | Backend decision |
 |---|---|---|
 | Stories (Instagram-style) | Mock viewer on home | No schema in V1 — use live status + shorts instead |
-| Dislike button | `/watch/[id]` | Not in V1 — likes only |
+| Dislike button | `/watch/[id]` | ✅ API: `POST /videos/:id/dislike` (mutually exclusive with like); frontend wiring pending |
 | Super Chat | Mentioned in CoinsModal | **In scope (stakeholder)** — Phase 2 Module 6 with 90/5/5 split; not replaced by gifts alone |
 | Sports / Concerts / Community / Education hubs | Not in UI routes yet | Phase 2 verticals + `live_events` — see stakeholder doc |
 | Creator Store™, GAF, Impact Dashboard, Insider $4.99 | Not in UI | Phase 2–3 — see stakeholder doc |
@@ -1001,7 +1001,31 @@ These frontend UI elements exist but are **deferred** unless product decides oth
 - [ ] `POST /history/progress` on interval during playback (watch, movie, podcast).
 - [ ] Socket.IO client for `/live/[id]` chat and gift animations.
 
-### 14.5 Monetization & admin
+### 14.5 Engagement parity ✅ (backend + frontend)
+
+| Feature | API | Frontend |
+|---------|-----|----------|
+| Video like/save/dislike hydration | `GET /videos/:id` + shorts feed | watch, movie, shorts |
+| Video view counter | `POST /videos/:id/view` | watch, movie, shorts |
+| Comment likes + replies | comments API | watch, shorts |
+| Follow hydration on watch | `isFollowing` on `GET /videos/:id` | watch |
+| Podcast save + feed hydration | podcasts save/like | podcast page, feed |
+| Vertical like/save/view | verticals engagement routes | vertical watch |
+| Creator notify bell | live-alerts | creator profile |
+| Streamer ID upload | streamer-id upload | streamer modal |
+| Share analytics | `POST /analytics/track` | ShareSheet |
+| Reports on podcasts/verticals | `podcast_episode`, `vertical_episode` | podcast + vertical watch |
+| Profile saved/liked tabs | `GET /me/saved`, `GET /me/liked` | profile (all item types) |
+| Playlist remove/reorder | playlists API | playlist detail (owner) |
+| History per-item delete | `DELETE /history/:type/:id` | settings history |
+| Social links editor | `PUT /users/me/social-links` | settings social |
+| Channel membership cancel | `DELETE /billing/subscriptions/:id` | settings premium |
+
+**Polish & QA (done):** profile saved/liked cards for podcast/vertical/series; continue-watching row uses full history mapper; playlist reorder; report modals on podcast/vertical; auth modal on vertical engagement.
+
+**Next:** Admin moderation UI (§14.6), then production deploy.
+
+### 14.6 Monetization & admin
 - [ ] `CoinsModal` → Stripe checkout + webhook balance update.
 - [ ] Gifts → `GET /billing/gifts/catalog` + `POST /billing/gifts/send`.
 - [ ] Premium → subscription create + webhook.

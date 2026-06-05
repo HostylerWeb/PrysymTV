@@ -10,7 +10,7 @@ export type CreatorDashboardResponse = {
     watchHours30d: number;
     subscribers: number;
     engagement30d: number;
-    retentionRate: string | null;
+    retentionRate: number | null;
   };
   advertising: {
     adImpressionsOnYourContent24h: number;
@@ -26,6 +26,7 @@ export type CreatorDashboardResponse = {
     merchandiseRevenueUsd: string;
     donationsUsd: string;
     pendingPayoutUsd: string;
+    availableBalanceUsd: string;
     lifetimeCreditsUsd: string;
   };
   communityImpact: {
@@ -44,28 +45,42 @@ export type CreatorDashboardResponse = {
     adImpressions30d: number;
     thumbnailUrl: string | null;
   }>;
-  content: Array<
-    CreatorDashboardResponse["topContent"][number] & {
-      commentsCount: number;
-      createdAt: string;
-    }
-  >;
+  content: Array<{
+    id: string;
+    title: string;
+    type: string;
+    vertical: string | null;
+    viewsCount: number;
+    likesCount: number;
+    commentsCount: number;
+    adImpressions30d: number;
+    thumbnailUrl: string | null;
+    createdAt: string;
+  }>;
 };
 
-export async function fetchCreatorDashboard() {
+export function fetchCreatorDashboard() {
   return apiRequest<CreatorDashboardResponse>("/analytics/creators/me/dashboard");
 }
 
-export async function trackContentAdImpression(body: {
-  campaignId: string;
-  creatorId: string;
-  videoId?: string;
-  placement: "home_banner" | "shorts_interstitial" | "movie_preroll";
-  viewerUserId?: string;
-}) {
-  return apiRequest<{ success: boolean }>("/ads/track/impression", {
+export type AnalyticsEventType = "view" | "share" | "watch_time" | "ad_impression" | "ad_click";
+
+export function trackAnalyticsEvents(
+  events: Array<{
+    eventType: AnalyticsEventType;
+    targetId?: string;
+    metadata?: Record<string, unknown>;
+  }>,
+) {
+  return apiRequest<{ success: boolean; recorded: number }>("/analytics/track", {
     method: "POST",
-    body,
-    auth: false,
+    auth: true,
+    body: { events },
   });
+}
+
+export function trackShare(targetId: string, metadata?: Record<string, unknown>) {
+  return trackAnalyticsEvents([
+    { eventType: "share", targetId, metadata },
+  ]).catch(() => {});
 }

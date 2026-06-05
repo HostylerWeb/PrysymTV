@@ -1,4 +1,4 @@
-/** Call API; on failure return mock/static fallback so UI stays usable offline. */
+/** Call API; on failure return empty fallback so UI shows empty states instead of fake data. */
 export async function withApiFallback<T>(
   fetcher: () => Promise<T>,
   fallback: T,

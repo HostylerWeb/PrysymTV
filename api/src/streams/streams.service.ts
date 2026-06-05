@@ -162,6 +162,32 @@ export class StreamsService {
 
     if (updated.count > 0) {
       this.logger.log(`Stream live: ${streamKey} → ${hlsPlaybackUrl}`);
+      const stream = await this.prisma.stream.findFirst({
+        where: { temporaryStreamToken: streamKey },
+        include: {
+          creator: {
+            select: { id: true, username: true, displayName: true },
+          },
+        },
+      });
+      if (stream) {
+        const alerts = await this.prisma.creatorLiveAlert.findMany({
+          where: { creatorId: stream.creatorId },
+        });
+        if (alerts.length > 0) {
+          const name =
+            stream.creator.displayName ?? stream.creator.username;
+          await this.prisma.notification.createMany({
+            data: alerts.map((a) => ({
+              userId: a.userId,
+              type: 'live' as const,
+              actorId: stream.creatorId,
+              referenceId: stream.id,
+              message: `${name} is live now`,
+            })),
+          });
+        }
+      }
     }
     return { ok: true, hlsPlaybackUrl };
   }

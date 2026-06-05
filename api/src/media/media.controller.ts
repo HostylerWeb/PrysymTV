@@ -95,6 +95,7 @@ export class MediaController {
     const allowedPrefixes = [
       `uploads/avatars/${user.id}`,
       `uploads/banners/${user.id}`,
+      `uploads/streamer-ids/${user.id}`,
     ];
     if (!allowedPrefixes.some((p) => key === p || key.startsWith(`${p}.`))) {
       throw new ForbiddenException('Invalid profile image key');

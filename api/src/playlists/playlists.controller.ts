@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -77,6 +78,12 @@ export class PlaylistsController {
     @Body() body: ReorderPlaylistDto,
   ) {
     return this.playlists.reorder(user.id, id, body);
+  }
+
+  @Get('discover')
+  discover(@Query('limit') limit?: string) {
+    const n = limit ? Number(limit) : 12;
+    return this.playlists.discoverPublic(Number.isFinite(n) ? n : 12);
   }
 
   @Get(':id')

@@ -94,6 +94,10 @@ export function savedItemLabel(itemType: string): string {
       return "Live";
     case "podcast_episode":
       return "Podcast";
+    case "vertical_episode":
+      return "Vertical";
+    case "vertical_series":
+      return "Series";
     case "playlist":
       return "Playlist";
     default:

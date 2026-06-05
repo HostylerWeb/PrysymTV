@@ -34,6 +34,13 @@ export type PlaylistSummary = {
   updatedAt?: string;
 };
 
+export function fetchDiscoverPlaylists(limit = 12) {
+  return apiRequest<{ items: PlaylistSummary[] }>(
+    `/playlists/discover?limit=${limit}`,
+    { auth: false },
+  );
+}
+
 export function fetchPlaylist(id: string) {
   return apiRequest<PlaylistDetail>(`/playlists/${id}`, { auth: false });
 }
@@ -98,4 +105,11 @@ export function removePlaylistItem(playlistId: string, playlistItemId: string) {
     `/playlists/${playlistId}/items/${playlistItemId}`,
     { method: "DELETE" },
   );
+}
+
+export function reorderPlaylistItems(playlistId: string, itemIds: string[]) {
+  return apiRequest<{ success: boolean }>(`/playlists/${playlistId}/reorder`, {
+    method: "PUT",
+    body: { itemIds },
+  });
 }

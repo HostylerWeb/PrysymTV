@@ -64,6 +64,14 @@ export type SavedItemRecord = {
   itemId: string;
   createdAt: string;
   video: VideoRecord | null;
+  podcastEpisode?: PodcastEpisodeRecord | null;
+  verticalEpisode?: VerticalEpisodeHistoryRecord | null;
+  verticalSeries?: {
+    id: string;
+    slug: string;
+    title: string;
+    posterUrl: string | null;
+  } | null;
 };
 
 export type LikedItemRecord = {
@@ -71,6 +79,8 @@ export type LikedItemRecord = {
   targetId: string;
   createdAt: string;
   video: VideoRecord | null;
+  podcastEpisode?: PodcastEpisodeRecord | null;
+  verticalEpisode?: VerticalEpisodeHistoryRecord | null;
 };
 
 export type PodcastEpisodeRecord = {

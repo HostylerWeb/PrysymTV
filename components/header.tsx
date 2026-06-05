@@ -76,6 +76,10 @@ export function Header({ onSearchClick, offsetContent = true }: HeaderProps) {
         </div>
       </header>
 
+      {offsetContent && (
+        <div className={APP_HEADER_HEIGHT_CLASS} aria-hidden="true" />
+      )}
+
       <NotificationsModal
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}

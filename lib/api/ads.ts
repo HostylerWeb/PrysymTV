@@ -1,5 +1,4 @@
 import { apiRequest, loadStoredAccessToken } from "@/lib/api-client";
-import { getAd, type MockAd } from "@/lib/mock-data";
 
 export type AdPlacement =
   | "home_banner"
@@ -25,18 +24,6 @@ export type AdAttribution = {
   viewerUserId?: string;
 };
 
-function mockToServed(ad: MockAd): ServedAd {
-  return {
-    id: ad.id,
-    title: ad.title,
-    mediaUrl: ad.mediaUrl,
-    clickThroughUrl: ad.clickThroughUrl,
-    placement: ad.placement,
-    mediaType: ad.mediaType,
-    skipAfterSeconds: ad.skipAfterSeconds ?? 0,
-  };
-}
-
 /**
  * Fetches an ad for the placement. Sends Bearer when logged in so premium users get ad-free from API.
  * Pass `skipFetch: true` when the client already knows the user is premium.
@@ -56,11 +43,8 @@ export async function fetchServedAd(
     if (res.adFree || !res.ad) return null;
     return res.ad;
   } catch {
-    /* API offline — fallback only for non-premium guests */
+    return null;
   }
-  if (hasToken) return null;
-  const mock = getAd(placement);
-  return mock ? mockToServed(mock) : null;
 }
 
 export async function trackAdImpression(attr: AdAttribution) {

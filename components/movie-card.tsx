@@ -1,7 +1,8 @@
 "use client"
 
-import { Play, Star } from "lucide-react"
+import { Heart, Play } from "lucide-react"
 import Link from "next/link"
+import { formatViewCount } from "@/lib/format-media"
 
 interface MovieCardProps {
   id: string
@@ -31,11 +32,12 @@ export function MovieCard({ id, title, poster, year, rating, genre }: MovieCardP
             </div>
           </div>
 
-          {/* Rating Badge */}
+          {rating > 0 && (
           <div className="absolute top-2 left-2 flex items-center gap-1 bg-background/80 backdrop-blur-sm px-2 py-1 rounded">
-            <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-            <span className="text-xs font-medium text-foreground">{rating}</span>
+            <Heart className="w-3 h-3 text-primary fill-primary" />
+            <span className="text-xs font-medium text-foreground">{formatViewCount(rating)}</span>
           </div>
+          )}
         </div>
 
         {/* Info */}

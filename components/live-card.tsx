@@ -2,6 +2,7 @@
 
 import { Users } from "lucide-react"
 import Link from "next/link"
+import { userAvatarUrl } from "@/lib/user-avatar"
 
 interface LiveCardProps {
   id: string
@@ -50,7 +51,7 @@ export function LiveCard({ id, slug, title, thumbnail, streamer, viewers, catego
         <div className="flex gap-3">
           <div className="w-10 h-10 rounded-full bg-muted flex-shrink-0 overflow-hidden ring-2 ring-primary">
             <img
-              src={avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${streamer}`}
+              src={userAvatarUrl(avatar, streamer)}
               alt={streamer}
               className="w-full h-full object-cover"
             />

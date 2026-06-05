@@ -29,6 +29,8 @@ export type PodcastEpisodeCard = {
   plays: string;
   audioUrl: string | null;
   description?: string;
+  liked?: boolean;
+  saved?: boolean;
 };
 
 type ApiShow = {
@@ -106,14 +108,19 @@ export function fetchPodcastShows(page = 1, limit = 24) {
   );
 }
 
+type ApiEpisodeWithFlags = ApiEpisode & { liked?: boolean; saved?: boolean };
+
 export function fetchPodcastEpisodesFeed(page = 1, limit = 30) {
   return withApiFallback(
     () =>
-      apiRequest<{ items: ApiEpisode[]; meta: PaginatedMeta }>(
+      apiRequest<{ items: ApiEpisodeWithFlags[]; meta: PaginatedMeta }>(
         `/podcasts/episodes/feed?page=${page}&limit=${limit}`,
-        { auth: false },
       ).then((res) => ({
-        items: res.items.map(mapEpisode),
+        items: res.items.map((e) => ({
+          ...mapEpisode(e),
+          liked: e.liked ?? false,
+          saved: e.saved ?? false,
+        })),
         meta: res.meta,
       })),
     { items: [], meta: { page: 1, limit, total: 0 } },
@@ -131,7 +138,9 @@ export function fetchPodcastFeatured(limit = 6) {
 }
 
 export function fetchPodcastEpisode(id: string) {
-  return apiRequest<ApiEpisode & { liked?: boolean }>(`/podcasts/episodes/${id}`);
+  return apiRequest<ApiEpisode & { liked?: boolean; saved?: boolean }>(
+    `/podcasts/episodes/${id}`,
+  );
 }
 
 export function recordPodcastPlay(episodeId: string) {
@@ -143,11 +152,16 @@ export function recordPodcastPlay(episodeId: string) {
 export function togglePodcastLike(episodeId: string) {
   return apiRequest<{ liked: boolean }>(`/podcasts/episodes/${episodeId}/like`, {
     method: "POST",
-    auth: true,
   });
 }
 
-export function mapPodcastEpisodeDetail(raw: ApiEpisode & { liked?: boolean }) {
+export function togglePodcastSave(episodeId: string) {
+  return apiRequest<{ saved: boolean }>(`/podcasts/episodes/${episodeId}/save`, {
+    method: "POST",
+  });
+}
+
+export function mapPodcastEpisodeDetail(raw: ApiEpisode & { liked?: boolean; saved?: boolean }) {
   const card = mapEpisode(raw);
   const publishedAt = raw.publishedAt ?? raw.createdAt ?? new Date().toISOString();
   return {
@@ -163,5 +177,6 @@ export function mapPodcastEpisodeDetail(raw: ApiEpisode & { liked?: boolean }) {
     hostSlug: raw.creator?.username,
     hostName: raw.creator?.displayName ?? raw.creator?.username ?? "Host",
     liked: raw.liked ?? false,
+    saved: raw.saved ?? false,
   };
 }

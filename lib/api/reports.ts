@@ -1,6 +1,12 @@
 import { apiRequest } from "@/lib/api-client";
 
-export type ReportTargetType = "video" | "comment" | "stream" | "user";
+export type ReportTargetType =
+  | "video"
+  | "comment"
+  | "stream"
+  | "user"
+  | "podcast_episode"
+  | "vertical_episode";
 
 export type ReportReason =
   | "spam"

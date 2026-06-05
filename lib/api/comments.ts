@@ -4,6 +4,7 @@ export type VideoComment = {
   id: string;
   body: string;
   likesCount: number;
+  liked?: boolean;
   createdAt: string;
   user: {
     id: string;
@@ -17,7 +18,6 @@ export type VideoComment = {
 export function fetchVideoComments(videoId: string, page = 1) {
   return apiRequest<{ items: VideoComment[]; meta: { page: number; limit: number; total: number } }>(
     `/videos/${videoId}/comments?page=${page}`,
-    { auth: false },
   );
 }
 
@@ -28,6 +28,13 @@ export function postVideoComment(videoId: string, body: string, parentId?: strin
   });
 }
 
+export function toggleCommentLike(commentId: string) {
+  return apiRequest<{ liked: boolean; likesCount: number }>(
+    `/videos/comments/${commentId}/like`,
+    { method: "POST" },
+  );
+}
+
 /** Normalize API/Prisma comment payloads for the UI. */
 export function normalizeVideoComment(raw: Record<string, unknown>): VideoComment {
   const user = (raw.user ?? {}) as VideoComment["user"];
@@ -35,6 +42,7 @@ export function normalizeVideoComment(raw: Record<string, unknown>): VideoCommen
     id: String(raw.id),
     body: String(raw.body ?? ""),
     likesCount: Number(raw.likesCount ?? 0),
+    liked: Boolean(raw.liked),
     createdAt:
       typeof raw.createdAt === "string"
         ? raw.createdAt

@@ -7,12 +7,19 @@ import {
 } from '@nestjs/common';
 import {
   ContentStatus,
+  DislikeTargetType,
   LikeTargetType,
   ReportReason,
   ReportTargetType,
   SavedItemType,
   VideoType,
 } from '@prisma/client';
+import {
+  enrichVideoCardsForViewer,
+  getLikedCommentIds,
+  getViewerVideoFlags,
+  savedItemTypeForVideo,
+} from '../common/engagement.util';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -115,7 +122,7 @@ export class VideosService {
     };
   }
 
-  async getOne(id: string) {
+  async getOne(id: string, viewerId?: string) {
     const video = await this.prisma.video.findUnique({
       where: { id },
       include: {
@@ -130,7 +137,33 @@ export class VideosService {
       },
     });
     if (!video) throw new NotFoundException('Video not found');
-    return this.toPublicVideo(video);
+
+    const flags = await getViewerVideoFlags(
+      this.prisma,
+      viewerId,
+      video.id,
+      video.type,
+    );
+
+    let isFollowing = false;
+    if (viewerId && viewerId !== video.creatorId) {
+      const follow = await this.prisma.follow.findUnique({
+        where: {
+          followerId_followingId: {
+            followerId: viewerId,
+            followingId: video.creatorId,
+          },
+        },
+      });
+      isFollowing = !!follow;
+    }
+
+    return {
+      ...this.toPublicVideo(video),
+      ...flags,
+      isFollowing,
+      dislikesCount: video.dislikesCount,
+    };
   }
 
   toPublicVideo(
@@ -143,6 +176,7 @@ export class VideosService {
       durationSeconds: number;
       viewsCount: number;
       likesCount: number;
+      dislikesCount: number;
       commentsCount: number;
       type: string;
       status: string;
@@ -165,7 +199,7 @@ export class VideosService {
     };
   }
 
-  async listComments(videoId: string, page = 1, limit = 30) {
+  async listComments(videoId: string, page = 1, limit = 30, viewerId?: string) {
     const video = await this.prisma.video.findUnique({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Video not found');
 
@@ -190,7 +224,24 @@ export class VideosService {
       this.prisma.comment.count({ where: { videoId, parentId: null } }),
     ]);
 
-    return { items, meta: { page, limit, total } };
+    const commentIds = items.flatMap((c) => [
+      c.id,
+      ...c.replies.map((r) => r.id),
+    ]);
+    const likedIds = await getLikedCommentIds(this.prisma, viewerId, commentIds);
+
+    const mapComment = (c: (typeof items)[0] | (typeof items)[0]['replies'][0]) => ({
+      ...c,
+      liked: likedIds.has(c.id),
+    });
+
+    return {
+      items: items.map((c) => ({
+        ...mapComment(c),
+        replies: c.replies.map((r) => mapComment(r)),
+      })),
+      meta: { page, limit, total },
+    };
   }
 
   async createComment(
@@ -219,7 +270,7 @@ export class VideosService {
     return comment;
   }
 
-  async shortsFeed(cursor?: string, limit = 20) {
+  async shortsFeed(cursor?: string, limit = 20, viewerId?: string) {
     const skip = cursor ? parseInt(cursor, 10) || 0 : 0;
     const items = await this.prisma.video.findMany({
       where: { type: VideoType.short, status: ContentStatus.ready, visibility: 'public' },
@@ -230,8 +281,20 @@ export class VideosService {
     });
     const hasMore = items.length > limit;
     const page = hasMore ? items.slice(0, limit) : items;
+    const typesById = new Map(page.map((v) => [v.id, v.type]));
+    const flags = await enrichVideoCardsForViewer(
+      this.prisma,
+      viewerId,
+      page.map((v) => v.id),
+      typesById,
+    );
+
     return {
-      items: page.map(mapVideoCard),
+      items: page.map((v) => {
+        const card = mapVideoCard(v);
+        const f = flags.get(v.id) ?? { liked: false, saved: false, disliked: false };
+        return { ...card, ...f };
+      }),
       nextCursor: hasMore ? String(skip + limit) : null,
     };
   }
@@ -260,6 +323,18 @@ export class VideosService {
       select: VIDEO_CARD_SELECT,
     });
     return { item: item ? mapVideoCard(item) : null };
+  }
+
+  async recordView(videoId: string) {
+    const video = await this.prisma.video.findUnique({ where: { id: videoId } });
+    if (!video || video.status !== ContentStatus.ready) {
+      throw new NotFoundException('Video not found');
+    }
+    await this.prisma.video.update({
+      where: { id: videoId },
+      data: { viewsCount: { increment: 1 } },
+    });
+    return { success: true, viewsCount: video.viewsCount + 1 };
   }
 
   async toggleLike(userId: string, videoId: string) {
@@ -296,6 +371,30 @@ export class VideosService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      const dislike = await tx.dislike.findUnique({
+        where: {
+          userId_targetType_targetId: {
+            userId,
+            targetType: DislikeTargetType.video,
+            targetId: videoId,
+          },
+        },
+      });
+      if (dislike) {
+        await tx.dislike.delete({
+          where: {
+            userId_targetType_targetId: {
+              userId,
+              targetType: DislikeTargetType.video,
+              targetId: videoId,
+            },
+          },
+        });
+        await tx.video.update({
+          where: { id: videoId },
+          data: { dislikesCount: { decrement: 1 } },
+        });
+      }
       await tx.like.create({
         data: { userId, targetType: LikeTargetType.video, targetId: videoId },
       });
@@ -304,15 +403,138 @@ export class VideosService {
         data: { likesCount: { increment: 1 } },
       });
     });
-    return { liked: true };
+    return { liked: true, disliked: false };
+  }
+
+  async toggleDislike(userId: string, videoId: string) {
+    const video = await this.prisma.video.findUnique({ where: { id: videoId } });
+    if (!video) throw new NotFoundException('Video not found');
+
+    const existing = await this.prisma.dislike.findUnique({
+      where: {
+        userId_targetType_targetId: {
+          userId,
+          targetType: DislikeTargetType.video,
+          targetId: videoId,
+        },
+      },
+    });
+
+    if (existing) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.dislike.delete({
+          where: {
+            userId_targetType_targetId: {
+              userId,
+              targetType: DislikeTargetType.video,
+              targetId: videoId,
+            },
+          },
+        });
+        await tx.video.update({
+          where: { id: videoId },
+          data: { dislikesCount: { decrement: 1 } },
+        });
+      });
+      return { disliked: false };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const like = await tx.like.findUnique({
+        where: {
+          userId_targetType_targetId: {
+            userId,
+            targetType: LikeTargetType.video,
+            targetId: videoId,
+          },
+        },
+      });
+      if (like) {
+        await tx.like.delete({
+          where: {
+            userId_targetType_targetId: {
+              userId,
+              targetType: LikeTargetType.video,
+              targetId: videoId,
+            },
+          },
+        });
+        await tx.video.update({
+          where: { id: videoId },
+          data: { likesCount: { decrement: 1 } },
+        });
+      }
+      await tx.dislike.create({
+        data: {
+          userId,
+          targetType: DislikeTargetType.video,
+          targetId: videoId,
+        },
+      });
+      await tx.video.update({
+        where: { id: videoId },
+        data: { dislikesCount: { increment: 1 } },
+      });
+    });
+    return { disliked: true, liked: false };
+  }
+
+  async toggleCommentLike(userId: string, commentId: string) {
+    const comment = await this.prisma.comment.findUnique({
+      where: { id: commentId },
+    });
+    if (!comment) throw new NotFoundException('Comment not found');
+
+    const existing = await this.prisma.like.findUnique({
+      where: {
+        userId_targetType_targetId: {
+          userId,
+          targetType: LikeTargetType.comment,
+          targetId: commentId,
+        },
+      },
+    });
+
+    if (existing) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.like.delete({
+          where: {
+            userId_targetType_targetId: {
+              userId,
+              targetType: LikeTargetType.comment,
+              targetId: commentId,
+            },
+          },
+        });
+        await tx.comment.update({
+          where: { id: commentId },
+          data: { likesCount: { decrement: 1 } },
+        });
+      });
+      return { liked: false, likesCount: Math.max(0, comment.likesCount - 1) };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.like.create({
+        data: {
+          userId,
+          targetType: LikeTargetType.comment,
+          targetId: commentId,
+        },
+      });
+      await tx.comment.update({
+        where: { id: commentId },
+        data: { likesCount: { increment: 1 } },
+      });
+    });
+    return { liked: true, likesCount: comment.likesCount + 1 };
   }
 
   async toggleSave(userId: string, videoId: string) {
     const video = await this.prisma.video.findUnique({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Video not found');
 
-    const itemType =
-      video.type === VideoType.movie ? SavedItemType.movie : SavedItemType.video;
+    const itemType = savedItemTypeForVideo(video.type);
 
     const existing = await this.prisma.savedItem.findUnique({
       where: { userId_itemType_itemId: { userId, itemType, itemId: videoId } },
@@ -320,7 +542,9 @@ export class VideosService {
 
     if (existing) {
       await this.prisma.savedItem.delete({
-        where: { userId_itemType_itemId: existing },
+        where: {
+          userId_itemType_itemId: { userId, itemType, itemId: videoId },
+        },
       });
       return { saved: false };
     }
