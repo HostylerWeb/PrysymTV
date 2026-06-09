@@ -48,12 +48,8 @@ import {
   updateNotificationPreference,
 } from "@/lib/api/notifications"
 import { mapHistoryToSettingsItems, type SettingsHistoryItem } from "@/lib/map-history"
-import {
-  attachVerticalEpisodeVideo,
-  createVerticalEpisode,
-  createVerticalSeries,
-  fetchMyVerticalSeries,
-} from "@/lib/api/verticals-admin"
+import { fetchMyVerticalSeries } from "@/lib/api/verticals-admin"
+import { VerticalSeriesWizard } from "@/components/vertical-series-wizard"
 import {
   createPodcastShow,
   fetchMyPodcastShows,
@@ -66,6 +62,7 @@ import {
   fetchMyPlaylists,
   type PlaylistSummary,
 } from "@/lib/api/playlists"
+import { fetchPodcastCategories, type ContentCategory } from "@/lib/api/categories"
 import { fetchCreatorDashboard, type CreatorDashboardResponse } from "@/lib/api/analytics"
 import {
   cancelCreatorSubscription,
@@ -101,7 +98,7 @@ const NOTIFICATION_PREFS = [
 ]
 
 const FAQS = [
-  { q: "How do I upload a video?", a: "Open Settings → Your Videos → Upload and pick a content type." },
+  { q: "How do I upload a video?", a: "Tap the + button in the header and choose Short, Long video, Podcast, or Micro-drama series." },
   { q: "How do I become a streamer?", a: "Apply from Settings → Become a Streamer. Once approved, use Go Live." },
   { q: "What are Coins?", a: "Coins let you send gifts during live streams and support creators." },
   { q: "How do I report content?", a: "Use the flag icon on any video, movie, or live stream page." },
@@ -116,14 +113,13 @@ const PREMIUM_TIERS = [
 const UPLOAD_TYPES = [
   { id: "short", label: "Short", icon: Video, description: "Vertical short-form (under 60s)" },
   { id: "video", label: "Video", icon: Video, description: "Long-form video" },
-  { id: "movie", label: "Movie", icon: Film, description: "Full-length movie" },
 ]
 
 /** Desktop-optimized sheet sizing (md+). */
 const SHEET_SHELL =
   "absolute bottom-0 left-0 right-0 md:top-1/2 md:left-1/2 md:right-auto md:-translate-x-1/2 md:-translate-y-1/2 bg-background rounded-t-3xl md:rounded-2xl shadow-2xl flex flex-col animate-in slide-in-from-bottom md:zoom-in-95 duration-300 max-h-[88vh] md:max-h-[min(820px,90vh)] md:border md:border-border/80"
 const SHEET_SIZE_DESKTOP =
-  "md:w-[min(600px,92vw)] lg:w-[640px] md:h-[90vh] md:max-h-[92vh] md:min-h-[90vh]"
+  "md:w-[min(720px,94vw)] lg:w-[760px] md:h-[90vh] md:max-h-[92vh] md:min-h-[90vh]"
 const SHEET_HEADER = "flex items-center gap-2 px-4 py-4 md:px-8 md:py-5 border-b border-border shrink-0"
 const SHEET_TITLE = "flex-1 text-center text-lg md:text-xl font-semibold truncate"
 const SHEET_BODY = "flex-1 overflow-y-auto overscroll-contain px-4 pb-6 md:px-8 md:pb-10"
@@ -150,6 +146,7 @@ interface ProfileSettingsSheetProps {
   onDarkModeToggle: () => void
   onCoinsClick: () => void
   onStreamerApply: () => void
+  onVerticalCreatorApply: () => void
   onLogout: () => void
   onRefreshUser?: () => Promise<void>
   /** Open directly to a sub-panel (e.g. from /profile?settings=notifications) */
@@ -164,6 +161,7 @@ export function ProfileSettingsSheet({
   onDarkModeToggle,
   onCoinsClick,
   onStreamerApply,
+  onVerticalCreatorApply,
   onLogout,
   onRefreshUser,
   initialScreen,
@@ -197,18 +195,16 @@ export function ProfileSettingsSheet({
   const [uploadDone, setUploadDone] = useState(false)
   const [uploadProcessing, setUploadProcessing] = useState(false)
   const [processingStatus, setProcessingStatus] = useState<string | null>(null)
-  const [verticalSlug, setVerticalSlug] = useState("")
-  const [verticalTitle, setVerticalTitle] = useState("")
-  const [episodeSeriesSlug, setEpisodeSeriesSlug] = useState("")
-  const [episodeNumber, setEpisodeNumber] = useState(1)
-  const [episodeTitle, setEpisodeTitle] = useState("")
-  const [lastEpisodeId, setLastEpisodeId] = useState<string | null>(null)
-  const [episodeVideoFile, setEpisodeVideoFile] = useState<File | null>(null)
-  const [verticalBusy, setVerticalBusy] = useState(false)
-  const [verticalMessage, setVerticalMessage] = useState<string | null>(null)
+  const [verticalWizardOpen, setVerticalWizardOpen] = useState(false)
+  const [verticalWizardIntent, setVerticalWizardIntent] = useState<
+    "new_series" | "add_episode" | undefined
+  >()
   const [myPodcastShows, setMyPodcastShows] = useState<MyPodcastShow[]>([])
   const [podcastShowTitle, setPodcastShowTitle] = useState("")
   const [podcastShowCategory, setPodcastShowCategory] = useState("General")
+  const [podcastCategoryOptions, setPodcastCategoryOptions] = useState<ContentCategory[]>([
+    { slug: "general", label: "General" },
+  ])
   const [podcastEpisodeShowId, setPodcastEpisodeShowId] = useState("")
   const [podcastEpisodeTitle, setPodcastEpisodeTitle] = useState("")
   const [podcastAudioFile, setPodcastAudioFile] = useState<File | null>(null)
@@ -253,6 +249,16 @@ export function ProfileSettingsSheet({
     void fetchMyPodcastShows()
       .then((res) => setMyPodcastShows(res.items))
       .catch(() => setMyPodcastShows([]))
+    void fetchPodcastCategories()
+      .then((res) => {
+        if (res.items.length > 0) {
+          setPodcastCategoryOptions(res.items)
+          setPodcastShowCategory((prev) =>
+            res.items.some((c) => c.label === prev) ? prev : res.items[0].label,
+          )
+        }
+      })
+      .catch(() => {})
   }, [isOpen, screen])
 
   useEffect(() => {
@@ -324,7 +330,9 @@ export function ProfileSettingsSheet({
     onClose()
   }
 
-  const isStreamer = user?.isStreamer || user?.streamerStatus === "approved"
+  const isStreamer = user?.streamerStatus === "approved"
+  const isVerticalCreator =
+    user?.isVerticalCreator || user?.verticalCreatorStatus === "approved"
 
   return (
     <div
@@ -526,85 +534,60 @@ export function ProfileSettingsSheet({
             />
           )}
 
-          {screen === "verticals" && (
-            <VerticalSeriesPanel
-              mySeries={mySeries}
-              verticalSlug={verticalSlug}
-              verticalTitle={verticalTitle}
-              episodeSeriesSlug={episodeSeriesSlug}
-              episodeNumber={episodeNumber}
-              episodeTitle={episodeTitle}
-              lastEpisodeId={lastEpisodeId}
-              episodeVideoFile={episodeVideoFile}
-              busy={verticalBusy}
-              message={verticalMessage}
-              onSlugChange={setVerticalSlug}
-              onTitleChange={setVerticalTitle}
-              onEpisodeSeriesSlugChange={setEpisodeSeriesSlug}
-              onEpisodeNumberChange={setEpisodeNumber}
-              onEpisodeTitleChange={setEpisodeTitle}
-              onEpisodeVideoFileChange={setEpisodeVideoFile}
-              onCreateSeries={async () => {
-                if (!verticalSlug.trim() || !verticalTitle.trim()) return
-                setVerticalBusy(true)
-                setVerticalMessage(null)
-                try {
-                  await createVerticalSeries({
-                    slug: verticalSlug.trim().toLowerCase().replace(/\s+/g, "-"),
-                    title: verticalTitle.trim(),
-                  })
-                  setVerticalMessage("Series created.")
-                  const res = await fetchMyVerticalSeries()
-                  setMySeries(res.items)
-                } catch (e) {
-                  setVerticalMessage(e instanceof Error ? e.message : "Failed to create series")
-                } finally {
-                  setVerticalBusy(false)
-                }
-              }}
-              onCreateEpisode={async () => {
-                if (!episodeSeriesSlug.trim() || !episodeTitle.trim()) return
-                setVerticalBusy(true)
-                setVerticalMessage(null)
-                try {
-                  const ep = await createVerticalEpisode(episodeSeriesSlug.trim(), {
-                    episodeNumber,
-                    title: episodeTitle.trim(),
-                  }) as { id: string }
-                  setLastEpisodeId(ep.id)
-                  setVerticalMessage(`Episode ${episodeNumber} created. Upload video below.`)
-                  const res = await fetchMyVerticalSeries()
-                  setMySeries(res.items)
-                } catch (e) {
-                  setVerticalMessage(e instanceof Error ? e.message : "Failed to create episode")
-                } finally {
-                  setVerticalBusy(false)
-                }
-              }}
-              onAttachVideo={async () => {
-                if (!lastEpisodeId || !episodeVideoFile) return
-                setVerticalBusy(true)
-                setVerticalMessage(null)
-                try {
-                  const done = await uploadVideoFlow(
-                    {
-                      type: "video",
-                      title: episodeTitle.trim() || `Episode ${episodeNumber}`,
-                      mimeType: episodeVideoFile.type,
-                      fileName: episodeVideoFile.name,
-                    },
-                    episodeVideoFile,
-                  )
-                  await attachVerticalEpisodeVideo(lastEpisodeId, done.videoId)
-                  setVerticalMessage("Episode video attached.")
-                  setEpisodeVideoFile(null)
-                } catch (e) {
-                  setVerticalMessage(e instanceof Error ? e.message : "Upload or attach failed")
-                } finally {
-                  setVerticalBusy(false)
-                }
+          {screen === "verticals" && !isVerticalCreator && (
+            <VerticalCreatorGatePanel
+              user={user}
+              onApply={() => {
+                handleClose()
+                onVerticalCreatorApply()
               }}
             />
+          )}
+
+          {screen === "verticals" && isVerticalCreator && (
+            <div className="space-y-5 pt-2">
+              <p className="text-sm text-muted-foreground">
+                Create a series with cover art and description, then upload vertical episodes in order.
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  className="rounded-full w-full"
+                  onClick={() => {
+                    setVerticalWizardIntent("new_series")
+                    setVerticalWizardOpen(true)
+                  }}
+                >
+                  Create new series
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="rounded-full w-full"
+                  disabled={mySeries.length === 0}
+                  onClick={() => {
+                    setVerticalWizardIntent("add_episode")
+                    setVerticalWizardOpen(true)
+                  }}
+                >
+                  Add episode to series
+                </Button>
+              </div>
+              {mySeries.length > 0 && (
+                <div className="space-y-2 border-t border-border pt-4">
+                  <h4 className="text-sm font-semibold">Your series</h4>
+                  <ul className="space-y-2">
+                    {mySeries.map((s) => (
+                      <li key={s.id} className="p-3 rounded-xl bg-secondary/30 text-sm">
+                        <p className="font-medium">{s.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          /{s.slug} · {s.episodes.length} episode
+                          {s.episodes.length === 1 ? "" : "s"}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           )}
 
           {screen === "podcasts" && (
@@ -612,6 +595,7 @@ export function ProfileSettingsSheet({
               shows={myPodcastShows}
               showTitle={podcastShowTitle}
               showCategory={podcastShowCategory}
+              categoryOptions={podcastCategoryOptions}
               episodeShowId={podcastEpisodeShowId}
               episodeTitle={podcastEpisodeTitle}
               audioFile={podcastAudioFile}
@@ -767,7 +751,7 @@ export function ProfileSettingsSheet({
                 try {
                   const queued = await uploadVideoFlow(
                     {
-                      type: uploadType as "short" | "video" | "movie",
+                      type: uploadType as "short" | "video",
                       title: uploadTitle.trim(),
                       mimeType: uploadFile.type,
                       fileName: uploadFile.name,
@@ -799,6 +783,20 @@ export function ProfileSettingsSheet({
           )}
         </div>
       </div>
+
+      <VerticalSeriesWizard
+        isOpen={verticalWizardOpen}
+        initialIntent={verticalWizardIntent}
+        onClose={() => {
+          setVerticalWizardOpen(false)
+          setVerticalWizardIntent(undefined)
+        }}
+        onSuccess={() => {
+          void fetchMyVerticalSeries()
+            .then((res) => setMySeries(res.items))
+            .catch(() => {})
+        }}
+      />
     </div>
   )
 }
@@ -844,9 +842,6 @@ function MenuPanel({
           accent: "live",
         },
     { icon: Clock, label: "Watch History", description: "Recently watched content", screen: "history" },
-    { icon: Video, label: "Your Videos", description: "Upload shorts, videos, movies", screen: "upload" },
-    { icon: Film, label: "Micro-dramas", description: "Create vertical series & episodes", screen: "verticals" },
-    { icon: Headphones, label: "Podcasts", description: "Create shows & upload episodes", screen: "podcasts" },
     { icon: ListMusic, label: "Playlists", description: "Create and manage playlists", screen: "playlists" },
     { icon: Link2, label: "Social Links", description: "Links on your creator profile", screen: "social" },
     {
@@ -1478,6 +1473,31 @@ function HistoryPanel({
   )
 }
 
+function VerticalCreatorGatePanel({
+  user,
+  onApply,
+}: {
+  user: User | null
+  onApply: () => void
+}) {
+  return (
+    <div className="py-8 text-center px-2">
+      <Film className="w-10 h-10 text-primary mx-auto mb-3" />
+      <p className="font-semibold mb-2">Vertical creator approval required</p>
+      <p className="text-sm text-muted-foreground mb-4">
+        Apply to create and publish micro-drama series on Prysym TV.
+      </p>
+      <Button onClick={onApply} className="rounded-full">
+        {user?.verticalCreatorStatus === "pending"
+          ? "Application pending"
+          : user?.verticalCreatorStatus === "rejected"
+            ? "Re-apply"
+            : "Apply now"}
+      </Button>
+    </div>
+  )
+}
+
 function GoLivePanel({
   user,
   isStreamer,
@@ -1700,152 +1720,11 @@ function UploadPanel({
   )
 }
 
-function VerticalSeriesPanel({
-  mySeries,
-  verticalSlug,
-  verticalTitle,
-  episodeSeriesSlug,
-  episodeNumber,
-  episodeTitle,
-  lastEpisodeId,
-  episodeVideoFile,
-  busy,
-  message,
-  onSlugChange,
-  onTitleChange,
-  onEpisodeSeriesSlugChange,
-  onEpisodeNumberChange,
-  onEpisodeTitleChange,
-  onEpisodeVideoFileChange,
-  onCreateSeries,
-  onCreateEpisode,
-  onAttachVideo,
-}: {
-  mySeries: Array<{
-    id: string
-    slug: string
-    title: string
-    episodes: Array<{ id: string; episodeNumber: number; title: string }>
-  }>
-  verticalSlug: string
-  verticalTitle: string
-  episodeSeriesSlug: string
-  episodeNumber: number
-  episodeTitle: string
-  lastEpisodeId: string | null
-  episodeVideoFile: File | null
-  busy: boolean
-  message: string | null
-  onSlugChange: (v: string) => void
-  onTitleChange: (v: string) => void
-  onEpisodeSeriesSlugChange: (v: string) => void
-  onEpisodeNumberChange: (n: number) => void
-  onEpisodeTitleChange: (v: string) => void
-  onEpisodeVideoFileChange: (f: File | null) => void
-  onCreateSeries: () => void
-  onCreateEpisode: () => void
-  onAttachVideo: () => void
-}) {
-  return (
-    <div className="space-y-6 pt-2">
-      {message && (
-        <p className="text-sm text-center text-muted-foreground bg-secondary/40 rounded-lg py-2 px-3">
-          {message}
-        </p>
-      )}
-
-      <section className="space-y-3">
-        <h4 className="text-sm font-semibold">Your series</h4>
-        {mySeries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No micro-drama series yet.</p>
-        ) : (
-          <ul className="space-y-2">
-            {mySeries.map((s) => (
-              <li key={s.id} className="p-3 rounded-xl bg-secondary/30 text-sm">
-                <p className="font-medium">{s.title}</p>
-                <p className="text-xs text-muted-foreground">/{s.slug} · {s.episodes.length} episodes</p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="space-y-3 border-t border-border pt-4">
-        <h4 className="text-sm font-semibold">New series</h4>
-        <input
-          value={verticalSlug}
-          onChange={(e) => onSlugChange(e.target.value)}
-          placeholder="slug (e.g. midnight-contract)"
-          className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
-        />
-        <input
-          value={verticalTitle}
-          onChange={(e) => onTitleChange(e.target.value)}
-          placeholder="Series title"
-          className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
-        />
-        <Button onClick={onCreateSeries} disabled={busy} className="w-full rounded-full">
-          Create series
-        </Button>
-      </section>
-
-      <section className="space-y-3 border-t border-border pt-4">
-        <h4 className="text-sm font-semibold">Add episode</h4>
-        <input
-          value={episodeSeriesSlug}
-          onChange={(e) => onEpisodeSeriesSlugChange(e.target.value)}
-          placeholder="Series slug"
-          className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
-        />
-        <input
-          type="number"
-          min={1}
-          value={episodeNumber}
-          onChange={(e) => onEpisodeNumberChange(Number(e.target.value) || 1)}
-          className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
-        />
-        <input
-          value={episodeTitle}
-          onChange={(e) => onEpisodeTitleChange(e.target.value)}
-          placeholder="Episode title"
-          className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
-        />
-        <Button onClick={onCreateEpisode} disabled={busy} className="w-full rounded-full">
-          Create episode
-        </Button>
-      </section>
-
-      {lastEpisodeId && (
-        <section className="space-y-3 border-t border-border pt-4">
-          <h4 className="text-sm font-semibold">Attach episode video</h4>
-          <p className="text-xs text-muted-foreground">Episode ID: {lastEpisodeId}</p>
-          <label className="block p-6 rounded-xl border-2 border-dashed border-border text-center cursor-pointer hover:border-primary/50">
-            <input
-              type="file"
-              accept="video/*"
-              className="hidden"
-              onChange={(e) => onEpisodeVideoFileChange(e.target.files?.[0] ?? null)}
-            />
-            <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-            <p className="text-sm">{episodeVideoFile?.name ?? "Choose video file"}</p>
-          </label>
-          <Button
-            onClick={onAttachVideo}
-            disabled={busy || !episodeVideoFile}
-            className="w-full rounded-full"
-          >
-            Upload & attach
-          </Button>
-        </section>
-      )}
-    </div>
-  )
-}
-
 function PodcastCreatorPanel({
   shows,
   showTitle,
   showCategory,
+  categoryOptions,
   episodeShowId,
   episodeTitle,
   audioFile,
@@ -1862,6 +1741,7 @@ function PodcastCreatorPanel({
   shows: MyPodcastShow[]
   showTitle: string
   showCategory: string
+  categoryOptions: Array<{ slug: string; label: string }>
   episodeShowId: string
   episodeTitle: string
   audioFile: File | null
@@ -1885,12 +1765,17 @@ function PodcastCreatorPanel({
           placeholder="Show title"
           className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
         />
-        <input
+        <select
           value={showCategory}
           onChange={(e) => onShowCategoryChange(e.target.value)}
-          placeholder="Category"
           className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
-        />
+        >
+          {categoryOptions.map((c) => (
+            <option key={c.slug} value={c.label}>
+              {c.label}
+            </option>
+          ))}
+        </select>
         <Button onClick={() => void onCreateShow()} disabled={busy || !showTitle.trim()} className="w-full rounded-full">
           Create show
         </Button>

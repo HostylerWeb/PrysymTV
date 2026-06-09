@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { use, useState } from "react"
 import { AdminConfirmDialog } from "@/components/admin/admin-confirm-dialog"
+import { AdminUserImpactTab } from "@/components/admin/admin-user-impact-tab"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminStatusPill } from "@/components/admin/admin-status-pill"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
@@ -115,9 +116,20 @@ export default function AdminUserDetailPage({
             Streamer status: <AdminStatusPill status={user.streamerStatus} />
           </p>
           {user.streamerApplication && (
+            <Button asChild variant="outline" className="rounded-full mb-6">
+              <Link href={`/admin/applications/streamer/${user.streamerApplication.id}`}>
+                Open live streaming application
+              </Link>
+            </Button>
+          )}
+          <p className="text-sm text-muted-foreground mb-4">
+            Vertical creator:{" "}
+            <AdminStatusPill status={user.verticalCreatorStatus ?? "none"} />
+          </p>
+          {user.verticalCreatorApplication && (
             <Button asChild variant="outline" className="rounded-full">
-              <Link href={`/admin/streamers/${user.streamerApplication.id}`}>
-                Open application
+              <Link href={`/admin/applications/vertical/${user.verticalCreatorApplication.id}`}>
+                Open vertical series application
               </Link>
             </Button>
           )}
@@ -236,19 +248,8 @@ export default function AdminUserDetailPage({
           <ReportsTable title="Reports filed by user" rows={user.reports.filed} />
         </TabsContent>
 
-        <TabsContent value="impact" className="space-y-4">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <Label>Jobs supported</Label>
-              <Input type="number" defaultValue={0} className="mt-1" />
-            </div>
-            <div>
-              <Label>Businesses funded</Label>
-              <Input type="number" defaultValue={0} className="mt-1" />
-            </div>
-          </div>
-          <Button className="rounded-full">Save impact metrics</Button>
-          <p className="text-xs text-muted-foreground">Impact scorecard API — Phase 3.</p>
+        <TabsContent value="impact">
+          <AdminUserImpactTab userId={id} />
         </TabsContent>
 
         <TabsContent value="actions" className="space-y-6">

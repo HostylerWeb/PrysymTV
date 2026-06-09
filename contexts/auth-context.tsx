@@ -10,7 +10,11 @@ import {
 } from "react"
 import { ApiError, loadStoredAccessToken, setAccessToken } from "@/lib/api-client"
 import * as authApi from "@/lib/api/auth"
-import { fetchMe, applyStreamer as applyStreamerApi } from "@/lib/api/users"
+import {
+  fetchMe,
+  applyStreamer as applyStreamerApi,
+  applyVerticalCreator as applyVerticalCreatorApi,
+} from "@/lib/api/users"
 import { mapMeToUser } from "@/lib/api/map-user"
 
 export interface User {
@@ -27,6 +31,8 @@ export interface User {
   premiumExpiresAt: string | null
   isStreamer: boolean
   streamerStatus: "none" | "pending" | "approved" | "rejected"
+  isVerticalCreator: boolean
+  verticalCreatorStatus: "none" | "pending" | "approved" | "rejected"
   followersCount: number
   followingCount: number
   videosCount: number
@@ -47,6 +53,11 @@ interface AuthContextType {
   refreshUser: () => Promise<void>
   updateCoins: (amount: number) => void
   applyForStreamer: (description: string, idPhotoUrl: string) => Promise<void>
+  applyForVerticalCreator: (
+    description: string,
+    idDocumentUrl: string,
+    portfolioUrl?: string,
+  ) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -117,6 +128,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(mapMeToUser(me))
   }
 
+  const applyForVerticalCreator = async (
+    description: string,
+    idDocumentUrl: string,
+    portfolioUrl?: string,
+  ) => {
+    await applyVerticalCreatorApi(description, idDocumentUrl, portfolioUrl)
+    const me = await fetchMe()
+    setUser(mapMeToUser(me))
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -129,6 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshUser,
         updateCoins,
         applyForStreamer,
+        applyForVerticalCreator,
       }}
     >
       {children}

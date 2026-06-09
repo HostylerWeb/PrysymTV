@@ -22,6 +22,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
+    "db:purge-demo": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' ts-node prisma/purge-demo-content.ts",
     "db:studio": "prisma studio"
   },
   "prisma": {

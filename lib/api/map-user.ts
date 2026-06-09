@@ -4,6 +4,7 @@ import { userAvatarUrl } from "@/lib/user-avatar";
 
 export function mapMeToUser(me: MeResponse): User {
   const status = me.streamerStatus;
+  const verticalStatus = me.verticalCreatorStatus ?? "none";
   return {
     id: me.id,
     role: me.role,
@@ -18,6 +19,8 @@ export function mapMeToUser(me: MeResponse): User {
     premiumExpiresAt: me.premiumExpiresAt,
     isStreamer: status === "approved",
     streamerStatus: status,
+    isVerticalCreator: verticalStatus === "approved",
+    verticalCreatorStatus: verticalStatus,
     followersCount: me.followersCount,
     followingCount: me.followingCount,
     videosCount: me.videosCount,

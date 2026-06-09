@@ -17,6 +17,8 @@ import { UsersService } from './users.service';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { UpdateNotificationPrefDto } from './dto/notification-pref.dto';
 import { ApplyStreamerDto } from './dto/apply-streamer.dto';
+import { ApplyVerticalCreatorDto } from './dto/apply-vertical-creator.dto';
+import { RequestCreatorAccessDto } from './dto/request-creator-access.dto';
 import { ReplaceSocialLinksDto } from './dto/social-links.dto';
 
 @Controller('users')
@@ -107,6 +109,24 @@ export class UsersController {
     @Body() dto: ApplyStreamerDto,
   ) {
     return this.users.applyStreamer(user.id, dto);
+  }
+
+  @Post('apply-vertical-creator')
+  @UseGuards(JwtAuthGuard)
+  applyVerticalCreator(
+    @CurrentUser() user: AuthUserPayload,
+    @Body() dto: ApplyVerticalCreatorDto,
+  ) {
+    return this.users.applyVerticalCreator(user.id, dto);
+  }
+
+  @Post('request-creator-access')
+  @UseGuards(JwtAuthGuard)
+  requestCreatorAccess(
+    @CurrentUser() user: AuthUserPayload,
+    @Body() dto: RequestCreatorAccessDto,
+  ) {
+    return this.users.requestCreatorAccess(user.id, dto);
   }
 
   @Get('me/videos')

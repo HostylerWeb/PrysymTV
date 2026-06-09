@@ -9,6 +9,23 @@ export type AdminOverview = {
   pendingPayouts: number;
   pendingPayoutsUsd: number;
   pendingStreamerApplications: number;
+  pendingVerticalCreatorApplications: number;
+  pendingApplications: number;
+};
+
+export type AdminApplicationType = "streamer" | "vertical";
+
+export type AdminApplicationListItem = {
+  id: string;
+  type: AdminApplicationType;
+  userId: string;
+  username: string;
+  displayName: string | null;
+  description: string;
+  status: string;
+  submittedAt: string;
+  hasIdDocument: boolean;
+  portfolioUrl: string | null;
 };
 
 export type PaginatedMeta = { page: number; limit: number; total: number };
@@ -79,6 +96,14 @@ export type AdminUserDetail = AdminUserListItem & {
     idDocumentUrl: string | null;
     userId?: string;
   } | null;
+  verticalCreatorStatus?: string;
+  verticalCreatorApplication: {
+    id: string;
+    description: string;
+    status: string;
+    portfolioUrl: string | null;
+    userId?: string;
+  } | null;
 };
 
 export type AdminStreamerApplication = {
@@ -91,6 +116,18 @@ export type AdminStreamerApplication = {
   submittedAt: string;
   hasIdDocument: boolean;
   idDocumentUrl?: string | null;
+};
+
+export type AdminVerticalCreatorApplication = {
+  id: string;
+  userId: string;
+  username: string;
+  displayName: string | null;
+  description: string;
+  idDocumentUrl?: string | null;
+  portfolioUrl: string | null;
+  status: string;
+  submittedAt: string;
 };
 
 export type AdminPayout = {
@@ -178,6 +215,65 @@ export function fetchAdminOverview() {
   return apiRequest<AdminOverview>("/admin/analytics/overview");
 }
 
+export type AdminAnalyticsTimeseries = {
+  range: string;
+  buckets: string[];
+  series: {
+    dau: number[];
+    signups: number[];
+    revenueUsd: number[];
+    liveHours: number[];
+  };
+  revenueBySource: Array<{ sourceType: string; totalUsd: number }>;
+  topContent: Array<{
+    id: string;
+    title: string;
+    views: number;
+    type: string;
+    creator: string;
+  }>;
+  premiumSubscribers: number;
+};
+
+export function fetchAdminAnalyticsTimeseries(range: "7d" | "30d" | "90d" = "30d") {
+  return apiRequest<AdminAnalyticsTimeseries>(
+    `/admin/analytics/timeseries${qs({ range })}`,
+  );
+}
+
+export type AdminUserImpact = {
+  periodMonth: string;
+  earningsUsd: number;
+  adRevenueUsd: number;
+  sponsorshipRevenueUsd: number;
+  merchandiseRevenueUsd: number;
+  donationsUsd: number;
+  watchHours: number;
+  retentionRate: number | null;
+  subscriberCount: number;
+  engagementScore: number | null;
+  jobsSupported: number;
+  businessesFunded: number;
+  dollarsInvested: number;
+  workforceOpportunities: number;
+};
+
+export function fetchAdminUserImpact(userId: string, periodMonth?: string) {
+  return apiRequest<AdminUserImpact>(
+    `/admin/users/${userId}/impact${qs({ periodMonth })}`,
+  );
+}
+
+export function updateAdminUserImpact(
+  userId: string,
+  body: Partial<AdminUserImpact> & { periodMonth: string },
+) {
+  return apiRequest<AdminUserImpact>(`/admin/users/${userId}/impact`, {
+    method: "PUT",
+    body,
+  });
+}
+
 export function fetchAdminReports(params?: {
   page?: number;
   limit?: number;
@@ -240,6 +336,17 @@ export function adjustAdminUserCoins(id: string, delta: number) {
   return apiRequest(`/admin/users/${id}/coins`, { method: "PUT", body: { delta } });
 }
 
+export function fetchAdminApplications(params?: {
+  page?: number;
+  limit?: number;
+  status?: string;
+  type?: "all" | "streamer" | "vertical";
+}) {
+  return apiRequest<{ items: AdminApplicationListItem[]; meta: PaginatedMeta }>(
+    `/admin/applications${qs(params ?? {})}`,
+  );
+}
+
 export function fetchAdminStreamerApplications(params?: {
   page?: number;
   limit?: number;
@@ -265,6 +372,34 @@ export function reviewAdminStreamerApplication(
   body: { action: "approve" | "reject"; notes?: string },
 ) {
   return apiRequest(`/admin/streamer-applications/${id}`, { method: "PUT", body });
+}
+
+export function fetchAdminVerticalCreatorApplications(params?: {
+  page?: number;
+  limit?: number;
+  status?: string;
+}) {
+  return apiRequest<{ items: AdminVerticalCreatorApplication[]; meta: PaginatedMeta }>(
+    `/admin/vertical-creator-applications${qs(params ?? {})}`,
+  );
+}
+
+export function fetchAdminVerticalCreatorApplication(id: string) {
+  return apiRequest<
+    AdminVerticalCreatorApplication & {
+      email?: string;
+      verticalCreatorStatus?: string;
+      reviewNotes?: string | null;
+      reviewedBy?: string | null;
+    }
+  >(`/admin/vertical-creator-applications/${id}`);
+}
+
+export function reviewAdminVerticalCreatorApplication(
+  id: string,
+  body: { action: "approve" | "reject"; notes?: string },
+) {
+  return apiRequest(`/admin/vertical-creator-applications/${id}`, { method: "PUT", body });
 }
 
 export function fetchAdminPayouts(params?: { page?: number; limit?: number; status?: string }) {
@@ -599,6 +734,31 @@ export function updateAdminProgramsConfig(
   }>,
 ) {
   return apiRequest("/admin/config/programs", { method: "PUT", body: { programs } });
+}
+
+export function fetchAdminPodcastCategoriesConfig() {
+  return apiRequest<
+    Array<{
+      slug: string;
+      label: string;
+      isActive: boolean;
+      sortOrder: number;
+    }>
+  >("/admin/config/podcast-categories");
+}
+
+export function updateAdminPodcastCategoriesConfig(
+  categories: Array<{
+    slug: string;
+    label: string;
+    isActive: boolean;
+    sortOrder: number;
+  }>,
+) {
+  return apiRequest("/admin/config/podcast-categories", {
+    method: "PUT",
+    body: { categories },
+  });
 }
 
 export function upsertAdminCoinPackage(body: {

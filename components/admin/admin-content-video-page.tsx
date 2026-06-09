@@ -20,9 +20,16 @@ type Props = {
   description: string;
   breadcrumbLabel: string;
   videoType: "video" | "short" | "movie";
+  headerActions?: React.ReactNode;
 };
 
-export function AdminContentVideoPage({ title, description, breadcrumbLabel, videoType }: Props) {
+export function AdminContentVideoPage({
+  title,
+  description,
+  breadcrumbLabel,
+  videoType,
+  headerActions,
+}: Props) {
   const [q, setQ] = useState("")
   const [status, setStatus] = useState("all")
   const [page, setPage] = useState(1)
@@ -53,6 +60,7 @@ export function AdminContentVideoPage({ title, description, breadcrumbLabel, vid
           { label: "Content", href: "/admin/content" },
           { label: breadcrumbLabel },
         ]}
+        actions={headerActions}
       />
 
       <div className="flex flex-col sm:flex-row gap-3 mb-4">

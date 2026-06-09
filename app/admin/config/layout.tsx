@@ -9,7 +9,8 @@ const CONFIG_TABS = [
   { href: "/admin/config/ads", label: "Ad network" },
   { href: "/admin/config/economy", label: "Economy" },
   { href: "/admin/config/scorecard", label: "Scorecard" },
-  { href: "/admin/config/programs", label: "Programs" },
+  { href: "/admin/config/programs", label: "Video categories" },
+  { href: "/admin/config/podcast-categories", label: "Podcast categories" },
   { href: "/admin/config/analytics", label: "Analytics defaults" },
 ]
 

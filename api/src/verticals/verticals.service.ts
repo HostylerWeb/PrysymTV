@@ -8,6 +8,7 @@ import {
   ContentStatus,
   LikeTargetType,
   SavedItemType,
+  VerticalCreatorStatus,
   VerticalSeriesStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -18,6 +19,18 @@ import { CreateVerticalSeriesDto } from './dto/create-vertical-series.dto';
 @Injectable()
 export class VerticalsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async assertVerticalCreatorApproved(creatorId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: creatorId },
+      select: { verticalCreatorStatus: true },
+    });
+    if (!user || user.verticalCreatorStatus !== VerticalCreatorStatus.approved) {
+      throw new ForbiddenException(
+        'Vertical series upload requires an approved vertical creator application',
+      );
+    }
+  }
 
   async listSeries() {
     const items = await this.prisma.verticalSeries.findMany({
@@ -299,6 +312,7 @@ export class VerticalsService {
   }
 
   async createSeries(creatorId: string, dto: CreateVerticalSeriesDto) {
+    await this.assertVerticalCreatorApproved(creatorId);
     const exists = await this.prisma.verticalSeries.findUnique({
       where: { slug: dto.slug },
     });
@@ -321,6 +335,7 @@ export class VerticalsService {
   }
 
   async createEpisode(creatorId: string, slug: string, dto: CreateVerticalEpisodeDto) {
+    await this.assertVerticalCreatorApproved(creatorId);
     const series = await this.prisma.verticalSeries.findFirst({ where: { slug } });
     if (!series) throw new NotFoundException('Series not found');
     if (series.creatorId && series.creatorId !== creatorId) {
@@ -355,6 +370,7 @@ export class VerticalsService {
     episodeId: string,
     dto: AttachEpisodeVideoDto,
   ) {
+    await this.assertVerticalCreatorApproved(creatorId);
     const episode = await this.prisma.verticalEpisode.findUnique({
       where: { id: episodeId },
       include: { series: true },
@@ -380,6 +396,7 @@ export class VerticalsService {
   }
 
   async listMySeries(creatorId: string) {
+    await this.assertVerticalCreatorApproved(creatorId);
     const items = await this.prisma.verticalSeries.findMany({
       where: { creatorId },
       orderBy: { updatedAt: 'desc' },

@@ -20,7 +20,7 @@ export type AdminNavItem = {
   label: string
   href: string
   icon: LucideIcon
-  badgeKey?: "reports" | "streamers" | "payouts" | "live"
+  badgeKey?: "reports" | "applications" | "payouts" | "live"
 }
 
 export type AdminNavGroup = {
@@ -47,7 +47,13 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     title: "People",
     items: [
       { id: "users", label: "Users", href: "/admin/users", icon: Users },
-      { id: "streamers", label: "Streamers", href: "/admin/streamers", icon: UserCheck, badgeKey: "streamers" },
+      {
+        id: "applications",
+        label: "Applications",
+        href: "/admin/applications",
+        icon: UserCheck,
+        badgeKey: "applications",
+      },
     ],
   },
   {
@@ -72,9 +78,3 @@ export const ADMIN_NAV: AdminNavGroup[] = [
   },
 ]
 
-export const ADMIN_BADGE_COUNTS = {
-  reports: 12,
-  streamers: 4,
-  payouts: 3,
-  live: 2,
-} as const

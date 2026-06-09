@@ -186,11 +186,18 @@ export default function AdminDashboardPage() {
       <section className="mt-6 rounded-xl border border-border bg-card p-4 md:p-5">
         <div className="flex items-center gap-2 mb-2">
           <Activity className="w-4 h-4 text-muted-foreground" />
-          <h2 className="font-semibold">Pending streamer applications</h2>
-          <span className="text-sm text-muted-foreground">{o.pendingStreamerApplications}</span>
+          <h2 className="font-semibold">Pending applications</h2>
+          <span className="text-sm text-muted-foreground">
+            {o.pendingApplications ??
+              o.pendingStreamerApplications + o.pendingVerticalCreatorApplications}
+          </span>
         </div>
-        <Button asChild variant="outline" size="sm" className="rounded-full mt-2">
-          <Link href="/admin/streamers">Review applications</Link>
+        <p className="text-xs text-muted-foreground mb-3">
+          Live streaming ({o.pendingStreamerApplications}) · Vertical series (
+          {o.pendingVerticalCreatorApplications})
+        </p>
+        <Button asChild variant="outline" size="sm" className="rounded-full">
+          <Link href="/admin/applications">Review applications</Link>
         </Button>
       </section>
     </>

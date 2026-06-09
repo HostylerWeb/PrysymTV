@@ -8,6 +8,7 @@ import {
 import {
   ContentStatus,
   ContentVertical,
+  Visibility,
   DislikeTargetType,
   LikeTargetType,
   Prisma,
@@ -29,6 +30,7 @@ import { StorageService } from '../storage/storage.service';
 import { VIDEO_PROCESSING_QUEUE } from '../queue/queue.constants';
 import type { VideoProcessingJobData } from '../queue/video-processing.processor';
 import { mapVideoCard, VIDEO_CARD_SELECT } from '../common/mappers/content.mapper';
+import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { UploadCompleteDto } from './dto/upload-complete.dto';
 import { UploadInitDto } from './dto/upload-init.dto';
 
@@ -45,15 +47,44 @@ export class VideosService {
     return type as VideoType;
   }
 
-  async uploadInit(userId: string, dto: UploadInitDto) {
+  async uploadInit(user: AuthUserPayload, dto: UploadInitDto) {
+    if (dto.type === 'movie' && user.role !== 'admin') {
+      throw new ForbiddenException(
+        'Movies can only be uploaded by platform admins',
+      );
+    }
+
     const maxBytes = this.storage.getSettings().maxUploadBytes;
+    const tags =
+      dto.tags
+        ?.split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .slice(0, 20) ?? [];
+
+    const visibility =
+      dto.visibility && Object.values(Visibility).includes(dto.visibility as Visibility)
+        ? (dto.visibility as Visibility)
+        : Visibility.public;
+
     const video = await this.prisma.video.create({
       data: {
-        creatorId: userId,
+        creatorId: user.id,
         type: this.mapUploadType(dto.type),
         title: dto.title.trim(),
-        description: dto.description?.trim(),
-        category: dto.type === 'podcast' ? 'podcast' : undefined,
+        description: dto.description?.trim() || null,
+        category:
+          dto.category?.trim() ||
+          (dto.type === 'movie'
+            ? 'movies'
+            : dto.type === 'podcast'
+              ? 'podcast'
+              : undefined),
+        releaseYear: dto.type === 'movie' ? (dto.releaseYear ?? null) : undefined,
+        ageRating:
+          dto.type === 'movie' ? dto.ageRating?.trim() || null : undefined,
+        tags,
+        visibility,
         status: ContentStatus.processing,
       },
     });

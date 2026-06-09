@@ -1,6 +1,7 @@
 "use client"
 
 import { Bell, Cast, Search, User } from "lucide-react"
+import { CreateHeaderButton } from "@/components/create-header-button"
 import Link from "next/link"
 import { userAvatarUrl } from "@/lib/user-avatar"
 import { useCallback, useEffect, useState } from "react"
@@ -10,6 +11,10 @@ import { fetchNotifications } from "@/lib/api/notifications"
 
 interface HeaderProps {
   onSearchClick: () => void
+  /** Page-specific create action (upload short, episode, etc.) */
+  onCreateClick?: () => void
+  /** Accessible label for the + button */
+  createLabel?: string
   /** Set false only when the page hero already accounts for header height (rare). */
   offsetContent?: boolean
 }
@@ -17,7 +22,12 @@ interface HeaderProps {
 /** Matches fixed header row height (py-4 + 40px controls). */
 export const APP_HEADER_HEIGHT_CLASS = "h-[4.5rem]"
 
-export function Header({ onSearchClick, offsetContent = true }: HeaderProps) {
+export function Header({
+  onSearchClick,
+  onCreateClick,
+  createLabel = "Create",
+  offsetContent = true,
+}: HeaderProps) {
   const { isAuthenticated, user } = useAuth()
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
@@ -48,6 +58,9 @@ export function Header({ onSearchClick, offsetContent = true }: HeaderProps) {
           </Link>
 
           <div className="flex items-center gap-2 ml-auto">
+            {onCreateClick && (
+              <CreateHeaderButton onClick={onCreateClick} label={createLabel} />
+            )}
             <button
               type="button"
               className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors"

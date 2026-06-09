@@ -7,8 +7,19 @@ import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
 import { fetchVerticalSeriesList, type VerticalSeriesCard } from "@/lib/api/verticals"
 import { Smartphone } from "lucide-react"
+import { CreateFlowModals, triggerContextualCreate } from "@/components/create-flow-modals"
+import { useCreateFlow } from "@/hooks/use-create-flow"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function VerticalsPage() {
+  const createFlow = useCreateFlow()
+  const { user, isAuthenticated, refreshUser } = useAuth()
+  const createVertical = () =>
+    triggerContextualCreate("vertical", createFlow, {
+      isAuthenticated,
+      user,
+      verticalIntent: "add_episode",
+    })
   const [activeTab, setActiveTab] = useState("verticals")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [series, setSeries] = useState<VerticalSeriesCard[]>([])
@@ -19,7 +30,11 @@ export default function VerticalsPage() {
 
   return (
     <main className="min-h-screen bg-background pb-20 md:pb-0 md:pl-20">
-      <Header onSearchClick={() => setIsSearchOpen(true)} />
+      <Header
+        onSearchClick={() => setIsSearchOpen(true)}
+        onCreateClick={createVertical}
+        createLabel="Add vertical episode"
+      />
       <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-10">
         <div className="flex items-center gap-3 mb-2">
           <Smartphone className="w-8 h-8 text-primary" />
@@ -63,6 +78,11 @@ export default function VerticalsPage() {
       </div>
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      <CreateFlowModals
+        flow={createFlow}
+        onUploadSuccess={() => void refreshUser()}
+        onNeedCreatorVerification={() => createFlow.setUnlockOpen(true)}
+      />
     </main>
   )
 }

@@ -5,12 +5,14 @@ import {
   DEFAULT_ADS_SETTINGS,
   DEFAULT_ANALYTICS_SETTINGS,
   DEFAULT_ECONOMY_SETTINGS,
+  DEFAULT_PODCAST_CATEGORIES_SETTINGS,
   DEFAULT_PROGRAMS_SETTINGS,
   DEFAULT_SCORECARD_SETTINGS,
 } from './platform-settings.defaults';
 import {
   AdsSettings,
   AnalyticsSettings,
+  CategoryConfigEntry,
   EconomySettings,
   PLATFORM_SETTING_KEYS,
   ProgramConfigEntry,
@@ -98,6 +100,20 @@ export class PlatformSettingsService {
     adminId?: string,
   ): Promise<ProgramConfigEntry[]> {
     return this.setArray(PLATFORM_SETTING_KEYS.programs, programs, adminId);
+  }
+
+  async getPodcastCategories(): Promise<CategoryConfigEntry[]> {
+    return this.getArray(
+      PLATFORM_SETTING_KEYS.podcastCategories,
+      DEFAULT_PODCAST_CATEGORIES_SETTINGS,
+    );
+  }
+
+  async setPodcastCategories(
+    categories: CategoryConfigEntry[],
+    adminId?: string,
+  ): Promise<CategoryConfigEntry[]> {
+    return this.setArray(PLATFORM_SETTING_KEYS.podcastCategories, categories, adminId);
   }
 
   async getMinPayoutUsd(): Promise<number> {

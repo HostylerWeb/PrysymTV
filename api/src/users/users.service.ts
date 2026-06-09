@@ -5,7 +5,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ContentStatus, StreamerStatus } from '@prisma/client';
+import {
+  ContentStatus,
+  StreamerStatus,
+  VerticalCreatorStatus,
+} from '@prisma/client';
 import {
   mapVideoCard,
   VIDEO_CARD_SELECT,
@@ -16,6 +20,11 @@ import { StorageService } from '../storage/storage.service';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { UpdateNotificationPrefDto } from './dto/notification-pref.dto';
 import { ApplyStreamerDto } from './dto/apply-streamer.dto';
+import { ApplyVerticalCreatorDto } from './dto/apply-vertical-creator.dto';
+import {
+  CreatorAccessFeature,
+  RequestCreatorAccessDto,
+} from './dto/request-creator-access.dto';
 import { ReplaceSocialLinksDto } from './dto/social-links.dto';
 
 @Injectable()
@@ -28,8 +37,6 @@ export class UsersService {
   ) {}
 
   async getMe(userId: string) {
-    await this.devAutoApprovePendingStreamer(userId);
-
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
@@ -184,6 +191,132 @@ export class UsersService {
       }),
     ]);
     return { success: true, streamerStatus: nextStatus, autoApproved: autoApprove };
+  }
+
+  async applyVerticalCreator(userId: string, dto: ApplyVerticalCreatorDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException();
+    if (user.verticalCreatorStatus === VerticalCreatorStatus.approved) {
+      throw new BadRequestException('Already an approved vertical creator');
+    }
+    if (user.verticalCreatorStatus === VerticalCreatorStatus.pending) {
+      throw new ConflictException('Application already pending');
+    }
+
+    const autoApprove = this.isAutoApproveVerticalCreatorEnabled();
+    const nextStatus = autoApprove
+      ? VerticalCreatorStatus.approved
+      : VerticalCreatorStatus.pending;
+    const applicationStatus = autoApprove ? 'approved' : 'pending';
+
+    await this.prisma.$transaction([
+      this.prisma.verticalCreatorApplication.upsert({
+        where: { userId },
+        create: {
+          userId,
+          description: dto.description,
+          idDocumentUrl: dto.idDocumentUrl,
+          portfolioUrl: dto.portfolioUrl?.trim() || null,
+          status: applicationStatus,
+        },
+        update: {
+          description: dto.description,
+          idDocumentUrl: dto.idDocumentUrl,
+          portfolioUrl: dto.portfolioUrl?.trim() || null,
+          status: applicationStatus,
+        },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { verticalCreatorStatus: nextStatus },
+      }),
+    ]);
+    return {
+      success: true,
+      verticalCreatorStatus: nextStatus,
+      autoApproved: autoApprove,
+    };
+  }
+
+  async requestCreatorAccess(userId: string, dto: RequestCreatorAccessDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { streamerApplication: true },
+    });
+    if (!user) throw new NotFoundException();
+
+    const identityVerified = user.streamerStatus === StreamerStatus.approved;
+    const description =
+      dto.description?.trim() ||
+      'Creator access requested from profile unlock flow.';
+    const results: Record<string, string> = {};
+
+    for (const feature of dto.features) {
+      if (feature === CreatorAccessFeature.vertical) {
+        if (user.verticalCreatorStatus === VerticalCreatorStatus.approved) {
+          results.vertical = 'already_approved';
+          continue;
+        }
+        if (user.verticalCreatorStatus === VerticalCreatorStatus.pending) {
+          results.vertical = 'pending';
+          continue;
+        }
+
+        if (identityVerified || this.isAutoApproveVerticalCreatorEnabled()) {
+          const idDocumentUrl =
+            user.streamerApplication?.idDocumentUrl ?? undefined;
+          if (!idDocumentUrl && !this.isAutoApproveVerticalCreatorEnabled()) {
+            results.vertical = 'needs_id_verification';
+            continue;
+          }
+          await this.prisma.$transaction([
+            this.prisma.verticalCreatorApplication.upsert({
+              where: { userId },
+              create: {
+                userId,
+                description,
+                idDocumentUrl: idDocumentUrl ?? null,
+                status: 'approved',
+                reviewNotes: identityVerified
+                  ? 'Auto-approved: verified streamer identity on file'
+                  : 'Auto-approved: dev setting',
+              },
+              update: {
+                description,
+                idDocumentUrl: idDocumentUrl ?? undefined,
+                status: 'approved',
+                reviewNotes: identityVerified
+                  ? 'Auto-approved: verified streamer identity on file'
+                  : 'Auto-approved: dev setting',
+              },
+            }),
+            this.prisma.user.update({
+              where: { id: userId },
+              data: { verticalCreatorStatus: VerticalCreatorStatus.approved },
+            }),
+          ]);
+          results.vertical = 'approved';
+        } else {
+          results.vertical = 'needs_id_verification';
+        }
+      }
+
+      if (feature === CreatorAccessFeature.live) {
+        if (user.streamerStatus === StreamerStatus.approved) {
+          results.live = 'already_approved';
+        } else if (user.streamerStatus === StreamerStatus.pending) {
+          results.live = 'pending';
+        } else {
+          results.live = 'needs_id_verification';
+        }
+      }
+    }
+
+    return {
+      success: true,
+      identityVerified,
+      results,
+    };
   }
 
   async getPublicVideos(username: string, page = 1, limit = 24) {
@@ -583,28 +716,15 @@ export class UsersService {
   }
 
   private isAutoApproveStreamerEnabled(): boolean {
+    if (this.config.get<string>('NODE_ENV') === 'production') return false;
     const raw = this.config.get<string>('AUTO_APPROVE_STREAMER');
     return raw === 'true' || raw === '1';
   }
 
-  /** Dev convenience: upgrade existing pending applications when auto-approve is on. */
-  private async devAutoApprovePendingStreamer(userId: string): Promise<void> {
-    if (!this.isAutoApproveStreamerEnabled()) return;
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { streamerStatus: true },
-    });
-    if (user?.streamerStatus !== StreamerStatus.pending) return;
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: userId },
-        data: { streamerStatus: StreamerStatus.approved },
-      }),
-      this.prisma.streamerApplication.updateMany({
-        where: { userId },
-        data: { status: 'approved' },
-      }),
-    ]);
+  private isAutoApproveVerticalCreatorEnabled(): boolean {
+    if (this.config.get<string>('NODE_ENV') === 'production') return false;
+    const raw = this.config.get<string>('AUTO_APPROVE_VERTICAL_CREATOR');
+    return raw === 'true' || raw === '1';
   }
 
   private async maybeNotifyFollow(
@@ -644,6 +764,7 @@ export class UsersService {
     role: string;
     isVerified: boolean;
     streamerStatus: string;
+    verticalCreatorStatus: string;
     partnerTier?: string;
     programVerticals?: { vertical: string }[];
     coinsBalance: number;
@@ -665,6 +786,7 @@ export class UsersService {
       role: user.role,
       isVerified: user.isVerified,
       streamerStatus: user.streamerStatus,
+      verticalCreatorStatus: user.verticalCreatorStatus,
       partnerTier: user.partnerTier ?? 'standard',
       programVerticals:
         user.programVerticals?.map((p) => p.vertical) ?? [],

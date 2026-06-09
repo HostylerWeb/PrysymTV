@@ -60,12 +60,21 @@ export type ProgramConfigEntry = {
   sortOrder: number;
 };
 
+/** Admin-managed taxonomy labels (e.g. podcast show categories). */
+export type CategoryConfigEntry = {
+  slug: string;
+  label: string;
+  isActive: boolean;
+  sortOrder: number;
+};
+
 export const PLATFORM_SETTING_KEYS = {
   economy: 'economy',
   ads: 'ads',
   analytics: 'analytics',
   scorecard: 'scorecard',
   programs: 'programs',
+  podcastCategories: 'podcast_categories',
 } as const;
 
 export type PlatformSettingKey =

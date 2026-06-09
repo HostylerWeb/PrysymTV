@@ -106,6 +106,33 @@ export async function applyStreamer(description: string, idDocumentUrl: string) 
   );
 }
 
+export async function applyVerticalCreator(
+  description: string,
+  idDocumentUrl: string,
+  portfolioUrl?: string,
+) {
+  return apiRequest<
+    MessageResponse & { verticalCreatorStatus?: string; autoApproved?: boolean }
+  >("/users/apply-vertical-creator", {
+    method: "POST",
+    body: { description, idDocumentUrl, portfolioUrl },
+  });
+}
+
+export async function requestCreatorAccess(body: {
+  features: Array<"vertical" | "live">;
+  description?: string;
+}) {
+  return apiRequest<{
+    success: boolean;
+    identityVerified: boolean;
+    results: Record<string, string>;
+  }>("/users/request-creator-access", {
+    method: "POST",
+    body,
+  });
+}
+
 export function toggleCreatorLiveAlerts(username: string) {
   return apiRequest<{ enabled: boolean }>(
     `/users/${encodeURIComponent(username)}/live-alerts`,

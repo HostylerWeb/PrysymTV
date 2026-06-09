@@ -1,31 +1,43 @@
 "use client"
 
 import Link from "next/link"
+import { useState } from "react"
 import { DollarSign, Flag, Radio, Users, Wallet } from "lucide-react"
 import { AdminKpiCard } from "@/components/admin/admin-kpi-card"
+import { AdminMiniChart } from "@/components/admin/admin-mini-chart"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
-import { fetchAdminContentStats, fetchAdminOverview } from "@/lib/api/admin"
+import {
+  fetchAdminAnalyticsTimeseries,
+  fetchAdminContentStats,
+  fetchAdminOverview,
+} from "@/lib/api/admin"
 import { Button } from "@/components/ui/button"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 
-const CHART_PLACEHOLDERS = [
-  { title: "DAU / WAU / MAU", range: "30d" },
-  { title: "Revenue by source", range: "30d" },
-  { title: "New signups", range: "7d" },
-  { title: "Top content by views", range: "30d" },
-  { title: "Live hours", range: "30d" },
-  { title: "Premium subscribers", range: "30d" },
-]
+const RANGES = ["7d", "30d", "90d"] as const;
 
 export default function AdminAnalyticsPage() {
-  const { data: overview, loading, error } = useAdminQuery(fetchAdminOverview, [])
-  const { data: contentStats } = useAdminQuery(fetchAdminContentStats, [])
+  const [range, setRange] = useState<(typeof RANGES)[number]>("30d");
+  const { data: overview, loading, error } = useAdminQuery(fetchAdminOverview, []);
+  const { data: contentStats } = useAdminQuery(fetchAdminContentStats, []);
+  const { data: timeseries, loading: tsLoading } = useAdminQuery(
+    () => fetchAdminAnalyticsTimeseries(range),
+    [range],
+  );
 
   return (
     <>
       <AdminPageHeader
         title="Platform analytics"
-        description="Live KPIs from the API. Time-series charts ship in a later phase."
+        description="Live KPIs and time-series from Postgres."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Analytics" }]}
         actions={
           <Button variant="outline" size="sm" className="rounded-full" disabled>
@@ -101,33 +113,101 @@ export default function AdminAnalyticsPage() {
       )}
 
       <div className="flex gap-2 mb-6">
-        {["7d", "30d", "90d"].map((r) => (
+        {RANGES.map((r) => (
           <Button
             key={r}
-            variant={r === "30d" ? "default" : "outline"}
+            variant={r === range ? "default" : "outline"}
             size="sm"
             className="rounded-full"
-            disabled
+            onClick={() => setRange(r)}
           >
             {r}
           </Button>
         ))}
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        {CHART_PLACEHOLDERS.map((c) => (
-          <div
-            key={c.title}
-            className="rounded-xl border border-border bg-card p-5 min-h-[200px] flex flex-col"
-          >
-            <p className="font-medium text-sm">{c.title}</p>
-            <p className="text-xs text-muted-foreground mb-4">{c.range}</p>
-            <div className="flex-1 rounded-lg bg-secondary/40 flex items-center justify-center text-xs text-muted-foreground">
-              Chart placeholder — requires analytics time-series API
+      {tsLoading && !timeseries && (
+        <p className="text-sm text-muted-foreground mb-4">Loading charts…</p>
+      )}
+
+      {timeseries && (
+        <>
+          <div className="grid md:grid-cols-2 gap-4 mb-6">
+            <AdminMiniChart
+              title="Daily active users"
+              buckets={timeseries.buckets}
+              values={timeseries.series.dau}
+            />
+            <AdminMiniChart
+              title="New signups"
+              buckets={timeseries.buckets}
+              values={timeseries.series.signups}
+            />
+            <AdminMiniChart
+              title="Revenue (USD)"
+              buckets={timeseries.buckets}
+              values={timeseries.series.revenueUsd}
+              valuePrefix="$"
+            />
+            <AdminMiniChart
+              title="Live hours"
+              buckets={timeseries.buckets}
+              values={timeseries.series.liveHours}
+              valueSuffix="h"
+            />
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-4">
+            <div className="rounded-xl border border-border bg-card p-5">
+              <p className="font-medium text-sm mb-3">Revenue by source ({range})</p>
+              {timeseries.revenueBySource.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No ledger batches yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {timeseries.revenueBySource.map((r) => (
+                    <li key={r.sourceType} className="flex justify-between text-sm">
+                      <span className="capitalize">{r.sourceType.replace(/_/g, " ")}</span>
+                      <span className="font-medium">${r.totalUsd.toLocaleString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-5">
+              <p className="font-medium text-sm mb-1">Premium subscribers</p>
+              <p className="text-3xl font-bold mb-4">{timeseries.premiumSubscribers}</p>
+              <p className="text-xs text-muted-foreground">Users with active premium expiry</p>
             </div>
           </div>
-        ))}
-      </div>
+
+          <div className="rounded-xl border border-border overflow-hidden mt-4">
+            <div className="p-4 border-b border-border">
+              <p className="font-medium text-sm">Top content by views</p>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Creator</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="text-right">Views</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {timeseries.topContent.map((v) => (
+                  <TableRow key={v.id}>
+                    <TableCell className="max-w-[200px] truncate">{v.title}</TableCell>
+                    <TableCell>{v.creator}</TableCell>
+                    <TableCell className="capitalize">{v.type}</TableCell>
+                    <TableCell className="text-right">{v.views.toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
+      )}
     </>
   )
 }

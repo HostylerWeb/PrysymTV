@@ -23,6 +23,7 @@ export type MeResponse = {
   role: string;
   isVerified: boolean;
   streamerStatus: "none" | "pending" | "approved" | "rejected";
+  verticalCreatorStatus: "none" | "pending" | "approved" | "rejected";
   coinsBalance: number;
   premiumTier: string;
   premiumExpiresAt: string | null;

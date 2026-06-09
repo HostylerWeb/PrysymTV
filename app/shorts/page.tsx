@@ -25,6 +25,7 @@ import { Header } from "@/components/header"
 import { useAuth } from "@/contexts/auth-context"
 
 import { AdInterstitial } from "@/components/ad-interstitial"
+import { fetchPublicConfig } from "@/lib/api/config"
 import { ShareSheet } from "@/components/share-sheet"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
 import {
@@ -53,6 +54,10 @@ import {
   formatEngagementCount,
   type EngagementCounts,
 } from "@/lib/engagement-count"
+import { CreateFlowModals, triggerContextualCreate } from "@/components/create-flow-modals"
+import { CreateHeaderButton } from "@/components/create-header-button"
+import { useCreateFlow } from "@/hooks/use-create-flow"
+import { useRouter } from "next/navigation"
 export type ShortItem = {
   id: string
   videoUrl: string
@@ -323,7 +328,11 @@ function ShortVideo({
 }
 
 export default function ShortsPage() {
+  const router = useRouter()
+  const createFlow = useCreateFlow()
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
+  const uploadShort = () =>
+    triggerContextualCreate("short", createFlow, { isAuthenticated, user })
   const [shortsData, setShortsData] = useState<ShortItem[]>([])
   const [feedLoaded, setFeedLoaded] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
@@ -371,6 +380,23 @@ export default function ShortsPage() {
   const [engagement, setEngagement] = useState<Record<string, EngagementCounts>>({})
   const shortsViewCount = useRef(0)
   const viewRecorded = useRef(new Set<string>())
+  const adEveryNSwipes = useRef(5)
+  const adsEnabled = useRef(true)
+
+  useEffect(() => {
+    void fetchPublicConfig()
+      .then((cfg) => {
+        adEveryNSwipes.current = Math.max(
+          1,
+          cfg.ads.shortsInterstitialEveryNSwipes || 5,
+        )
+        adsEnabled.current = cfg.ads.shortsInterstitialEnabled
+      })
+      .catch(() => {
+        adEveryNSwipes.current = 5
+        adsEnabled.current = true
+      })
+  }, [])
 
   useEffect(() => {
     setEngagement((prev) => {
@@ -418,7 +444,13 @@ export default function ShortsPage() {
       if (newIndex !== activeIndex && newIndex >= 0 && newIndex < shortsData.length) {
         setActiveIndex(newIndex)
         shortsViewCount.current += 1
-        if (shortsViewCount.current > 0 && shortsViewCount.current % 5 === 0) {
+        const n = adEveryNSwipes.current
+        if (
+          adsEnabled.current &&
+          n > 0 &&
+          shortsViewCount.current > 0 &&
+          shortsViewCount.current % n === 0
+        ) {
           setShowAd(true)
         }
       }
@@ -638,16 +670,35 @@ export default function ShortsPage() {
   if (feedLoaded && shortsData.length === 0) {
     return (
       <main className="h-screen bg-black overflow-hidden md:pl-20 flex flex-col items-center justify-center gap-3 px-6">
-        <p className="text-white/70 text-center">No shorts yet. Check back soon or upload one from Settings.</p>
+        <p className="text-white/70 text-center">No shorts yet. Tap + to upload your first short.</p>
+        <CreateHeaderButton
+          variant="on-dark"
+          label="Upload short"
+          onClick={uploadShort}
+        />
         <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
         <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
         <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+        <CreateFlowModals
+          flow={createFlow}
+          onNeedCreatorVerification={() => setIsAuthModalOpen(true)}
+        />
       </main>
     )
   }
 
   return (
     <main className="h-screen bg-black overflow-hidden md:pl-20">
+      <div className="fixed top-0 left-0 right-0 z-[55] md:left-20 pointer-events-none">
+        <div className="flex items-center justify-end gap-2 px-4 py-4 pointer-events-auto bg-gradient-to-b from-black/70 to-transparent">
+          <CreateHeaderButton
+            variant="on-dark"
+            label="Upload short"
+            onClick={uploadShort}
+          />
+        </div>
+      </div>
+
       {/* Shorts Container */}
       <div
         ref={containerRef}
@@ -886,6 +937,12 @@ export default function ShortsPage() {
           videoId={String(shortsData[activeIndex]?.id ?? activeIndex)}
         />
       )}
+
+      <CreateFlowModals
+        flow={createFlow}
+        onOpenSettings={() => router.push("/profile?settings=go-live")}
+        onNeedCreatorVerification={() => router.push("/profile")}
+      />
 
       <style jsx global>{`
         @keyframes marquee {

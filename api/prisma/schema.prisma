@@ -21,6 +21,13 @@ enum StreamerStatus {
   rejected
 }
 
+enum VerticalCreatorStatus {
+  none
+  pending
+  approved
+  rejected
+}
+
 enum PremiumTier {
   none
   basic
@@ -383,8 +390,9 @@ model User {
   role              UserRole       @default(user)
   isVerified        Boolean        @default(false) @map("is_verified")
   isBanned          Boolean        @default(false) @map("is_banned")
-  streamerStatus    StreamerStatus @default(none) @map("streamer_status")
-  partnerTier       CreatorPartnerTier @default(standard) @map("partner_tier")
+  streamerStatus         StreamerStatus         @default(none) @map("streamer_status")
+  verticalCreatorStatus  VerticalCreatorStatus  @default(none) @map("vertical_creator_status")
+  partnerTier            CreatorPartnerTier     @default(standard) @map("partner_tier")
   coinsBalance      Int            @default(0) @map("coins_balance")
   premiumTier       PremiumTier    @default(none) @map("premium_tier")
   premiumExpiresAt  DateTime?      @map("premium_expires_at")
@@ -393,8 +401,9 @@ model User {
   createdAt         DateTime       @default(now()) @map("created_at")
   updatedAt         DateTime       @updatedAt @map("updated_at")
 
-  streamerApplication   StreamerApplication?
-  socialLinks           UserSocialLink[]
+  streamerApplication        StreamerApplication?
+  verticalCreatorApplication VerticalCreatorApplication?
+  socialLinks                UserSocialLink[]
   notificationPrefs     UserNotificationPreference[]
   refreshSessions       RefreshSession[]
   passwordResets        PasswordReset[]
@@ -424,8 +433,9 @@ model User {
   streamMessages        StreamMessage[]
   creatorPayouts        CreatorPayout[]     @relation("CreatorPayouts")
   payoutsProcessed      CreatorPayout[]     @relation("PayoutProcessor")
-  applicationsReviewed  StreamerApplication[] @relation("ApplicationReviewer")
-  liveEvents            LiveEvent[]
+  applicationsReviewed         StreamerApplication[]         @relation("ApplicationReviewer")
+  verticalApplicationsReviewed VerticalCreatorApplication[]  @relation("VerticalApplicationReviewer")
+  liveEvents                   LiveEvent[]
   creatorStore          CreatorStore?
   storeOrdersAsBuyer    StoreOrder[]          @relation("StoreBuyer")
   viewerSupportSent     ViewerSupportTransaction[] @relation("SupportSender")
@@ -475,6 +485,23 @@ model StreamerApplication {
   reviewedBy    User?             @relation("ApplicationReviewer", fields: [reviewedById], references: [id])
 
   @@map("streamer_applications")
+}
+
+model VerticalCreatorApplication {
+  id            String            @id @default(uuid()) @db.Uuid
+  userId        String            @unique @map("user_id") @db.Uuid
+  description   String
+  idDocumentUrl String?           @map("id_document_url")
+  portfolioUrl  String?           @map("portfolio_url")
+  status        ApplicationStatus @default(pending)
+  reviewedById  String?           @map("reviewed_by") @db.Uuid
+  reviewNotes   String?           @map("review_notes")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy    User?             @relation("VerticalApplicationReviewer", fields: [reviewedById], references: [id])
+
+  @@map("vertical_creator_applications")
 }
 
 model UserSocialLink {

@@ -1,12 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { ExternalLink, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ADMIN_NAV } from "@/lib/admin/nav"
-import { fetchAdminOverview } from "@/lib/api/admin"
+import { useAdminBadges } from "@/lib/admin/use-admin-badges"
 import { useAuth } from "@/contexts/auth-context"
 
 function isActive(pathname: string, href: string) {
@@ -17,25 +16,7 @@ function isActive(pathname: string, href: string) {
 export function AdminSidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
-  const [badges, setBadges] = useState({
-    reports: 0,
-    streamers: 0,
-    payouts: 0,
-    live: 0,
-  })
-
-  useEffect(() => {
-    void fetchAdminOverview()
-      .then((o) =>
-        setBadges({
-          reports: o.pendingReports,
-          streamers: o.pendingStreamerApplications,
-          payouts: o.pendingPayouts,
-          live: o.liveNow,
-        }),
-      )
-      .catch(() => {})
-  }, [pathname])
+  const badges = useAdminBadges(pathname)
 
   return (
     <aside className="hidden md:flex fixed left-0 top-0 bottom-0 z-50 w-64 flex-col border-r border-border bg-sidebar text-sidebar-foreground">

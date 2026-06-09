@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation"
 import { Menu, Search } from "lucide-react"
 import { useState } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { ADMIN_BADGE_COUNTS, ADMIN_NAV } from "@/lib/admin/nav"
+import { ADMIN_NAV } from "@/lib/admin/nav"
+import { useAdminBadges } from "@/lib/admin/use-admin-badges"
 import { cn } from "@/lib/utils"
 
 function isActive(pathname: string, href: string) {
@@ -16,6 +17,7 @@ function isActive(pathname: string, href: string) {
 export function AdminTopbar({ title }: { title?: string }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const badges = useAdminBadges(pathname)
 
   return (
     <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b border-border bg-background/95 backdrop-blur px-4 md:px-6">
@@ -41,7 +43,7 @@ export function AdminTopbar({ title }: { title?: string }) {
                 </p>
                 {group.items.map((item) => {
                   const Icon = item.icon
-                  const badge = item.badgeKey ? ADMIN_BADGE_COUNTS[item.badgeKey] : 0
+                  const badge = item.badgeKey ? badges[item.badgeKey] : 0
                   return (
                     <Link
                       key={item.id}

@@ -27,8 +27,23 @@ import { videoThumbnail } from "@/lib/format-media"
 import { useAuth } from "@/contexts/auth-context"
 import { AuthModal } from "@/components/auth-modal"
 import { userAvatarUrl } from "@/lib/user-avatar"
+import { CreateFlowModals, triggerContextualCreate } from "@/components/create-flow-modals"
+import { useCreateFlow } from "@/hooks/use-create-flow"
+import { useRouter } from "next/navigation"
+import { fetchPodcastCategories } from "@/lib/api/categories"
 
-const categories = ["All", "True Crime", "Tech", "Business", "Comedy", "Health", "Society", "Science", "Sports", "Music"]
+const FALLBACK_PODCAST_FILTER_CATEGORIES = [
+  "All",
+  "True Crime",
+  "Tech",
+  "Business",
+  "Comedy",
+  "Health",
+  "Society",
+  "Science",
+  "Sports",
+  "Music",
+]
 
 type FeaturedPodcast = {
   id: string
@@ -244,7 +259,11 @@ const EMPTY_FEATURED: FeaturedPodcast = {
 }
 
 export default function PodcastsPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth()
+  const router = useRouter()
+  const createFlow = useCreateFlow()
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
+  const uploadPodcast = () =>
+    triggerContextualCreate("podcast", createFlow, { isAuthenticated, user })
   const [activeTab, setActiveTab] = useState("podcasts")
   const [activeCategory, setActiveCategory] = useState("All")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -256,6 +275,17 @@ export default function PodcastsPage() {
   const [latestEpisodes, setLatestEpisodes] = useState<PodcastEpisodeCard[]>([])
   const [featuredPodcast, setFeaturedPodcast] = useState<FeaturedPodcast>(EMPTY_FEATURED)
   const [curatedPlaylists, setCuratedPlaylists] = useState<PlaylistSummary[]>([])
+  const [categories, setCategories] = useState<string[]>(FALLBACK_PODCAST_FILTER_CATEGORIES)
+
+  useEffect(() => {
+    void fetchPodcastCategories()
+      .then((res) => {
+        if (res.items.length > 0) {
+          setCategories(["All", ...res.items.map((c) => c.label)])
+        }
+      })
+      .catch(() => setCategories(FALLBACK_PODCAST_FILTER_CATEGORIES))
+  }, [])
 
   useEffect(() => {
     if (authLoading) return
@@ -336,7 +366,11 @@ export default function PodcastsPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-background pb-32 md:pb-20 md:pl-20 flex items-center justify-center">
-        <Header onSearchClick={() => setIsSearchOpen(true)} />
+        <Header
+        onSearchClick={() => setIsSearchOpen(true)}
+        onCreateClick={uploadPodcast}
+        createLabel="Upload podcast episode"
+      />
         <p className="text-sm text-muted-foreground">Loading podcasts…</p>
       </main>
     )
@@ -344,7 +378,11 @@ export default function PodcastsPage() {
 
   return (
     <main className="min-h-screen bg-background pb-32 md:pb-20 md:pl-20">
-      <Header onSearchClick={() => setIsSearchOpen(true)} />
+      <Header
+        onSearchClick={() => setIsSearchOpen(true)}
+        onCreateClick={uploadPodcast}
+        createLabel="Upload podcast episode"
+      />
 
       {/* ── HERO BANNER ─────────────────────────────────────────────────── */}
       <div className="relative w-full h-72 md:h-[420px] overflow-hidden">
@@ -608,6 +646,12 @@ export default function PodcastsPage() {
         onTabChange={setActiveTab}
       />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+
+      <CreateFlowModals
+        flow={createFlow}
+        onOpenSettings={() => router.push("/profile?settings=go-live")}
+        onNeedCreatorVerification={() => router.push("/profile")}
+      />
     </main>
   )
 }

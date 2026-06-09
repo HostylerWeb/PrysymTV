@@ -12,6 +12,8 @@ import {
   Play,
   ChevronRight,
   Radio,
+  ListMusic,
+  Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -46,9 +48,18 @@ import {
 } from "@/lib/format-media"
 import { mapHistoryToSettingsItems } from "@/lib/map-history"
 import { mapLikedItemCard, mapSavedItemCard } from "@/lib/map-profile-items"
+import { CreatorPermissionsCard } from "@/components/creator-permissions-card"
+import { CreateFlowModals, openVerticalWizard } from "@/components/create-flow-modals"
+import { CreateHeaderButton } from "@/components/create-header-button"
+import { useCreateFlow } from "@/hooks/use-create-flow"
+import {
+  fetchMyPlaylists,
+  type PlaylistSummary,
+} from "@/lib/api/playlists"
 
 const tabs = [
   { id: "videos", label: "Videos", icon: Grid3X3 },
+  { id: "playlists", label: "Playlists", icon: ListMusic },
   { id: "saved", label: "Saved", icon: Bookmark },
   { id: "liked", label: "Liked", icon: Heart },
 ]
@@ -79,6 +90,7 @@ const VALID_SETTINGS_SCREENS: ProfileSettingsScreen[] = [
 function ProfilePageContent() {
   const searchParams = useSearchParams()
   const settingsParam = searchParams.get("settings")
+  const createParam = searchParams.get("create")
   const initialSettingsScreen =
     settingsParam && VALID_SETTINGS_SCREENS.includes(settingsParam as ProfileSettingsScreen)
       ? (settingsParam as ProfileSettingsScreen)
@@ -94,13 +106,20 @@ function ProfilePageContent() {
   const [coinsPurchasing, setCoinsPurchasing] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isStreamerModalOpen, setIsStreamerModalOpen] = useState(false)
+  const [streamerModalPrefill, setStreamerModalPrefill] = useState<string | undefined>()
+  const [streamerModalFeatures, setStreamerModalFeatures] = useState<
+    Array<"live" | "vertical">
+  >(["live"])
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false)
   const [darkModeEnabled, setDarkModeEnabled] = useState(true)
   const [myVideos, setMyVideos] = useState<VideoRecord[]>([])
   const [savedItems, setSavedItems] = useState<SavedItemRecord[]>([])
   const [likedItems, setLikedItems] = useState<LikedItemRecord[]>([])
   const [watchHistory, setWatchHistory] = useState<HistoryItemRecord[]>([])
+  const [myPlaylists, setMyPlaylists] = useState<PlaylistSummary[]>([])
   const [tabsLoading, setTabsLoading] = useState(false)
+  const createFlow = useCreateFlow()
+  const { setMenuOpen: setCreateMenuOpen } = createFlow
 
   const openSettingsPanel = (screen: ProfileSettingsScreen = "menu") => {
     setSettingsOpenTo(screen)
@@ -119,11 +138,17 @@ function ProfilePageContent() {
   }, [initialSettingsScreen, isAuthenticated, isLoading])
 
   useEffect(() => {
+    if (!createParam || !isAuthenticated || isLoading) return
+    setCreateMenuOpen(true)
+  }, [createParam, isAuthenticated, isLoading, setCreateMenuOpen])
+
+  useEffect(() => {
     if (!isAuthenticated || isLoading || !user) {
       setMyVideos([])
       setSavedItems([])
       setLikedItems([])
       setWatchHistory([])
+      setMyPlaylists([])
       return
     }
 
@@ -131,23 +156,27 @@ function ProfilePageContent() {
     async function loadProfileData() {
       setTabsLoading(true)
       try {
-        const [videosRes, savedRes, likedRes, historyRes] = await Promise.all([
-          fetchMyVideos(1, 24),
-          fetchMySaved(1, 24),
-          fetchMyLiked(1, 24),
-          fetchHistory(1, 12),
-        ])
+        const [videosRes, savedRes, likedRes, historyRes, playlistsRes] =
+          await Promise.all([
+            fetchMyVideos(1, 24),
+            fetchMySaved(1, 24),
+            fetchMyLiked(1, 24),
+            fetchHistory(1, 12),
+            fetchMyPlaylists(),
+          ])
         if (cancelled) return
         setMyVideos(videosRes.items)
         setSavedItems(savedRes.items)
         setLikedItems(likedRes.items)
         setWatchHistory(historyRes.items)
+        setMyPlaylists(playlistsRes.items)
       } catch {
         if (!cancelled) {
           setMyVideos([])
           setSavedItems([])
           setLikedItems([])
           setWatchHistory([])
+          setMyPlaylists([])
         }
       } finally {
         if (!cancelled) setTabsLoading(false)
@@ -313,6 +342,8 @@ function ProfilePageContent() {
             </button>
           </Link>
           <h1 className="text-lg font-semibold text-foreground">Profile</h1>
+          <div className="flex items-center gap-2">
+            <CreateHeaderButton onClick={() => createFlow.setMenuOpen(true)} />
           <button
             type="button"
             onClick={() => (showSettings ? closeSettingsPanel() : openSettingsPanel("menu"))}
@@ -325,6 +356,7 @@ function ProfilePageContent() {
               <Settings className="w-5 h-5 text-foreground" />
             </span>
           </button>
+          </div>
         </div>
       </div>
 
@@ -342,7 +374,7 @@ function ProfilePageContent() {
               <button className="absolute bottom-0 right-0 md:bottom-2 md:right-2 w-8 h-8 rounded-full bg-primary flex items-center justify-center hover:scale-105 transition-transform">
                 <Edit3 className="w-4 h-4 text-primary-foreground" />
               </button>
-              {user?.isStreamer && (
+              {user?.streamerStatus === "approved" && (
                 <div className="absolute -top-1 -right-1 md:top-0 md:right-0 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center ring-2 ring-background">
                   <Radio className="w-3 h-3 text-white" />
                 </div>
@@ -353,7 +385,7 @@ function ProfilePageContent() {
             <div className="flex flex-col items-center md:items-start text-center md:text-left">
               <div className="flex items-center gap-3 mb-1">
                 <h2 className="text-xl md:text-3xl font-bold text-foreground">{user?.name}</h2>
-                {user?.isStreamer && (
+                {user?.streamerStatus === "approved" && (
                   <span className="px-2 py-0.5 rounded-md bg-green-500/10 text-green-500 text-[10px] uppercase tracking-wider font-bold">
                     Streamer
                   </span>
@@ -371,7 +403,7 @@ function ProfilePageContent() {
               {/* Action Buttons */}
               <div className="flex items-center justify-center md:justify-start gap-3 w-full max-w-xs md:max-w-none md:w-auto">
                 <Button className="flex-1 md:flex-none rounded-full px-8" onClick={() => setIsEditProfileOpen(true)}>Edit Profile</Button>
-                {user?.isStreamer ? (
+                {user?.streamerStatus === "approved" && (
                   <Button
                     variant="secondary"
                     className="flex-1 md:flex-none rounded-full gap-2 px-6"
@@ -380,15 +412,14 @@ function ProfilePageContent() {
                     <Radio className="w-4 h-4" />
                     Go Live
                   </Button>
-                ) : (
-                  <Button 
-                    variant="secondary" 
-                    className="flex-1 md:flex-none rounded-full px-6"
-                    onClick={() => setIsStreamerModalOpen(true)}
-                  >
-                    {user?.streamerStatus === "pending" ? "Pending..." : "Become Streamer"}
-                  </Button>
                 )}
+              </div>
+
+              <div className="w-full max-w-md md:max-w-lg mt-2">
+                <CreatorPermissionsCard
+                  user={user}
+                  onUnlock={() => createFlow.setUnlockOpen(true)}
+                />
               </div>
             </div>
           </div>
@@ -515,7 +546,7 @@ function ProfilePageContent() {
         ) : null}
 
         {activeTab === "videos" && !tabsLoading && myVideos.length === 0 ? (
-          <ProfileEmpty message="You have not uploaded any videos yet. Open Settings → Your Videos to upload." />
+          <ProfileEmpty message="No uploads yet. Tap + in the header to upload a short or long video." />
         ) : null}
 
         {activeTab === "videos" && myVideos.length > 0 ? (
@@ -544,6 +575,45 @@ function ProfilePageContent() {
               </Link>
             ))}
           </div>
+        ) : null}
+
+        {activeTab === "playlists" && !tabsLoading && myPlaylists.length === 0 ? (
+          <div className="text-center py-12 space-y-3">
+            <ProfileEmpty message="No playlists yet. Create one in Settings → Playlists, or when you upload." />
+            <Button
+              variant="outline"
+              className="rounded-full gap-2"
+              onClick={() => openSettingsPanel("playlists")}
+            >
+              <Plus className="w-4 h-4" />
+              Manage playlists
+            </Button>
+          </div>
+        ) : null}
+
+        {activeTab === "playlists" && myPlaylists.length > 0 ? (
+          <ul className="space-y-2">
+            {myPlaylists.map((p) => (
+              <li key={p.id}>
+                <Link
+                  href={`/playlist/${p.id}`}
+                  className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-secondary/40 transition-colors"
+                >
+                  <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center shrink-0">
+                    <ListMusic className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm truncate">{p.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {p.itemCount} item{p.itemCount === 1 ? "" : "s"} · {p.type}
+                      {p.visibility === "private" ? " · private" : ""}
+                    </p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                </Link>
+              </li>
+            ))}
+          </ul>
         ) : null}
 
         {activeTab === "saved" && !tabsLoading && savedItems.length === 0 ? (
@@ -621,11 +691,30 @@ function ProfilePageContent() {
         onPurchasePackage={handlePurchasePackage}
         purchasing={coinsPurchasing}
       />
-      <StreamerApplicationModal 
-        isOpen={isStreamerModalOpen} 
-        onClose={() => setIsStreamerModalOpen(false)} 
+      <StreamerApplicationModal
+        isOpen={isStreamerModalOpen}
+        initialDescription={streamerModalPrefill}
+        features={streamerModalFeatures}
+        onClose={() => {
+          setIsStreamerModalOpen(false)
+          setStreamerModalPrefill(undefined)
+          setStreamerModalFeatures(["live"])
+        }}
       />
       <EditProfileModal isOpen={isEditProfileOpen} onClose={() => setIsEditProfileOpen(false)} />
+
+      <CreateFlowModals
+        flow={createFlow}
+        onOpenSettings={(screen) => openSettingsPanel(screen)}
+        onNeedCreatorVerification={(ctx) => {
+          setStreamerModalPrefill(ctx.description)
+          setStreamerModalFeatures(
+            ctx.features.length > 0 ? ctx.features : ["live"],
+          )
+          setIsStreamerModalOpen(true)
+        }}
+        onUploadSuccess={() => void refreshUser()}
+      />
 
       <ProfileSettingsSheet
         isOpen={showSettings}
@@ -639,7 +728,13 @@ function ProfilePageContent() {
         }}
         onStreamerApply={() => {
           closeSettingsPanel()
+          setStreamerModalFeatures(["live"])
           setIsStreamerModalOpen(true)
+        }}
+        onVerticalCreatorApply={() => {
+          closeSettingsPanel()
+          createFlow.setUnlockPreselect("vertical")
+          createFlow.setUnlockOpen(true)
         }}
         onLogout={handleLogout}
         onRefreshUser={refreshUser}

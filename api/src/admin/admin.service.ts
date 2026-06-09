@@ -6,6 +6,7 @@ import {
 import {
   ApplicationStatus,
   ContentStatus,
+  ContentVertical,
   CreatorBalanceEntryType,
   CreatorPartnerTier,
   PayoutStatus,
@@ -14,6 +15,7 @@ import {
   ReportTargetType,
   StreamStatus,
   StreamerStatus,
+  VerticalCreatorStatus,
   VideoType,
 } from '@prisma/client';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
@@ -23,15 +25,18 @@ import { AdminListQueryDto } from './dto/admin-list-query.dto';
 import { AdminReportAction } from './dto/review-report.dto';
 import { AdminPayoutAction } from './dto/process-payout.dto';
 import { StreamerApplicationAction } from './dto/review-streamer-application.dto';
+import { VerticalCreatorApplicationAction } from './dto/review-vertical-creator-application.dto';
 import { UpdateAdsConfigDto } from './dto/update-ads-config.dto';
 import { UpdateAnalyticsConfigDto } from './dto/update-analytics-config.dto';
 import { UpdateEconomyConfigDto } from './dto/update-economy-config.dto';
 import { UpdateScorecardConfigDto } from './dto/update-scorecard-config.dto';
 import { UpsertCoinPackageDto } from './dto/upsert-coin-package.dto';
 import { UpsertGiftCatalogDto } from './dto/upsert-gift-catalog.dto';
+import { UpdateUserImpactDto } from './dto/update-user-impact.dto';
 import type {
   AdsSettings,
   AnalyticsSettings,
+  CategoryConfigEntry,
   ProgramConfigEntry,
   ScorecardSettings,
 } from '../platform-settings/platform-settings.types';
@@ -66,6 +71,7 @@ export class AdminService {
       pendingReports,
       pendingPayouts,
       pendingApps,
+      pendingVerticalApps,
     ] = await Promise.all([
       this.prisma.analyticsEvent.findMany({
         where: { createdAt: { gte: since24h }, userId: { not: null } },
@@ -88,6 +94,9 @@ export class AdminService {
       this.prisma.streamerApplication.count({
         where: { status: ApplicationStatus.pending },
       }),
+      this.prisma.verticalCreatorApplication.count({
+        where: { status: ApplicationStatus.pending },
+      }),
     ]);
 
     const pendingPayoutsUsd = pendingPayouts.reduce(
@@ -104,7 +113,96 @@ export class AdminService {
       pendingPayouts: pendingPayouts.length,
       pendingPayoutsUsd: Number(pendingPayoutsUsd),
       pendingStreamerApplications: pendingApps,
+      pendingVerticalCreatorApplications: pendingVerticalApps,
+      pendingApplications: pendingApps + pendingVerticalApps,
     };
+  }
+
+  async listApplications(query: AdminListQueryDto) {
+    const { page, limit, skip, take } = this.paginate(query.page, query.limit);
+    const statusFilter =
+      query.status && query.status !== 'all'
+        ? (query.status as ApplicationStatus)
+        : undefined;
+
+    const type = query.type?.toLowerCase();
+    const includeStreamer = !type || type === 'all' || type === 'streamer';
+    const includeVertical = !type || type === 'all' || type === 'vertical';
+
+    const streamerWhere: Prisma.StreamerApplicationWhereInput = {};
+    const verticalWhere: Prisma.VerticalCreatorApplicationWhereInput = {};
+    if (statusFilter) {
+      streamerWhere.status = statusFilter;
+      verticalWhere.status = statusFilter;
+    }
+
+    const [streamerItems, verticalItems] = await Promise.all([
+      includeStreamer
+        ? this.prisma.streamerApplication.findMany({
+            where: streamerWhere,
+            orderBy: { createdAt: 'desc' },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                },
+              },
+            },
+          })
+        : Promise.resolve([]),
+      includeVertical
+        ? this.prisma.verticalCreatorApplication.findMany({
+            where: verticalWhere,
+            orderBy: { createdAt: 'desc' },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                },
+              },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const merged = [
+      ...streamerItems.map((a) => ({
+        id: a.id,
+        type: 'streamer' as const,
+        userId: a.userId,
+        username: a.user.username,
+        displayName: a.user.displayName,
+        description: a.description,
+        status: a.status,
+        submittedAt: a.createdAt.toISOString(),
+        hasIdDocument: !!a.idDocumentUrl,
+        portfolioUrl: null as string | null,
+      })),
+      ...verticalItems.map((a) => ({
+        id: a.id,
+        type: 'vertical' as const,
+        userId: a.userId,
+        username: a.user.username,
+        displayName: a.user.displayName,
+        description: a.description,
+        status: a.status,
+        submittedAt: a.createdAt.toISOString(),
+        hasIdDocument: !!a.idDocumentUrl,
+        portfolioUrl: a.portfolioUrl,
+      })),
+    ].sort(
+      (a, b) =>
+        new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
+    );
+
+    const total = merged.length;
+    const items = merged.slice(skip, skip + take);
+
+    return { items, meta: { page, limit, total } };
   }
 
   async listReports(query: AdminListQueryDto) {
@@ -298,6 +396,7 @@ export class AdminService {
       include: {
         socialLinks: { orderBy: { sortOrder: 'asc' } },
         streamerApplication: true,
+        verticalCreatorApplication: true,
         _count: {
           select: {
             videos: true,
@@ -392,6 +491,7 @@ export class AdminService {
       isVerified: user.isVerified,
       isBanned: user.isBanned,
       streamerStatus: user.streamerStatus,
+      verticalCreatorStatus: user.verticalCreatorStatus,
       partnerTier: user.partnerTier,
       coins: user.coinsBalance,
       bio: user.bio,
@@ -445,6 +545,7 @@ export class AdminService {
         ),
       },
       streamerApplication: user.streamerApplication,
+      verticalCreatorApplication: user.verticalCreatorApplication,
     };
   }
 
@@ -605,6 +706,121 @@ export class AdminService {
     ]);
 
     return { success: true, status: appStatus, streamerStatus };
+  }
+
+  async listVerticalCreatorApplications(query: AdminListQueryDto) {
+    const { page, limit, skip, take } = this.paginate(query.page, query.limit);
+    const where: Prisma.VerticalCreatorApplicationWhereInput = {};
+    if (query.status && query.status !== 'all') {
+      where.status = query.status as ApplicationStatus;
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.verticalCreatorApplication.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              email: true,
+            },
+          },
+        },
+      }),
+      this.prisma.verticalCreatorApplication.count({ where }),
+    ]);
+
+    return {
+      items: items.map((a) => ({
+        id: a.id,
+        userId: a.userId,
+        username: a.user.username,
+        displayName: a.user.displayName,
+        description: a.description,
+        portfolioUrl: a.portfolioUrl,
+        status: a.status,
+        submittedAt: a.createdAt.toISOString(),
+      })),
+      meta: { page, limit, total },
+    };
+  }
+
+  async getVerticalCreatorApplication(id: string) {
+    const app = await this.prisma.verticalCreatorApplication.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            email: true,
+            avatarUrl: true,
+            verticalCreatorStatus: true,
+          },
+        },
+        reviewedBy: { select: { username: true } },
+      },
+    });
+    if (!app) throw new NotFoundException('Application not found');
+    return {
+      id: app.id,
+      userId: app.userId,
+      username: app.user.username,
+      displayName: app.user.displayName,
+      email: app.user.email,
+      avatarUrl: app.user.avatarUrl,
+      verticalCreatorStatus: app.user.verticalCreatorStatus,
+      description: app.description,
+      idDocumentUrl: app.idDocumentUrl,
+      portfolioUrl: app.portfolioUrl,
+      status: app.status,
+      reviewNotes: app.reviewNotes,
+      reviewedBy: app.reviewedBy?.username ?? null,
+      submittedAt: app.createdAt.toISOString(),
+      updatedAt: app.updatedAt.toISOString(),
+    };
+  }
+
+  async reviewVerticalCreatorApplication(
+    id: string,
+    adminId: string,
+    action: VerticalCreatorApplicationAction,
+    notes?: string,
+  ) {
+    const app = await this.prisma.verticalCreatorApplication.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+    if (!app) throw new NotFoundException('Application not found');
+
+    const approved = action === VerticalCreatorApplicationAction.approve;
+    const appStatus = approved ? ApplicationStatus.approved : ApplicationStatus.rejected;
+    const verticalCreatorStatus = approved
+      ? VerticalCreatorStatus.approved
+      : VerticalCreatorStatus.rejected;
+
+    await this.prisma.$transaction([
+      this.prisma.verticalCreatorApplication.update({
+        where: { id },
+        data: {
+          status: appStatus,
+          reviewedById: adminId,
+          reviewNotes: notes?.trim() || null,
+        },
+      }),
+      this.prisma.user.update({
+        where: { id: app.userId },
+        data: { verticalCreatorStatus },
+      }),
+    ]);
+
+    return { success: true, status: appStatus, verticalCreatorStatus };
   }
 
   async listPayouts(query: AdminListQueryDto) {
@@ -790,6 +1006,215 @@ export class AdminService {
       })),
       meta: { page, limit, total },
     };
+  }
+
+  async getAnalyticsTimeseries(range: '7d' | '30d' | '90d' = '30d') {
+    const days = range === '7d' ? 7 : range === '90d' ? 90 : 30;
+    const buckets = this.dayBuckets(days);
+    const start = new Date(buckets[0]);
+
+    const [
+      analyticsEvents,
+      signups,
+      revenueBatches,
+      endedStreams,
+      premiumSubscribers,
+      topContent,
+    ] = await Promise.all([
+      this.prisma.analyticsEvent.findMany({
+        where: { createdAt: { gte: start }, userId: { not: null } },
+        select: { userId: true, createdAt: true },
+      }),
+      this.prisma.user.findMany({
+        where: { createdAt: { gte: start } },
+        select: { createdAt: true },
+      }),
+      this.prisma.revenueLedgerBatch.findMany({
+        where: { createdAt: { gte: start } },
+        select: { createdAt: true, sourceType: true, grossAmountUsd: true },
+      }),
+      this.prisma.stream.findMany({
+        where: { endedAt: { gte: start } },
+        select: { startedAt: true, endedAt: true, createdAt: true },
+      }),
+      this.prisma.user.count({
+        where: { premiumExpiresAt: { gt: new Date() } },
+      }),
+      this.prisma.video.findMany({
+        where: { status: ContentStatus.ready },
+        orderBy: { viewsCount: 'desc' },
+        take: 8,
+        select: {
+          id: true,
+          title: true,
+          viewsCount: true,
+          type: true,
+          creator: { select: { username: true } },
+        },
+      }),
+    ]);
+
+    const dauByDay = new Map<string, Set<string>>();
+    for (const b of buckets) dauByDay.set(b, new Set());
+    for (const e of analyticsEvents) {
+      if (!e.userId) continue;
+      const key = this.dateKey(e.createdAt);
+      dauByDay.get(key)?.add(e.userId);
+    }
+
+    const signupsByDay = new Map(buckets.map((b) => [b, 0]));
+    for (const u of signups) {
+      const key = this.dateKey(u.createdAt);
+      if (signupsByDay.has(key)) {
+        signupsByDay.set(key, (signupsByDay.get(key) ?? 0) + 1);
+      }
+    }
+
+    const revenueByDay = new Map(buckets.map((b) => [b, 0]));
+    const revenueSourceTotals = new Map<string, number>();
+    for (const batch of revenueBatches) {
+      const key = this.dateKey(batch.createdAt);
+      const usd = Number(batch.grossAmountUsd);
+      if (revenueByDay.has(key)) {
+        revenueByDay.set(key, (revenueByDay.get(key) ?? 0) + usd);
+      }
+      const src = String(batch.sourceType);
+      revenueSourceTotals.set(src, (revenueSourceTotals.get(src) ?? 0) + usd);
+    }
+
+    const liveHoursByDay = new Map(buckets.map((b) => [b, 0]));
+    for (const s of endedStreams) {
+      const ended = s.endedAt ?? s.createdAt;
+      const started = s.startedAt ?? s.createdAt;
+      const hours = Math.max(0, ended.getTime() - started.getTime()) / 3_600_000;
+      const key = this.dateKey(ended);
+      if (liveHoursByDay.has(key)) {
+        liveHoursByDay.set(key, (liveHoursByDay.get(key) ?? 0) + hours);
+      }
+    }
+
+    return {
+      range,
+      buckets,
+      series: {
+        dau: buckets.map((b) => dauByDay.get(b)?.size ?? 0),
+        signups: buckets.map((b) => signupsByDay.get(b) ?? 0),
+        revenueUsd: buckets.map((b) =>
+          Math.round((revenueByDay.get(b) ?? 0) * 100) / 100,
+        ),
+        liveHours: buckets.map((b) =>
+          Math.round((liveHoursByDay.get(b) ?? 0) * 10) / 10,
+        ),
+      },
+      revenueBySource: [...revenueSourceTotals.entries()]
+        .map(([sourceType, totalUsd]) => ({
+          sourceType,
+          totalUsd: Math.round(totalUsd * 100) / 100,
+        }))
+        .sort((a, b) => b.totalUsd - a.totalUsd),
+      topContent: topContent.map((v) => ({
+        id: v.id,
+        title: v.title,
+        views: v.viewsCount,
+        type: v.type,
+        creator: `@${v.creator.username}`,
+      })),
+      premiumSubscribers,
+    };
+  }
+
+  async getUserImpact(creatorId: string, periodMonth?: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: creatorId },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const period = this.parsePeriodMonth(periodMonth);
+    const snap = await this.prisma.creatorImpactSnapshot.findUnique({
+      where: {
+        creatorId_periodMonth: { creatorId, periodMonth: period },
+      },
+    });
+
+    if (!snap) {
+      return {
+        periodMonth: period.toISOString().slice(0, 7),
+        earningsUsd: 0,
+        adRevenueUsd: 0,
+        sponsorshipRevenueUsd: 0,
+        merchandiseRevenueUsd: 0,
+        donationsUsd: 0,
+        watchHours: 0,
+        retentionRate: null,
+        subscriberCount: 0,
+        engagementScore: null,
+        jobsSupported: 0,
+        businessesFunded: 0,
+        dollarsInvested: 0,
+        workforceOpportunities: 0,
+      };
+    }
+
+    return {
+      periodMonth: snap.periodMonth.toISOString().slice(0, 7),
+      earningsUsd: Number(snap.earningsUsd),
+      adRevenueUsd: Number(snap.adRevenueUsd),
+      sponsorshipRevenueUsd: Number(snap.sponsorshipRevenueUsd),
+      merchandiseRevenueUsd: Number(snap.merchandiseRevenueUsd),
+      donationsUsd: Number(snap.donationsUsd),
+      watchHours: Number(snap.watchHours),
+      retentionRate: snap.retentionRate ? Number(snap.retentionRate) : null,
+      subscriberCount: snap.subscriberCount,
+      engagementScore: snap.engagementScore ? Number(snap.engagementScore) : null,
+      jobsSupported: snap.jobsSupported,
+      businessesFunded: snap.businessesFunded,
+      dollarsInvested: Number(snap.dollarsInvested),
+      workforceOpportunities: snap.workforceOpportunities,
+    };
+  }
+
+  async upsertUserImpact(creatorId: string, body: UpdateUserImpactDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: creatorId },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const periodMonth = this.parsePeriodMonth(body.periodMonth);
+    const data = {
+      earningsUsd: body.earningsUsd,
+      adRevenueUsd: body.adRevenueUsd,
+      sponsorshipRevenueUsd: body.sponsorshipRevenueUsd,
+      merchandiseRevenueUsd: body.merchandiseRevenueUsd,
+      donationsUsd: body.donationsUsd,
+      watchHours: body.watchHours,
+      retentionRate: body.retentionRate,
+      subscriberCount: body.subscriberCount,
+      engagementScore: body.engagementScore,
+      jobsSupported: body.jobsSupported,
+      businessesFunded: body.businessesFunded,
+      dollarsInvested: body.dollarsInvested,
+      workforceOpportunities: body.workforceOpportunities,
+    };
+
+    const filtered = Object.fromEntries(
+      Object.entries(data).filter(([, v]) => v !== undefined),
+    );
+
+    await this.prisma.creatorImpactSnapshot.upsert({
+      where: {
+        creatorId_periodMonth: { creatorId, periodMonth },
+      },
+      create: {
+        creatorId,
+        periodMonth,
+        ...filtered,
+      },
+      update: filtered,
+    });
+
+    return this.getUserImpact(creatorId, body.periodMonth);
   }
 
   async deleteVideo(id: string) {
@@ -1183,7 +1608,71 @@ export class AdminService {
   }
 
   updateProgramsConfig(adminId: string, programs: ProgramConfigEntry[]) {
+    this.validateProgramEntries(programs);
     return this.platformSettings.setPrograms(programs, adminId);
+  }
+
+  getPodcastCategoriesConfig() {
+    return this.platformSettings.getPodcastCategories();
+  }
+
+  updatePodcastCategoriesConfig(
+    adminId: string,
+    categories: CategoryConfigEntry[],
+  ) {
+    this.validateCategoryEntries(categories, 'Podcast categories');
+    return this.platformSettings.setPodcastCategories(categories, adminId);
+  }
+
+  private validateCategoryEntries(
+    entries: CategoryConfigEntry[],
+    label: string,
+  ) {
+    const slugs = new Set<string>();
+    for (const entry of entries) {
+      const slug = entry.slug?.trim().toLowerCase();
+      const entryLabel = entry.label?.trim();
+      if (!slug || !entryLabel) {
+        throw new BadRequestException(`${label}: slug and label are required`);
+      }
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+        throw new BadRequestException(
+          `${label}: invalid slug "${slug}" (use lowercase letters, numbers, hyphens)`,
+        );
+      }
+      if (slugs.has(slug)) {
+        throw new BadRequestException(`${label}: duplicate slug "${slug}"`);
+      }
+      slugs.add(slug);
+    }
+  }
+
+  private validateProgramEntries(programs: ProgramConfigEntry[]) {
+    const slugs = new Set<string>();
+    const validVerticals = new Set<string>(Object.values(ContentVertical));
+
+    for (const program of programs) {
+      const slug = program.slug?.trim().toLowerCase();
+      const label = program.label?.trim();
+      if (!slug || !label) {
+        throw new BadRequestException('Video categories: slug and label are required');
+      }
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+        throw new BadRequestException(
+          `Video categories: invalid slug "${slug}"`,
+        );
+      }
+      if (slugs.has(slug)) {
+        throw new BadRequestException(`Video categories: duplicate slug "${slug}"`);
+      }
+      slugs.add(slug);
+
+      if (!validVerticals.has(program.vertical)) {
+        throw new BadRequestException(
+          `Video categories: invalid vertical for "${slug}"`,
+        );
+      }
+    }
   }
 
   async upsertCoinPackage(body: UpsertCoinPackageDto) {
@@ -1377,6 +1866,30 @@ export class AdminService {
     } catch {
       throw new NotFoundException('Campaign not found');
     }
+  }
+
+  private dayBuckets(days: number): string[] {
+    const buckets: string[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      buckets.push(d.toISOString().slice(0, 10));
+    }
+    return buckets;
+  }
+
+  private dateKey(d: Date): string {
+    return d.toISOString().slice(0, 10);
+  }
+
+  private parsePeriodMonth(periodMonth?: string): Date {
+    if (periodMonth?.match(/^\d{4}-\d{2}$/)) {
+      return new Date(`${periodMonth}-01T00:00:00.000Z`);
+    }
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   }
 
   private async resolveTargetTitle(

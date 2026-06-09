@@ -3,6 +3,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { ContentStatus, PrismaClient, StreamStatus, VideoType } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { Pool } from 'pg';
+import { purgeDemoContent } from './purge-demo-content';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -253,12 +254,46 @@ async function main() {
     update: { status: 'active' },
   });
 
+  const passwordHash = await argon2.hash('Demo1234!', { type: argon2.argon2id });
+
+  await prisma.user.upsert({
+    where: { username: 'admin' },
+    create: {
+      username: 'admin',
+      email: 'admin@prysym.tv',
+      passwordHash,
+      displayName: 'Platform Admin',
+      role: 'admin',
+      isVerified: true,
+    },
+    update: {
+      role: 'admin',
+      displayName: 'Platform Admin',
+    },
+  });
+
+  const seedDemo = process.env.SEED_DEMO_CONTENT !== 'false';
+
+  if (!seedDemo) {
+    const purged = await purgeDemoContent(prisma);
+    if (
+      purged.removedUser ||
+      purged.verticalSeries ||
+      purged.podcastShows ||
+      purged.streams ||
+      purged.videos ||
+      purged.orphanedLiveEnded
+    ) {
+      console.log('Removed leftover demo content:', purged);
+    }
+  }
+
+  if (seedDemo) {
   const demoVideo =
     'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
   const demoThumb =
     'https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=800&auto=format&fit=crop';
 
-  const passwordHash = await argon2.hash('Demo1234!', { type: argon2.argon2id });
   const progamer = await prisma.user.upsert({
     where: { username: 'progamerx' },
     create: {
@@ -276,22 +311,6 @@ async function main() {
     update: {
       displayName: 'ProGamerX',
       streamerStatus: 'approved',
-    },
-  });
-
-  await prisma.user.upsert({
-    where: { username: 'admin' },
-    create: {
-      username: 'admin',
-      email: 'admin@prysym.tv',
-      passwordHash,
-      displayName: 'Platform Admin',
-      role: 'admin',
-      isVerified: true,
-    },
-    update: {
-      role: 'admin',
-      displayName: 'Platform Admin',
     },
   });
 
@@ -478,6 +497,7 @@ async function main() {
       update: { status: ContentStatus.ready, videoUrl: demoVideo },
     });
   }
+  }
 
   const platformDefaults = {
     economy: {
@@ -541,7 +561,9 @@ async function main() {
   }
 
   console.log(
-    'Seeded: gifts, coins, revenue rules, GAF, ads, platform settings, demo user/stream/videos, podcasts, vertical series.',
+    seedDemo
+      ? 'Seeded: catalog, admin, platform settings, and demo creator content (progamerx).'
+      : 'Seeded: catalog, admin, platform settings (no demo videos — SEED_DEMO_CONTENT=true to add samples).',
   );
 }
 

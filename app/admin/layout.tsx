@@ -1,51 +1,24 @@
 "use client"
 
-import Link from "next/link"
+import { notFound } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
 import { AdminTopbar } from "@/components/admin/admin-topbar"
-import { Button } from "@/components/ui/button"
 
 const ADMIN_UI_PREVIEW = process.env.NEXT_PUBLIC_ADMIN_UI_PREVIEW === "true"
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, isAuthenticated } = useAuth()
 
-  const canAccess =
-    ADMIN_UI_PREVIEW || (isAuthenticated && user?.role === "admin")
+  const isAdmin = isAuthenticated && user?.role === "admin"
+  const canAccess = ADMIN_UI_PREVIEW || isAdmin
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <p className="text-muted-foreground text-sm">Loading admin…</p>
-      </div>
-    )
+    return null
   }
 
   if (!canAccess) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-6">
-        <div className="max-w-md text-center space-y-4">
-          <h1 className="text-2xl font-bold">Admin access required</h1>
-          <p className="text-sm text-muted-foreground">
-            Your account needs the <code className="text-xs bg-secondary px-1 rounded">admin</code> role,
-            or set{" "}
-            <code className="text-xs bg-secondary px-1 rounded">NEXT_PUBLIC_ADMIN_UI_PREVIEW=true</code> in{" "}
-            <code className="text-xs bg-secondary px-1 rounded">.env.local</code> to preview the UI.
-          </p>
-          <div className="flex gap-3 justify-center">
-            <Button asChild variant="outline" className="rounded-full">
-              <Link href="/">Back to Prysym TV</Link>
-            </Button>
-            {!isAuthenticated && (
-              <Button asChild className="rounded-full">
-                <Link href="/profile">Sign in</Link>
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    )
+    notFound()
   }
 
   return (

@@ -25,7 +25,7 @@ export class VideosController {
   @Post('upload/init')
   @UseGuards(JwtAuthGuard)
   uploadInit(@CurrentUser() user: AuthUserPayload, @Body() body: UploadInitDto) {
-    return this.videos.uploadInit(user.id, body);
+    return this.videos.uploadInit(user, body);
   }
 
   @Post('upload/complete')

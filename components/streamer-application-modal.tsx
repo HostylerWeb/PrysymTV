@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   X,
   Upload,
@@ -20,26 +20,59 @@ import {
 
 const MIN_DESCRIPTION = 20
 
+export type CreatorVerificationFeatures = Array<"live" | "vertical">
+
 interface StreamerApplicationModalProps {
   isOpen: boolean
   onClose: () => void
+  /** Prefill from unlock-permissions flow */
+  initialDescription?: string
+  portfolioUrl?: string
+  /** Which permissions to apply for (default: live only) */
+  features?: CreatorVerificationFeatures
+  /** e.g. vertical request already submitted */
+  bannerMessage?: string
 }
 
 export function StreamerApplicationModal({
   isOpen,
   onClose,
+  initialDescription,
+  portfolioUrl,
+  features = ["live"],
+  bannerMessage,
 }: StreamerApplicationModalProps) {
-  const { user, applyForStreamer } = useAuth()
+  const { user, applyForStreamer, applyForVerticalCreator } = useAuth()
   const [step, setStep] = useState(1)
-  const [description, setDescription] = useState("")
+  const [description, setDescription] = useState(initialDescription ?? "")
   const [idFile, setIdFile] = useState<File | null>(null)
   const [idFileName, setIdFileName] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState("")
 
+  useEffect(() => {
+    if (isOpen && initialDescription) {
+      setDescription(initialDescription)
+    }
+  }, [isOpen, initialDescription])
+
   if (!isOpen) return null
 
+  const wantsLive = features.includes("live")
+  const wantsVertical = features.includes("vertical")
   const descriptionOk = description.trim().length >= MIN_DESCRIPTION
+
+  const title = wantsLive && wantsVertical
+    ? "Verify your identity"
+    : wantsVertical
+      ? "Apply for vertical series"
+      : "Become a Streamer"
+
+  const subtitle = wantsLive && wantsVertical
+    ? "One ID upload covers live streaming and vertical series access"
+    : wantsVertical
+      ? "Upload your ID to publish micro-drama series"
+      : "Apply to start live streaming on Prysym TV"
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -57,7 +90,22 @@ export function StreamerApplicationModal({
     try {
       const init = await initStreamerIdUpload(idFile)
       const publicUrl = await uploadProfileImage(init, idFile)
-      await applyForStreamer(description.trim(), publicUrl)
+      const desc = description.trim()
+
+      if (
+        wantsLive &&
+        user?.streamerStatus !== "approved" &&
+        user?.streamerStatus !== "pending"
+      ) {
+        await applyForStreamer(desc, publicUrl)
+      }
+      if (
+        wantsVertical &&
+        user?.verticalCreatorStatus !== "approved" &&
+        user?.verticalCreatorStatus !== "pending"
+      ) {
+        await applyForVerticalCreator(desc, publicUrl, portfolioUrl)
+      }
       setStep(3)
     } catch (err) {
       setError(getAuthErrorMessage(err))
@@ -75,7 +123,11 @@ export function StreamerApplicationModal({
     onClose()
   }
 
-  if (user?.streamerStatus === "approved") {
+  if (
+    wantsLive &&
+    !wantsVertical &&
+    user?.streamerStatus === "approved"
+  ) {
     return (
       <div
         className="fixed inset-0 z-[100] bg-black/70 flex items-end sm:items-center justify-center"
@@ -112,7 +164,11 @@ export function StreamerApplicationModal({
     )
   }
 
-  if (user?.streamerStatus === "pending") {
+  const anyPending =
+    (wantsLive && user?.streamerStatus === "pending") ||
+    (wantsVertical && user?.verticalCreatorStatus === "pending")
+
+  if (anyPending) {
     return (
       <div
         className="fixed inset-0 z-[100] bg-black/70 flex items-end sm:items-center justify-center"
@@ -135,11 +191,11 @@ export function StreamerApplicationModal({
               <Clock className="w-10 h-10 text-white" />
             </div>
             <h2 className="text-2xl font-bold text-foreground mb-2">
-              Application Pending
+              Application pending
             </h2>
             <p className="text-muted-foreground mb-6">
-              Your streamer application is being reviewed. We&apos;ll notify you
-              once it&apos;s approved.
+              Your request is being reviewed. We&apos;ll notify you once it&apos;s
+              approved.
             </p>
             <Button
               variant="secondary"
@@ -175,12 +231,8 @@ export function StreamerApplicationModal({
           <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center mx-auto mb-4">
             <Video className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h2 className="text-2xl font-bold text-foreground text-center">
-            Become a Streamer
-          </h2>
-          <p className="text-sm text-muted-foreground text-center mt-1">
-            Apply to start live streaming on Prysym TV
-          </p>
+          <h2 className="text-2xl font-bold text-foreground text-center">{title}</h2>
+          <p className="text-sm text-muted-foreground text-center mt-1">{subtitle}</p>
         </div>
 
         <div className="px-6 pb-4">
@@ -211,6 +263,12 @@ export function StreamerApplicationModal({
         </div>
 
         <div className="px-6 pb-8">
+          {bannerMessage && (
+            <div className="mb-4 p-3 rounded-lg bg-primary/10 border border-primary/20">
+              <p className="text-sm text-foreground text-center">{bannerMessage}</p>
+            </div>
+          )}
+
           {error && (
             <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
               <p className="text-sm text-destructive text-center">{error}</p>
@@ -329,11 +387,11 @@ export function StreamerApplicationModal({
                 <CheckCircle className="w-10 h-10 text-white" />
               </div>
               <h3 className="text-xl font-bold text-foreground mb-2">
-                Application Submitted!
+                Application submitted
               </h3>
               <p className="text-muted-foreground mb-6">
-                Status is now <strong>pending</strong>. Our team will review your
-                application and email you when approved.
+                Status is now <strong>pending</strong>. Our team will review your ID
+                and application details.
               </p>
               <Button onClick={handleClose} className="w-full rounded-full">
                 Done

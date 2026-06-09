@@ -23,6 +23,7 @@ import { CreateAdCampaignDto } from './dto/create-ad-campaign.dto';
 import { ProcessPayoutDto } from './dto/process-payout.dto';
 import { ReviewReportDto } from './dto/review-report.dto';
 import { ReviewStreamerApplicationDto } from './dto/review-streamer-application.dto';
+import { ReviewVerticalCreatorApplicationDto } from './dto/review-vertical-creator-application.dto';
 import { UpdatePartnerTierDto } from './dto/update-partner-tier.dto';
 import { UpdateRevenueSplitRuleDto } from './dto/update-revenue-split-rule.dto';
 import { VerifyUserDto } from './dto/verify-user.dto';
@@ -32,7 +33,11 @@ import { UpdateEconomyConfigDto } from './dto/update-economy-config.dto';
 import { UpdateScorecardConfigDto } from './dto/update-scorecard-config.dto';
 import { UpsertCoinPackageDto } from './dto/upsert-coin-package.dto';
 import { UpsertGiftCatalogDto } from './dto/upsert-gift-catalog.dto';
-import type { ProgramConfigEntry } from '../platform-settings/platform-settings.types';
+import type {
+  CategoryConfigEntry,
+  ProgramConfigEntry,
+} from '../platform-settings/platform-settings.types';
+import { UpdateUserImpactDto } from './dto/update-user-impact.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -46,6 +51,13 @@ export class AdminController {
   @Get('analytics/overview')
   overview() {
     return this.admin.getOverview();
+  }
+
+  @Get('analytics/timeseries')
+  analyticsTimeseries(@Query('range') range?: string) {
+    const r =
+      range === '7d' || range === '90d' ? range : ('30d' as const);
+    return this.admin.getAnalyticsTimeseries(r);
   }
 
   @Get('reports')
@@ -77,6 +89,19 @@ export class AdminController {
     return this.admin.getUser(id);
   }
 
+  @Get('users/:id/impact')
+  getUserImpact(
+    @Param('id') id: string,
+    @Query('periodMonth') periodMonth?: string,
+  ) {
+    return this.admin.getUserImpact(id, periodMonth);
+  }
+
+  @Put('users/:id/impact')
+  updateUserImpact(@Param('id') id: string, @Body() body: UpdateUserImpactDto) {
+    return this.admin.upsertUserImpact(id, body);
+  }
+
   @Put('users/:id/ban')
   banUser(@Param('id') id: string, @Body() body: BanUserDto) {
     return this.admin.setUserBanned(id, body.banned);
@@ -100,6 +125,11 @@ export class AdminController {
     return this.admin.adjustUserCoins(id, body.delta);
   }
 
+  @Get('applications')
+  listApplications(@Query() query: AdminListQueryDto) {
+    return this.admin.listApplications(query);
+  }
+
   @Get('streamer-applications')
   listStreamerApplications(@Query() query: AdminListQueryDto) {
     return this.admin.listStreamerApplications(query);
@@ -117,6 +147,30 @@ export class AdminController {
     @CurrentUser() admin: AuthUserPayload,
   ) {
     return this.admin.reviewStreamerApplication(
+      id,
+      admin.id,
+      body.action,
+      body.notes,
+    );
+  }
+
+  @Get('vertical-creator-applications')
+  listVerticalCreatorApplications(@Query() query: AdminListQueryDto) {
+    return this.admin.listVerticalCreatorApplications(query);
+  }
+
+  @Get('vertical-creator-applications/:id')
+  getVerticalCreatorApplication(@Param('id') id: string) {
+    return this.admin.getVerticalCreatorApplication(id);
+  }
+
+  @Put('vertical-creator-applications/:id')
+  reviewVerticalCreatorApplication(
+    @Param('id') id: string,
+    @Body() body: ReviewVerticalCreatorApplicationDto,
+    @CurrentUser() admin: AuthUserPayload,
+  ) {
+    return this.admin.reviewVerticalCreatorApplication(
       id,
       admin.id,
       body.action,
@@ -282,6 +336,19 @@ export class AdminController {
     @CurrentUser() admin: AuthUserPayload,
   ) {
     return this.admin.updateProgramsConfig(admin.id, body.programs);
+  }
+
+  @Get('config/podcast-categories')
+  podcastCategoriesConfig() {
+    return this.admin.getPodcastCategoriesConfig();
+  }
+
+  @Put('config/podcast-categories')
+  updatePodcastCategoriesConfig(
+    @Body() body: { categories: CategoryConfigEntry[] },
+    @CurrentUser() admin: AuthUserPayload,
+  ) {
+    return this.admin.updatePodcastCategoriesConfig(admin.id, body.categories);
   }
 
   @Put('coin-packages')

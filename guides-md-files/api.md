@@ -34,6 +34,8 @@
 | `PUT` | `/users/me/notification-preferences` | ✅ |
 | `PUT` | `/users/me/social-links` | ✅ |
 | `POST` | `/users/apply-streamer` | ✅ Dev: `AUTO_APPROVE_STREAMER=true` approves instantly |
+| `POST` | `/users/apply-vertical-creator` | ✅ `{ description, idDocumentUrl, portfolioUrl? }` — dev: `AUTO_APPROVE_VERTICAL_CREATOR=true` |
+| `POST` | `/users/request-creator-access` | ✅ `{ features: ['vertical','live'], description? }` — verified streamers auto-unlock vertical |
 | `POST` | `/reports` | ✅ Bearer — `{ targetType, targetId, reason, details? }` |
 | `GET` | `/users/me/videos` | ✅ |
 | `GET` | `/users/me/saved` | ✅ |
@@ -85,7 +87,7 @@
 | `GET` | `/billing/subscriptions/me` | ✅ |
 | `DELETE` | `/billing/subscriptions/:id` | ✅ Cancel membership |
 | `GET` | `/billing/creators/balance` | ✅ Available USD + pending payout rows |
-| `POST` | `/billing/creators/payouts/request` | ✅ Min $50; manual admin fulfillment |
+| `POST` | `/billing/creators/payouts/request` | ✅ Min from `platform_settings.economy.minPayoutUsd` (default $50) |
 | `POST` | `/billing/gifts/send` | ✅ (coins + `viewer_support` revenue split) |
 | `POST` | `/streams/init` | ✅ Requires `streamer_status: approved` |
 | `POST` | `/streams/mediamtx/auth` | ✅ MediaMTX HTTP auth (no Bearer) |
@@ -133,43 +135,73 @@
 | `POST` | `/verticals/episodes/:episodeId/like` | ✅ Toggle like |
 | `POST` | `/verticals/episodes/:episodeId/save` | ✅ Toggle episode save |
 | `POST` | `/verticals/series/:seriesId/save` | ✅ Toggle series save |
-| `GET` | `/verticals/me/series` | ✅ Creator’s series (Bearer) |
-| `POST` | `/verticals/series` | ✅ Create series (Bearer) |
-| `POST` | `/verticals/series/:slug/episodes` | ✅ Add episode (Bearer) |
-| `PUT` | `/verticals/episodes/:episodeId/video` | ✅ Attach uploaded `videoId` (Bearer) |
-| `GET` | `/programs` | ✅ |
+| `GET` | `/verticals/me/series` | ✅ Approved vertical creators only (Bearer) |
+| `POST` | `/verticals/series` | ✅ Approved vertical creators only (Bearer) |
+| `POST` | `/verticals/series/:slug/episodes` | ✅ Approved vertical creators only (Bearer) |
+| `PUT` | `/verticals/episodes/:episodeId/video` | ✅ Approved vertical creators only (Bearer) |
+| `GET` | `/programs` | ✅ Reads `platform_settings.programs` (admin-editable) |
 | `GET` | `/programs/:slug` | ✅ Videos + `live_events` for pillar |
-| `GET` | `/admin/analytics/overview` | 🚧 Stub |
-| `GET` | `/admin/analytics/revenue` | 📋 Time series |
-| `GET` | `/admin/analytics/content` | 📋 Top content |
+| `GET` | `/config/public` | ✅ Public ads knobs — shorts frequency, placement toggles, skip seconds |
+| `GET` | `/admin/analytics/overview` | ✅ DAU, live, revenue today, pending queues |
+| `GET` | `/admin/analytics/timeseries` | ✅ `?range=7d\|30d\|90d` — DAU, signups, revenue, live hours, top content |
 | `GET` | `/admin/revenue-split-rules` | ✅ |
 | `PUT` | `/admin/revenue-split-rules/:ruleKey` | ✅ Bps sum 10000 |
-| `GET` | `/admin/reports` | 📋 Moderation queue |
-| `GET` | `/admin/reports/:id` | 📋 Hydrated report |
-| `PUT` | `/admin/reports/:id` | 📋 `{ action: dismiss \| delete_content \| ban_user }` |
-| `GET` | `/admin/users` | 📋 Paginated search |
-| `GET` | `/admin/users/:id` | 📋 User detail |
-| `PUT` | `/admin/users/:id/ban` | 📋 |
-| `PUT` | `/admin/users/:id/verify` | 📋 |
-| `PUT` | `/admin/users/:id/streamer-status` | 📋 |
-| `GET` | `/admin/streamer-applications` | 📋 |
-| `GET` | `/admin/streamer-applications/:id` | 📋 |
-| `PUT` | `/admin/streamer-applications/:id` | 📋 |
-| `GET` | `/admin/payouts` | 📋 |
-| `PUT` | `/admin/payouts/:id` | 📋 |
-| `POST` | `/admin/streams/:id/kill` | 📋 |
-| `DELETE` | `/admin/videos/:id` | 📋 |
-| `DELETE` | `/admin/comments/:id` | 📋 |
+| `GET` | `/admin/reports` | ✅ `?status=&page=&limit=` |
+| `GET` | `/admin/reports/:id` | ✅ Hydrated report |
+| `PUT` | `/admin/reports/:id` | ✅ `{ action: dismiss \| delete_content \| ban_user, notes? }` |
+| `GET` | `/admin/users` | ✅ `?q=&status=&type=&page=&limit=` |
+| `GET` | `/admin/users/:id` | ✅ User detail + financial + reports |
+| `GET` | `/admin/users/:id/impact` | ✅ `?periodMonth=YYYY-MM` — `creator_impact_snapshots` |
+| `PUT` | `/admin/users/:id/impact` | ✅ Upsert impact scorecard for period |
+| `PUT` | `/admin/users/:id/ban` | ✅ `{ banned }` |
+| `PUT` | `/admin/users/:id/verify` | ✅ `{ verified }` |
+| `PUT` | `/admin/users/:id/partner-tier` | ✅ `{ partnerTier }` |
+| `PUT` | `/admin/users/:id/coins` | ✅ `{ delta }` |
+| `GET` | `/admin/applications` | ✅ Unified queue — `?status=&type=streamer\|vertical\|all` |
+| `GET` | `/admin/streamer-applications` | ✅ Legacy — prefer `/admin/applications` |
+| `GET` | `/admin/streamer-applications/:id` | ✅ |
+| `PUT` | `/admin/streamer-applications/:id` | ✅ `{ action: approve \| reject, notes? }` |
+| `GET` | `/admin/vertical-creator-applications` | ✅ Legacy — prefer `/admin/applications` |
+| `GET` | `/admin/vertical-creator-applications/:id` | ✅ |
+| `PUT` | `/admin/vertical-creator-applications/:id` | ✅ `{ action: approve \| reject, notes? }` |
+| `GET` | `/admin/payouts` | ✅ `?status=` |
+| `PUT` | `/admin/payouts/:id` | ✅ `{ action: processing \| complete \| reject }` |
+| `GET` | `/admin/live-streams` | ✅ |
+| `GET` | `/admin/stream-history` | ✅ Ended streams |
+| `GET` | `/admin/revenue/ledger` | ✅ Ledger batches (paginated) |
+| `POST` | `/admin/streams/:id/kill` | ✅ |
+| `DELETE` | `/admin/videos/:id` | ✅ |
+| `DELETE` | `/admin/comments/:id` | ✅ |
+| `GET` | `/admin/content/stats` | ✅ |
+| `GET` | `/admin/content/videos` | ✅ `?type=short\|video\|movie` |
+| `GET` | `/admin/content/comments` | ✅ |
+| `GET` | `/admin/content/vertical-series` | ✅ |
+| `GET` | `/admin/content/vertical-series/:slug/episodes` | ✅ |
+| `GET` | `/admin/content/podcast-shows` | ✅ |
+| `GET` | `/admin/content/podcast-shows/:showId/episodes` | ✅ |
+| `DELETE` | `/admin/vertical-episodes/:id` | ✅ |
+| `DELETE` | `/admin/podcast-episodes/:id` | ✅ |
+| `GET` | `/admin/config/economy` | ✅ Pricing + coin/gift tables |
+| `PUT` | `/admin/config/economy` | ✅ `minPayoutUsd`, premium/insider prices |
+| `PUT` | `/admin/coin-packages` | ✅ Upsert package body |
+| `DELETE` | `/admin/coin-packages/:id` | ✅ |
+| `PUT` | `/admin/gift-catalog` | ✅ Upsert gift body |
+| `DELETE` | `/admin/gift-catalog/:id` | ✅ Deactivate if in use |
+| `GET` | `/admin/config/ads` | ✅ Network knobs + placements |
+| `PUT` | `/admin/config/ads` | ✅ |
+| `GET` | `/admin/config/analytics` | ✅ KPI visibility, alert thresholds |
+| `PUT` | `/admin/config/analytics` | ✅ |
+| `GET` | `/admin/config/scorecard` | ✅ Module progress + display prefs |
+| `PUT` | `/admin/config/scorecard` | ✅ |
+| `GET` | `/admin/config/programs` | ✅ Discovery category metadata |
+| `PUT` | `/admin/config/programs` | ✅ `{ programs: [...] }` |
+| `GET` | `/admin/economy/gifts` | ✅ Gift send activity |
+| `GET` | `/admin/economy/transactions` | ✅ |
 | `GET` | `/admin/ads/campaigns` | ✅ |
+| `GET` | `/admin/ads/campaigns/:id` | ✅ |
 | `POST` | `/admin/ads/campaigns` | ✅ |
 | `PUT` | `/admin/ads/campaigns/:id/status` | ✅ `{ status }` |
 | `PUT` | `/admin/ads/campaigns/:id` | 📋 Full edit |
-| `GET` | `/admin/config` | 📋 Aggregated platform settings |
-| `PUT` | `/admin/config/:section` | 📋 `revenue` \| `ads` \| `economy` \| `scorecard` \| `programs` |
-| `GET` | `/admin/coin-packages` | 📋 |
-| `PUT` | `/admin/coin-packages/:id` | 📋 |
-| `GET` | `/admin/gift-catalog` | 📋 |
-| `PUT` | `/admin/gift-catalog/:id` | 📋 |
 
 ---
 
@@ -267,7 +299,7 @@ Aggregates: `liveNow`, `featuredLive`, `trending`, `newReleases`, `movies`, `fea
 
 | Route | Status |
 |-------|--------|
-| `POST /videos/upload/init` | ✅ Creates `Video` + presigned PUT (R2/S3) or local multipart URL; stores `rawObjectKey` |
+| `POST /videos/upload/init` | ✅ `{ type, title, description?, category?, visibility?, tags?, mimeType, fileName? }` — **`type: movie` is admin-only**. |
 | `POST /videos/upload/complete` | ✅ Verifies object, enqueues BullMQ `video-processing` job |
 | `GET /videos/feed/shorts` | ✅ `?cursor=` — optional Bearer adds `liked`, `saved`, `disliked` per card |
 | `GET /videos/feed/movies` | ✅ `?page=&limit=` |
@@ -460,10 +492,12 @@ Returns `{ ad: ServedAd | null }` from active campaigns. With Bearer and active 
 | `POST /verticals/episodes/:episodeId/like` | ✅ Bearer — toggle like |
 | `POST /verticals/episodes/:episodeId/save` | ✅ Bearer — toggle episode save |
 | `POST /verticals/series/:seriesId/save` | ✅ Bearer — toggle series save |
-| `GET /verticals/me/series` | ✅ Bearer — creator admin |
-| `POST /verticals/series` | ✅ `{ slug, title, tagline?, description?, genre?, posterUrl? }` |
-| `POST /verticals/series/:slug/episodes` | ✅ `{ episodeNumber, title, description?, cliffhanger?, durationSeconds? }` |
-| `PUT /verticals/episodes/:episodeId/video` | ✅ `{ videoId }` — after TUS upload |
+| `GET /verticals/me/series` | ✅ Bearer — **approved vertical creator** |
+| `POST /verticals/series` | ✅ `{ slug, title, tagline?, description?, genre?, posterUrl? }` — approved only |
+| `POST /verticals/series/:slug/episodes` | ✅ `{ episodeNumber, title, ... }` — approved only |
+| `PUT /verticals/episodes/:episodeId/video` | ✅ `{ videoId }` — after upload; approved only |
+
+**Vertical creator gate:** `POST /users/apply-vertical-creator` → admin `PUT /admin/vertical-creator-applications/:id` with `{ action: approve \| reject }`. User field: `verticalCreatorStatus` (`none` \| `pending` \| `approved` \| `rejected`). Dev auto-approve: `AUTO_APPROVE_VERTICAL_CREATOR=true`.
 
 Frontend: show **`vertical_episode`** ad before each episode. Logged-in users persist progress via `POST /history/progress` (`contentType: vertical_episode`); guests use `localStorage`.
 
@@ -477,6 +511,15 @@ Founder pillars: Podcasts, Sports, Concerts, Community, Education. Consumer disc
 |-------|--------|
 | `GET /programs` | ✅ |
 | `GET /programs/:slug` | ✅ Videos + `live_events` for that vertical |
+
+## Categories (`/categories`)
+
+Admin-managed taxonomies for uploads and browse filters. Stored in `platform_settings` (`programs`, `podcast_categories`).
+
+| Route | Status |
+|-------|--------|
+| `GET /categories/videos` | ✅ Active video upload/browse categories (`general` + active programs except podcast hub) |
+| `GET /categories/podcasts` | ✅ Active podcast show categories (labels used on `PodcastShow.category`) |
 
 ### `GET /videos/feed/videos` ✅
 
@@ -521,35 +564,96 @@ Long-form video browse (`type = video`). Returns live streams when `mode` includ
 
 ---
 
+## Public config (`/config`)
+
+**Auth:** None
+
+| Route | Notes |
+|-------|--------|
+| `GET /config/public` | `{ ads: { shortsInterstitialEveryNSwipes, shortsInterstitialEnabled, shortsSkipSeconds, moviePrerollSkipSeconds, placements } }` — consumed by `/shorts` and ad UI |
+
+Values are stored in `platform_settings` and edited at `/admin/config/ads`.
+
+---
+
 ## Admin (`/admin`)
 
 **Auth:** Bearer + role `admin` on all routes.
 
 **Frontend:** Operator console at `/admin` (see [`admin-dashboard-plan.md`](./admin-dashboard-plan.md)).
 
-### Implemented
+### Analytics
 
 | Route | Notes |
 |-------|--------|
-| `GET /admin/analytics/overview` | 🚧 Stub — `{ dau: 0, revenueToday: 0 }` |
-| `GET /admin/revenue-split-rules` | List all split rules |
-| `PUT /admin/revenue-split-rules/:ruleKey` | `{ name?, description?, creatorBps?, platformBps?, gafBps?, creatorDevFundBps? }` — must sum to 10000 bps |
-| `GET /admin/ads/campaigns` | All campaigns |
-| `POST /admin/ads/campaigns` | Create — `advertiserName`, `title`, `mediaUrl`, `clickThroughUrl`, `placement`, `targetImpressions`, `budgetUsd`, `startsAt`, `endsAt` |
-| `PUT /admin/ads/campaigns/:id/status` | `{ status: draft \| active \| paused \| completed }` |
+| `GET /admin/analytics/overview` | `{ dau, liveNow, liveViewers, revenueTodayUsd, pendingReports, pendingPayouts, pendingPayoutsUsd, pendingApplications, pendingStreamerApplications, pendingVerticalCreatorApplications }` |
+| `GET /admin/analytics/timeseries` | `?range=7d\|30d\|90d` — daily buckets + `revenueBySource`, `topContent`, `premiumSubscribers` |
 
-### Planned (admin dashboard UI — API TBD)
+### Moderation, users, streamers, payouts, live
 
-| Area | Routes |
+| Route | Notes |
+|-------|--------|
+| `GET/PUT /admin/reports`, `GET /admin/reports/:id` | Report queue + review actions |
+| `GET /admin/users`, `GET /admin/users/:id` | Search, detail, tabs |
+| `GET/PUT /admin/users/:id/impact` | Per-creator `creator_impact_snapshots` by `periodMonth` |
+| `PUT /admin/users/:id/ban`, `/verify`, `/partner-tier`, `/coins` | User admin actions |
+| `GET/PUT /admin/streamer-applications/:id` | Approve/reject streamer applications |
+| `GET/PUT /admin/vertical-creator-applications/:id` | Approve/reject vertical series upload access |
+| `GET/PUT /admin/payouts/:id` | Payout queue |
+| `GET /admin/live-streams`, `GET /admin/stream-history` | Live + ended streams |
+| `POST /admin/streams/:id/kill` | Force-end live stream |
+| `GET /admin/revenue/ledger` | Revenue ledger batches |
+
+### Content library
+
+| Route | Notes |
+|-------|--------|
+| `GET /admin/content/stats` | Counts by type |
+| `GET /admin/content/videos` | `?type=short\|video\|movie` |
+| `GET /admin/content/comments` | |
+| `GET /admin/content/vertical-series` (+ `/:slug/episodes`) | |
+| `GET /admin/content/podcast-shows` (+ `/:showId/episodes`) | |
+| `DELETE /admin/videos/:id`, `/comments/:id`, `/vertical-episodes/:id`, `/podcast-episodes/:id` | |
+
+### Platform config (`platform_settings` + catalog tables)
+
+| Route | Notes |
+|-------|--------|
+| `GET/PUT /admin/config/economy` | Min payout, premium/insider prices; GET includes coin packages + gifts |
+| `PUT/DELETE /admin/coin-packages`, `/gift-catalog` | Catalog CRUD |
+| `GET/PUT /admin/config/ads` | Skip timers, swipe frequency, placement toggles, GAF rule key |
+| `GET/PUT /admin/config/analytics` | Dashboard KPI visibility, alert thresholds |
+| `GET/PUT /admin/config/scorecard` | Mission module %, display prefs |
+| `GET/PUT /admin/config/programs` | Video categories — add/edit/delete; drives `GET /programs`, `GET /categories/videos`, `/videos` chips, long-video upload |
+| `GET/PUT /admin/config/podcast-categories` | Podcast categories — add/edit/delete; drives `GET /categories/podcasts`, `/podcasts` filters, podcast upload |
+
+### Demo / sample content
+
+Seeder flag `SEED_DEMO_CONTENT` (default `true` in dev, set `false` in `api/.env` for a clean catalog):
+
+| Command | Effect |
+|---------|--------|
+| `SEED_DEMO_CONTENT=true` + `npm run db:seed` | Inserts demo user `progamerx` (live stream, movies, shorts, podcasts, vertical series) |
+| `SEED_DEMO_CONTENT=false` + `npm run db:seed` | **Purges** demo content, then seeds admin + platform settings only |
+| `npm run db:purge-demo` | Removes demo content without re-seeding |
+
+**Important:** Setting `SEED_DEMO_CONTENT=false` alone does not delete rows already in the database — run `db:purge-demo` or `db:seed` once to clear them.
+
+### Revenue, ads, economy activity
+
+| Route | Notes |
+|-------|--------|
+| `GET/PUT /admin/revenue-split-rules/:ruleKey` | Bps must sum to 10000 |
+| `GET/POST /admin/ads/campaigns`, `GET /admin/ads/campaigns/:id`, `PUT …/status` | Campaign CRUD |
+| `GET /admin/economy/gifts`, `GET /admin/economy/transactions` | Activity feeds |
+
+### Still planned
+
+| Item | Notes |
 |------|--------|
-| Moderation | `GET/PUT /admin/reports`, `DELETE /admin/videos/:id`, `DELETE /admin/comments/:id` |
-| Users | `GET /admin/users`, `GET /admin/users/:id`, `PUT …/ban`, `PUT …/verify`, `PUT …/streamer-status`, `PUT …/partner-tier` |
-| Streamers | `GET/PUT /admin/streamer-applications/:id` |
-| Live | `POST /admin/streams/:id/kill` |
-| Payouts | `GET/PUT /admin/payouts/:id` |
-| Analytics | `GET /admin/analytics/revenue`, `GET /admin/analytics/content` |
-| Platform config | `GET/PUT /admin/config/:section` — ads network knobs, economy, scorecard, program categories |
-| Economy | `GET/PUT /admin/coin-packages`, `GET/PUT /admin/gift-catalog` |
+| `PUT /admin/ads/campaigns/:id` | Full campaign edit |
+| CSV export | Analytics export |
+| Admin audit log | |
 
 **Seeded `revenue_split_rules` keys:** `live_event`, `viewer_support`, `insider_membership`, `ad_gaf_allocation`, `sponsorship`, `creator_subscription`, `coin_purchase`, `store_merchandise`
 
@@ -612,7 +716,7 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 | `VIDEO_PROCESSING_TMP_DIR` | No | — | Temp dir for transcodes |
 | `RTMP_INGEST_URL` | No | `rtmp://localhost:1935/live` | RTMP server URL returned from `POST /streams/init` |
 | `MEDIAMTX_HLS_PUBLIC_URL` | No | `http://localhost:8888` | Base URL for HLS playback (`{base}/live/{streamKey}/index.m3u8`) |
-| `AUTO_APPROVE_STREAMER` | No | — | `true` / `1` in dev — skip admin queue for streamer applications |
+| `AUTO_APPROVE_STREAMER` | No | `false` | `true` / `1` in **non-production** only — skip admin queue for streamer applications (off by default) |
 | `STRIPE_SECRET_KEY` | No | — | Empty → dev-mode instant coin/premium/membership grants |
 | `STRIPE_WEBHOOK_SECRET` | No | — | Required with Stripe; see [`stripe-production.md`](./stripe-production.md) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | No | — | Password-reset email |
@@ -653,4 +757,4 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 
 ---
 
-*Last updated: 2026-06-01 — Videos browse feed (`GET /videos/feed/videos`), `/videos` hub with program categories, admin dashboard plan + planned `/admin/*` routes. Production Stripe: [`stripe-production.md`](./stripe-production.md).*
+*Last updated: 2026-05-31 — Full `/admin/*` operator APIs, `platform_settings` config, `GET /config/public`, `GET /admin/analytics/timeseries`, `GET/PUT /admin/users/:id/impact`. Production Stripe: [`stripe-production.md`](./stripe-production.md).*

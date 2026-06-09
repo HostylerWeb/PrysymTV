@@ -12,15 +12,21 @@ import { LiveCard } from "@/components/live-card"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
-  VIDEO_CATEGORIES,
+  FALLBACK_VIDEO_CATEGORIES,
   verticalForCategorySlug,
   type VideoBrowseMode,
   type VideoBrowseSort,
+  type VideoCategory,
 } from "@/lib/constants/video-categories"
+import { fetchVideoCategories } from "@/lib/api/categories"
 import { fetchVideosBrowse, type LiveBrowseItem } from "@/lib/api/videos-feed"
 import type { VideoCard as ApiVideoCard } from "@/lib/api/feed"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
 import { userAvatarUrl } from "@/lib/user-avatar"
+import { CreateFlowModals, triggerContextualCreate } from "@/components/create-flow-modals"
+import { useCreateFlow } from "@/hooks/use-create-flow"
+import { useAuth } from "@/contexts/auth-context"
+import { useRouter } from "next/navigation"
 
 const MODE_OPTIONS: { id: VideoBrowseMode; label: string }[] = [
   { id: "all", label: "All" },
@@ -34,6 +40,11 @@ const SORT_OPTIONS: { id: VideoBrowseSort; label: string }[] = [
 ]
 
 function VideosBrowseContent() {
+  const router = useRouter()
+  const createFlow = useCreateFlow()
+  const { user, isAuthenticated } = useAuth()
+  const uploadVideo = () =>
+    triggerContextualCreate("video", createFlow, { isAuthenticated, user })
   const searchParams = useSearchParams()
   const initialCategory = searchParams.get("category") ?? "all"
 
@@ -51,8 +62,27 @@ function VideosBrowseContent() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [categories, setCategories] = useState<VideoCategory[]>(FALLBACK_VIDEO_CATEGORIES)
 
-  const vertical = useMemo(() => verticalForCategorySlug(category), [category])
+  useEffect(() => {
+    void fetchVideoCategories()
+      .then((res) =>
+        setCategories([
+          { slug: "all", label: "All", vertical: null },
+          ...res.items.map((c) => ({
+            slug: c.slug,
+            label: c.label,
+            vertical: c.vertical ?? null,
+          })),
+        ]),
+      )
+      .catch(() => setCategories(FALLBACK_VIDEO_CATEGORIES))
+  }, [])
+
+  const vertical = useMemo(
+    () => verticalForCategorySlug(category, categories),
+    [category, categories],
+  )
   const hasMore = videos.length < total
 
   const loadFeed = useCallback(
@@ -119,7 +149,11 @@ function VideosBrowseContent() {
 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
-      <Header onSearchClick={() => setIsSearchOpen(true)} />
+      <Header
+        onSearchClick={() => setIsSearchOpen(true)}
+        onCreateClick={uploadVideo}
+        createLabel="Upload video"
+      />
 
       <div className="sticky top-[4.5rem] z-40 bg-background/95 backdrop-blur-md border-b border-border">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 space-y-3">
@@ -161,7 +195,7 @@ function VideosBrowseContent() {
           </div>
 
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {VIDEO_CATEGORIES.map((cat) => (
+            {categories.map((cat) => (
               <button
                 key={cat.slug}
                 type="button"
@@ -336,6 +370,12 @@ function VideosBrowseContent() {
       <Footer />
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+
+      <CreateFlowModals
+        flow={createFlow}
+        onOpenSettings={() => router.push("/profile?settings=go-live")}
+        onNeedCreatorVerification={() => router.push("/profile")}
+      />
     </main>
   )
 }

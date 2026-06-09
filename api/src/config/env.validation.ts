@@ -184,6 +184,10 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   AUTO_APPROVE_STREAMER?: string;
+
+  @IsOptional()
+  @IsString()
+  AUTO_APPROVE_VERTICAL_CREATOR?: string;
 }
 
 const WEAK_SECRET_MARKERS = [

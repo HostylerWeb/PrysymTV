@@ -1,5 +1,15 @@
-import { SettingsRedirect } from "@/components/settings-redirect"
+"use client"
 
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+
+/** Legacy URL — creation lives under the header + menu. */
 export default function UploadPage() {
-  return <SettingsRedirect screen="upload" />
+  const router = useRouter()
+
+  useEffect(() => {
+    router.replace("/profile?create=1")
+  }, [router])
+
+  return null
 }

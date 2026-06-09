@@ -1,11 +1,16 @@
 import { apiRequest, getApiBaseUrl, loadStoredAccessToken } from "@/lib/api-client";
 
 export type UploadInitBody = {
-  type: "short" | "video" | "movie" | "podcast";
+  type: "short" | "video" | "podcast" | "movie";
   title: string;
   description?: string;
+  category?: string;
+  visibility?: "public" | "private" | "unlisted";
+  tags?: string;
   mimeType: string;
   fileName?: string;
+  releaseYear?: number;
+  ageRating?: string;
 };
 
 export type UploadInitResponse = {
