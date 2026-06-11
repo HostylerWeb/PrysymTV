@@ -11,8 +11,11 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
+import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -155,6 +158,46 @@ export class MediaController {
     const max = this.storage.getSettings().maxUploadBytes;
     if (file.size > max) {
       throw new ForbiddenException('File exceeds maximum upload size');
+    }
+
+    const abs = this.storage.getLocalAbsolutePath(key);
+    await writeFile(abs, file.buffer);
+    return {
+      success: true,
+      objectKey: key,
+      publicUrl: this.storage.getPublicUrl(key),
+    };
+  }
+
+  @Post('ad-upload')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+    }),
+  )
+  async adUpload(
+    @Body('objectKey') objectKey: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (this.storage.getSettings().driver !== 'local') {
+      throw new ForbiddenException(
+        'Multipart ad upload is only available when STORAGE_DRIVER=local',
+      );
+    }
+    if (!file?.buffer?.length || !objectKey?.trim()) {
+      throw new ForbiddenException('Missing file or objectKey');
+    }
+
+    const key = objectKey.replace(/^\/+/, '');
+    if (!key.startsWith('uploads/ads/')) {
+      throw new ForbiddenException('Invalid ad media object key');
+    }
+
+    const max = 50 * 1024 * 1024;
+    if (file.size > max) {
+      throw new ForbiddenException('Ad media exceeds 50 MB limit');
     }
 
     const abs = this.storage.getLocalAbsolutePath(key);

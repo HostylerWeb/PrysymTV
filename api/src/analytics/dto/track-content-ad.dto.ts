@@ -5,8 +5,9 @@ export class TrackContentAdDto {
   @IsUUID()
   campaignId!: string;
 
+  @IsOptional()
   @IsUUID()
-  creatorId!: string;
+  creatorId?: string;
 
   @IsOptional()
   @IsUUID()

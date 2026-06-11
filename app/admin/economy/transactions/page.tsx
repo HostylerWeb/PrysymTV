@@ -6,6 +6,8 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminPagination } from "@/components/admin/admin-pagination"
 import { AdminStatusPill } from "@/components/admin/admin-status-pill"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
+import { AdminDateRangePicker } from "@/components/admin/admin-date-range-picker"
+import { useAdminListDateFilter } from "@/components/admin/use-admin-list-date-filter"
 import { fetchAdminTransactions } from "@/lib/api/admin"
 import { Input } from "@/components/ui/input"
 import {
@@ -28,6 +30,7 @@ export default function AdminEconomyTransactionsPage() {
   const [tab, setTab] = useState("all")
   const [q, setQ] = useState("")
   const [page, setPage] = useState(1)
+  const { dateRange, setDateRange, dateParams, dateDeps } = useAdminListDateFilter()
 
   const { data, loading, error } = useAdminQuery(
     () =>
@@ -36,8 +39,9 @@ export default function AdminEconomyTransactionsPage() {
         limit: 20,
         type: tab === "all" ? undefined : tab,
         q: q || undefined,
+        ...dateParams,
       }),
-    [tab, page, q],
+    [tab, page, q, ...dateDeps],
   )
 
   const items = data?.items ?? []
@@ -57,6 +61,13 @@ export default function AdminEconomyTransactionsPage() {
       />
 
       <AdminFilterBar tabs={TABS} activeTab={tab} onTabChange={(t) => { setTab(t); setPage(1) }} />
+
+      <AdminDateRangePicker
+        className="mb-4"
+        value={dateRange}
+        onChange={setDateRange}
+        allowClear
+      />
 
       <div className="mb-4">
         <Input

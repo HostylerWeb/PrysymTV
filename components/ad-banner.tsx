@@ -3,25 +3,34 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import {
+  buildAdAttribution,
   fetchServedAd,
   trackAdClick,
   trackAdImpression,
-  type AdAttribution,
   type ServedAd,
 } from "@/lib/api/ads"
+import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
+import { useAuth } from "@/contexts/auth-context"
 
 type AdBannerProps = {
   creatorId?: string
   videoId?: string
+  platformCreatorId?: string
 }
 
-export function AdBanner({ creatorId, videoId }: AdBannerProps) {
+export function AdBanner({ creatorId, videoId, platformCreatorId: platformCreatorIdProp }: AdBannerProps) {
   const showAds = useShouldShowAds()
+  const { user } = useAuth()
+  const { isPlacementEnabled, platformCreatorId: platformCreatorIdFromConfig } =
+    usePublicAdsConfig()
+  const platformCreatorId = platformCreatorIdProp ?? platformCreatorIdFromConfig
   const [ad, setAd] = useState<ServedAd | null>(null)
 
+  const placementEnabled = isPlacementEnabled("home_banner")
+
   useEffect(() => {
-    if (!showAds) {
+    if (!showAds || !placementEnabled) {
       setAd(null)
       return
     }
@@ -32,27 +41,31 @@ export function AdBanner({ creatorId, videoId }: AdBannerProps) {
     return () => {
       cancelled = true
     }
-  }, [showAds])
+  }, [showAds, placementEnabled])
 
   useEffect(() => {
     if (!ad) return
-    const attr: AdAttribution = {
+    const attr = buildAdAttribution({
       campaignId: ad.id,
       placement: "home_banner",
       creatorId,
+      platformCreatorId,
       videoId,
-    }
-    if (creatorId) void trackAdImpression(attr)
-  }, [ad, creatorId, videoId])
+      viewerUserId: user?.id,
+    })
+    void trackAdImpression(attr)
+  }, [ad, creatorId, platformCreatorId, videoId, user?.id])
 
-  if (!ad) return null
+  if (!placementEnabled || !ad) return null
 
-  const attr: AdAttribution = {
+  const attr = buildAdAttribution({
     campaignId: ad.id,
     placement: "home_banner",
     creatorId,
+    platformCreatorId,
     videoId,
-  }
+    viewerUserId: user?.id,
+  })
 
   return (
     <section className="px-4 py-2">
@@ -61,7 +74,7 @@ export function AdBanner({ creatorId, videoId }: AdBannerProps) {
         <Link
           href={ad.clickThroughUrl}
           onClick={() => {
-            if (creatorId) void trackAdClick(attr)
+            void trackAdClick(attr)
           }}
           className="block relative w-full aspect-[6/1] md:aspect-[8/1] rounded-xl overflow-hidden border border-border hover:opacity-95 transition-opacity"
         >

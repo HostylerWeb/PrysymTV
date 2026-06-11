@@ -2,6 +2,7 @@ import {
   ConnectedSocket,
   MessageBody,
   OnGatewayConnection,
+  OnGatewayDisconnect,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
@@ -35,7 +36,7 @@ const CHAT_COLORS = [
   namespace: '/streams',
   cors: { origin: true, credentials: true },
 })
-export class StreamsGateway implements OnGatewayConnection {
+export class StreamsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
@@ -65,6 +66,28 @@ export class StreamsGateway implements OnGatewayConnection {
     }
   }
 
+  async handleDisconnect(client: Socket) {
+    const streamId = client.data.streamId as string | undefined;
+    if (streamId) {
+      await this.syncViewerCount(streamId);
+    }
+  }
+
+  private async syncViewerCount(streamId: string) {
+    const room = `stream:${streamId}`;
+    const sockets = await this.server.in(room).fetchSockets();
+    const count = sockets.length;
+    try {
+      await this.prisma.stream.update({
+        where: { id: streamId },
+        data: { viewerCount: count },
+      });
+    } catch {
+      /* stream may have ended */
+    }
+    this.server.to(room).emit('viewers', { count });
+  }
+
   @SubscribeMessage('join')
   async join(
     @ConnectedSocket() client: Socket,
@@ -72,6 +95,8 @@ export class StreamsGateway implements OnGatewayConnection {
   ) {
     const room = `stream:${body.streamId}`;
     await client.join(room);
+    client.data.streamId = body.streamId;
+    await this.syncViewerCount(body.streamId);
 
     const rows = await this.prisma.streamMessage.findMany({
       where: { streamId: body.streamId },

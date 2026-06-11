@@ -1,18 +1,25 @@
 import { apiRequest } from "@/lib/api-client";
+import type { AdPlacement } from "@/lib/api/ads";
 
 export type PublicAdsConfig = {
   shortsInterstitialEveryNSwipes: number;
   shortsInterstitialEnabled: boolean;
   shortsSkipSeconds: number;
   moviePrerollSkipSeconds: number;
-  placements: {
-    home_banner: boolean;
-    shorts_interstitial: boolean;
-    movie_preroll: boolean;
-    vertical_episode: boolean;
-  };
+  impressionRevenueCpmUsd: number;
+  platformCreatorId: string | null;
+  placements: Record<AdPlacement, boolean>;
+};
+
+export type PublicMembershipConfig = {
+  priceUsd: number;
+  label: string;
+  perks: string[];
 };
 
 export function fetchPublicConfig() {
-  return apiRequest<{ ads: PublicAdsConfig }>("/config/public", { auth: false });
+  return apiRequest<{ ads: PublicAdsConfig; membership: PublicMembershipConfig }>(
+    "/config/public",
+    { auth: false },
+  );
 }

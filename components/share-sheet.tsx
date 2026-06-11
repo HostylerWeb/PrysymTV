@@ -59,9 +59,9 @@ export function ShareSheet({ isOpen, onClose, title, url, targetId, onShared }: 
 
   if (!isOpen) return null
 
-  const recordShare = (platform?: string) => {
+  const recordShare = async (platform?: string) => {
     if (targetId) {
-      void trackShare(targetId, { platform, title })
+      await trackShare(targetId, { platform, title })
     }
     onShared?.()
   }
@@ -70,7 +70,7 @@ export function ShareSheet({ isOpen, onClose, title, url, targetId, onShared }: 
     try {
       await navigator.clipboard.writeText(shareUrl)
       setCopied(true)
-      recordShare("copy")
+      void recordShare("copy")
       setTimeout(() => setCopied(false), 2000)
     } catch {
       /* clipboard unavailable */
@@ -79,7 +79,7 @@ export function ShareSheet({ isOpen, onClose, title, url, targetId, onShared }: 
 
   const handleSocial = (href: string, platform: SharePlatform) => {
     openShareLink(href)
-    recordShare(platform)
+    void recordShare(platform)
   }
 
   return (

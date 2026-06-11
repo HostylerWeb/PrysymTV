@@ -19,6 +19,7 @@ import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
 import { Footer } from "@/components/footer"
 import { AdBanner } from "@/components/ad-banner"
+import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { fetchFeedHome } from "@/lib/api/feed"
 import { fetchShortsFeed } from "@/lib/api/videos-feed"
 import { fetchPodcastEpisodesFeed } from "@/lib/api/podcasts"
@@ -29,6 +30,7 @@ type ContentCategory = "all" | "movies" | "live" | "videos" | "series" | "trendi
 
 export default function Home() {
   const { isAuthenticated } = useAuth()
+  const { platformCreatorId } = usePublicAdsConfig()
   const [activeCategory, setActiveCategory] = useState<ContentCategory>("all")
   const [activeTab, setActiveTab] = useState("home")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -185,7 +187,7 @@ export default function Home() {
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <Header onSearchClick={() => setIsSearchOpen(true)} />
       <FeaturedLive stream={featuredLive} />
-      <AdBanner />
+      <AdBanner platformCreatorId={platformCreatorId} />
 
       <div className="relative z-10 bg-background">
         <div className="max-w-7xl mx-auto w-full px-4 md:px-0">

@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
+  IsNumber,
   IsObject,
   IsOptional,
   IsString,
@@ -48,6 +49,12 @@ export class UpdateAdsConfigDto {
   @IsOptional()
   @IsString()
   gafRuleKey?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  impressionRevenueCpmUsd?: number;
 
   @IsOptional()
   @IsObject()

@@ -2,7 +2,10 @@ import { ContentVertical } from '@prisma/client';
 
 export type EconomySettings = {
   minPayoutUsd: number;
+  /** Ad-free Prysym membership (Shorts, Verticals, Movies) — admin-set price */
+  membershipPriceUsd: number;
   insiderPriceUsd: number;
+  /** @deprecated Legacy tier prices — kept for DB compatibility */
   premiumBasicPriceUsd: number;
   premiumPriceUsd: number;
   ultimatePriceUsd: number;
@@ -20,6 +23,8 @@ export type AdsSettings = {
   moviePrerollSkipSeconds: number;
   shortsSkipSeconds: number;
   gafRuleKey: string;
+  /** USD earned per 1000 impressions (CPM) for revenue / GAF allocation */
+  impressionRevenueCpmUsd: number;
   placements: AdsPlacementToggles;
 };
 

@@ -137,6 +137,17 @@ export function fetchPodcastFeatured(limit = 6) {
   );
 }
 
+export function fetchPodcastTrendingShows(limit = 12) {
+  return withApiFallback(
+    () =>
+      apiRequest<{ items: ApiShow[] }>(
+        `/podcasts/shows/trending?limit=${limit}`,
+        { auth: false },
+      ).then((res) => res.items.map(mapShow)),
+    [],
+  );
+}
+
 export function fetchPodcastEpisode(id: string) {
   return apiRequest<ApiEpisode & { liked?: boolean; saved?: boolean }>(
     `/podcasts/episodes/${id}`,

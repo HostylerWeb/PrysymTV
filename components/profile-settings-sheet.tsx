@@ -20,9 +20,6 @@ import {
   Check,
   Mail,
   MessageSquare,
-  Eye,
-  TrendingUp,
-  DollarSign,
   Trash2,
   Play,
   Copy,
@@ -40,6 +37,7 @@ import type { User } from "@/contexts/auth-context"
 import { uploadVideoFlow, pollVideoUntilReady, getVideoUploadMaxBytes } from "@/lib/api/videos"
 import { initStream, getRtmpIngestUrl } from "@/lib/api/streams"
 import { createPremiumCheckout } from "@/lib/api/billing"
+import { fetchPublicConfig, type PublicMembershipConfig } from "@/lib/api/config"
 import { isPremiumActive } from "@/lib/premium"
 import { ApiError } from "@/lib/api-client"
 import { clearHistory, deleteHistoryItem, fetchHistory } from "@/lib/api/history"
@@ -63,11 +61,10 @@ import {
   type PlaylistSummary,
 } from "@/lib/api/playlists"
 import { fetchPodcastCategories, type ContentCategory } from "@/lib/api/categories"
-import { fetchCreatorDashboard, type CreatorDashboardResponse } from "@/lib/api/analytics"
+import { CreatorDashboardPanel } from "@/components/creator-dashboard-panel"
 import {
   cancelCreatorSubscription,
   fetchMyCreatorSubscriptions,
-  requestCreatorPayout,
   type CreatorSubscription,
 } from "@/lib/api/billing-monetization"
 import { fetchMe, replaceSocialLinks } from "@/lib/api/users"
@@ -97,6 +94,12 @@ const NOTIFICATION_PREFS = [
   { id: "system", label: "System updates", description: "Platform news and milestones" },
 ]
 
+function canAccessCreatorDashboard(user: User | null): boolean {
+  if (!user) return false
+  if (user.role === "admin" || user.role === "creator") return true
+  return (user.videosCount ?? 0) > 0
+}
+
 const FAQS = [
   { q: "How do I upload a video?", a: "Tap the + button in the header and choose Short, Long video, Podcast, or Micro-drama series." },
   { q: "How do I become a streamer?", a: "Apply from Settings → Become a Streamer. Once approved, use Go Live." },
@@ -104,11 +107,11 @@ const FAQS = [
   { q: "How do I report content?", a: "Use the flag icon on any video, movie, or live stream page." },
 ]
 
-const PREMIUM_TIERS = [
-  { id: "basic", name: "Basic", price: "$2.99/mo", perks: ["Ad-free on one creator", "Subscriber badge in chat"] },
-  { id: "premium", name: "Premium", price: "$4.99/mo", perks: ["Ad-free platform-wide", "Skip movie preroll ads", "Exclusive badge", "Early access content"], popular: true },
-  { id: "ultimate", name: "Ultimate", price: "$9.99/mo", perks: ["Everything in Premium", "Subscriber-only streams", "Priority support"] },
-]
+const DEFAULT_MEMBERSHIP: PublicMembershipConfig = {
+  priceUsd: 4.99,
+  label: "Prysym Membership",
+  perks: ["Ad-free on Shorts, Verticals, and Movies", "Skip movie preroll ads"],
+}
 
 const UPLOAD_TYPES = [
   { id: "short", label: "Short", icon: Video, description: "Vertical short-form (under 60s)" },
@@ -171,7 +174,7 @@ export function ProfileSettingsSheet({
   const [notifSettings, setNotifSettings] = useState<Record<string, boolean>>(
     Object.fromEntries(NOTIFICATION_PREFS.map((p) => [p.id, true]))
   )
-  const [premiumTier, setPremiumTier] = useState("premium")
+  const [membership, setMembership] = useState<PublicMembershipConfig>(DEFAULT_MEMBERSHIP)
   const [premiumActive, setPremiumActive] = useState(false)
   const [premiumBusy, setPremiumBusy] = useState(false)
   const [premiumError, setPremiumError] = useState<string | null>(null)
@@ -298,10 +301,14 @@ export function ProfileSettingsSheet({
   useEffect(() => {
     if (!user) return
     setPremiumActive(isPremiumActive(user.premiumTier, user.premiumExpiresAt))
-    if (user.premiumTier && user.premiumTier !== "none") {
-      setPremiumTier(user.premiumTier)
-    }
   }, [user, isOpen])
+
+  useEffect(() => {
+    if (!isOpen || screen !== "premium") return
+    void fetchPublicConfig()
+      .then((cfg) => setMembership(cfg.membership ?? DEFAULT_MEMBERSHIP))
+      .catch(() => setMembership(DEFAULT_MEMBERSHIP))
+  }, [isOpen, screen])
 
   useEffect(() => {
     if (!isOpen || screen !== "notifications") return
@@ -391,6 +398,7 @@ export function ProfileSettingsSheet({
             <MenuPanel
               user={user}
               isStreamer={isStreamer}
+              showCreatorDashboard={canAccessCreatorDashboard(user)}
               darkModeEnabled={darkModeEnabled}
               onDarkModeToggle={onDarkModeToggle}
               onCoinsClick={onCoinsClick}
@@ -419,14 +427,20 @@ export function ProfileSettingsSheet({
             />
           )}
 
-          {screen === "dashboard" && <PerformanceDashboardPanel />}
+          {screen === "dashboard" &&
+            (canAccessCreatorDashboard(user) ? (
+              <CreatorDashboardPanel />
+            ) : (
+              <p className="text-sm text-muted-foreground pt-4">
+                Creator analytics are available after you publish content or receive creator access.
+              </p>
+            ))}
 
           {screen === "help" && <HelpPanel />}
 
           {screen === "premium" && (
             <PremiumPanel
-              selected={premiumTier}
-              onSelect={setPremiumTier}
+              membership={membership}
               subscribed={premiumActive}
               busy={premiumBusy}
               error={premiumError}
@@ -434,7 +448,7 @@ export function ProfileSettingsSheet({
                 setPremiumBusy(true)
                 setPremiumError(null)
                 try {
-                  const res = await createPremiumCheckout(premiumTier)
+                  const res = await createPremiumCheckout("membership")
                   if (res.devMode) {
                     setPremiumActive(true)
                     await onRefreshUser?.()
@@ -804,6 +818,7 @@ export function ProfileSettingsSheet({
 function MenuPanel({
   user,
   isStreamer,
+  showCreatorDashboard,
   darkModeEnabled,
   onDarkModeToggle,
   onCoinsClick,
@@ -813,6 +828,7 @@ function MenuPanel({
 }: {
   user: User | null
   isStreamer: boolean
+  showCreatorDashboard: boolean
   darkModeEnabled: boolean
   onDarkModeToggle: () => void
   onCoinsClick: () => void
@@ -844,12 +860,16 @@ function MenuPanel({
     { icon: Clock, label: "Watch History", description: "Recently watched content", screen: "history" },
     { icon: ListMusic, label: "Playlists", description: "Create and manage playlists", screen: "playlists" },
     { icon: Link2, label: "Social Links", description: "Links on your creator profile", screen: "social" },
-    {
-      icon: BarChart3,
-      label: "Performance & Revenue",
-      description: "Views, ads on your videos, earnings, impact",
-      screen: "dashboard",
-    },
+    ...(showCreatorDashboard
+      ? [
+          {
+            icon: BarChart3,
+            label: "Performance & Revenue",
+            description: "Views, ads on your videos, earnings, impact",
+            screen: "dashboard" as const,
+          },
+        ]
+      : []),
     { icon: Bell, label: "Notifications", description: "Email & push preferences", screen: "notifications" },
     {
       icon: Moon,
@@ -984,205 +1004,6 @@ function NotificationsPanel({
   )
 }
 
-function PerformanceDashboardPanel() {
-  const [data, setData] = useState<CreatorDashboardResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [payoutAmount, setPayoutAmount] = useState("50")
-  const [payoutMethod, setPayoutMethod] = useState<"paypal" | "bank_transfer" | "crypto">("paypal")
-  const [payoutBusy, setPayoutBusy] = useState(false)
-  const [payoutMessage, setPayoutMessage] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const dash = await fetchCreatorDashboard()
-        if (!cancelled) setData(dash)
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof ApiError ? e.message : "Could not load performance data")
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  if (loading) {
-    return <p className="text-sm text-muted-foreground pt-4">Loading your metrics…</p>
-  }
-  if (error) {
-    return <p className="text-sm text-destructive pt-4">{error}</p>
-  }
-  if (!data) return null
-
-  const fmtUsd = (v: string) => {
-    const n = Number(v)
-    return Number.isFinite(n) ? `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "$0.00"
-  }
-
-  const perfStats = [
-    { label: "Views (24h)", value: formatViewCount(data.performance.views24h), icon: Eye },
-    { label: "Views (7d)", value: formatViewCount(data.performance.views7d), icon: TrendingUp },
-    { label: "Watch hrs (30d)", value: String(data.performance.watchHours30d), icon: BarChart3 },
-    { label: "Earnings (30d)", value: fmtUsd(data.financial.earnings30dUsd), icon: DollarSign },
-  ]
-
-  const adStats = [
-    { label: "Ad views on your content (24h)", value: formatViewCount(data.advertising.adImpressionsOnYourContent24h) },
-    { label: "Ad views (30d)", value: formatViewCount(data.advertising.adImpressionsOnYourContent30d) },
-    { label: "Ad clicks (30d)", value: formatViewCount(data.advertising.adClicksOnYourContent30d) },
-    { label: "CTR (30d)", value: `${data.advertising.ctr30d}%` },
-  ]
-
-  return (
-    <div className="pt-2 md:pt-3 space-y-6 md:space-y-8">
-      {data.programVerticals.length > 0 && (
-        <p className="text-xs md:text-sm text-muted-foreground">
-          Programs: {data.programVerticals.join(", ").replace(/_/g, " ")} · Partner tier: {data.partnerTier}
-        </p>
-      )}
-
-      <div>
-        <h3 className="text-sm font-semibold mb-2">Performance</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-          {perfStats.map((s) => {
-            const Icon = s.icon
-            return (
-              <div key={s.label} className="p-3 md:p-4 rounded-xl bg-secondary/30 border border-border">
-                <Icon className="w-4 h-4 md:w-5 md:h-5 text-primary mb-1 md:mb-2" />
-                <p className="text-xl md:text-2xl font-bold">{s.value}</p>
-                <p className="text-[10px] md:text-xs text-muted-foreground">{s.label}</p>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-sm font-semibold mb-2">Ads on your videos</h3>
-        <div className="grid grid-cols-2 gap-2 md:gap-3">
-          {adStats.map((s) => (
-            <div key={s.label} className="p-3 rounded-xl bg-secondary/20 border border-border text-sm">
-              <p className="font-bold">{s.value}</p>
-              <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">{s.label}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="md:grid md:grid-cols-2 md:gap-6">
-        <div>
-          <h3 className="text-sm md:text-base font-semibold mb-2 md:mb-3">Top content</h3>
-          <div className="space-y-2 md:space-y-2.5">
-            {data.topContent.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Upload videos to see stats here.</p>
-            ) : (
-              data.topContent.map((item, i) => (
-                <div
-                  key={item.id}
-                  className="flex justify-between text-sm md:text-base p-2.5 md:p-3 rounded-lg bg-secondary/20 gap-2"
-                >
-                  <span className="line-clamp-1">
-                    #{i + 1} {item.title}
-                  </span>
-                  <span className="text-muted-foreground shrink-0 text-xs md:text-sm">
-                    {formatViewCount(item.viewsCount)} views · {item.adImpressions30d} ads
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-        <div className="space-y-4">
-          <div className="p-4 md:p-6 rounded-xl border border-border bg-secondary/20">
-            <p className="text-sm font-semibold">Revenue (30d)</p>
-            <ul className="text-xs md:text-sm text-muted-foreground mt-2 space-y-1">
-              <li>Total earnings: {fmtUsd(data.financial.earnings30dUsd)}</li>
-              <li>Ad revenue: {fmtUsd(data.financial.adRevenueUsd)}</li>
-              <li>Sponsorships: {fmtUsd(data.financial.sponsorshipRevenueUsd)}</li>
-              <li>Merch: {fmtUsd(data.financial.merchandiseRevenueUsd)}</li>
-              <li>Donations: {fmtUsd(data.financial.donationsUsd)}</li>
-            </ul>
-          </div>
-          <div className="p-4 md:p-6 rounded-xl border border-border bg-secondary/20 space-y-3">
-            <p className="text-sm font-semibold">Available balance</p>
-            <p className="text-2xl md:text-3xl font-bold text-primary">
-              {fmtUsd(data.financial.pendingPayoutUsd)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Minimum withdrawal $50. Payouts are reviewed manually (1–5 business days).
-            </p>
-            <div className="flex gap-2">
-              <input
-                type="number"
-                min={50}
-                step={1}
-                value={payoutAmount}
-                onChange={(e) => setPayoutAmount(e.target.value)}
-                className="flex-1 h-10 px-3 rounded-lg bg-secondary text-sm"
-                placeholder="Amount (USD)"
-              />
-              <select
-                value={payoutMethod}
-                onChange={(e) =>
-                  setPayoutMethod(e.target.value as "paypal" | "bank_transfer" | "crypto")
-                }
-                className="h-10 px-2 rounded-lg bg-secondary text-sm"
-              >
-                <option value="paypal">PayPal</option>
-                <option value="bank_transfer">Bank</option>
-                <option value="crypto">Crypto</option>
-              </select>
-            </div>
-            <Button
-              className="w-full rounded-full"
-              disabled={payoutBusy}
-              onClick={() => {
-                const amount = Number(payoutAmount)
-                if (!Number.isFinite(amount) || amount < 50) {
-                  setPayoutMessage("Enter at least $50")
-                  return
-                }
-                setPayoutBusy(true)
-                setPayoutMessage(null)
-                void requestCreatorPayout({ amountUsd: amount, method: payoutMethod })
-                  .then((res) => {
-                    setPayoutMessage(`Request submitted (${res.payout.status}).`)
-                    return fetchCreatorDashboard()
-                  })
-                  .then((dash) => dash && setData(dash))
-                  .catch((e) =>
-                    setPayoutMessage(
-                      e instanceof ApiError ? e.message : "Could not request payout",
-                    ),
-                  )
-                  .finally(() => setPayoutBusy(false))
-              }}
-            >
-              {payoutBusy ? "Submitting…" : "Request payout"}
-            </Button>
-            {payoutMessage && (
-              <p className="text-xs text-center text-muted-foreground">{payoutMessage}</p>
-            )}
-          </div>
-          <div className="p-4 rounded-xl border border-primary/20 bg-primary/5">
-            <p className="text-sm font-semibold">Community impact</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {data.communityImpact.jobsSupported} jobs · {data.communityImpact.businessesFunded} businesses ·{" "}
-              {fmtUsd(data.communityImpact.dollarsInvested)} invested
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function HelpPanel() {
   return (
     <div className="pt-2 md:pt-3 space-y-4 md:space-y-5">
@@ -1219,28 +1040,28 @@ function HelpPanel() {
 }
 
 function PremiumPanel({
-  selected,
-  onSelect,
+  membership,
   subscribed,
   busy,
   error,
   onSubscribe,
 }: {
-  selected: string
-  onSelect: (id: string) => void
+  membership: PublicMembershipConfig
   subscribed: boolean
   busy?: boolean
   error?: string | null
   onSubscribe: () => void | Promise<void>
 }) {
+  const priceLabel = `$${membership.priceUsd.toFixed(2)}/mo`
+
   if (subscribed) {
     return (
       <div className="py-8 space-y-6">
         <div className="text-center">
           <Check className="w-12 h-12 text-primary mx-auto mb-3" />
-          <p className="font-bold text-lg">You&apos;re Premium!</p>
+          <p className="font-bold text-lg">You&apos;re a member!</p>
           <p className="text-sm text-muted-foreground mt-1">
-            Ad-free across Prysym TV. Channel memberships are separate (support creators on their profile).
+            Ad-free on Shorts, Verticals, and Movies. Channel memberships are separate (support creators on their profile).
           </p>
         </div>
         <ChannelMembershipsPanel />
@@ -1253,40 +1074,29 @@ function PremiumPanel({
       {error && (
         <p className="text-sm text-destructive text-center">{error}</p>
       )}
-      <p className="text-sm md:text-base text-muted-foreground text-center">Ad-free viewing and exclusive perks.</p>
-      <div className="space-y-3 md:grid md:grid-cols-3 md:gap-4 md:space-y-0">
-        {PREMIUM_TIERS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onSelect(t.id)}
-            className={cn(
-              "w-full p-4 md:p-5 rounded-xl border text-left transition-all h-full",
-              selected === t.id ? "border-primary bg-primary/5" : "border-border hover:bg-secondary/30"
-            )}
-          >
-            <div className="flex items-center justify-between mb-1">
-              <span className="font-bold md:text-lg">{t.name}</span>
-              <span className="font-black md:text-lg">{t.price}</span>
-            </div>
-            {t.popular && <span className="text-[10px] md:text-xs font-bold text-primary uppercase">Most popular</span>}
-            <ul className="mt-2 md:mt-3 space-y-1 md:space-y-1.5">
-              {t.perks.map((p) => (
-                <li key={p} className="text-xs md:text-sm text-muted-foreground flex gap-1.5">
-                  <Check className="w-3 h-3 md:w-4 md:h-4 text-primary shrink-0 mt-0.5" />
-                  {p}
-                </li>
-              ))}
-            </ul>
-          </button>
-        ))}
+      <p className="text-sm md:text-base text-muted-foreground text-center">
+        One membership — ad-free across Shorts, Verticals, and Movies.
+      </p>
+      <div className="rounded-xl border border-primary bg-primary/5 p-5 md:p-6">
+        <div className="flex items-center justify-between mb-2">
+          <span className="font-bold text-lg">{membership.label}</span>
+          <span className="font-black text-lg">{priceLabel}</span>
+        </div>
+        <ul className="mt-3 space-y-1.5">
+          {membership.perks.map((p) => (
+            <li key={p} className="text-sm text-muted-foreground flex gap-1.5">
+              <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+              {p}
+            </li>
+          ))}
+        </ul>
       </div>
       <Button
         onClick={() => void onSubscribe()}
         disabled={busy}
         className="w-full rounded-full h-11 md:h-12 md:text-base"
       >
-        {busy ? "Starting checkout…" : "Subscribe"}
+        {busy ? "Starting checkout…" : `Subscribe — ${priceLabel}`}
       </Button>
       <ChannelMembershipsPanel />
     </div>

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Post, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -19,8 +19,9 @@ export class AnalyticsController {
   track(
     @Req() req: Request & { user?: AuthUserPayload | null },
     @Body() body: TrackEventsDto,
+    @Headers('x-country-code') countryCode?: string,
   ) {
-    return this.analytics.trackBatch(req.user?.id, body);
+    return this.analytics.trackBatch(req.user?.id, body, countryCode);
   }
 
   /** Creator Impact Dashboard™ — performance, ad views on your videos, revenue, impact. */

@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   Post,
   Put,
@@ -19,7 +20,9 @@ import { RevenueSplitService } from '../revenue/revenue-split.service';
 import { AdminService } from './admin.service';
 import { AdminListQueryDto } from './dto/admin-list-query.dto';
 import { BanUserDto } from './dto/ban-user.dto';
+import { AdCampaignQueryDto } from './dto/ad-campaign-query.dto';
 import { CreateAdCampaignDto } from './dto/create-ad-campaign.dto';
+import { UpdateAdCampaignDto } from './dto/update-ad-campaign.dto';
 import { ProcessPayoutDto } from './dto/process-payout.dto';
 import { ReviewReportDto } from './dto/review-report.dto';
 import { ReviewStreamerApplicationDto } from './dto/review-streamer-application.dto';
@@ -38,6 +41,7 @@ import type {
   ProgramConfigEntry,
 } from '../platform-settings/platform-settings.types';
 import { UpdateUserImpactDto } from './dto/update-user-impact.dto';
+import { AdminDateRangeQueryDto } from './dto/admin-date-range-query.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -54,10 +58,74 @@ export class AdminController {
   }
 
   @Get('analytics/timeseries')
-  analyticsTimeseries(@Query('range') range?: string) {
-    const r =
-      range === '7d' || range === '90d' ? range : ('30d' as const);
-    return this.admin.getAnalyticsTimeseries(r);
+  analyticsTimeseries(@Query() query: AdminDateRangeQueryDto) {
+    return this.admin.getAnalyticsTimeseries(query);
+  }
+
+  @Get('analytics/revenue')
+  analyticsRevenue(@Query() query: AdminDateRangeQueryDto) {
+    return this.admin.getAnalyticsRevenue(query);
+  }
+
+  @Get('analytics/content')
+  analyticsContent(@Query() query: AdminDateRangeQueryDto) {
+    return this.admin.getAnalyticsContent(query);
+  }
+
+  @Get('analytics/geography')
+  analyticsGeography(@Query() query: AdminDateRangeQueryDto) {
+    return this.admin.getAnalyticsGeography(query);
+  }
+
+  @Get('analytics/export')
+  @Header('Content-Type', 'text/csv')
+  analyticsExport(@Query() query: AdminDateRangeQueryDto) {
+    return this.admin.exportAnalyticsCsv(query);
+  }
+
+  @Get('audit-logs')
+  auditLogs(@Query() query: AdminListQueryDto & { entityType?: string }) {
+    return this.admin.listAuditLogs(query);
+  }
+
+  @Get('gaf/ledger')
+  gafLedger(@Query() query: AdminListQueryDto & { direction?: string }) {
+    return this.admin.gafLedger({
+      page: query.page,
+      limit: query.limit,
+      direction: query.direction,
+      dateFrom: query.dateFrom,
+      dateTo: query.dateTo,
+    });
+  }
+
+  @Get('advertisers')
+  listAdvertisers() {
+    return this.admin.listAdvertisers();
+  }
+
+  @Put('advertisers/:id')
+  updateAdvertiser(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      companyName?: string;
+      contactEmail?: string;
+      billingEmail?: string | null;
+      isVerified?: boolean;
+    },
+    @CurrentUser() admin: AuthUserPayload,
+  ) {
+    return this.admin.updateAdvertiser(id, body, admin.id);
+  }
+
+  @Post('advertisers/:id/verify')
+  verifyAdvertiser(
+    @Param('id') id: string,
+    @Body() body: { isVerified: boolean },
+    @CurrentUser() admin: AuthUserPayload,
+  ) {
+    return this.admin.verifyAdvertiser(id, body.isVerified, admin.id);
   }
 
   @Get('reports')
@@ -123,6 +191,11 @@ export class AdminController {
     @Body() body: { delta: number },
   ) {
     return this.admin.adjustUserCoins(id, body.delta);
+  }
+
+  @Delete('users/:id')
+  deleteUser(@Param('id') id: string, @CurrentUser() admin: AuthUserPayload) {
+    return this.admin.deleteUser(id, admin.id);
   }
 
   @Get('applications')
@@ -273,6 +346,27 @@ export class AdminController {
     return this.admin.deletePodcastEpisode(id);
   }
 
+  @Delete('podcast-shows/:id')
+  deletePodcastShow(
+    @Param('id') id: string,
+    @CurrentUser() admin: AuthUserPayload,
+  ) {
+    return this.admin.deletePodcastShow(id, admin.id);
+  }
+
+  @Delete('vertical-series/:slug')
+  deleteVerticalSeries(
+    @Param('slug') slug: string,
+    @CurrentUser() admin: AuthUserPayload,
+  ) {
+    return this.admin.deleteVerticalSeries(slug, admin.id);
+  }
+
+  @Delete('streams/:id')
+  deleteStream(@Param('id') id: string, @CurrentUser() admin: AuthUserPayload) {
+    return this.admin.deleteStream(id, admin.id);
+  }
+
   @Get('config/economy')
   economyConfig() {
     return this.admin.getEconomyConfig();
@@ -401,13 +495,37 @@ export class AdminController {
   }
 
   @Get('ads/campaigns')
-  listAdCampaigns() {
-    return this.admin.listAdCampaigns();
+  listAdCampaigns(@Query() query: AdCampaignQueryDto) {
+    return this.admin.listAdCampaigns(query);
   }
 
   @Post('ads/campaigns')
   createAdCampaign(@Body() body: CreateAdCampaignDto) {
     return this.admin.createAdCampaign(body);
+  }
+
+  @Put('ads/campaigns/:id')
+  updateAdCampaign(
+    @Param('id') id: string,
+    @Body() body: UpdateAdCampaignDto,
+    @CurrentUser() admin: AuthUserPayload,
+  ) {
+    return this.admin.updateAdCampaign(id, body, admin.id);
+  }
+
+  @Post('ads/campaigns/:id/duplicate')
+  duplicateAdCampaign(
+    @Param('id') id: string,
+    @CurrentUser() admin: AuthUserPayload,
+  ) {
+    return this.admin.duplicateAdCampaign(id, admin.id);
+  }
+
+  @Post('ads/media/upload')
+  uploadAdMedia(
+    @Body() body: { mimeType: string; fileName?: string },
+  ) {
+    return this.admin.uploadAdMediaInit(body);
   }
 
   @Put('ads/campaigns/:id/status')
@@ -416,5 +534,21 @@ export class AdminController {
     @Body() body: { status: AdCampaignStatus },
   ) {
     return this.admin.updateAdCampaignStatus(id, body.status);
+  }
+
+  @Delete('ads/campaigns/:id')
+  deleteAdCampaign(
+    @Param('id') id: string,
+    @CurrentUser() admin: AuthUserPayload,
+  ) {
+    return this.admin.deleteAdCampaign(id, admin.id);
+  }
+
+  @Delete('advertisers/:id')
+  deleteAdvertiser(
+    @Param('id') id: string,
+    @CurrentUser() admin: AuthUserPayload,
+  ) {
+    return this.admin.deleteAdvertiser(id, admin.id);
   }
 }

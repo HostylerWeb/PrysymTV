@@ -6,7 +6,8 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminPagination } from "@/components/admin/admin-pagination"
 import { AdminStatusPill } from "@/components/admin/admin-status-pill"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
-import { fetchAdminVerticalSeries } from "@/lib/api/admin"
+import { AdminDeleteButton } from "@/components/admin/admin-confirm-dialog"
+import { deleteAdminVerticalSeries, fetchAdminVerticalSeries } from "@/lib/api/admin"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -22,7 +23,7 @@ export default function AdminContentVerticalsPage() {
   const [q, setQ] = useState("")
   const [page, setPage] = useState(1)
 
-  const { data, loading, error } = useAdminQuery(
+  const { data, loading, error, reload } = useAdminQuery(
     () => fetchAdminVerticalSeries({ page, limit: 20, q: q || undefined }),
     [page, q],
   )
@@ -90,10 +91,14 @@ export default function AdminContentVerticalsPage() {
                 <TableCell>
                   <AdminStatusPill status={s.status} />
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right space-x-2">
                   <Button asChild size="sm" variant="outline" className="rounded-full">
                     <Link href={`/admin/content/verticals/${s.slug}`}>Episodes</Link>
                   </Button>
+                  <AdminDeleteButton
+                    itemLabel="series"
+                    onConfirm={() => void deleteAdminVerticalSeries(s.slug).then(() => reload())}
+                  />
                 </TableCell>
               </TableRow>
             ))}

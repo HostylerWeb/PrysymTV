@@ -29,6 +29,7 @@ import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { fetchGiftCatalog, sendGift } from "@/lib/api/billing"
 import { fetchStream, type StreamDetail } from "@/lib/api/streams"
 import { fetchPublicProfile, followUser, unfollowUser } from "@/lib/api/users"
+import { formatEngagementCount } from "@/lib/engagement-count"
 import { connectStreamChat, type StreamChatMessage } from "@/lib/api/stream-chat"
 import type { Socket } from "socket.io-client"
 
@@ -58,6 +59,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
   const [isNotifyOn, setIsNotifyOn] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [viewerCount, setViewerCount] = useState(0)
+  const [followersCount, setFollowersCount] = useState(0)
   const [activeTab, setActiveTab] = useState("home")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
@@ -71,7 +73,10 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
   useEffect(() => {
     if (!stream?.streamerSlug || !isAuthenticated) return
     void fetchPublicProfile(stream.streamerSlug)
-      .then((p) => setIsFollowing(p.isFollowing ?? false))
+      .then((p) => {
+        setIsFollowing(p.isFollowing ?? false)
+        setFollowersCount(p.followersCount ?? 0)
+      })
       .catch(() => {})
   }, [stream?.streamerSlug, isAuthenticated])
 
@@ -146,6 +151,9 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
               color: msg.color,
             },
           ])
+        })
+        socket.on("viewers", (payload: { count: number }) => {
+          if (typeof payload?.count === "number") setViewerCount(payload.count)
         })
       })
       .catch(() => {
@@ -339,7 +347,9 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
                 />
                 <div className="min-w-0">
                   <h3 className="text-sm md:text-base font-semibold truncate">{stream.streamer}</h3>
-                  <p className="text-xs text-muted-foreground">2.1M followers</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatEngagementCount(followersCount)} followers
+                  </p>
                 </div>
               </Link>
               <div className="flex gap-2 shrink-0">

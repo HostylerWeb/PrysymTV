@@ -13,6 +13,9 @@ import {
   UserCheck,
   Film,
   Coins,
+  Building2,
+  Landmark,
+  ScrollText,
 } from "lucide-react"
 
 export type AdminNavItem = {
@@ -62,6 +65,8 @@ export const ADMIN_NAV: AdminNavGroup[] = [
       { id: "payouts", label: "Payouts", href: "/admin/payouts", icon: Wallet, badgeKey: "payouts" },
       { id: "revenue", label: "Revenue", href: "/admin/revenue", icon: Percent },
       { id: "ads", label: "Ads", href: "/admin/ads", icon: Megaphone },
+      { id: "advertisers", label: "Advertisers", href: "/admin/advertisers", icon: Building2 },
+      { id: "gaf", label: "GAF", href: "/admin/gaf", icon: Landmark },
       { id: "economy", label: "Economy", href: "/admin/economy", icon: Coins },
     ],
   },
@@ -74,7 +79,10 @@ export const ADMIN_NAV: AdminNavGroup[] = [
   },
   {
     title: "System",
-    items: [{ id: "settings", label: "Settings", href: "/admin/settings", icon: Settings }],
+    items: [
+      { id: "audit-log", label: "Audit log", href: "/admin/audit-log", icon: ScrollText },
+      { id: "settings", label: "Settings", href: "/admin/settings", icon: Settings },
+    ],
   },
 ]
 

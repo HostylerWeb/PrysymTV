@@ -25,7 +25,8 @@ import { Header } from "@/components/header"
 import { useAuth } from "@/contexts/auth-context"
 
 import { AdInterstitial } from "@/components/ad-interstitial"
-import { fetchPublicConfig } from "@/lib/api/config"
+import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
+import { useWatchAnalytics } from "@/lib/hooks/use-watch-analytics"
 import { ShareSheet } from "@/components/share-sheet"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
 import {
@@ -35,6 +36,7 @@ import {
   toggleVideoSave,
   type ShortVideoCard,
 } from "@/lib/api/videos-feed"
+import { saveWatchProgress } from "@/lib/api/history"
 import {
   fetchVideoComments,
   normalizeVideoComment,
@@ -60,6 +62,7 @@ import { useCreateFlow } from "@/hooks/use-create-flow"
 import { useRouter } from "next/navigation"
 export type ShortItem = {
   id: string
+  creatorId: string
   videoUrl: string
   username: string
   userSlug: string
@@ -76,6 +79,7 @@ export type ShortItem = {
 function mapShortFromApi(card: ShortVideoCard): ShortItem {
   return {
     id: card.id,
+    creatorId: card.creatorId,
     videoUrl: card.playbackUrl ?? card.videoUrl ?? "",
     username: `@${card.channelSlug}`,
     userSlug: card.channelSlug,
@@ -83,7 +87,7 @@ function mapShortFromApi(card: ShortVideoCard): ShortItem {
     caption: card.title,
     likes: formatViewCount(card.likesCount ?? 0),
     comments: formatViewCount(card.commentsCount ?? 0),
-    shares: "0",
+    shares: formatViewCount(card.sharesCount ?? 0),
     saves: "0",
     music: `Original Sound - ${card.channelSlug}`,
     isFollowing: false,
@@ -380,23 +384,9 @@ export default function ShortsPage() {
   const [engagement, setEngagement] = useState<Record<string, EngagementCounts>>({})
   const shortsViewCount = useRef(0)
   const viewRecorded = useRef(new Set<string>())
-  const adEveryNSwipes = useRef(5)
-  const adsEnabled = useRef(true)
-
-  useEffect(() => {
-    void fetchPublicConfig()
-      .then((cfg) => {
-        adEveryNSwipes.current = Math.max(
-          1,
-          cfg.ads.shortsInterstitialEveryNSwipes || 5,
-        )
-        adsEnabled.current = cfg.ads.shortsInterstitialEnabled
-      })
-      .catch(() => {
-        adEveryNSwipes.current = 5
-        adsEnabled.current = true
-      })
-  }, [])
+  const { config: adsConfig, isPlacementEnabled } = usePublicAdsConfig()
+  const activeShort = shortsData[activeIndex]
+  useWatchAnalytics(activeShort?.id, { creatorId: activeShort?.creatorId })
 
   useEffect(() => {
     setEngagement((prev) => {
@@ -436,6 +426,17 @@ export default function ShortsPage() {
     void recordVideoView(short.id).catch(() => {})
   }, [activeIndex, shortsData])
 
+  useEffect(() => {
+    const short = shortsData[activeIndex]
+    if (!short || !isAuthenticated) return
+    void saveWatchProgress({
+      contentType: "video",
+      contentId: short.id,
+      progressSeconds: 0,
+      completed: false,
+    }).catch(() => {})
+  }, [activeIndex, shortsData, isAuthenticated])
+
   const handleScroll = () => {
     if (containerRef.current) {
       const scrollTop = containerRef.current.scrollTop
@@ -444,9 +445,10 @@ export default function ShortsPage() {
       if (newIndex !== activeIndex && newIndex >= 0 && newIndex < shortsData.length) {
         setActiveIndex(newIndex)
         shortsViewCount.current += 1
-        const n = adEveryNSwipes.current
+        const n = Math.max(1, adsConfig?.shortsInterstitialEveryNSwipes ?? 5)
         if (
-          adsEnabled.current &&
+          isPlacementEnabled("shorts_interstitial") &&
+          (adsConfig?.shortsInterstitialEnabled ?? true) &&
           n > 0 &&
           shortsViewCount.current > 0 &&
           shortsViewCount.current % n === 0
@@ -934,7 +936,8 @@ export default function ShortsPage() {
       {showAd && (
         <AdInterstitial
           onClose={() => setShowAd(false)}
-          videoId={String(shortsData[activeIndex]?.id ?? activeIndex)}
+          creatorId={shortsData[activeIndex]?.creatorId}
+          videoId={shortsData[activeIndex]?.id}
         />
       )}
 

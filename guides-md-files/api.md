@@ -475,7 +475,45 @@ Returns `{ ad: ServedAd | null }` from active campaigns. With Bearer and active 
 
 ### `POST /ads/track/impression` · `POST /ads/track/click` ✅
 
-**Body:** `{ campaignId, creatorId, videoId?, placement, viewerUserId? }`
+**Body:** `{ campaignId, creatorId?, videoId?, placement, viewerUserId? }` — `creatorId` optional (falls back to platform admin). Serve increments `deliveredImpressions`; track records attribution + CPM revenue via `gafRuleKey` / per-campaign `revenueRuleKey`.
+
+### Advertisers B2B (`/advertisers`) ✅
+
+| Route | Auth | Notes |
+|-------|------|--------|
+| `POST /advertisers/register` | Bearer | Create advertiser account |
+| `GET /advertisers/me` | Bearer | List own accounts |
+| `GET /advertisers/me/:id` | Bearer | Account + campaigns |
+
+Frontend: `/advertisers` self-serve portal. Admin: `/admin/advertisers`, `/admin/gaf`, `/admin/audit-log`.
+
+### Admin ads (extended) ✅
+
+| Route | Notes |
+|-------|--------|
+| `PUT /admin/ads/campaigns/:id` | Full edit incl. `revenueRuleKey`, `advertiserAccountId` |
+| `POST /admin/ads/campaigns/:id/duplicate` | Clone campaign |
+| `POST /admin/ads/media/upload` | Ad creative upload |
+| `GET /admin/ads/campaigns` | Filters: `status`, `placement`, `q`, date range |
+
+Platform ads config adds `impressionRevenueCpmUsd`. `GET /config/public` includes `platformCreatorId` + `placements`.
+
+### Analytics (extended) ✅
+
+| Route | Notes |
+|-------|--------|
+| `POST /analytics/track` | Batch events; header `X-Country-Code` for geography |
+| `GET /admin/analytics/revenue` | Revenue breakdown by range |
+| `GET /admin/analytics/content` | Top content, likes, dislikes by range |
+| `GET /admin/analytics/geography` | Viewer countries from event metadata |
+| `GET /admin/analytics/export` | CSV export |
+| `GET /admin/gaf/ledger` | GAF inflow/outflow |
+| `GET /admin/audit-logs` | Admin action log |
+| `GET /podcasts/shows/trending` | Trending podcast shows |
+| `POST /podcasts/episodes/:id/dislike` | Toggle dislike |
+| `POST /verticals/episodes/:id/dislike` | Toggle dislike |
+
+`POST /videos/:id/view` writes `analytics_events` (view). Trending feed uses 7-day views. Creator dashboard: `/creator/dashboard`.
 
 ---
 

@@ -25,6 +25,7 @@ import {
   savedItemTypeForVideo,
 } from '../common/engagement.util';
 import { Queue } from 'bullmq';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { VIDEO_PROCESSING_QUEUE } from '../queue/queue.constants';
@@ -39,6 +40,7 @@ export class VideosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly analytics: AnalyticsService,
     @InjectQueue(VIDEO_PROCESSING_QUEUE) private readonly videoQueue: Queue,
   ) {}
 
@@ -520,7 +522,11 @@ export class VideosService {
     };
   }
 
-  async recordView(videoId: string) {
+  async recordView(
+    videoId: string,
+    userId?: string,
+    countryCode?: string,
+  ) {
     const video = await this.prisma.video.findUnique({ where: { id: videoId } });
     if (!video || video.status !== ContentStatus.ready) {
       throw new NotFoundException('Video not found');
@@ -528,6 +534,12 @@ export class VideosService {
     await this.prisma.video.update({
       where: { id: videoId },
       data: { viewsCount: { increment: 1 } },
+    });
+    await this.analytics.recordViewEvent({
+      videoId,
+      creatorId: video.creatorId,
+      userId,
+      countryCode,
     });
     return { success: true, viewsCount: video.viewsCount + 1 };
   }

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AdCampaignStatus, AdPlacement } from '@prisma/client';
+import { AdCampaignStatus, AdPlacement, Prisma } from '@prisma/client';
 import { isPremiumActive } from '../common/utils/premium.util';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -53,9 +53,12 @@ export class AdsService {
       },
     });
 
-    const eligible = campaigns.filter(
-      (c) => c.deliveredImpressions < c.targetImpressions,
-    );
+    const cpm = adsConfig.impressionRevenueCpmUsd;
+    const eligible = campaigns.filter((c) => {
+      if (c.deliveredImpressions >= c.targetImpressions) return false;
+      const spent = new Prisma.Decimal(cpm).div(1000).mul(c.deliveredImpressions);
+      return spent.lt(c.budgetUsd);
+    });
     if (!eligible.length) return { ad: null };
 
     const weights = eligible.map(
@@ -69,6 +72,27 @@ export class AdsService {
       if (r <= 0) {
         picked = eligible[i];
         break;
+      }
+    }
+
+    await this.prisma.adCampaign.update({
+      where: { id: picked.id },
+      data: { deliveredImpressions: { increment: 1 } },
+    });
+
+    const updated = await this.prisma.adCampaign.findUnique({
+      where: { id: picked.id },
+    });
+    if (updated) {
+      const spent = new Prisma.Decimal(cpm).div(1000).mul(updated.deliveredImpressions);
+      if (
+        updated.deliveredImpressions >= updated.targetImpressions ||
+        spent.gte(updated.budgetUsd)
+      ) {
+        await this.prisma.adCampaign.update({
+          where: { id: picked.id },
+          data: { status: AdCampaignStatus.completed },
+        });
       }
     }
 
@@ -89,7 +113,9 @@ export class AdsService {
             ? adsConfig.moviePrerollSkipSeconds
             : placement === AdPlacement.shorts_interstitial
               ? adsConfig.shortsSkipSeconds
-              : 0,
+              : placement === AdPlacement.vertical_episode
+                ? adsConfig.shortsSkipSeconds
+                : 0,
       },
     };
   }

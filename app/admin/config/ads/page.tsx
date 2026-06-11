@@ -23,6 +23,7 @@ export default function AdminConfigAdsPage() {
     moviePrerollSkipSeconds: 15,
     shortsSkipSeconds: 5,
     gafRuleKey: "ad_gaf_allocation",
+    impressionRevenueCpmUsd: 2.5,
     placements: {
       home_banner: true,
       shorts_interstitial: true,
@@ -110,6 +111,22 @@ export default function AdminConfigAdsPage() {
               value={form.gafRuleKey}
               onChange={(e) => setForm((f) => ({ ...f, gafRuleKey: e.target.value }))}
             />
+          </div>
+          <div>
+            <Label>Impression revenue CPM (USD)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min={0}
+              className="mt-1 w-32"
+              value={form.impressionRevenueCpmUsd}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, impressionRevenueCpmUsd: Number(e.target.value) }))
+              }
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              USD earned per 1,000 ad impressions for revenue ledger.
+            </p>
           </div>
           <Button className="rounded-full" disabled={busy} onClick={() => void save()}>
             Save network settings

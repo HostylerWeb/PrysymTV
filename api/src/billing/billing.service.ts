@@ -23,13 +23,13 @@ import { SendGiftDto } from './dto/send-gift.dto';
 
 const COIN_USD = new Prisma.Decimal('0.01');
 
+/** Single platform membership — ad-free on Shorts, Verticals, and Movies. */
 const PREMIUM_PLANS: Record<
   string,
   { tier: PremiumTier; priceUsd: number; label: string }
 > = {
-  basic: { tier: PremiumTier.basic, priceUsd: 2.99, label: 'Prysym Basic' },
-  premium: { tier: PremiumTier.premium, priceUsd: 4.99, label: 'Prysym Premium' },
-  ultimate: { tier: PremiumTier.ultimate, priceUsd: 9.99, label: 'Prysym Ultimate' },
+  membership: { tier: PremiumTier.premium, priceUsd: 4.99, label: 'Prysym Membership' },
+  premium: { tier: PremiumTier.premium, priceUsd: 4.99, label: 'Prysym Membership' },
 };
 
 const PREMIUM_DURATION_DAYS = 30;
@@ -286,13 +286,8 @@ export class BillingService {
   private async resolvePremiumPlan(tierId: string) {
     const plan = PREMIUM_PLANS[tierId];
     if (!plan) return null;
-    const prices = await this.platformSettings.getPremiumPrices();
-    const priceMap: Record<string, number> = {
-      basic: prices.basic,
-      premium: prices.premium,
-      ultimate: prices.ultimate,
-    };
-    return { ...plan, priceUsd: priceMap[tierId] ?? plan.priceUsd };
+    const priceUsd = await this.platformSettings.getMembershipPriceUsd();
+    return { ...plan, priceUsd };
   }
 
   private async createPremiumCheckout(userId: string, tierId: string) {

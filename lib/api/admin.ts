@@ -1,4 +1,15 @@
-import { apiRequest } from "@/lib/api-client";
+import { apiRequest, getApiBaseUrl, loadStoredAccessToken } from "@/lib/api-client";
+
+export type AdminDateRangeParams = {
+  range?: "7d" | "30d" | "90d";
+  dateFrom?: string;
+  dateTo?: string;
+};
+
+export type AdminListDateParams = {
+  dateFrom?: string;
+  dateTo?: string;
+};
 
 export type AdminOverview = {
   dau: number;
@@ -200,6 +211,12 @@ export type AdCampaign = {
   status: string;
   startsAt: string;
   endsAt: string;
+  mediaUrl?: string;
+  clickThroughUrl?: string;
+  revenueRuleKey?: string;
+  advertiserAccountId?: string | null;
+  mediaType?: string;
+  skipAfterSeconds?: number;
 };
 
 function qs(params: Record<string, string | number | undefined>) {
@@ -235,9 +252,9 @@ export type AdminAnalyticsTimeseries = {
   premiumSubscribers: number;
 };
 
-export function fetchAdminAnalyticsTimeseries(range: "7d" | "30d" | "90d" = "30d") {
+export function fetchAdminAnalyticsTimeseries(params?: AdminDateRangeParams) {
   return apiRequest<AdminAnalyticsTimeseries>(
-    `/admin/analytics/timeseries${qs({ range })}`,
+    `/admin/analytics/timeseries${qs(params ?? { range: "30d" })}`,
   );
 }
 
@@ -278,7 +295,7 @@ export function fetchAdminReports(params?: {
   page?: number;
   limit?: number;
   status?: string;
-}) {
+} & AdminListDateParams) {
   return apiRequest<{ items: AdminReportListItem[]; meta: PaginatedMeta }>(
     `/admin/reports${qs(params ?? {})}`,
   );
@@ -304,7 +321,7 @@ export function fetchAdminUsers(params?: {
   q?: string;
   status?: string;
   type?: string;
-}) {
+} & AdminListDateParams) {
   return apiRequest<{ items: AdminUserListItem[]; meta: PaginatedMeta }>(
     `/admin/users${qs(params ?? {})}`,
   );
@@ -316,6 +333,10 @@ export function fetchAdminUser(id: string) {
 
 export function banAdminUser(id: string, banned: boolean) {
   return apiRequest(`/admin/users/${id}/ban`, { method: "PUT", body: { banned } });
+}
+
+export function deleteAdminUser(id: string) {
+  return apiRequest(`/admin/users/${id}`, { method: "DELETE" });
 }
 
 export function verifyAdminUser(id: string, verified: boolean) {
@@ -402,7 +423,11 @@ export function reviewAdminVerticalCreatorApplication(
   return apiRequest(`/admin/vertical-creator-applications/${id}`, { method: "PUT", body });
 }
 
-export function fetchAdminPayouts(params?: { page?: number; limit?: number; status?: string }) {
+export function fetchAdminPayouts(params?: {
+  page?: number;
+  limit?: number;
+  status?: string;
+} & AdminListDateParams) {
   return apiRequest<{ items: AdminPayout[]; meta: PaginatedMeta }>(
     `/admin/payouts${qs(params ?? {})}`,
   );
@@ -419,7 +444,10 @@ export function fetchAdminLiveStreams() {
   return apiRequest<{ items: AdminLiveStream[] }>("/admin/live-streams");
 }
 
-export function fetchAdminStreamHistory(params?: { page?: number; limit?: number }) {
+export function fetchAdminStreamHistory(params?: {
+  page?: number;
+  limit?: number;
+} & AdminListDateParams) {
   return apiRequest<{
     items: Array<{
       id: string;
@@ -433,7 +461,10 @@ export function fetchAdminStreamHistory(params?: { page?: number; limit?: number
   }>(`/admin/stream-history${qs(params ?? {})}`);
 }
 
-export function fetchAdminRevenueLedger(params?: { page?: number; limit?: number }) {
+export function fetchAdminRevenueLedger(params?: {
+  page?: number;
+  limit?: number;
+} & AdminListDateParams) {
   return apiRequest<{
     items: Array<{
       id: string;
@@ -510,8 +541,14 @@ export function updateAdminRevenueRule(
   return apiRequest(`/admin/revenue-split-rules/${ruleKey}`, { method: "PUT", body });
 }
 
-export function fetchAdminAdCampaigns() {
-  return apiRequest<AdCampaign[]>("/admin/ads/campaigns");
+export function fetchAdminAdCampaigns(params?: {
+  status?: string;
+  placement?: string;
+  q?: string;
+} & AdminListDateParams) {
+  return apiRequest<{ items: AdCampaign[]; meta: PaginatedMeta }>(
+    `/admin/ads/campaigns${qs(params ?? {})}`,
+  ).then((res) => res.items ?? []);
 }
 
 export function createAdminAdCampaign(body: {
@@ -525,8 +562,47 @@ export function createAdminAdCampaign(body: {
   startsAt: string;
   endsAt: string;
   status?: "draft" | "active";
+  revenueRuleKey?: string;
+  advertiserAccountId?: string;
 }) {
   return apiRequest("/admin/ads/campaigns", { method: "POST", body });
+}
+
+export function updateAdminAdCampaign(
+  id: string,
+  body: Partial<{
+    advertiserName: string;
+    title: string;
+    mediaUrl: string;
+    clickThroughUrl: string;
+    placement: string;
+    targetImpressions: number;
+    budgetUsd: number;
+    startsAt: string;
+    endsAt: string;
+    revenueRuleKey: string;
+    advertiserAccountId: string | null;
+  }>,
+) {
+  return apiRequest<AdCampaign>(`/admin/ads/campaigns/${id}`, { method: "PUT", body });
+}
+
+export function duplicateAdminAdCampaign(id: string) {
+  return apiRequest<AdCampaign>(`/admin/ads/campaigns/${id}/duplicate`, {
+    method: "POST",
+  });
+}
+
+export function initAdminAdMediaUpload(body: {
+  fileName: string;
+  mimeType: string;
+  sizeBytes?: number;
+}) {
+  return apiRequest<{
+    uploadUrl: string;
+    publicUrl: string;
+    objectKey: string;
+  }>("/admin/ads/media/upload", { method: "POST", body });
 }
 
 export function fetchAdminAdCampaign(id: string) {
@@ -629,8 +705,29 @@ export function deleteAdminPodcastEpisode(id: string) {
   return apiRequest(`/admin/podcast-episodes/${id}`, { method: "DELETE" });
 }
 
+export function deleteAdminPodcastShow(id: string) {
+  return apiRequest(`/admin/podcast-shows/${id}`, { method: "DELETE" });
+}
+
+export function deleteAdminVerticalSeries(slug: string) {
+  return apiRequest(`/admin/vertical-series/${slug}`, { method: "DELETE" });
+}
+
+export function deleteAdminStream(id: string) {
+  return apiRequest(`/admin/streams/${id}`, { method: "DELETE" });
+}
+
+export function deleteAdminAdCampaign(id: string) {
+  return apiRequest(`/admin/ads/campaigns/${id}`, { method: "DELETE" });
+}
+
+export function deleteAdminAdvertiser(id: string) {
+  return apiRequest(`/admin/advertisers/${id}`, { method: "DELETE" });
+}
+
 export type AdminEconomyConfig = {
   minPayoutUsd: number;
+  membershipPriceUsd: number;
   insiderPriceUsd: number;
   premiumBasicPriceUsd: number;
   premiumPriceUsd: number;
@@ -657,6 +754,7 @@ export type AdminAdsConfig = {
   moviePrerollSkipSeconds: number;
   shortsSkipSeconds: number;
   gafRuleKey: string;
+  impressionRevenueCpmUsd: number;
   placements: {
     home_banner: boolean;
     shorts_interstitial: boolean;
@@ -804,7 +902,11 @@ export function fetchAdminProgramsConfig() {
   >("/admin/config/programs");
 }
 
-export function fetchAdminGiftActivity(params?: { page?: number; limit?: number; q?: string }) {
+export function fetchAdminGiftActivity(params?: {
+  page?: number;
+  limit?: number;
+  q?: string;
+} & AdminListDateParams) {
   return apiRequest<{
     items: Array<{
       id: string;
@@ -825,7 +927,7 @@ export function fetchAdminTransactions(params?: {
   limit?: number;
   type?: string;
   q?: string;
-}) {
+} & AdminListDateParams) {
   return apiRequest<{
     items: Array<{
       id: string;
@@ -847,5 +949,131 @@ export function updateAdminAdCampaignStatus(
   return apiRequest(`/admin/ads/campaigns/${id}/status`, {
     method: "PUT",
     body: { status },
+  });
+}
+
+export type AdminAnalyticsContentResponse = {
+  topDisliked: Array<{
+    id: string;
+    title: string;
+    type: string;
+    creator: string;
+    dislikesCount: number;
+    views: number;
+  }>;
+};
+
+export type AdminAnalyticsGeographyResponse = {
+  countries: Array<{
+    countryCode: string;
+    views: number;
+    users: number;
+  }>;
+};
+
+export function fetchAdminAnalyticsContent(params?: AdminDateRangeParams) {
+  return apiRequest<AdminAnalyticsContentResponse>(
+    `/admin/analytics/content${qs(params ?? { range: "30d" })}`,
+  );
+}
+
+export function fetchAdminAnalyticsGeography(params?: AdminDateRangeParams) {
+  return apiRequest<AdminAnalyticsGeographyResponse>(
+    `/admin/analytics/geography${qs(params ?? { range: "30d" })}`,
+  );
+}
+
+export async function exportAdminAnalyticsCsv(params?: AdminDateRangeParams) {
+  const query = params ?? { range: "30d" as const };
+  const token = loadStoredAccessToken();
+  const res = await fetch(
+    `${getApiBaseUrl()}/admin/analytics/export${qs(query)}`,
+    {
+      credentials: "include",
+      headers: {
+        Accept: "text/csv",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Export failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `prysym-analytics-${query.dateFrom ?? query.range ?? "export"}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export type AdminAuditLogItem = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  admin: { username: string; displayName: string | null };
+};
+
+export function fetchAdminAuditLogs(params?: {
+  page?: number;
+  limit?: number;
+  entityType?: string;
+} & AdminListDateParams) {
+  return apiRequest<{ items: AdminAuditLogItem[]; meta: PaginatedMeta }>(
+    `/admin/audit-logs${qs(params ?? {})}`,
+  );
+}
+
+export type AdminGafLedgerResponse = {
+  items: Array<{
+    id: string;
+    direction: string;
+    source: string;
+    amountUsd: string | number;
+    programCategory: string | null;
+    createdAt: string;
+  }>;
+  meta: PaginatedMeta;
+  summary: {
+    totalInflowUsd: number;
+    totalOutflowUsd: number;
+    balanceUsd: number;
+  };
+};
+
+export function fetchAdminGafLedger(params?: {
+  page?: number;
+  limit?: number;
+  direction?: "inflow" | "outflow";
+} & AdminListDateParams) {
+  return apiRequest<AdminGafLedgerResponse>(`/admin/gaf/ledger${qs(params ?? {})}`);
+}
+
+export type AdminAdvertiserAccount = {
+  id: string;
+  companyName: string;
+  contactEmail: string;
+  billingEmail: string | null;
+  isVerified: boolean;
+  createdAt: string;
+  owner: { id: string; username: string; displayName: string | null } | null;
+  _count: { campaigns: number };
+};
+
+export function fetchAdminAdvertisers() {
+  return apiRequest<AdminAdvertiserAccount[]>("/admin/advertisers");
+}
+
+export function verifyAdminAdvertiser(id: string, isVerified: boolean) {
+  return apiRequest<AdminAdvertiserAccount>(`/admin/advertisers/${id}/verify`, {
+    method: "POST",
+    body: { isVerified },
   });
 }

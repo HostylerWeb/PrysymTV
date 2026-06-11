@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   ContentStatus,
+  DislikeTargetType,
   LikeTargetType,
   SavedItemType,
   VerticalCreatorStatus,
@@ -214,6 +215,30 @@ export class VerticalsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      const dislike = await tx.dislike.findUnique({
+        where: {
+          userId_targetType_targetId: {
+            userId,
+            targetType: DislikeTargetType.vertical_episode,
+            targetId: episodeId,
+          },
+        },
+      });
+      if (dislike) {
+        await tx.dislike.delete({
+          where: {
+            userId_targetType_targetId: {
+              userId,
+              targetType: DislikeTargetType.vertical_episode,
+              targetId: episodeId,
+            },
+          },
+        });
+        await tx.verticalEpisode.update({
+          where: { id: episodeId },
+          data: { dislikesCount: { decrement: 1 } },
+        });
+      }
       await tx.like.create({
         data: {
           userId,
@@ -226,7 +251,84 @@ export class VerticalsService {
         data: { likesCount: { increment: 1 } },
       });
     });
-    return { liked: true };
+    return { liked: true, disliked: false };
+  }
+
+  async toggleEpisodeDislike(userId: string, episodeId: string) {
+    const episode = await this.prisma.verticalEpisode.findUnique({
+      where: { id: episodeId },
+    });
+    if (!episode || episode.status !== ContentStatus.ready) {
+      throw new NotFoundException('Episode not found');
+    }
+
+    const existing = await this.prisma.dislike.findUnique({
+      where: {
+        userId_targetType_targetId: {
+          userId,
+          targetType: DislikeTargetType.vertical_episode,
+          targetId: episodeId,
+        },
+      },
+    });
+
+    if (existing) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.dislike.delete({
+          where: {
+            userId_targetType_targetId: {
+              userId,
+              targetType: DislikeTargetType.vertical_episode,
+              targetId: episodeId,
+            },
+          },
+        });
+        await tx.verticalEpisode.update({
+          where: { id: episodeId },
+          data: { dislikesCount: { decrement: 1 } },
+        });
+      });
+      return { disliked: false };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const like = await tx.like.findUnique({
+        where: {
+          userId_targetType_targetId: {
+            userId,
+            targetType: LikeTargetType.vertical_episode,
+            targetId: episodeId,
+          },
+        },
+      });
+      if (like) {
+        await tx.like.delete({
+          where: {
+            userId_targetType_targetId: {
+              userId,
+              targetType: LikeTargetType.vertical_episode,
+              targetId: episodeId,
+            },
+          },
+        });
+        await tx.verticalEpisode.update({
+          where: { id: episodeId },
+          data: { likesCount: { decrement: 1 } },
+        });
+      }
+      await tx.dislike.create({
+        data: {
+          userId,
+          targetType: DislikeTargetType.vertical_episode,
+          targetId: episodeId,
+        },
+      });
+      await tx.verticalEpisode.update({
+        where: { id: episodeId },
+        data: { dislikesCount: { increment: 1 } },
+      });
+    });
+    return { disliked: true, liked: false };
   }
 
   async toggleEpisodeSave(userId: string, episodeId: string) {

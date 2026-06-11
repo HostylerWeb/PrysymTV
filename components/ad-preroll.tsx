@@ -4,13 +4,15 @@ import { useState, useRef, useEffect } from "react"
 import { X } from "lucide-react"
 import Link from "next/link"
 import {
+  buildAdAttribution,
   fetchServedAd,
   trackAdClick,
   trackAdImpression,
-  type AdAttribution,
   type ServedAd,
 } from "@/lib/api/ads"
+import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
+import { useAuth } from "@/contexts/auth-context"
 
 interface AdPrerollProps {
   onComplete: () => void
@@ -26,13 +28,17 @@ export function AdPreroll({
   videoId,
 }: AdPrerollProps) {
   const showAds = useShouldShowAds()
+  const { user } = useAuth()
+  const { isPlacementEnabled, platformCreatorId } = usePublicAdsConfig()
   const [ad, setAd] = useState<ServedAd | null | undefined>(undefined)
   const [countdown, setCountdown] = useState(15)
   const [canSkip, setCanSkip] = useState(skippable)
   const videoRef = useRef<HTMLVideoElement>(null)
 
+  const placementEnabled = isPlacementEnabled("movie_preroll")
+
   useEffect(() => {
-    if (!showAds) {
+    if (!showAds || !placementEnabled) {
       setAd(null)
       onComplete()
       return
@@ -41,20 +47,21 @@ export function AdPreroll({
       setAd(served)
       if (!served) onComplete()
     })
-  }, [showAds, onComplete])
+  }, [showAds, placementEnabled, onComplete])
 
   useEffect(() => {
     if (!ad) return
     setCountdown(ad.skipAfterSeconds || 15)
-    if (creatorId) {
-      void trackAdImpression({
-        campaignId: ad.id,
-        placement: "movie_preroll",
-        creatorId,
-        videoId,
-      })
-    }
-  }, [ad, creatorId, videoId])
+    const attr = buildAdAttribution({
+      campaignId: ad.id,
+      placement: "movie_preroll",
+      creatorId,
+      platformCreatorId,
+      videoId,
+      viewerUserId: user?.id,
+    })
+    void trackAdImpression(attr)
+  }, [ad, creatorId, platformCreatorId, videoId, user?.id])
 
   useEffect(() => {
     if (ad === undefined) return
@@ -84,12 +91,14 @@ export function AdPreroll({
 
   if (!ad) return null
 
-  const attr: AdAttribution = {
+  const attr = buildAdAttribution({
     campaignId: ad.id,
     placement: "movie_preroll",
     creatorId,
+    platformCreatorId,
     videoId,
-  }
+    viewerUserId: user?.id,
+  })
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
@@ -121,7 +130,7 @@ export function AdPreroll({
           href={ad.clickThroughUrl}
           className="absolute bottom-4 left-4 text-white/80 text-sm underline"
           onClick={() => {
-            if (creatorId) void trackAdClick(attr)
+            void trackAdClick(attr)
           }}
         >
           {ad.title}

@@ -15,6 +15,8 @@ import { Footer } from "@/components/footer"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { useAuth } from "@/contexts/auth-context"
 import { fetchVideo, recordVideoView, toggleVideoLike, toggleVideoSave } from "@/lib/api/videos-feed"
+import { useWatchAnalytics } from "@/lib/hooks/use-watch-analytics"
+import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { saveWatchProgress } from "@/lib/api/history"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
 import { bumpLikeCount } from "@/lib/engagement-count"
@@ -22,6 +24,7 @@ import type { ApiVideoDetail } from "@/lib/api/videos-feed"
 
 type MovieDisplay = {
   id: string
+  creatorId: string
   title: string
   poster: string
   banner: string
@@ -46,6 +49,7 @@ type MovieDisplay = {
 function mapApiToMovie(v: ApiVideoDetail): MovieDisplay {
   return {
     id: v.id,
+    creatorId: v.creator.id,
     title: v.title,
     poster: videoThumbnail(v.thumbnailUrl),
     banner: videoThumbnail(v.thumbnailUrl),
@@ -90,6 +94,8 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
   const videoRef = useRef<HTMLVideoElement>(null)
   const progressSent = useRef(0)
   const viewRecorded = useRef(false)
+  const { isPlacementEnabled } = usePublicAdsConfig()
+  useWatchAnalytics(isPlaying ? movie?.id : undefined, { creatorId: movie?.creatorId })
 
   useEffect(() => {
     viewRecorded.current = false
@@ -140,7 +146,11 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
       setIsAuthModalOpen(true)
       return
     }
-    setShowPreroll(true)
+    if (isPlacementEnabled("movie_preroll")) {
+      setShowPreroll(true)
+    } else {
+      startPlayback()
+    }
   }
 
   const startPlayback = () => {
@@ -171,7 +181,11 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
       <div className="max-w-7xl mx-auto w-full">
         <div className="relative w-full aspect-video md:aspect-[21/9] bg-black overflow-hidden">
           {showPreroll && (
-            <AdPreroll onComplete={startPlayback} videoId={movie.id} />
+            <AdPreroll
+              onComplete={startPlayback}
+              creatorId={movie.creatorId}
+              videoId={movie.id}
+            />
           )}
           {isPlaying ? (
             <>

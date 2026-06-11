@@ -1,12 +1,24 @@
 "use client"
 
 import Link from "next/link"
+import { useMemo, useState } from "react"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminStatusPill } from "@/components/admin/admin-status-pill"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
-import { fetchAdminAdCampaigns } from "@/lib/api/admin"
+import { AdminDeleteButton } from "@/components/admin/admin-confirm-dialog"
+import { AdminDateRangePicker } from "@/components/admin/admin-date-range-picker"
+import { dateRangeQueryParams, type AdminDateRangeValue } from "@/lib/admin/date-range"
+import { deleteAdminAdCampaign, duplicateAdminAdCampaign, fetchAdminAdCampaigns } from "@/lib/api/admin"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -17,7 +29,53 @@ import {
 } from "@/components/ui/table"
 
 export default function AdminAdsPage() {
-  const { data: campaigns, loading, error } = useAdminQuery(fetchAdminAdCampaigns, [])
+  const [status, setStatus] = useState("")
+  const [placement, setPlacement] = useState("")
+  const [search, setSearch] = useState("")
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [dateRange, setDateRange] = useState<AdminDateRangeValue | null>(null)
+
+  const { data: campaigns, loading, error, reload } = useAdminQuery(
+    () =>
+      fetchAdminAdCampaigns({
+        status: status || undefined,
+        placement: placement || undefined,
+        q: search || undefined,
+        ...dateRangeQueryParams(dateRange),
+      }),
+    [status, placement, search, dateRange?.dateFrom, dateRange?.dateTo],
+  )
+
+  const filtered = useMemo(() => {
+    const list = campaigns ?? []
+    if (!search.trim()) return list
+    const q = search.toLowerCase()
+    return list.filter(
+      (c) =>
+        c.title.toLowerCase().includes(q) ||
+        c.advertiserName.toLowerCase().includes(q),
+    )
+  }, [campaigns, search])
+
+  const duplicate = async (id: string) => {
+    setBusyId(id)
+    try {
+      await duplicateAdminAdCampaign(id)
+      await reload()
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const remove = async (id: string) => {
+    setBusyId(id)
+    try {
+      await deleteAdminAdCampaign(id)
+      await reload()
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   return (
     <>
@@ -31,6 +89,47 @@ export default function AdminAdsPage() {
           </Button>
         }
       />
+
+      <AdminDateRangePicker
+        className="mb-4"
+        value={dateRange}
+        onChange={setDateRange}
+        allowClear
+        label="Campaign dates"
+      />
+
+      <div className="flex flex-wrap gap-3 mb-4">
+        <Input
+          placeholder="Search campaigns…"
+          className="max-w-xs"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <Select value={status || "all"} onValueChange={(v) => setStatus(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="paused">Paused</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={placement || "all"} onValueChange={(v) => setPlacement(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Placement" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All placements</SelectItem>
+            <SelectItem value="home_banner">Home banner</SelectItem>
+            <SelectItem value="shorts_interstitial">Shorts interstitial</SelectItem>
+            <SelectItem value="movie_preroll">Movie preroll</SelectItem>
+            <SelectItem value="vertical_episode">Vertical episode</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
       {loading && <p className="text-sm text-muted-foreground mb-4">Loading campaigns…</p>}
@@ -48,7 +147,7 @@ export default function AdminAdsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(campaigns ?? []).map((c) => {
+            {filtered.map((c) => {
               const delivered = c.deliveredImpressions
               const target = c.targetImpressions || 1
               const pct = Math.round((delivered / target) * 100)
@@ -70,10 +169,23 @@ export default function AdminAdsPage() {
                   <TableCell>
                     <AdminStatusPill status={c.status} />
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right space-x-2">
                     <Button asChild size="sm" variant="outline" className="rounded-full">
                       <Link href={`/admin/ads/${c.id}`}>View</Link>
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="rounded-full"
+                      disabled={busyId === c.id}
+                      onClick={() => void duplicate(c.id)}
+                    >
+                      Duplicate
+                    </Button>
+                    <AdminDeleteButton
+                      itemLabel="campaign"
+                      onConfirm={() => remove(c.id)}
+                    />
                   </TableCell>
                 </TableRow>
               )

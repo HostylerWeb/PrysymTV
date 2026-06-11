@@ -6,7 +6,8 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminPagination } from "@/components/admin/admin-pagination"
 import { AdminStatusPill } from "@/components/admin/admin-status-pill"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
-import { fetchAdminPodcastShows } from "@/lib/api/admin"
+import { AdminDeleteButton } from "@/components/admin/admin-confirm-dialog"
+import { deleteAdminPodcastShow, fetchAdminPodcastShows } from "@/lib/api/admin"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -22,7 +23,7 @@ export default function AdminContentPodcastsPage() {
   const [q, setQ] = useState("")
   const [page, setPage] = useState(1)
 
-  const { data, loading, error } = useAdminQuery(
+  const { data, loading, error, reload } = useAdminQuery(
     () => fetchAdminPodcastShows({ page, limit: 20, q: q || undefined }),
     [page, q],
   )
@@ -84,10 +85,14 @@ export default function AdminContentPodcastsPage() {
                 <TableCell>
                   <AdminStatusPill status={s.status} />
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right space-x-2">
                   <Button asChild size="sm" variant="outline" className="rounded-full">
                     <Link href={`/admin/content/podcasts/${s.id}`}>Episodes</Link>
                   </Button>
+                  <AdminDeleteButton
+                    itemLabel="podcast show"
+                    onConfirm={() => void deleteAdminPodcastShow(s.id).then(() => reload())}
+                  />
                 </TableCell>
               </TableRow>
             ))}

@@ -24,7 +24,17 @@ export class PlatformSettingsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getEconomy(): Promise<EconomySettings> {
-    return this.getObject(PLATFORM_SETTING_KEYS.economy, DEFAULT_ECONOMY_SETTINGS);
+    const raw = await this.getObject(
+      PLATFORM_SETTING_KEYS.economy,
+      DEFAULT_ECONOMY_SETTINGS,
+    );
+    const membershipPriceUsd =
+      raw.membershipPriceUsd ?? raw.premiumPriceUsd ?? DEFAULT_ECONOMY_SETTINGS.membershipPriceUsd;
+    return {
+      ...raw,
+      membershipPriceUsd,
+      premiumPriceUsd: membershipPriceUsd,
+    };
   }
 
   async setEconomy(
@@ -32,7 +42,20 @@ export class PlatformSettingsService {
     adminId?: string,
   ): Promise<EconomySettings> {
     const current = await this.getEconomy();
-    return this.setObject(PLATFORM_SETTING_KEYS.economy, { ...current, ...partial }, adminId);
+    const membershipPriceUsd =
+      partial.membershipPriceUsd ?? partial.premiumPriceUsd ?? current.membershipPriceUsd;
+    const next: EconomySettings = {
+      ...current,
+      ...partial,
+      membershipPriceUsd,
+      premiumPriceUsd: membershipPriceUsd,
+    };
+    return this.setObject(PLATFORM_SETTING_KEYS.economy, next, adminId);
+  }
+
+  async getMembershipPriceUsd(): Promise<number> {
+    const economy = await this.getEconomy();
+    return economy.membershipPriceUsd;
   }
 
   async getAds(): Promise<AdsSettings> {

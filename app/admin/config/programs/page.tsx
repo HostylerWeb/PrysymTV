@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Plus, Trash2 } from "lucide-react"
+import { GripVertical, Plus, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
@@ -18,7 +18,30 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-type ProgramRow = Awaited<ReturnType<typeof fetchAdminProgramsConfig>>[number]
+type ProgramRow = Awaited<ReturnType<typeof fetchAdminProgramsConfig>>[number] & {
+  _clientId: string
+}
+
+function newClientId(): string {
+  return `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+function withProgramClientIds(rows: Omit<ProgramRow, "_clientId">[]): ProgramRow[] {
+  return rows.map((row, index) => ({
+    ...row,
+    _clientId: row.slug || `row-${index}`,
+  }))
+}
+
+function reorderPrograms(rows: ProgramRow[], from: number, to: number): ProgramRow[] {
+  if (from === to || from < 0 || to < 0 || from >= rows.length || to >= rows.length) {
+    return rows
+  }
+  const next = [...rows]
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  return next.map((row, index) => ({ ...row, sortOrder: index }))
+}
 
 const VERTICAL_OPTIONS = [
   { value: "general", label: "General" },
@@ -47,9 +70,10 @@ export default function AdminConfigProgramsPage() {
   const [rows, setRows] = useState<ProgramRow[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
 
   useEffect(() => {
-    if (programs) setRows(programs)
+    if (programs) setRows(withProgramClientIds(programs))
   }, [programs])
 
   const updateRow = (index: number, patch: Partial<ProgramRow>) => {
@@ -63,7 +87,7 @@ export default function AdminConfigProgramsPage() {
   }
 
   const removeRow = (index: number) => {
-    onChange(rows.filter((_, i) => i !== index))
+    onChange(rows.filter((_, i) => i !== index).map((row, i) => ({ ...row, sortOrder: i })))
   }
 
   const addRow = () => {
@@ -72,6 +96,7 @@ export default function AdminConfigProgramsPage() {
     onChange([
       ...rows,
       {
+        _clientId: newClientId(),
         slug,
         label,
         vertical: "general",
@@ -83,11 +108,18 @@ export default function AdminConfigProgramsPage() {
     ])
   }
 
+  const handleDrop = (toIndex: number) => {
+    if (dragIndex === null) return
+    onChange(reorderPrograms(rows, dragIndex, toIndex))
+    setDragIndex(null)
+  }
+
   const save = async () => {
     setBusy(true)
     setMessage(null)
     try {
-      await updateAdminProgramsConfig(rows)
+      const payload = rows.map(({ _clientId: _, ...row }) => row)
+      await updateAdminProgramsConfig(payload)
       await reload()
       setMessage("Video categories saved.")
     } catch (e) {
@@ -123,6 +155,7 @@ export default function AdminConfigProgramsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10" />
                 <TableHead>Label</TableHead>
                 <TableHead>Slug</TableHead>
                 <TableHead title="Content pillar used for API filtering (sports, concert, etc.)">
@@ -137,7 +170,28 @@ export default function AdminConfigProgramsPage() {
             </TableHeader>
             <TableBody>
               {rows.map((p, index) => (
-                <TableRow key={`${p.slug}-${index}`}>
+                <TableRow
+                  key={p._clientId}
+                  draggable
+                  onDragStart={() => setDragIndex(index)}
+                  onDragEnd={() => setDragIndex(null)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    handleDrop(index)
+                  }}
+                  className={dragIndex === index ? "opacity-50" : undefined}
+                >
+                  <TableCell className="w-10 px-2">
+                    <button
+                      type="button"
+                      className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground hover:text-foreground"
+                      aria-label="Drag to reorder"
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      <GripVertical className="w-4 h-4" />
+                    </button>
+                  </TableCell>
                   <TableCell>
                     <Input
                       className="h-8 min-w-[120px]"

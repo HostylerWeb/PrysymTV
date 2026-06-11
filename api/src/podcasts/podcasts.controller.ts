@@ -28,6 +28,11 @@ export class PodcastsController {
     return this.podcasts.featuredShow();
   }
 
+  @Get('shows/trending')
+  trendingShows(@Query('limit') limit?: string) {
+    return this.podcasts.trendingShows(limit ? parseInt(limit, 10) : 12);
+  }
+
   @Get('shows/me')
   @UseGuards(JwtAuthGuard)
   myShows(@CurrentUser() user: AuthUserPayload) {
@@ -98,6 +103,12 @@ export class PodcastsController {
   @UseGuards(JwtAuthGuard)
   like(@CurrentUser() user: AuthUserPayload, @Param('id') id: string) {
     return this.podcasts.toggleLike(user.id, id);
+  }
+
+  @Post('episodes/:id/dislike')
+  @UseGuards(JwtAuthGuard)
+  dislike(@CurrentUser() user: AuthUserPayload, @Param('id') id: string) {
+    return this.podcasts.toggleDislike(user.id, id);
   }
 
   @Post('episodes/:id/save')

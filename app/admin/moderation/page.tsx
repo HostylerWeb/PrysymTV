@@ -7,6 +7,8 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminPagination } from "@/components/admin/admin-pagination"
 import { AdminStatusPill } from "@/components/admin/admin-status-pill"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
+import { AdminDateRangePicker } from "@/components/admin/admin-date-range-picker"
+import { useAdminListDateFilter } from "@/components/admin/use-admin-list-date-filter"
 import { fetchAdminReports } from "@/lib/api/admin"
 import { Button } from "@/components/ui/button"
 import {
@@ -37,6 +39,7 @@ export default function AdminModerationPage() {
   const [tab, setTab] = useState("pending")
   const [page, setPage] = useState(1)
   const [targetType, setTargetType] = useState("all")
+  const { dateRange, setDateRange, dateParams, dateDeps } = useAdminListDateFilter()
 
   const { data, loading, error } = useAdminQuery(
     () =>
@@ -44,8 +47,9 @@ export default function AdminModerationPage() {
         page,
         limit: 20,
         status: tab === "all" ? undefined : tab,
+        ...dateParams,
       }),
-    [tab, page],
+    [tab, page, ...dateDeps],
   )
 
   const items = useMemo(() => {
@@ -80,6 +84,13 @@ export default function AdminModerationPage() {
           setTab(t)
           setPage(1)
         }}
+      />
+
+      <AdminDateRangePicker
+        className="mb-4"
+        value={dateRange}
+        onChange={setDateRange}
+        allowClear
       />
 
       <div className="flex flex-wrap gap-3 mb-4">

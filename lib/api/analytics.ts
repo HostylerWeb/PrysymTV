@@ -42,6 +42,7 @@ export type CreatorDashboardResponse = {
     vertical: string | null;
     viewsCount: number;
     likesCount: number;
+    dislikesCount?: number;
     adImpressions30d: number;
     thumbnailUrl: string | null;
   }>;
@@ -52,6 +53,7 @@ export type CreatorDashboardResponse = {
     vertical: string | null;
     viewsCount: number;
     likesCount: number;
+    dislikesCount?: number;
     commentsCount: number;
     adImpressions30d: number;
     thumbnailUrl: string | null;
@@ -77,6 +79,26 @@ export function trackAnalyticsEvents(
     auth: true,
     body: { events },
   });
+}
+
+export function trackView(targetId: string, metadata?: Record<string, unknown>) {
+  return trackAnalyticsEvents([{ eventType: "view", targetId, metadata }]).catch(
+    () => {},
+  );
+}
+
+export function trackWatchTime(
+  targetId: string,
+  seconds: number,
+  metadata?: Record<string, unknown>,
+) {
+  return trackAnalyticsEvents([
+    {
+      eventType: "watch_time",
+      targetId,
+      metadata: { ...metadata, seconds },
+    },
+  ]).catch(() => {});
 }
 
 export function trackShare(targetId: string, metadata?: Record<string, unknown>) {

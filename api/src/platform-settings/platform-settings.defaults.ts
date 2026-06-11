@@ -11,6 +11,7 @@ import type {
 
 export const DEFAULT_ECONOMY_SETTINGS: EconomySettings = {
   minPayoutUsd: 50,
+  membershipPriceUsd: 4.99,
   insiderPriceUsd: 4.99,
   premiumBasicPriceUsd: 2.99,
   premiumPriceUsd: 4.99,
@@ -22,6 +23,7 @@ export const DEFAULT_ADS_SETTINGS: AdsSettings = {
   moviePrerollSkipSeconds: 15,
   shortsSkipSeconds: 5,
   gafRuleKey: 'ad_gaf_allocation',
+  impressionRevenueCpmUsd: 2.5,
   placements: {
     home_banner: true,
     shorts_interstitial: true,

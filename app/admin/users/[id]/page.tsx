@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { use, useState } from "react"
+import { useRouter } from "next/navigation"
 import { AdminConfirmDialog } from "@/components/admin/admin-confirm-dialog"
 import { AdminUserImpactTab } from "@/components/admin/admin-user-impact-tab"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
@@ -10,6 +11,7 @@ import { useAdminQuery } from "@/lib/admin/use-admin-query"
 import {
   adjustAdminUserCoins,
   banAdminUser,
+  deleteAdminUser,
   fetchAdminUser,
   updateAdminPartnerTier,
   verifyAdminUser,
@@ -40,7 +42,9 @@ export default function AdminUserDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = use(params)
+  const router = useRouter()
   const [tab, setTab] = useState("overview")
+  const [deleteBusy, setDeleteBusy] = useState(false)
   const [coinAdjust, setCoinAdjust] = useState("")
   const [partnerTier, setPartnerTier] = useState<string | null>(null)
 
@@ -317,6 +321,25 @@ export default function AdminUserDetailPage({
                 Unban user
               </Button>
             )}
+            <AdminConfirmDialog
+              title={`Delete @${user.username}?`}
+              description="Permanently removes the account and cascades their content. This cannot be undone."
+              confirmLabel="Delete account"
+              onConfirm={async () => {
+                setDeleteBusy(true)
+                try {
+                  await deleteAdminUser(id)
+                  router.push("/admin/users")
+                } finally {
+                  setDeleteBusy(false)
+                }
+              }}
+              trigger={
+                <Button variant="destructive" className="rounded-full w-full mt-3" disabled={deleteBusy}>
+                  Delete account
+                </Button>
+              }
+            />
           </div>
         </TabsContent>
       </Tabs>

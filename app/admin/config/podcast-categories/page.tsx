@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
-import { TaxonomyConfigTable, type TaxonomyRow } from "@/components/admin/taxonomy-config-table"
+import {
+  TaxonomyConfigTable,
+  withClientIds,
+  type TaxonomyRow,
+} from "@/components/admin/taxonomy-config-table"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
 import {
   fetchAdminPodcastCategoriesConfig,
@@ -20,14 +24,15 @@ export default function AdminConfigPodcastCategoriesPage() {
   const [message, setMessage] = useState<string | null>(null)
 
   useEffect(() => {
-    if (categories) setRows(categories)
+    if (categories) setRows(withClientIds(categories))
   }, [categories])
 
   const save = async () => {
     setBusy(true)
     setMessage(null)
     try {
-      await updateAdminPodcastCategoriesConfig(rows)
+      const payload = rows.map(({ _clientId: _, ...row }) => row)
+      await updateAdminPodcastCategoriesConfig(payload)
       await reload()
       setMessage("Podcast categories saved.")
     } catch (e) {

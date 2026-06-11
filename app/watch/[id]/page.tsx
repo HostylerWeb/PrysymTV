@@ -38,6 +38,7 @@ import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-me
 import { bumpLikeCount } from "@/lib/engagement-count"
 import { userAvatarUrl } from "@/lib/user-avatar"
 import { followUser, unfollowUser } from "@/lib/api/users"
+import { useWatchAnalytics } from "@/lib/hooks/use-watch-analytics"
 
 type WatchVideo = {
   id: string
@@ -103,6 +104,7 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
   const [isPlaylistOpen, setIsPlaylistOpen] = useState(false)
   const progressSent = useRef(0)
   const viewRecorded = useRef(false)
+  useWatchAnalytics(video?.id, { creatorId: video?.creatorId })
 
   useEffect(() => {
     viewRecorded.current = false

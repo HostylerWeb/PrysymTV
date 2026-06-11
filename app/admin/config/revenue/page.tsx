@@ -74,8 +74,18 @@ export default function AdminConfigRevenuePage() {
     <>
       <AdminPageHeader
         title="Configuration — Revenue"
-        description="Edit split rules. Total must equal 100%."
+        description="Edit how each revenue type is split between creator, platform, GAF, and creator dev fund. Total must equal 100%."
       />
+
+      <p className="text-sm text-muted-foreground mb-6 rounded-xl border border-border bg-card p-4">
+        These rules control <strong>revenue splits</strong>, not customer-facing prices. Set the
+        Prysym Membership price under{" "}
+        <a href="/admin/config/economy" className="text-primary underline">
+          Configuration → Economy
+        </a>
+        . Rule names may still show legacy dollar amounts in older databases — edit the name on
+        each rule if needed.
+      </p>
 
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="space-y-2">

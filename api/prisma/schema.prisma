@@ -103,6 +103,8 @@ enum LikeTargetType {
 
 enum DislikeTargetType {
   video
+  podcast_episode
+  vertical_episode
 }
 
 enum SavedItemType {
@@ -396,6 +398,7 @@ model User {
   coinsBalance      Int            @default(0) @map("coins_balance")
   premiumTier       PremiumTier    @default(none) @map("premium_tier")
   premiumExpiresAt  DateTime?      @map("premium_expires_at")
+  countryCode       String?        @map("country_code") @db.VarChar(2)
   googleId          String?        @unique @map("google_id")
   appleId           String?        @unique @map("apple_id")
   createdAt         DateTime       @default(now()) @map("created_at")
@@ -453,6 +456,7 @@ model User {
   programVerticals      CreatorProgramVertical[]
   contentAdEvents       ContentAdEvent[]      @relation("CreatorAdEvents")
   verticalSeries        VerticalSeries[]
+  adminAuditLogs        AdminAuditLog[]     @relation("AdminAuditLogs")
 
   @@map("users")
 }
@@ -574,6 +578,7 @@ model Video {
   likesCount      Int           @default(0) @map("likes_count")
   dislikesCount   Int           @default(0) @map("dislikes_count")
   commentsCount   Int           @default(0) @map("comments_count")
+  sharesCount     Int           @default(0) @map("shares_count")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
   creator         User          @relation(fields: [creatorId], references: [id], onDelete: Cascade)
@@ -631,6 +636,7 @@ model PodcastEpisode {
   status          ContentStatus @default(processing)
   playsCount      Int           @default(0) @map("plays_count")
   likesCount      Int           @default(0) @map("likes_count")
+  dislikesCount   Int           @default(0) @map("dislikes_count")
   publishedAt     DateTime?     @map("published_at")
   createdAt       DateTime      @default(now()) @map("created_at")
   show            PodcastShow   @relation(fields: [showId], references: [id], onDelete: Cascade)
@@ -1294,6 +1300,21 @@ model CommunityImpactReport {
   @@map("community_impact_reports")
 }
 
+model AdminAuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  adminId    String   @map("admin_id") @db.Uuid
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+  admin      User     @relation("AdminAuditLogs", fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId, createdAt])
+  @@index([entityType, createdAt])
+  @@map("admin_audit_logs")
+}
+
 model FraudSignal {
   id          String           @id @default(uuid()) @db.Uuid
   userId      String?          @map("user_id") @db.Uuid
@@ -1345,6 +1366,7 @@ model VerticalEpisode {
   status          ContentStatus @default(ready)
   viewsCount      Int           @default(0) @map("views_count")
   likesCount      Int           @default(0) @map("likes_count")
+  dislikesCount   Int           @default(0) @map("dislikes_count")
   createdAt       DateTime      @default(now()) @map("created_at")
   series          VerticalSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 

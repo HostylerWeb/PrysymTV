@@ -1,73 +1,189 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import {
   AnalyticsEventType,
   Prisma,
+  RevenueSourceType,
   UserRole,
 } from '@prisma/client';
 import { CreatorsBalanceService } from '../billing/creators-balance.service';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RevenueSplitService } from '../revenue/revenue-split.service';
 import { TrackEventsDto } from './dto/track-events.dto';
 import { TrackContentAdDto } from './dto/track-content-ad.dto';
 
 @Injectable()
 export class AnalyticsService {
+  private platformCreatorIdCache: string | null | undefined;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly creatorsBalance: CreatorsBalanceService,
+    private readonly platformSettings: PlatformSettingsService,
+    private readonly revenueSplit: RevenueSplitService,
   ) {}
 
-  async trackBatch(userId: string | undefined, dto: TrackEventsDto) {
+  async trackBatch(
+    userId: string | undefined,
+    dto: TrackEventsDto,
+    countryCode?: string,
+  ) {
     if (!dto.events.length) return { success: true, recorded: 0 };
+
+    if (userId && countryCode) {
+      await this.prisma.user.updateMany({
+        where: { id: userId, countryCode: null },
+        data: { countryCode: countryCode.toUpperCase().slice(0, 2) },
+      });
+    }
 
     await this.prisma.analyticsEvent.createMany({
       data: dto.events.map((e) => ({
         eventType: e.eventType,
         userId: userId ?? null,
         targetId: e.targetId ?? null,
-        metadata: (e.metadata ?? {}) as Prisma.InputJsonValue,
+        metadata: {
+          ...(e.metadata ?? {}),
+          ...(countryCode ? { countryCode: countryCode.toUpperCase().slice(0, 2) } : {}),
+        } as Prisma.InputJsonValue,
       })),
     });
 
+    for (const e of dto.events) {
+      if (e.eventType === 'share' && e.targetId) {
+        await this.prisma.video
+          .update({
+            where: { id: e.targetId },
+            data: { sharesCount: { increment: 1 } },
+          })
+          .catch(() => {});
+      }
+    }
+
     return { success: true, recorded: dto.events.length };
+  }
+
+  async recordViewEvent(params: {
+    videoId: string;
+    creatorId: string;
+    userId?: string;
+    countryCode?: string;
+  }) {
+    await this.prisma.analyticsEvent.create({
+      data: {
+        eventType: 'view',
+        userId: params.userId ?? null,
+        targetId: params.videoId,
+        metadata: {
+          creatorId: params.creatorId,
+          ...(params.countryCode
+            ? { countryCode: params.countryCode.toUpperCase().slice(0, 2) }
+            : {}),
+        },
+      },
+    });
+  }
+
+  async resolvePlatformCreatorId(): Promise<string> {
+    if (this.platformCreatorIdCache !== undefined) {
+      if (!this.platformCreatorIdCache) {
+        throw new NotFoundException('Platform creator not configured');
+      }
+      return this.platformCreatorIdCache;
+    }
+    const admin = await this.prisma.user.findFirst({
+      where: { role: UserRole.admin },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    this.platformCreatorIdCache = admin?.id ?? null;
+    if (!admin) throw new NotFoundException('Platform creator not configured');
+    return admin.id;
   }
 
   async trackContentAd(
     dto: TrackContentAdDto,
     eventType: 'ad_impression' | 'ad_click',
   ) {
-    await this.prisma.$transaction([
-      this.prisma.contentAdEvent.create({
+    const adsConfig = await this.platformSettings.getAds();
+    const creatorId = dto.creatorId ?? (await this.resolvePlatformCreatorId());
+
+    const campaign = await this.prisma.adCampaign.findUnique({
+      where: { id: dto.campaignId },
+    });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+
+    const ruleKey = campaign.revenueRuleKey || adsConfig.gafRuleKey;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.contentAdEvent.create({
         data: {
           campaignId: dto.campaignId,
-          creatorId: dto.creatorId,
+          creatorId,
           videoId: dto.videoId,
           placement: dto.placement,
           eventType,
           viewerUserId: dto.viewerUserId,
         },
-      }),
-      this.prisma.analyticsEvent.create({
+      });
+      await tx.analyticsEvent.create({
         data: {
           eventType,
           userId: dto.viewerUserId ?? null,
           targetId: dto.campaignId,
           metadata: {
-            creatorId: dto.creatorId,
+            creatorId,
             videoId: dto.videoId,
             placement: dto.placement,
           },
         },
-      }),
-      this.prisma.adCampaign.update({
-        where: { id: dto.campaignId },
-        data:
-          eventType === AnalyticsEventType.ad_impression
-            ? { deliveredImpressions: { increment: 1 } }
-            : { clicks: { increment: 1 } },
-      }),
-    ]);
+      });
+      if (eventType === 'ad_click') {
+        await tx.adCampaign.update({
+          where: { id: dto.campaignId },
+          data: { clicks: { increment: 1 } },
+        });
+      }
+    });
+
+    if (eventType === 'ad_impression' && adsConfig.impressionRevenueCpmUsd > 0) {
+      const gross = new Prisma.Decimal(adsConfig.impressionRevenueCpmUsd).div(1000);
+      const platformId = await this.resolvePlatformCreatorId();
+      await this.revenueSplit.distributeAndPersist({
+        ruleKey,
+        sourceType: RevenueSourceType.ad_impression,
+        sourceId: dto.campaignId,
+        grossAmountUsd: gross,
+        creatorId: creatorId !== platformId ? creatorId : undefined,
+        metadata: {
+          placement: dto.placement,
+          videoId: dto.videoId,
+          campaignId: dto.campaignId,
+        },
+      });
+    }
 
     return { success: true };
+  }
+
+  private async completeCampaignIfNeeded(campaignId: string, cpmUsd: number) {
+    const campaign = await this.prisma.adCampaign.findUnique({
+      where: { id: campaignId },
+    });
+    if (!campaign || campaign.status !== 'active') return;
+
+    const spent = new Prisma.Decimal(cpmUsd)
+      .div(1000)
+      .mul(campaign.deliveredImpressions);
+    const hitTarget = campaign.deliveredImpressions >= campaign.targetImpressions;
+    const overBudget = spent.gte(campaign.budgetUsd);
+
+    if (hitTarget || overBudget) {
+      await this.prisma.adCampaign.update({
+        where: { id: campaignId },
+        data: { status: 'completed' },
+      });
+    }
   }
 
   private periodStart(days: number) {
@@ -86,26 +202,59 @@ export class AnalyticsService {
       select: {
         partnerTier: true,
         programVerticals: { select: { vertical: true } },
-        _count: { select: { followers: true, videos: true } },
+        _count: { select: { followers: true } },
       },
     });
 
-    const videos = await this.prisma.video.findMany({
-      where: { creatorId, status: 'ready' },
-      select: {
-        id: true,
-        title: true,
-        type: true,
-        vertical: true,
-        viewsCount: true,
-        likesCount: true,
-        commentsCount: true,
-        thumbnailUrl: true,
-        createdAt: true,
-      },
-      orderBy: { viewsCount: 'desc' },
-      take: 50,
-    });
+    const [videos, podcastEpisodes, verticalEpisodes] = await Promise.all([
+      this.prisma.video.findMany({
+        where: { creatorId, status: 'ready' },
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          vertical: true,
+          viewsCount: true,
+          likesCount: true,
+          dislikesCount: true,
+          commentsCount: true,
+          sharesCount: true,
+          thumbnailUrl: true,
+          createdAt: true,
+        },
+        orderBy: { viewsCount: 'desc' },
+        take: 50,
+      }),
+      this.prisma.podcastEpisode.findMany({
+        where: { creatorId, status: 'ready' },
+        select: {
+          id: true,
+          title: true,
+          playsCount: true,
+          likesCount: true,
+          dislikesCount: true,
+          coverUrl: true,
+          createdAt: true,
+        },
+        orderBy: { playsCount: 'desc' },
+        take: 30,
+      }),
+      this.prisma.verticalEpisode.findMany({
+        where: { series: { creatorId } },
+        select: {
+          id: true,
+          title: true,
+          viewsCount: true,
+          likesCount: true,
+          dislikesCount: true,
+          thumbnailUrl: true,
+          createdAt: true,
+          series: { select: { title: true } },
+        },
+        orderBy: { viewsCount: 'desc' },
+        take: 30,
+      }),
+    ]);
 
     const videoIds = videos.map((v) => v.id);
 
@@ -117,36 +266,23 @@ export class AnalyticsService {
       watchEvents30d,
       balanceSum,
       gifts30d,
+      likes30d,
+      comments30d,
       latestImpact,
       perVideoAds,
+      gafInflow,
     ] = await Promise.all([
       this.prisma.contentAdEvent.count({
-        where: {
-          creatorId,
-          eventType: 'ad_impression',
-          createdAt: { gte: since24h },
-        },
+        where: { creatorId, eventType: 'ad_impression', createdAt: { gte: since24h } },
       }),
       this.prisma.contentAdEvent.count({
-        where: {
-          creatorId,
-          eventType: 'ad_impression',
-          createdAt: { gte: since7d },
-        },
+        where: { creatorId, eventType: 'ad_impression', createdAt: { gte: since7d } },
       }),
       this.prisma.contentAdEvent.count({
-        where: {
-          creatorId,
-          eventType: 'ad_impression',
-          createdAt: { gte: since30d },
-        },
+        where: { creatorId, eventType: 'ad_impression', createdAt: { gte: since30d } },
       }),
       this.prisma.contentAdEvent.count({
-        where: {
-          creatorId,
-          eventType: 'ad_click',
-          createdAt: { gte: since30d },
-        },
+        where: { creatorId, eventType: 'ad_click', createdAt: { gte: since30d } },
       }),
       this.prisma.analyticsEvent.findMany({
         where: {
@@ -162,6 +298,19 @@ export class AnalyticsService {
       }),
       this.prisma.viewerSupportTransaction.count({
         where: { receiverId: creatorId, createdAt: { gte: since30d } },
+      }),
+      this.prisma.like.count({
+        where: {
+          createdAt: { gte: since30d },
+          OR: [
+            { targetType: 'video', targetId: { in: videoIds } },
+            { targetType: 'podcast_episode', targetId: { in: podcastEpisodes.map((e) => e.id) } },
+            { targetType: 'vertical_episode', targetId: { in: verticalEpisodes.map((e) => e.id) } },
+          ],
+        },
+      }),
+      this.prisma.comment.count({
+        where: { userId: creatorId, createdAt: { gte: since30d } },
       }),
       this.prisma.creatorImpactSnapshot.findFirst({
         where: { creatorId },
@@ -179,6 +328,10 @@ export class AnalyticsService {
             _count: { _all: true },
           })
         : Promise.resolve([]),
+      this.prisma.gafLedgerEntry.aggregate({
+        where: { direction: 'inflow', createdAt: { gte: since30d } },
+        _sum: { amountUsd: true },
+      }),
     ]);
 
     const countViews = async (since: Date) => {
@@ -205,15 +358,56 @@ export class AnalyticsService {
     }, 0);
 
     const adByVideo = new Map(
-      perVideoAds
-        .filter((r) => r.videoId)
-        .map((r) => [r.videoId!, r._count._all]),
+      perVideoAds.filter((r) => r.videoId).map((r) => [r.videoId!, r._count._all]),
     );
 
     const availableBalance =
       await this.creatorsBalance.computeAvailableBalance(creatorId);
-
     const earnings30d = await this.sumLedgerCredits(creatorId, since30d);
+
+    const allContent = [
+      ...videos.map((v) => ({
+        id: v.id,
+        title: v.title,
+        type: v.type,
+        vertical: v.vertical,
+        viewsCount: v.viewsCount,
+        likesCount: v.likesCount,
+        dislikesCount: v.dislikesCount,
+        commentsCount: v.commentsCount,
+        adImpressions30d: adByVideo.get(v.id) ?? 0,
+        thumbnailUrl: v.thumbnailUrl,
+        createdAt: v.createdAt,
+      })),
+      ...podcastEpisodes.map((e) => ({
+        id: e.id,
+        title: e.title,
+        type: 'podcast_episode',
+        vertical: 'podcast' as const,
+        viewsCount: e.playsCount,
+        likesCount: e.likesCount,
+        dislikesCount: e.dislikesCount,
+        commentsCount: 0,
+        adImpressions30d: 0,
+        thumbnailUrl: e.coverUrl,
+        createdAt: e.createdAt,
+      })),
+      ...verticalEpisodes.map((e) => ({
+        id: e.id,
+        title: `${e.series.title} — ${e.title}`,
+        type: 'vertical_episode',
+        vertical: null,
+        viewsCount: e.viewsCount,
+        likesCount: e.likesCount,
+        dislikesCount: e.dislikesCount,
+        commentsCount: 0,
+        adImpressions30d: 0,
+        thumbnailUrl: e.thumbnailUrl,
+        createdAt: e.createdAt,
+      })),
+    ].sort((a, b) => b.viewsCount - a.viewsCount);
+
+    const computedImpactUsd = Number(gafInflow._sum.amountUsd ?? 0);
 
     return {
       partnerTier: user?.partnerTier ?? 'standard',
@@ -224,7 +418,7 @@ export class AnalyticsService {
         views30d,
         watchHours30d: Math.round(watchHours30d * 10) / 10,
         subscribers: user?._count.followers ?? 0,
-        engagement30d: gifts30d,
+        engagement30d: likes30d + comments30d + gifts30d,
         retentionRate: latestImpact?.retentionRate ?? null,
       },
       advertising: {
@@ -252,31 +446,13 @@ export class AnalyticsService {
       communityImpact: {
         jobsSupported: latestImpact?.jobsSupported ?? 0,
         businessesFunded: latestImpact?.businessesFunded ?? 0,
-        dollarsInvested: latestImpact?.dollarsInvested?.toString() ?? '0',
+        dollarsInvested: (
+          Number(latestImpact?.dollarsInvested ?? 0) + computedImpactUsd
+        ).toFixed(2),
         workforceOpportunities: latestImpact?.workforceOpportunities ?? 0,
       },
-      topContent: videos.slice(0, 5).map((v) => ({
-        id: v.id,
-        title: v.title,
-        type: v.type,
-        vertical: v.vertical,
-        viewsCount: v.viewsCount,
-        likesCount: v.likesCount,
-        adImpressions30d: adByVideo.get(v.id) ?? 0,
-        thumbnailUrl: v.thumbnailUrl,
-      })),
-      content: videos.map((v) => ({
-        id: v.id,
-        title: v.title,
-        type: v.type,
-        vertical: v.vertical,
-        viewsCount: v.viewsCount,
-        likesCount: v.likesCount,
-        commentsCount: v.commentsCount,
-        adImpressions30d: adByVideo.get(v.id) ?? 0,
-        thumbnailUrl: v.thumbnailUrl,
-        createdAt: v.createdAt,
-      })),
+      topContent: allContent.slice(0, 5),
+      content: allContent,
     };
   }
 

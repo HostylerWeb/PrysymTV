@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ContentStatus, StreamStatus, VideoType } from '@prisma/client';
+import { AnalyticsEventType, ContentStatus, StreamStatus, VideoType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { mapVideoCard, VIDEO_CARD_SELECT } from '../common/mappers/content.mapper';
 
@@ -192,6 +192,45 @@ export class FeedService {
 
   async trending(page = 1, limit = 20) {
     const skip = (page - 1) * limit;
+    const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const grouped = await this.prisma.analyticsEvent.groupBy({
+      by: ['targetId'],
+      where: {
+        eventType: AnalyticsEventType.view,
+        createdAt: { gte: since7d },
+        targetId: { not: null },
+      },
+      _count: { _all: true },
+      orderBy: { _count: { targetId: 'desc' } },
+    });
+
+    const rankedIds = grouped
+      .map((row) => row.targetId)
+      .filter((id): id is string => !!id);
+
+    if (rankedIds.length > 0) {
+      const pageIds = rankedIds.slice(skip, skip + limit);
+      const videos = await this.prisma.video.findMany({
+        where: {
+          id: { in: pageIds },
+          status: ContentStatus.ready,
+          visibility: 'public',
+        },
+        select: VIDEO_CARD_SELECT,
+      });
+      const byId = new Map(videos.map((video) => [video.id, video]));
+      const items = pageIds
+        .map((id) => byId.get(id))
+        .filter((video): video is NonNullable<typeof video> => !!video)
+        .map(mapVideoCard);
+
+      return {
+        items,
+        meta: { page, limit, total: rankedIds.length },
+      };
+    }
+
     const [items, total] = await Promise.all([
       this.prisma.video.findMany({
         where: { status: ContentStatus.ready, visibility: 'public' },

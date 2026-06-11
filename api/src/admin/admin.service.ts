@@ -4,6 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AdCampaignStatus,
+  AnalyticsEventType,
   ApplicationStatus,
   ContentStatus,
   ContentVertical,
@@ -15,12 +17,19 @@ import {
   ReportTargetType,
   StreamStatus,
   StreamerStatus,
+  UserRole,
   VerticalCreatorStatus,
   VideoType,
 } from '@prisma/client';
+import { AdvertisersService } from '../advertisers/advertisers.service';
+import { GafService } from '../gaf/gaf.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
+import { AuditLogService } from './audit-log.service';
+import { AdCampaignQueryDto } from './dto/ad-campaign-query.dto';
 import { CreateAdCampaignDto } from './dto/create-ad-campaign.dto';
+import { UpdateAdCampaignDto } from './dto/update-ad-campaign.dto';
 import { AdminListQueryDto } from './dto/admin-list-query.dto';
 import { AdminReportAction } from './dto/review-report.dto';
 import { AdminPayoutAction } from './dto/process-payout.dto';
@@ -33,6 +42,11 @@ import { UpdateScorecardConfigDto } from './dto/update-scorecard-config.dto';
 import { UpsertCoinPackageDto } from './dto/upsert-coin-package.dto';
 import { UpsertGiftCatalogDto } from './dto/upsert-gift-catalog.dto';
 import { UpdateUserImpactDto } from './dto/update-user-impact.dto';
+import {
+  type AdminDateRangeInput,
+  createdAtFilter,
+  resolveAdminDateRange,
+} from './admin-date-range.util';
 import type {
   AdsSettings,
   AnalyticsSettings,
@@ -46,6 +60,10 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly platformSettings: PlatformSettingsService,
+    private readonly auditLog: AuditLogService,
+    private readonly advertisers: AdvertisersService,
+    private readonly gaf: GafService,
+    private readonly storage: StorageService,
   ) {}
 
   private paginate(page = 1, limit = 20) {
@@ -65,7 +83,8 @@ export class AdminService {
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     const [
-      dauRows,
+      analyticsDauRows,
+      watchDauRows,
       liveStreams,
       revenueAgg,
       pendingReports,
@@ -75,6 +94,11 @@ export class AdminService {
     ] = await Promise.all([
       this.prisma.analyticsEvent.findMany({
         where: { createdAt: { gte: since24h }, userId: { not: null } },
+        distinct: ['userId'],
+        select: { userId: true },
+      }),
+      this.prisma.watchHistory.findMany({
+        where: { updatedAt: { gte: since24h } },
         distinct: ['userId'],
         select: { userId: true },
       }),
@@ -104,8 +128,16 @@ export class AdminService {
       new Prisma.Decimal(0),
     );
 
+    const dauUserIds = new Set<string>();
+    for (const row of analyticsDauRows) {
+      if (row.userId) dauUserIds.add(row.userId);
+    }
+    for (const row of watchDauRows) {
+      dauUserIds.add(row.userId);
+    }
+
     return {
-      dau: dauRows.length,
+      dau: dauUserIds.size,
       liveNow: liveStreams.length,
       liveViewers: liveStreams.reduce((s, x) => s + x.viewerCount, 0),
       revenueTodayUsd: Number(revenueAgg._sum.grossAmountUsd ?? 0),
@@ -211,6 +243,8 @@ export class AdminService {
     if (query.status && query.status !== 'all') {
       where.status = query.status as ReportStatus;
     }
+    const createdAt = createdAtFilter(query);
+    if (createdAt) where.createdAt = createdAt;
 
     const [items, total] = await Promise.all([
       this.prisma.report.findMany({
@@ -348,6 +382,8 @@ export class AdminService {
     if (query.type && query.type !== 'all') {
       where.role = query.type as Prisma.EnumUserRoleFilter['equals'];
     }
+    const createdAt = createdAtFilter(query);
+    if (createdAt) where.createdAt = createdAt;
 
     const [items, total] = await Promise.all([
       this.prisma.user.findMany({
@@ -829,6 +865,8 @@ export class AdminService {
     if (query.status && query.status !== 'all') {
       where.status = query.status as PayoutStatus;
     }
+    const createdAt = createdAtFilter(query);
+    if (createdAt) where.createdAt = createdAt;
 
     const [items, total] = await Promise.all([
       this.prisma.creatorPayout.findMany({
@@ -941,6 +979,8 @@ export class AdminService {
   async listStreamHistory(query: AdminListQueryDto) {
     const { page, limit, skip, take } = this.paginate(query.page, query.limit);
     const where: Prisma.StreamWhereInput = { status: StreamStatus.ended };
+    const endedAt = createdAtFilter(query);
+    if (endedAt) where.endedAt = endedAt;
 
     const [items, total] = await Promise.all([
       this.prisma.stream.findMany({
@@ -977,9 +1017,13 @@ export class AdminService {
 
   async listRevenueLedger(query: AdminListQueryDto) {
     const { page, limit, skip, take } = this.paginate(query.page, query.limit);
+    const where: Prisma.RevenueLedgerBatchWhereInput = {};
+    const createdAt = createdAtFilter(query);
+    if (createdAt) where.createdAt = createdAt;
 
     const [items, total] = await Promise.all([
       this.prisma.revenueLedgerBatch.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         skip,
         take,
@@ -992,7 +1036,7 @@ export class AdminService {
           createdAt: true,
         },
       }),
-      this.prisma.revenueLedgerBatch.count(),
+      this.prisma.revenueLedgerBatch.count({ where }),
     ]);
 
     return {
@@ -1008,10 +1052,8 @@ export class AdminService {
     };
   }
 
-  async getAnalyticsTimeseries(range: '7d' | '30d' | '90d' = '30d') {
-    const days = range === '7d' ? 7 : range === '90d' ? 90 : 30;
-    const buckets = this.dayBuckets(days);
-    const start = new Date(buckets[0]);
+  async getAnalyticsTimeseries(query: AdminDateRangeInput = {}) {
+    const { start, end, label, buckets } = resolveAdminDateRange(query);
 
     const [
       analyticsEvents,
@@ -1019,40 +1061,32 @@ export class AdminService {
       revenueBatches,
       endedStreams,
       premiumSubscribers,
-      topContent,
     ] = await Promise.all([
       this.prisma.analyticsEvent.findMany({
-        where: { createdAt: { gte: start }, userId: { not: null } },
+        where: {
+          createdAt: { gte: start, lte: end },
+          userId: { not: null },
+        },
         select: { userId: true, createdAt: true },
       }),
       this.prisma.user.findMany({
-        where: { createdAt: { gte: start } },
+        where: { createdAt: { gte: start, lte: end } },
         select: { createdAt: true },
       }),
       this.prisma.revenueLedgerBatch.findMany({
-        where: { createdAt: { gte: start } },
+        where: { createdAt: { gte: start, lte: end } },
         select: { createdAt: true, sourceType: true, grossAmountUsd: true },
       }),
       this.prisma.stream.findMany({
-        where: { endedAt: { gte: start } },
+        where: { endedAt: { gte: start, lte: end } },
         select: { startedAt: true, endedAt: true, createdAt: true },
       }),
       this.prisma.user.count({
         where: { premiumExpiresAt: { gt: new Date() } },
       }),
-      this.prisma.video.findMany({
-        where: { status: ContentStatus.ready },
-        orderBy: { viewsCount: 'desc' },
-        take: 8,
-        select: {
-          id: true,
-          title: true,
-          viewsCount: true,
-          type: true,
-          creator: { select: { username: true } },
-        },
-      }),
     ]);
+
+    const topContent = await this.topContentInPeriod(start, 8, end);
 
     const dauByDay = new Map<string, Set<string>>();
     for (const b of buckets) dauByDay.set(b, new Set());
@@ -1094,7 +1128,9 @@ export class AdminService {
     }
 
     return {
-      range,
+      range: label,
+      dateFrom: buckets[0],
+      dateTo: buckets[buckets.length - 1],
       buckets,
       series: {
         dau: buckets.map((b) => dauByDay.get(b)?.size ?? 0),
@@ -1112,13 +1148,7 @@ export class AdminService {
           totalUsd: Math.round(totalUsd * 100) / 100,
         }))
         .sort((a, b) => b.totalUsd - a.totalUsd),
-      topContent: topContent.map((v) => ({
-        id: v.id,
-        title: v.title,
-        views: v.viewsCount,
-        type: v.type,
-        creator: `@${v.creator.username}`,
-      })),
+      topContent,
       premiumSubscribers,
     };
   }
@@ -1759,6 +1789,8 @@ export class AdminService {
   async listGiftActivity(query: AdminListQueryDto) {
     const { page, limit, skip, take } = this.paginate(query.page, query.limit);
     const where: Prisma.GiftWhereInput = {};
+    const createdAt = createdAtFilter(query);
+    if (createdAt) where.createdAt = createdAt;
 
     const [items, total] = await Promise.all([
       this.prisma.gift.findMany({
@@ -1802,6 +1834,8 @@ export class AdminService {
       const q = query.q.trim();
       where.user = { username: { contains: q, mode: 'insensitive' } };
     }
+    const createdAt = createdAtFilter(query);
+    if (createdAt) where.createdAt = createdAt;
 
     const [items, total] = await Promise.all([
       this.prisma.transaction.findMany({
@@ -1828,10 +1862,40 @@ export class AdminService {
     };
   }
 
-  listAdCampaigns() {
-    return this.prisma.adCampaign.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
+  async listAdCampaigns(query: AdCampaignQueryDto = {}) {
+    const { page, limit, skip, take } = this.paginate(query.page, query.limit);
+    const where: Prisma.AdCampaignWhereInput = {};
+
+    if (query.status) where.status = query.status;
+    if (query.placement) where.placement = query.placement;
+    if (query.q?.trim()) {
+      const q = query.q.trim();
+      where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { advertiserName: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    if (query.dateFrom || query.dateTo) {
+      where.startsAt = {};
+      if (query.dateFrom) {
+        where.startsAt.gte = new Date(query.dateFrom);
+      }
+      if (query.dateTo) {
+        where.endsAt = { lte: new Date(query.dateTo) };
+      }
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.adCampaign.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.adCampaign.count({ where }),
+    ]);
+
+    return { items, meta: { page, limit, total } };
   }
 
   async getAdCampaign(id: string) {
@@ -1857,7 +1921,7 @@ export class AdminService {
     });
   }
 
-  async updateAdCampaignStatus(id: string, status: import('@prisma/client').AdCampaignStatus) {
+  async updateAdCampaignStatus(id: string, status: AdCampaignStatus) {
     try {
       return await this.prisma.adCampaign.update({
         where: { id },
@@ -1866,6 +1930,551 @@ export class AdminService {
     } catch {
       throw new NotFoundException('Campaign not found');
     }
+  }
+
+  async updateAdCampaign(
+    id: string,
+    dto: UpdateAdCampaignDto,
+    adminId: string,
+  ) {
+    const existing = await this.prisma.adCampaign.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Campaign not found');
+
+    const data: Prisma.AdCampaignUpdateInput = {};
+    if (dto.advertiserAccountId !== undefined) {
+      data.advertiserAccount = dto.advertiserAccountId
+        ? { connect: { id: dto.advertiserAccountId } }
+        : { disconnect: true };
+    }
+    if (dto.advertiserName !== undefined) data.advertiserName = dto.advertiserName.trim();
+    if (dto.title !== undefined) data.title = dto.title.trim();
+    if (dto.mediaUrl !== undefined) data.mediaUrl = dto.mediaUrl;
+    if (dto.clickThroughUrl !== undefined) data.clickThroughUrl = dto.clickThroughUrl;
+    if (dto.placement !== undefined) data.placement = dto.placement;
+    if (dto.targetImpressions !== undefined) data.targetImpressions = dto.targetImpressions;
+    if (dto.budgetUsd !== undefined) data.budgetUsd = dto.budgetUsd;
+    if (dto.startsAt !== undefined) data.startsAt = new Date(dto.startsAt);
+    if (dto.endsAt !== undefined) data.endsAt = new Date(dto.endsAt);
+    if (dto.status !== undefined) data.status = dto.status;
+    if (dto.revenueRuleKey !== undefined) data.revenueRuleKey = dto.revenueRuleKey;
+
+    const updated = await this.prisma.adCampaign.update({
+      where: { id },
+      data,
+    });
+
+    await this.auditLog.log({
+      adminId,
+      action: 'update',
+      entityType: 'ad_campaign',
+      entityId: id,
+    });
+
+    return updated;
+  }
+
+  async duplicateAdCampaign(id: string, adminId: string) {
+    const original = await this.prisma.adCampaign.findUnique({ where: { id } });
+    if (!original) throw new NotFoundException('Campaign not found');
+
+    const copy = await this.prisma.adCampaign.create({
+      data: {
+        advertiserAccountId: original.advertiserAccountId,
+        revenueRuleKey: original.revenueRuleKey,
+        advertiserName: original.advertiserName,
+        title: `${original.title} (copy)`,
+        mediaUrl: original.mediaUrl,
+        clickThroughUrl: original.clickThroughUrl,
+        placement: original.placement,
+        targetImpressions: original.targetImpressions,
+        budgetUsd: original.budgetUsd,
+        status: AdCampaignStatus.draft,
+        startsAt: original.startsAt,
+        endsAt: original.endsAt,
+      },
+    });
+
+    await this.auditLog.log({
+      adminId,
+      action: 'duplicate',
+      entityType: 'ad_campaign',
+      entityId: copy.id,
+      metadata: { sourceCampaignId: id },
+    });
+
+    return copy;
+  }
+
+  async uploadAdMediaInit(body: { mimeType: string; fileName?: string }) {
+    if (!body.mimeType?.trim()) {
+      throw new BadRequestException('mimeType is required');
+    }
+    const target = await this.storage.createAdMediaUploadTarget(
+      body.mimeType.trim(),
+      body.fileName,
+    );
+    return {
+      objectKey: target.objectKey,
+      uploadUrl: target.uploadUrl,
+      uploadMethod: target.uploadMethod,
+      uploadHeaders: target.uploadHeaders,
+      expiresIn: target.expiresIn,
+      publicUrl: this.storage.getPublicUrl(target.objectKey),
+    };
+  }
+
+  async getAnalyticsRevenue(query: AdminDateRangeInput = {}) {
+    const { start, end, label, buckets } = resolveAdminDateRange(query);
+
+    const batches = await this.prisma.revenueLedgerBatch.findMany({
+      where: { createdAt: { gte: start, lte: end } },
+      select: { createdAt: true, sourceType: true, grossAmountUsd: true },
+    });
+
+    const revenueByDay = new Map(buckets.map((b) => [b, 0]));
+    const revenueSourceTotals = new Map<string, number>();
+    for (const batch of batches) {
+      const key = this.dateKey(batch.createdAt);
+      const usd = Number(batch.grossAmountUsd);
+      if (revenueByDay.has(key)) {
+        revenueByDay.set(key, (revenueByDay.get(key) ?? 0) + usd);
+      }
+      const src = String(batch.sourceType);
+      revenueSourceTotals.set(src, (revenueSourceTotals.get(src) ?? 0) + usd);
+    }
+
+    const totalUsd = [...revenueByDay.values()].reduce((s, v) => s + v, 0);
+
+    return {
+      range: label,
+      dateFrom: buckets[0],
+      dateTo: buckets[buckets.length - 1],
+      buckets,
+      revenueUsd: buckets.map((b) =>
+        Math.round((revenueByDay.get(b) ?? 0) * 100) / 100,
+      ),
+      bySource: [...revenueSourceTotals.entries()]
+        .map(([sourceType, amountUsd]) => ({
+          sourceType,
+          totalUsd: Math.round(amountUsd * 100) / 100,
+        }))
+        .sort((a, b) => b.totalUsd - a.totalUsd),
+      totalUsd: Math.round(totalUsd * 100) / 100,
+    };
+  }
+
+  async getAnalyticsContent(query: AdminDateRangeInput = {}) {
+    const { start, end, label } = resolveAdminDateRange(query);
+    const topDisliked = await this.topDislikedInPeriod(start, 20, end);
+    return { range: label, topDisliked };
+  }
+
+  async exportAnalyticsCsv(query: AdminDateRangeInput = {}) {
+    const { start, end, label } = resolveAdminDateRange(query);
+    const [revenue, topContent, timeseries] = await Promise.all([
+      this.getAnalyticsRevenue(query),
+      this.topContentInPeriod(start, 20, end),
+      this.getAnalyticsTimeseries(query),
+    ]);
+
+    const lines: string[] = [
+      'section,metric,value',
+      `overview,range,${label}`,
+      `overview,premium_subscribers,${timeseries.premiumSubscribers}`,
+    ];
+
+    for (let i = 0; i < revenue.buckets.length; i++) {
+      lines.push(
+        `revenue,${revenue.buckets[i]},${revenue.revenueUsd[i]}`,
+      );
+    }
+    for (const row of revenue.bySource) {
+      lines.push(`revenue_source,${row.sourceType},${row.totalUsd}`);
+    }
+    for (const row of topContent) {
+      lines.push(
+        `top_content,${this.csvEscape(row.title)},${row.views}`,
+      );
+    }
+
+    return lines.join('\n');
+  }
+
+  async listAuditLogs(query: AdminListQueryDto & { entityType?: string }) {
+    const [total, items] = await this.auditLog.list(query);
+    const page = Math.max(1, query.page ?? 1);
+    const limit = Math.min(100, Math.max(1, query.limit ?? 30));
+    return {
+      items: items.map((row) => ({
+        id: row.id,
+        action: row.action,
+        entityType: row.entityType,
+        entityId: row.entityId,
+        metadata: row.metadata,
+        admin: {
+          username: row.admin.username,
+          displayName: row.admin.displayName,
+        },
+        createdAt: row.createdAt.toISOString(),
+      })),
+      meta: { page, limit, total },
+    };
+  }
+
+  async getAnalyticsGeography(query: AdminDateRangeInput = {}) {
+    const { start, end, label } = resolveAdminDateRange(query);
+
+    const events = await this.prisma.analyticsEvent.findMany({
+      where: { createdAt: { gte: start, lte: end } },
+      select: { metadata: true, userId: true },
+    });
+
+    const userIds = [
+      ...new Set(events.map((e) => e.userId).filter((id): id is string => !!id)),
+    ];
+    const users = userIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, countryCode: true },
+        })
+      : [];
+    const userCountry = new Map(
+      users.map((u) => [u.id, u.countryCode?.toUpperCase() ?? null]),
+    );
+
+    const viewCounts = new Map<string, number>();
+    const usersByCountry = new Map<string, Set<string>>();
+    for (const event of events) {
+      const meta = event.metadata as { countryCode?: string } | null;
+      const fromMeta = meta?.countryCode?.toUpperCase().slice(0, 2);
+      const fromUser = event.userId ? userCountry.get(event.userId) : null;
+      const code = fromMeta || fromUser || 'ZZ';
+      viewCounts.set(code, (viewCounts.get(code) ?? 0) + 1);
+      if (event.userId) {
+        if (!usersByCountry.has(code)) usersByCountry.set(code, new Set());
+        usersByCountry.get(code)!.add(event.userId);
+      }
+    }
+
+    const countries = [...viewCounts.entries()]
+      .map(([countryCode, views]) => ({
+        countryCode,
+        views,
+        users: usersByCountry.get(countryCode)?.size ?? 0,
+      }))
+      .sort((a, b) => b.views - a.views);
+
+    return { range: label, countries };
+  }
+
+  listAdvertisers() {
+    return this.advertisers.adminList();
+  }
+
+  updateAdvertiser(
+    id: string,
+    body: {
+      companyName?: string;
+      contactEmail?: string;
+      billingEmail?: string | null;
+      isVerified?: boolean;
+    },
+    adminId: string,
+  ) {
+    return this.advertisers.adminUpdate(id, body).then(async (row) => {
+      await this.auditLog.log({
+        adminId,
+        action: 'update',
+        entityType: 'advertiser_account',
+        entityId: id,
+      });
+      return row;
+    });
+  }
+
+  verifyAdvertiser(id: string, isVerified: boolean, adminId: string) {
+    return this.advertisers.adminVerify(id, isVerified).then(async (row) => {
+      await this.auditLog.log({
+        adminId,
+        action: isVerified ? 'verify' : 'unverify',
+        entityType: 'advertiser_account',
+        entityId: id,
+      });
+      return row;
+    });
+  }
+
+  gafLedger(query: {
+    page?: number;
+    limit?: number;
+    direction?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }) {
+    return this.gaf.ledger(query);
+  }
+
+  async deleteAdCampaign(id: string, adminId: string) {
+    const existing = await this.prisma.adCampaign.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Campaign not found');
+    await this.prisma.adCampaign.delete({ where: { id } });
+    await this.auditLog.log({
+      adminId,
+      action: 'delete',
+      entityType: 'ad_campaign',
+      entityId: id,
+      metadata: { title: existing.title },
+    });
+    return { success: true };
+  }
+
+  async deleteUser(id: string, adminId: string) {
+    if (id === adminId) {
+      throw new BadRequestException('Cannot delete your own account');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, username: true, role: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.role === UserRole.admin) {
+      const adminCount = await this.prisma.user.count({
+        where: { role: UserRole.admin },
+      });
+      if (adminCount <= 1) {
+        throw new BadRequestException('Cannot delete the last admin account');
+      }
+    }
+    await this.prisma.user.delete({ where: { id } });
+    await this.auditLog.log({
+      adminId,
+      action: 'delete',
+      entityType: 'user',
+      entityId: id,
+      metadata: { username: user.username },
+    });
+    return { success: true };
+  }
+
+  async deleteAdvertiser(id: string, adminId: string) {
+    const account = await this.prisma.advertiserAccount.findUnique({
+      where: { id },
+      select: { id: true, companyName: true },
+    });
+    if (!account) throw new NotFoundException('Advertiser not found');
+    await this.prisma.$transaction([
+      this.prisma.adCampaign.deleteMany({ where: { advertiserAccountId: id } }),
+      this.prisma.advertiserAccount.delete({ where: { id } }),
+    ]);
+    await this.auditLog.log({
+      adminId,
+      action: 'delete',
+      entityType: 'advertiser_account',
+      entityId: id,
+      metadata: { companyName: account.companyName },
+    });
+    return { success: true };
+  }
+
+  async deletePodcastShow(id: string, adminId: string) {
+    const show = await this.prisma.podcastShow.findUnique({
+      where: { id },
+      select: { id: true, title: true },
+    });
+    if (!show) throw new NotFoundException('Podcast show not found');
+    await this.prisma.podcastShow.delete({ where: { id } });
+    await this.auditLog.log({
+      adminId,
+      action: 'delete',
+      entityType: 'podcast_show',
+      entityId: id,
+      metadata: { title: show.title },
+    });
+    return { success: true };
+  }
+
+  async deleteVerticalSeries(slug: string, adminId: string) {
+    const series = await this.prisma.verticalSeries.findUnique({
+      where: { slug },
+      select: { id: true, slug: true, title: true },
+    });
+    if (!series) throw new NotFoundException('Vertical series not found');
+    await this.prisma.verticalSeries.delete({ where: { id: series.id } });
+    await this.auditLog.log({
+      adminId,
+      action: 'delete',
+      entityType: 'vertical_series',
+      entityId: series.id,
+      metadata: { slug: series.slug, title: series.title },
+    });
+    return { success: true };
+  }
+
+  async deleteStream(id: string, adminId: string) {
+    const stream = await this.prisma.stream.findUnique({
+      where: { id },
+      select: { id: true, title: true, status: true },
+    });
+    if (!stream) throw new NotFoundException('Stream not found');
+    if (stream.status === StreamStatus.live) {
+      throw new BadRequestException('End the live stream before deleting');
+    }
+    await this.prisma.stream.delete({ where: { id } });
+    await this.auditLog.log({
+      adminId,
+      action: 'delete',
+      entityType: 'stream',
+      entityId: id,
+      metadata: { title: stream.title },
+    });
+    return { success: true };
+  }
+
+  private async topDislikedInPeriod(start: Date, take = 20, end?: Date) {
+    const viewedInPeriod = await this.prisma.analyticsEvent.groupBy({
+      by: ['targetId'],
+      where: {
+        eventType: AnalyticsEventType.view,
+        createdAt: { gte: start, ...(end ? { lte: end } : {}) },
+        targetId: { not: null },
+      },
+      _count: { _all: true },
+    });
+
+    const viewsById = new Map(
+      viewedInPeriod
+        .filter((g) => g.targetId)
+        .map((g) => [g.targetId!, g._count._all]),
+    );
+    const ids = [...viewsById.keys()];
+    if (!ids.length) return [];
+
+    const [videos, podcasts, verticals] = await Promise.all([
+      this.prisma.video.findMany({
+        where: {
+          id: { in: ids },
+          status: ContentStatus.ready,
+          dislikesCount: { gt: 0 },
+        },
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          dislikesCount: true,
+          creator: { select: { username: true } },
+        },
+      }),
+      this.prisma.podcastEpisode.findMany({
+        where: {
+          id: { in: ids },
+          status: ContentStatus.ready,
+          dislikesCount: { gt: 0 },
+        },
+        select: {
+          id: true,
+          title: true,
+          dislikesCount: true,
+          creator: { select: { username: true } },
+        },
+      }),
+      this.prisma.verticalEpisode.findMany({
+        where: {
+          id: { in: ids },
+          dislikesCount: { gt: 0 },
+        },
+        select: {
+          id: true,
+          title: true,
+          dislikesCount: true,
+          series: { select: { creator: { select: { username: true } } } },
+        },
+      }),
+    ]);
+
+    return [
+      ...videos.map((v) => ({
+        id: v.id,
+        title: v.title,
+        type: v.type,
+        creator: `@${v.creator.username}`,
+        dislikesCount: v.dislikesCount,
+        views: viewsById.get(v.id) ?? 0,
+      })),
+      ...podcasts.map((e) => ({
+        id: e.id,
+        title: e.title,
+        type: 'podcast_episode',
+        creator: `@${e.creator.username}`,
+        dislikesCount: e.dislikesCount,
+        views: viewsById.get(e.id) ?? 0,
+      })),
+      ...verticals
+        .filter((e) => e.series.creator)
+        .map((e) => ({
+          id: e.id,
+          title: e.title,
+          type: 'vertical_episode',
+          creator: `@${e.series.creator!.username}`,
+          dislikesCount: e.dislikesCount,
+          views: viewsById.get(e.id) ?? 0,
+        })),
+    ]
+      .sort(
+        (a, b) =>
+          b.dislikesCount - a.dislikesCount || b.views - a.views,
+      )
+      .slice(0, take);
+  }
+
+  private async topContentInPeriod(start: Date, take = 8, end?: Date) {
+    const grouped = await this.prisma.analyticsEvent.groupBy({
+      by: ['targetId'],
+      where: {
+        eventType: AnalyticsEventType.view,
+        createdAt: { gte: start, ...(end ? { lte: end } : {}) },
+        targetId: { not: null },
+      },
+      _count: { _all: true },
+      orderBy: { _count: { targetId: 'desc' } },
+      take,
+    });
+
+    const ids = grouped
+      .map((g) => g.targetId)
+      .filter((id): id is string => !!id);
+    if (!ids.length) return [];
+
+    const videos = await this.prisma.video.findMany({
+      where: { id: { in: ids }, status: ContentStatus.ready },
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        creator: { select: { username: true } },
+      },
+    });
+    const byId = new Map(videos.map((v) => [v.id, v]));
+
+    return grouped
+      .map((g) => {
+        const video = g.targetId ? byId.get(g.targetId) : undefined;
+        if (!video) return null;
+        return {
+          id: video.id,
+          title: video.title,
+          views: g._count._all,
+          type: video.type,
+          creator: `@${video.creator.username}`,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null);
+  }
+
+  private csvEscape(value: string) {
+    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+      return `"${value.replace(/"/g, '""')}"`;
+    }
+    return value;
   }
 
   private dayBuckets(days: number): string[] {

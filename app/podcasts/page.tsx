@@ -16,7 +16,7 @@ import { ShareSheet } from "@/components/share-sheet"
 import {
   fetchPodcastEpisodesFeed,
   fetchPodcastFeatured,
-  fetchPodcastShows,
+  fetchPodcastTrendingShows,
   recordPodcastPlay,
   togglePodcastLike,
   type PodcastEpisodeCard,
@@ -272,6 +272,7 @@ export default function PodcastsPage() {
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [shows, setShows] = useState<PodcastShowCard[]>([])
+  const [trendingShows, setTrendingShows] = useState<PodcastShowCard[]>([])
   const [latestEpisodes, setLatestEpisodes] = useState<PodcastEpisodeCard[]>([])
   const [featuredPodcast, setFeaturedPodcast] = useState<FeaturedPodcast>(EMPTY_FEATURED)
   const [curatedPlaylists, setCuratedPlaylists] = useState<PlaylistSummary[]>([])
@@ -292,18 +293,19 @@ export default function PodcastsPage() {
     let cancelled = false
     setLoading(true)
     void Promise.all([
-      fetchPodcastShows(1, 24),
+      fetchPodcastTrendingShows(24),
       fetchPodcastEpisodesFeed(1, 30),
       fetchPodcastFeatured(1),
       fetchDiscoverPlaylists(6).catch(() => ({ items: [] as PlaylistSummary[] })),
     ])
-      .then(([showsRes, epsRes, featuredList, playlistsRes]) => {
+      .then(([trendingRes, epsRes, featuredList, playlistsRes]) => {
         if (cancelled) return
         setCuratedPlaylists(playlistsRes.items)
-        setShows(showsRes.items)
+        setTrendingShows(trendingRes)
+        setShows(trendingRes)
         setLatestEpisodes(epsRes.items)
         const featShow =
-          featuredList[0] ?? showsRes.items[0] ?? null
+          featuredList[0] ?? trendingRes[0] ?? null
         if (featShow) {
           const latest =
             epsRes.items.find((e) => e.showId === featShow.id) ?? epsRes.items[0]
@@ -345,7 +347,9 @@ export default function PodcastsPage() {
   const nowPlaying = playIndex !== null ? latestEpisodes[playIndex] : null
 
   const filteredShows =
-    activeCategory === "All" ? shows : shows.filter((s) => s.category === activeCategory)
+    activeCategory === "All"
+      ? trendingShows
+      : trendingShows.filter((s) => s.category === activeCategory)
 
   const toggleLike = (id: string) => {
     if (!isAuthenticated) {

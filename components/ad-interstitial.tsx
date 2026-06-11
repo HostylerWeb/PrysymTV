@@ -1,12 +1,17 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import {
+  buildAdAttribution,
   fetchServedAd,
+  trackAdClick,
   trackAdImpression,
   type ServedAd,
 } from "@/lib/api/ads"
+import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
+import { useAuth } from "@/contexts/auth-context"
 
 interface AdInterstitialProps {
   onClose: () => void
@@ -16,11 +21,15 @@ interface AdInterstitialProps {
 
 export function AdInterstitial({ onClose, creatorId, videoId }: AdInterstitialProps) {
   const showAds = useShouldShowAds()
+  const { user } = useAuth()
+  const { isPlacementEnabled, platformCreatorId } = usePublicAdsConfig()
   const [ad, setAd] = useState<ServedAd | null | undefined>(undefined)
   const [countdown, setCountdown] = useState(5)
 
+  const placementEnabled = isPlacementEnabled("shorts_interstitial")
+
   useEffect(() => {
-    if (!showAds) {
+    if (!showAds || !placementEnabled) {
       onClose()
       return
     }
@@ -29,17 +38,20 @@ export function AdInterstitial({ onClose, creatorId, videoId }: AdInterstitialPr
       if (served) setCountdown(served.skipAfterSeconds || 5)
       else onClose()
     })
-  }, [onClose, showAds])
+  }, [onClose, showAds, placementEnabled])
 
   useEffect(() => {
-    if (!ad || !creatorId) return
-    void trackAdImpression({
+    if (!ad) return
+    const attr = buildAdAttribution({
       campaignId: ad.id,
       placement: "shorts_interstitial",
       creatorId,
+      platformCreatorId,
       videoId,
+      viewerUserId: user?.id,
     })
-  }, [ad, creatorId, videoId])
+    void trackAdImpression(attr)
+  }, [ad, creatorId, platformCreatorId, videoId, user?.id])
 
   useEffect(() => {
     if (!ad) return
@@ -51,10 +63,25 @@ export function AdInterstitial({ onClose, creatorId, videoId }: AdInterstitialPr
   if (ad === undefined) return null
   if (!ad) return null
 
+  const attr = buildAdAttribution({
+    campaignId: ad.id,
+    placement: "shorts_interstitial",
+    creatorId,
+    platformCreatorId,
+    videoId,
+    viewerUserId: user?.id,
+  })
+
   return (
     <div className="fixed inset-0 z-[80] bg-black flex flex-col">
       <div className="flex items-center justify-between px-4 py-3">
-        <span className="text-xs text-white/70">Sponsored · {ad.title}</span>
+        <Link
+          href={ad.clickThroughUrl}
+          onClick={() => void trackAdClick(attr)}
+          className="text-xs text-white/70 hover:text-white underline truncate max-w-[70%]"
+        >
+          Sponsored · {ad.title}
+        </Link>
         {countdown <= 0 ? (
           <button
             type="button"

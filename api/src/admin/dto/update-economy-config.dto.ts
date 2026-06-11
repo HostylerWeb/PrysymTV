@@ -12,6 +12,12 @@ export class UpdateEconomyConfigDto {
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  membershipPriceUsd?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
   insiderPriceUsd?: number;
 
   @IsOptional()

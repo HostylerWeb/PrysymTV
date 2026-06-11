@@ -1,6 +1,7 @@
 "use client"
 
-import { Plus, Trash2 } from "lucide-react"
+import { useState } from "react"
+import { GripVertical, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/table"
 
 export type TaxonomyRow = {
+  _clientId: string
   slug: string
   label: string
   isActive: boolean
@@ -29,6 +31,29 @@ function slugify(label: string): string {
   )
 }
 
+function newClientId(): string {
+  return `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+export function withClientIds<T extends Omit<TaxonomyRow, "_clientId">>(
+  rows: T[],
+): TaxonomyRow[] {
+  return rows.map((row, index) => ({
+    ...row,
+    _clientId: row.slug || `row-${index}`,
+  }))
+}
+
+function reorderRows(rows: TaxonomyRow[], from: number, to: number): TaxonomyRow[] {
+  if (from === to || from < 0 || to < 0 || from >= rows.length || to >= rows.length) {
+    return rows
+  }
+  const next = [...rows]
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  return next.map((row, index) => ({ ...row, sortOrder: index }))
+}
+
 type TaxonomyConfigTableProps = {
   rows: TaxonomyRow[]
   onChange: (rows: TaxonomyRow[]) => void
@@ -40,6 +65,8 @@ export function TaxonomyConfigTable({
   onChange,
   addLabel = "Add category",
 }: TaxonomyConfigTableProps) {
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+
   const updateRow = (index: number, patch: Partial<TaxonomyRow>) => {
     const next = [...rows]
     next[index] = { ...next[index], ...patch }
@@ -47,7 +74,8 @@ export function TaxonomyConfigTable({
   }
 
   const removeRow = (index: number) => {
-    onChange(rows.filter((_, i) => i !== index))
+    const next = rows.filter((_, i) => i !== index).map((row, i) => ({ ...row, sortOrder: i }))
+    onChange(next)
   }
 
   const addRow = () => {
@@ -55,6 +83,7 @@ export function TaxonomyConfigTable({
     onChange([
       ...rows,
       {
+        _clientId: newClientId(),
         slug: slugify(label),
         label,
         isActive: true,
@@ -63,12 +92,19 @@ export function TaxonomyConfigTable({
     ])
   }
 
+  const handleDrop = (toIndex: number) => {
+    if (dragIndex === null) return
+    onChange(reorderRows(rows, dragIndex, toIndex))
+    setDragIndex(null)
+  }
+
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-border overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10" />
               <TableHead>Label</TableHead>
               <TableHead>Slug</TableHead>
               <TableHead>Sort</TableHead>
@@ -78,7 +114,28 @@ export function TaxonomyConfigTable({
           </TableHeader>
           <TableBody>
             {rows.map((row, index) => (
-              <TableRow key={`${row.slug}-${index}`}>
+              <TableRow
+                key={row._clientId}
+                draggable
+                onDragStart={() => setDragIndex(index)}
+                onDragEnd={() => setDragIndex(null)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  handleDrop(index)
+                }}
+                className={dragIndex === index ? "opacity-50" : undefined}
+              >
+                <TableCell className="w-10 px-2">
+                  <button
+                    type="button"
+                    className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground hover:text-foreground"
+                    aria-label="Drag to reorder"
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    <GripVertical className="w-4 h-4" />
+                  </button>
+                </TableCell>
                 <TableCell>
                   <Input
                     className="h-8"

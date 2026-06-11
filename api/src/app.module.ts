@@ -20,6 +20,7 @@ import { PodcastsModule } from './podcasts/podcasts.module';
 import { PlaylistsModule } from './playlists/playlists.module';
 import { SearchModule } from './search/search.module';
 import { AdsModule } from './ads/ads.module';
+import { AdvertisersModule } from './advertisers/advertisers.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AdminModule } from './admin/admin.module';
 import { MediaModule } from './media/media.module';
@@ -89,6 +90,7 @@ import { ReportsModule } from './reports/reports.module';
     PlaylistsModule,
     SearchModule,
     AdsModule,
+    AdvertisersModule,
     AnalyticsModule,
     VerticalsModule,
     ProgramsModule,

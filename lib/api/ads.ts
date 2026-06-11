@@ -24,6 +24,23 @@ export type AdAttribution = {
   viewerUserId?: string;
 };
 
+export function buildAdAttribution(params: {
+  campaignId: string;
+  placement: AdPlacement;
+  creatorId?: string;
+  platformCreatorId?: string;
+  videoId?: string;
+  viewerUserId?: string;
+}): AdAttribution {
+  return {
+    campaignId: params.campaignId,
+    placement: params.placement,
+    creatorId: params.creatorId ?? params.platformCreatorId,
+    videoId: params.videoId,
+    viewerUserId: params.viewerUserId,
+  };
+}
+
 /**
  * Fetches an ad for the placement. Sends Bearer when logged in so premium users get ad-free from API.
  * Pass `skipFetch: true` when the client already knows the user is premium.
@@ -48,7 +65,6 @@ export async function fetchServedAd(
 }
 
 export async function trackAdImpression(attr: AdAttribution) {
-  if (!attr.creatorId) return;
   try {
     await apiRequest("/ads/track/impression", {
       method: "POST",
@@ -67,7 +83,6 @@ export async function trackAdImpression(attr: AdAttribution) {
 }
 
 export async function trackAdClick(attr: AdAttribution) {
-  if (!attr.creatorId) return;
   try {
     await apiRequest("/ads/track/click", {
       method: "POST",

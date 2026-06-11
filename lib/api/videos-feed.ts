@@ -5,6 +5,7 @@ import type { VideoDetail } from "@/lib/api/videos";
 
 export type ShortVideoCard = VideoCard & {
   commentsCount?: number;
+  sharesCount?: number;
   liked?: boolean;
   saved?: boolean;
   disliked?: boolean;

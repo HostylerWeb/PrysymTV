@@ -6,6 +6,8 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminPagination } from "@/components/admin/admin-pagination"
 import { AdminStatusPill } from "@/components/admin/admin-status-pill"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
+import { AdminDateRangePicker } from "@/components/admin/admin-date-range-picker"
+import { useAdminListDateFilter } from "@/components/admin/use-admin-list-date-filter"
 import { fetchAdminUsers } from "@/lib/api/admin"
 import { Input } from "@/components/ui/input"
 import {
@@ -30,6 +32,7 @@ export default function AdminUsersPage() {
   const [role, setRole] = useState("all")
   const [status, setStatus] = useState("all")
   const [page, setPage] = useState(1)
+  const { dateRange, setDateRange, dateParams, dateDeps } = useAdminListDateFilter()
 
   const { data, loading, error } = useAdminQuery(
     () =>
@@ -39,8 +42,9 @@ export default function AdminUsersPage() {
         q: q || undefined,
         type: role === "all" ? undefined : role,
         status: status === "all" ? undefined : status,
+        ...dateParams,
       }),
-    [page, q, role, status],
+    [page, q, role, status, ...dateDeps],
   )
 
   const items = data?.items ?? []
@@ -53,6 +57,14 @@ export default function AdminUsersPage() {
         title="Users"
         description="Search and manage accounts — ban, verify, partner tier."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Users" }]}
+      />
+
+      <AdminDateRangePicker
+        className="mb-4"
+        value={dateRange}
+        onChange={setDateRange}
+        allowClear
+        label="Joined"
       />
 
       <div className="flex flex-col sm:flex-row gap-3 mb-4">

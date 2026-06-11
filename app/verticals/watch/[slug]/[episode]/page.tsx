@@ -20,6 +20,7 @@ import { bumpLikeCount } from "@/lib/engagement-count"
 import { useAuth } from "@/contexts/auth-context"
 import { AuthModal } from "@/components/auth-modal"
 import { ReportModal } from "@/components/report-modal"
+import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 
 export default function VerticalWatchPage({
   params,
@@ -29,8 +30,9 @@ export default function VerticalWatchPage({
   const { slug, episode: episodeStr } = use(params)
   const { isAuthenticated, isLoading: authLoading } = useAuth()
   const episodeNum = parseInt(episodeStr, 10)
+  const { isPlacementEnabled } = usePublicAdsConfig()
   const [data, setData] = useState<VerticalEpisodePlayback | null>(null)
-  const [showAd, setShowAd] = useState(true)
+  const [showAd, setShowAd] = useState(() => false)
   const [canPlay, setCanPlay] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLiked, setIsLiked] = useState(false)
@@ -43,8 +45,8 @@ export default function VerticalWatchPage({
 
   useEffect(() => {
     if (authLoading) return
-    setShowAd(true)
-    setCanPlay(false)
+    setShowAd(isPlacementEnabled("vertical_episode"))
+    setCanPlay(!isPlacementEnabled("vertical_episode"))
     setError(null)
     viewRecorded.current = false
     void fetchVerticalEpisode(slug, episodeNum)
@@ -55,7 +57,7 @@ export default function VerticalWatchPage({
         setSeriesSaved(res.series.saved ?? false)
       })
       .catch(() => setError("Episode not found"))
-  }, [slug, episodeNum, authLoading, isAuthenticated])
+  }, [slug, episodeNum, authLoading, isAuthenticated, isPlacementEnabled])
 
   const onAdComplete = () => {
     setShowAd(false)
@@ -79,8 +81,8 @@ export default function VerticalWatchPage({
   const goNextEpisode = () => {
     if (!data?.nextEpisode) return
     const nextNum = data.nextEpisode.episodeNumber
-    setShowAd(true)
-    setCanPlay(false)
+    setShowAd(isPlacementEnabled("vertical_episode"))
+    setCanPlay(!isPlacementEnabled("vertical_episode"))
     viewRecorded.current = false
     void fetchVerticalEpisode(slug, nextNum)
       .then((res) => {

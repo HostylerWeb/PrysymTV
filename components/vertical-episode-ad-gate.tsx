@@ -1,12 +1,17 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import {
+  buildAdAttribution,
   fetchServedAd,
+  trackAdClick,
   trackAdImpression,
   type ServedAd,
 } from "@/lib/api/ads"
+import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
+import { useAuth } from "@/contexts/auth-context"
 
 type VerticalEpisodeAdGateProps = {
   seriesId?: string
@@ -21,11 +26,15 @@ export function VerticalEpisodeAdGate({
   onComplete,
 }: VerticalEpisodeAdGateProps) {
   const showAds = useShouldShowAds()
+  const { user } = useAuth()
+  const { isPlacementEnabled, platformCreatorId } = usePublicAdsConfig()
   const [ad, setAd] = useState<ServedAd | null | undefined>(undefined)
   const [countdown, setCountdown] = useState(5)
 
+  const placementEnabled = isPlacementEnabled("vertical_episode")
+
   useEffect(() => {
-    if (!showAds) {
+    if (!showAds || !placementEnabled) {
       onComplete()
       return
     }
@@ -34,17 +43,20 @@ export function VerticalEpisodeAdGate({
       if (served) setCountdown(served.skipAfterSeconds || 5)
       else onComplete()
     })
-  }, [onComplete, showAds])
+  }, [onComplete, showAds, placementEnabled])
 
   useEffect(() => {
-    if (!ad || !creatorId) return
-    void trackAdImpression({
+    if (!ad) return
+    const attr = buildAdAttribution({
       campaignId: ad.id,
       placement: "vertical_episode",
       creatorId,
+      platformCreatorId,
       videoId: seriesId,
+      viewerUserId: user?.id,
     })
-  }, [ad, creatorId, seriesId])
+    void trackAdImpression(attr)
+  }, [ad, creatorId, platformCreatorId, seriesId, user?.id])
 
   useEffect(() => {
     if (!ad) return
@@ -63,10 +75,25 @@ export function VerticalEpisodeAdGate({
 
   if (!ad) return null
 
+  const attr = buildAdAttribution({
+    campaignId: ad.id,
+    placement: "vertical_episode",
+    creatorId,
+    platformCreatorId,
+    videoId: seriesId,
+    viewerUserId: user?.id,
+  })
+
   return (
     <div className="fixed inset-0 z-[100] bg-black flex flex-col max-w-lg mx-auto">
       <div className="flex items-center justify-between px-4 py-3">
-        <span className="text-xs text-white/70">Sponsored · {ad.title}</span>
+        <Link
+          href={ad.clickThroughUrl}
+          onClick={() => void trackAdClick(attr)}
+          className="text-xs text-white/70 hover:text-white underline truncate max-w-[70%]"
+        >
+          Sponsored · {ad.title}
+        </Link>
         {countdown <= 0 ? (
           <button
             type="button"

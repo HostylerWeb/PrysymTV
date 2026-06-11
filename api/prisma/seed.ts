@@ -48,8 +48,8 @@ const REVENUE_SPLIT_RULES = [
   },
   {
     ruleKey: 'insider_membership',
-    name: 'Platform Insider Membership ($4.99/mo)',
-    description: 'Stakeholder default: platform 80%, GAF 10%, creator dev fund 10%',
+    name: 'Prysym Membership (ad-free)',
+    description: 'Revenue split when users subscribe to Prysym Membership. Default: platform 80%, GAF 10%, creator dev fund 10%',
     creatorBps: 0,
     platformBps: 8000,
     gafBps: 1000,
@@ -502,6 +502,7 @@ async function main() {
   const platformDefaults = {
     economy: {
       minPayoutUsd: 50,
+      membershipPriceUsd: 4.99,
       insiderPriceUsd: 4.99,
       premiumBasicPriceUsd: 2.99,
       premiumPriceUsd: 4.99,
@@ -512,6 +513,7 @@ async function main() {
       moviePrerollSkipSeconds: 15,
       shortsSkipSeconds: 5,
       gafRuleKey: 'ad_gaf_allocation',
+      impressionRevenueCpmUsd: 2.5,
       placements: {
         home_banner: true,
         shorts_interstitial: true,

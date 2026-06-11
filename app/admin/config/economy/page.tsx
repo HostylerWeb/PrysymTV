@@ -50,10 +50,7 @@ export default function AdminConfigEconomyPage() {
   const { data, loading, error, reload } = useAdminQuery(fetchAdminEconomyConfig, [])
   const [pricing, setPricing] = useState({
     minPayoutUsd: 50,
-    insiderPriceUsd: 4.99,
-    premiumBasicPriceUsd: 2.99,
-    premiumPriceUsd: 4.99,
-    ultimatePriceUsd: 9.99,
+    membershipPriceUsd: 4.99,
   })
   const [coinDraft, setCoinDraft] = useState<CoinDraft>(EMPTY_COIN)
   const [giftDraft, setGiftDraft] = useState<GiftDraft>(EMPTY_GIFT)
@@ -64,10 +61,7 @@ export default function AdminConfigEconomyPage() {
     if (!data) return
     setPricing({
       minPayoutUsd: data.minPayoutUsd,
-      insiderPriceUsd: data.insiderPriceUsd,
-      premiumBasicPriceUsd: data.premiumBasicPriceUsd,
-      premiumPriceUsd: data.premiumPriceUsd,
-      ultimatePriceUsd: data.ultimatePriceUsd,
+      membershipPriceUsd: data.membershipPriceUsd ?? data.premiumPriceUsd,
     })
   }, [data])
 
@@ -167,53 +161,27 @@ export default function AdminConfigEconomyPage() {
           />
         </div>
         <div>
-          <Label>Insider price (USD/mo)</Label>
+          <Label>Membership price (USD/mo)</Label>
+          <p className="text-xs text-muted-foreground mt-0.5 mb-1">
+            Ad-free on Shorts, Verticals, and Movies. Shown in Settings → Premium.
+          </p>
           <Input
             type="number"
             className="mt-1"
             step={0.01}
-            value={pricing.insiderPriceUsd}
+            value={pricing.membershipPriceUsd}
             onChange={(e) =>
-              setPricing((p) => ({ ...p, insiderPriceUsd: Number(e.target.value) }))
+              setPricing((p) => ({ ...p, membershipPriceUsd: Number(e.target.value) }))
             }
           />
         </div>
-        <div>
-          <Label>Premium basic</Label>
-          <Input
-            type="number"
-            className="mt-1"
-            step={0.01}
-            value={pricing.premiumBasicPriceUsd}
-            onChange={(e) =>
-              setPricing((p) => ({ ...p, premiumBasicPriceUsd: Number(e.target.value) }))
-            }
-          />
-        </div>
-        <div>
-          <Label>Premium</Label>
-          <Input
-            type="number"
-            className="mt-1"
-            step={0.01}
-            value={pricing.premiumPriceUsd}
-            onChange={(e) =>
-              setPricing((p) => ({ ...p, premiumPriceUsd: Number(e.target.value) }))
-            }
-          />
-        </div>
-        <div>
-          <Label>Ultimate</Label>
-          <Input
-            type="number"
-            className="mt-1"
-            step={0.01}
-            value={pricing.ultimatePriceUsd}
-            onChange={(e) =>
-              setPricing((p) => ({ ...p, ultimatePriceUsd: Number(e.target.value) }))
-            }
-          />
-        </div>
+        <p className="text-xs text-muted-foreground sm:col-span-2">
+          Membership revenue splits (platform / GAF / creator dev fund) are configured under{" "}
+          <a href="/admin/config/revenue" className="text-primary underline">
+            Configuration → Revenue
+          </a>{" "}
+          → <span className="font-mono">insider_membership</span>.
+        </p>
       </div>
       <Button className="rounded-full mb-8" disabled={busy} onClick={() => void savePricing()}>
         Save pricing settings

@@ -78,6 +78,15 @@ export class VerticalsController {
     return this.verticals.toggleEpisodeLike(user.id, episodeId);
   }
 
+  @Post('episodes/:episodeId/dislike')
+  @UseGuards(JwtAuthGuard)
+  dislikeEpisode(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('episodeId') episodeId: string,
+  ) {
+    return this.verticals.toggleEpisodeDislike(user.id, episodeId);
+  }
+
   @Post('episodes/:episodeId/save')
   @UseGuards(JwtAuthGuard)
   saveEpisode(

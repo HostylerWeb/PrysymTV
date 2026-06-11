@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   Post,
   Query,
@@ -113,8 +114,13 @@ export class VideosController {
   }
 
   @Post(':id/view')
-  recordView(@Param('id') id: string) {
-    return this.videos.recordView(id);
+  @UseGuards(OptionalJwtAuthGuard)
+  recordView(
+    @Param('id') id: string,
+    @Req() req: Request & { user?: AuthUserPayload | null },
+    @Headers('x-country-code') countryCode?: string,
+  ) {
+    return this.videos.recordView(id, req.user?.id, countryCode);
   }
 
   @Get(':id')

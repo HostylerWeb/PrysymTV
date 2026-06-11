@@ -4,6 +4,8 @@ import { useState } from "react"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminPagination } from "@/components/admin/admin-pagination"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
+import { AdminDateRangePicker } from "@/components/admin/admin-date-range-picker"
+import { useAdminListDateFilter } from "@/components/admin/use-admin-list-date-filter"
 import { fetchAdminGiftActivity } from "@/lib/api/admin"
 import { Input } from "@/components/ui/input"
 import {
@@ -18,10 +20,17 @@ import {
 export default function AdminEconomyGiftsPage() {
   const [q, setQ] = useState("")
   const [page, setPage] = useState(1)
+  const { dateRange, setDateRange, dateParams, dateDeps } = useAdminListDateFilter()
 
   const { data, loading, error } = useAdminQuery(
-    () => fetchAdminGiftActivity({ page, limit: 20, q: q || undefined }),
-    [page, q],
+    () =>
+      fetchAdminGiftActivity({
+        page,
+        limit: 20,
+        q: q || undefined,
+        ...dateParams,
+      }),
+    [page, q, ...dateDeps],
   )
 
   const items = data?.items ?? []
@@ -38,6 +47,13 @@ export default function AdminEconomyGiftsPage() {
           { label: "Economy", href: "/admin/economy" },
           { label: "Gift activity" },
         ]}
+      />
+
+      <AdminDateRangePicker
+        className="mb-4"
+        value={dateRange}
+        onChange={setDateRange}
+        allowClear
       />
 
       <div className="mb-4">

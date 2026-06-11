@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   ContentStatus,
+  DislikeTargetType,
   LikeTargetType,
   SavedItemType,
   Visibility,
@@ -46,6 +47,39 @@ export class PodcastsService {
       this.prisma.podcastShow.count({ where: { visibility: Visibility.public } }),
     ]);
     return { items, meta: { page, limit, total } };
+  }
+
+  async trendingShows(limit = 12) {
+    const shows = await this.prisma.podcastShow.findMany({
+      where: {
+        visibility: Visibility.public,
+        episodes: { some: { status: ContentStatus.ready } },
+      },
+      include: {
+        creator: { select: { username: true, displayName: true } },
+        _count: { select: { episodes: true } },
+        episodes: {
+          where: { status: ContentStatus.ready },
+          orderBy: { publishedAt: 'desc' },
+          take: 1,
+          select: { publishedAt: true, title: true },
+        },
+      },
+      take: Math.min(Math.max(limit * 3, limit), 48),
+    });
+
+    const sorted = shows
+      .sort((a, b) => {
+        if (b.followersCount !== a.followersCount) {
+          return b.followersCount - a.followersCount;
+        }
+        const aDate = a.episodes[0]?.publishedAt?.getTime() ?? 0;
+        const bDate = b.episodes[0]?.publishedAt?.getTime() ?? 0;
+        return bDate - aDate;
+      })
+      .slice(0, limit);
+
+    return { items: sorted };
   }
 
   async featuredShow() {
@@ -391,20 +425,121 @@ export class PodcastsService {
       return { liked: false };
     }
 
-    await this.prisma.$transaction([
-      this.prisma.like.create({
+    await this.prisma.$transaction(async (tx) => {
+      const dislike = await tx.dislike.findUnique({
+        where: {
+          userId_targetType_targetId: {
+            userId,
+            targetType: DislikeTargetType.podcast_episode,
+            targetId: episodeId,
+          },
+        },
+      });
+      if (dislike) {
+        await tx.dislike.delete({
+          where: {
+            userId_targetType_targetId: {
+              userId,
+              targetType: DislikeTargetType.podcast_episode,
+              targetId: episodeId,
+            },
+          },
+        });
+        await tx.podcastEpisode.update({
+          where: { id: episodeId },
+          data: { dislikesCount: { decrement: 1 } },
+        });
+      }
+      await tx.like.create({
         data: {
           userId,
           targetType: LikeTargetType.podcast_episode,
           targetId: episodeId,
         },
-      }),
-      this.prisma.podcastEpisode.update({
+      });
+      await tx.podcastEpisode.update({
         where: { id: episodeId },
         data: { likesCount: { increment: 1 } },
-      }),
-    ]);
-    return { liked: true };
+      });
+    });
+    return { liked: true, disliked: false };
+  }
+
+  async toggleDislike(userId: string, episodeId: string) {
+    const episode = await this.prisma.podcastEpisode.findUnique({
+      where: { id: episodeId },
+    });
+    if (!episode || episode.status !== ContentStatus.ready) {
+      throw new NotFoundException('Episode not found');
+    }
+
+    const existing = await this.prisma.dislike.findUnique({
+      where: {
+        userId_targetType_targetId: {
+          userId,
+          targetType: DislikeTargetType.podcast_episode,
+          targetId: episodeId,
+        },
+      },
+    });
+
+    if (existing) {
+      await this.prisma.$transaction([
+        this.prisma.dislike.delete({
+          where: {
+            userId_targetType_targetId: {
+              userId,
+              targetType: DislikeTargetType.podcast_episode,
+              targetId: episodeId,
+            },
+          },
+        }),
+        this.prisma.podcastEpisode.update({
+          where: { id: episodeId },
+          data: { dislikesCount: { decrement: 1 } },
+        }),
+      ]);
+      return { disliked: false };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const like = await tx.like.findUnique({
+        where: {
+          userId_targetType_targetId: {
+            userId,
+            targetType: LikeTargetType.podcast_episode,
+            targetId: episodeId,
+          },
+        },
+      });
+      if (like) {
+        await tx.like.delete({
+          where: {
+            userId_targetType_targetId: {
+              userId,
+              targetType: LikeTargetType.podcast_episode,
+              targetId: episodeId,
+            },
+          },
+        });
+        await tx.podcastEpisode.update({
+          where: { id: episodeId },
+          data: { likesCount: { decrement: 1 } },
+        });
+      }
+      await tx.dislike.create({
+        data: {
+          userId,
+          targetType: DislikeTargetType.podcast_episode,
+          targetId: episodeId,
+        },
+      });
+      await tx.podcastEpisode.update({
+        where: { id: episodeId },
+        data: { dislikesCount: { increment: 1 } },
+      });
+    });
+    return { disliked: true, liked: false };
   }
 
   async toggleSave(userId: string, episodeId: string) {

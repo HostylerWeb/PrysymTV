@@ -4,6 +4,8 @@ import { useState } from "react"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminPagination } from "@/components/admin/admin-pagination"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
+import { AdminDateRangePicker } from "@/components/admin/admin-date-range-picker"
+import { useAdminListDateFilter } from "@/components/admin/use-admin-list-date-filter"
 import { fetchAdminRevenueLedger } from "@/lib/api/admin"
 import {
   Table,
@@ -16,10 +18,16 @@ import {
 
 export default function AdminRevenueLedgerPage() {
   const [page, setPage] = useState(1)
+  const { dateRange, setDateRange, dateParams, dateDeps } = useAdminListDateFilter()
 
   const { data, loading, error } = useAdminQuery(
-    () => fetchAdminRevenueLedger({ page, limit: 20 }),
-    [page],
+    () =>
+      fetchAdminRevenueLedger({
+        page,
+        limit: 20,
+        ...dateParams,
+      }),
+    [page, ...dateDeps],
   )
 
   const items = data?.items ?? []
@@ -36,6 +44,13 @@ export default function AdminRevenueLedgerPage() {
           { label: "Revenue", href: "/admin/revenue" },
           { label: "Ledger" },
         ]}
+      />
+
+      <AdminDateRangePicker
+        className="mb-4"
+        value={dateRange}
+        onChange={setDateRange}
+        allowClear
       />
 
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
