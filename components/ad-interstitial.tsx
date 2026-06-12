@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import Link from "next/link"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   buildAdAttribution,
   fetchServedAd,
-  trackAdClick,
+  isValidServedAd,
+  openAdDestination,
   trackAdImpression,
   type ServedAd,
 } from "@/lib/api/ads"
@@ -17,28 +17,67 @@ interface AdInterstitialProps {
   onClose: () => void
   creatorId?: string
   videoId?: string
+  servedAd?: ServedAd
 }
 
-export function AdInterstitial({ onClose, creatorId, videoId }: AdInterstitialProps) {
+export function AdInterstitial({
+  onClose,
+  creatorId,
+  videoId,
+  servedAd,
+}: AdInterstitialProps) {
   const showAds = useShouldShowAds()
   const { user } = useAuth()
   const { isPlacementEnabled, platformCreatorId } = usePublicAdsConfig()
-  const [ad, setAd] = useState<ServedAd | null | undefined>(undefined)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  const finishedRef = useRef(false)
+
+  const close = useCallback(() => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    onCloseRef.current()
+  }, [])
+
+  const [ad, setAd] = useState<ServedAd | null | undefined>(
+    servedAd !== undefined
+      ? isValidServedAd(servedAd)
+        ? servedAd
+        : null
+      : undefined,
+  )
+  const [mediaReady, setMediaReady] = useState(false)
   const [countdown, setCountdown] = useState(5)
 
   const placementEnabled = isPlacementEnabled("shorts_interstitial")
 
   useEffect(() => {
-    if (!showAds || !placementEnabled) {
-      onClose()
+    finishedRef.current = false
+    setMediaReady(false)
+  }, [servedAd?.id])
+
+  useEffect(() => {
+    if (servedAd !== undefined) {
+      const valid = isValidServedAd(servedAd) ? servedAd : null
+      setAd(valid)
+      if (valid) setCountdown(valid.skipAfterSeconds || 5)
+      if (!valid) close()
       return
     }
+
+    if (!showAds || !placementEnabled) {
+      setAd(null)
+      close()
+      return
+    }
+
     void fetchServedAd("shorts_interstitial").then((served) => {
-      setAd(served)
-      if (served) setCountdown(served.skipAfterSeconds || 5)
-      else onClose()
+      const valid = isValidServedAd(served) ? served : null
+      setAd(valid)
+      if (valid) setCountdown(valid.skipAfterSeconds || 5)
+      if (!valid) close()
     })
-  }, [onClose, showAds, placementEnabled])
+  }, [showAds, placementEnabled, servedAd, close])
 
   useEffect(() => {
     if (!ad) return
@@ -54,11 +93,11 @@ export function AdInterstitial({ onClose, creatorId, videoId }: AdInterstitialPr
   }, [ad, creatorId, platformCreatorId, videoId, user?.id])
 
   useEffect(() => {
-    if (!ad) return
+    if (!ad || !mediaReady) return
     if (countdown <= 0) return
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000)
     return () => clearTimeout(t)
-  }, [countdown, ad])
+  }, [countdown, ad, mediaReady])
 
   if (ad === undefined) return null
   if (!ad) return null
@@ -72,29 +111,59 @@ export function AdInterstitial({ onClose, creatorId, videoId }: AdInterstitialPr
     viewerUserId: user?.id,
   })
 
+  const onMediaReady = () => {
+    setMediaReady(true)
+    setCountdown(ad.skipAfterSeconds || 5)
+  }
+
   return (
     <div className="fixed inset-0 z-[80] bg-black flex flex-col">
       <div className="flex items-center justify-between px-4 py-3">
-        <Link
+        <a
           href={ad.clickThroughUrl}
-          onClick={() => void trackAdClick(attr)}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => {
+            e.preventDefault()
+            openAdDestination(ad.clickThroughUrl, attr)
+          }}
           className="text-xs text-white/70 hover:text-white underline truncate max-w-[70%]"
         >
           Sponsored · {ad.title}
-        </Link>
-        {countdown <= 0 ? (
+        </a>
+        {mediaReady && countdown <= 0 ? (
           <button
             type="button"
-            onClick={onClose}
+            onClick={close}
             className="text-sm font-bold text-white bg-white/20 px-4 py-1.5 rounded-full"
           >
-            Skip
+            Close
           </button>
+        ) : mediaReady ? (
+          <span className="text-sm text-white/70">Close in {countdown}s</span>
         ) : (
-          <span className="text-sm text-white/70">Skip in {countdown}s</span>
+          <span className="text-sm text-white/50">Loading…</span>
         )}
       </div>
-      <video src={ad.mediaUrl} autoPlay muted playsInline className="flex-1 w-full object-cover" />
+      {ad.mediaType === "video" ? (
+        <video
+          src={ad.mediaUrl}
+          autoPlay
+          muted
+          playsInline
+          onLoadedData={onMediaReady}
+          onError={() => close()}
+          className="flex-1 w-full object-cover"
+        />
+      ) : (
+        <img
+          src={ad.mediaUrl}
+          alt=""
+          onLoad={onMediaReady}
+          onError={() => close()}
+          className="flex-1 w-full object-cover"
+        />
+      )}
     </div>
   )
 }

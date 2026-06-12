@@ -5,6 +5,7 @@ import {
   DEFAULT_ADS_SETTINGS,
   DEFAULT_ANALYTICS_SETTINGS,
   DEFAULT_ECONOMY_SETTINGS,
+  DEFAULT_MOVIE_GENRES_SETTINGS,
   DEFAULT_PODCAST_CATEGORIES_SETTINGS,
   DEFAULT_PROGRAMS_SETTINGS,
   DEFAULT_SCORECARD_SETTINGS,
@@ -115,7 +116,20 @@ export class PlatformSettingsService {
   }
 
   async getPrograms(): Promise<ProgramConfigEntry[]> {
-    return this.getArray(PLATFORM_SETTING_KEYS.programs, DEFAULT_PROGRAMS_SETTINGS);
+    const stored = await this.getArray(
+      PLATFORM_SETTING_KEYS.programs,
+      DEFAULT_PROGRAMS_SETTINGS,
+    );
+    const slugs = new Set(stored.map((p) => p.slug));
+    const missing = DEFAULT_PROGRAMS_SETTINGS.filter((p) => !slugs.has(p.slug));
+    if (missing.length === 0) return stored;
+    return [
+      ...stored,
+      ...missing.map((p, i) => ({
+        ...p,
+        sortOrder: stored.length + i,
+      })),
+    ];
   }
 
   async setPrograms(
@@ -137,6 +151,30 @@ export class PlatformSettingsService {
     adminId?: string,
   ): Promise<CategoryConfigEntry[]> {
     return this.setArray(PLATFORM_SETTING_KEYS.podcastCategories, categories, adminId);
+  }
+
+  async getMovieGenres(): Promise<CategoryConfigEntry[]> {
+    const stored = await this.getArray(
+      PLATFORM_SETTING_KEYS.movieGenres,
+      DEFAULT_MOVIE_GENRES_SETTINGS,
+    );
+    const slugs = new Set(stored.map((g) => g.slug));
+    const missing = DEFAULT_MOVIE_GENRES_SETTINGS.filter((g) => !slugs.has(g.slug));
+    if (missing.length === 0) return stored;
+    return [
+      ...stored,
+      ...missing.map((g, i) => ({
+        ...g,
+        sortOrder: stored.length + i,
+      })),
+    ];
+  }
+
+  async setMovieGenres(
+    genres: CategoryConfigEntry[],
+    adminId?: string,
+  ): Promise<CategoryConfigEntry[]> {
+    return this.setArray(PLATFORM_SETTING_KEYS.movieGenres, genres, adminId);
   }
 
   async getMinPayoutUsd(): Promise<number> {

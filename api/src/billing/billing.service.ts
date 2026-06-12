@@ -16,6 +16,7 @@ import {
 } from '@prisma/client';
 import Stripe from 'stripe';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RevenueSplitService } from '../revenue/revenue-split.service';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
@@ -61,6 +62,7 @@ export class BillingService {
     private readonly platformSettings: PlatformSettingsService,
     private readonly revenueSplit: RevenueSplitService,
     private readonly config: ConfigService,
+    private readonly notifications: NotificationsService,
   ) {
     const key = this.config.get<string>('STRIPE_SECRET_KEY');
     if (key) {
@@ -696,6 +698,13 @@ export class BillingService {
       where: { id: gift.id },
       data: { revenueBatchId: batch.id },
     });
+
+    void this.notifications.notifyGift(
+      dto.receiverId,
+      senderId,
+      dto.streamId,
+      catalog.name,
+    );
 
     const updatedSender = await this.prisma.user.findUnique({
       where: { id: senderId },

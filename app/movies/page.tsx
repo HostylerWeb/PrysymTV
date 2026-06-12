@@ -9,10 +9,9 @@ import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+import { fetchMovieGenres, genreLabel, type CategoryItem } from "@/lib/api/categories"
 import { fetchFeaturedMovie, fetchMoviesFeed } from "@/lib/api/videos-feed"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
-
-const genres = ["All", "Action", "Comedy", "Drama", "Thriller", "Sci-Fi", "Horror", "Romance", "Documentary"]
 
 type MovieCard = {
   id: string
@@ -20,6 +19,7 @@ type MovieCard = {
   poster: string
   year: string
   genre: string
+  genreSlug: string
   views: string
   likes: string
 }
@@ -31,7 +31,8 @@ type FeaturedMovie = MovieCard & {
 
 export default function MoviesPage() {
   const [activeTab, setActiveTab] = useState("movies")
-  const [activeGenre, setActiveGenre] = useState("All")
+  const [genreOptions, setGenreOptions] = useState<CategoryItem[]>([])
+  const [activeGenre, setActiveGenre] = useState("all")
   const [activeYear, setActiveYear] = useState("All Years")
   const [sortBy, setSortBy] = useState("Popularity")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
@@ -44,17 +45,25 @@ export default function MoviesPage() {
   const [newReleasesFromApi, setNewReleasesFromApi] = useState<MovieCard[]>([])
 
   useEffect(() => {
+    void fetchMovieGenres().then((res) => setGenreOptions(res.items))
+  }, [])
+
+  useEffect(() => {
     void Promise.all([fetchMoviesFeed(1), fetchFeaturedMovie()])
       .then(([res, featured]) => {
-        const mapRow = (m: (typeof res.items)[number]): MovieCard => ({
-          id: m.id,
-          title: m.title,
-          poster: videoThumbnail(m.thumbnailUrl),
-          year: String(m.releaseYear ?? new Date().getFullYear()),
-          genre: m.category ?? "Drama",
-          views: formatViewCount(m.viewsCount),
-          likes: formatViewCount(m.likesCount ?? 0),
-        })
+        const mapRow = (m: (typeof res.items)[number]): MovieCard => {
+          const genreSlug = m.category ?? "drama"
+          return {
+            id: m.id,
+            title: m.title,
+            poster: videoThumbnail(m.thumbnailUrl),
+            year: String(m.releaseYear ?? new Date().getFullYear()),
+            genreSlug,
+            genre: genreLabel(genreSlug, genreOptions),
+            views: formatViewCount(m.viewsCount),
+            likes: formatViewCount(m.likesCount ?? 0),
+          }
+        }
         const mapped = res.items.map(mapRow)
         setMovies(mapped)
         setTrendingFromApi(mapped.slice(0, 3))
@@ -75,10 +84,10 @@ export default function MoviesPage() {
         }
       })
       .finally(() => setLoading(false))
-  }, [])
+  }, [genreOptions])
 
   const filteredMovies = movies.filter(movie => {
-    const matchesGenre = activeGenre === "All" || movie.genre === activeGenre;
+    const matchesGenre = activeGenre === "all" || movie.genreSlug === activeGenre;
     const matchesSearch = movie.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesYear = activeYear === "All Years" || movie.year === activeYear;
     return matchesGenre && matchesSearch && matchesYear;
@@ -145,18 +154,31 @@ export default function MoviesPage() {
       {/* Genre Filter */}
       <div className="px-4 py-4">
         <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4">
-          {genres.map((genre) => (
+          <button
+            type="button"
+            onClick={() => setActiveGenre("all")}
+            className={cn(
+              "px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors",
+              activeGenre === "all"
+                ? "bg-foreground text-background"
+                : "bg-secondary text-foreground hover:bg-secondary/80",
+            )}
+          >
+            All
+          </button>
+          {genreOptions.map((genre) => (
             <button
-              key={genre}
-              onClick={() => setActiveGenre(genre)}
+              key={genre.slug}
+              type="button"
+              onClick={() => setActiveGenre(genre.slug)}
               className={cn(
                 "px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors",
-                activeGenre === genre 
-                  ? "bg-foreground text-background" 
-                  : "bg-secondary text-foreground hover:bg-secondary/80"
+                activeGenre === genre.slug
+                  ? "bg-foreground text-background"
+                  : "bg-secondary text-foreground hover:bg-secondary/80",
               )}
             >
-              {genre}
+              {genre.label}
             </button>
           ))}
         </div>
@@ -284,8 +306,11 @@ export default function MoviesPage() {
                   onChange={(e) => setActiveGenre(e.target.value)}
                   className="appearance-none bg-secondary text-foreground text-sm font-medium pl-3 pr-8 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer border border-transparent hover:border-border"
                 >
-                  {genres.map((genre) => (
-                    <option key={genre} value={genre}>{genre === "All" ? "All Genres" : genre}</option>
+                  <option value="all">All Genres</option>
+                  {genreOptions.map((genre) => (
+                    <option key={genre.slug} value={genre.slug}>
+                      {genre.label}
+                    </option>
                   ))}
                 </select>
                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />

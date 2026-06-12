@@ -1,4 +1,7 @@
-import { DEFAULT_PODCAST_CATEGORIES } from '../categories/categories.constants';
+import {
+  DEFAULT_MOVIE_GENRES,
+  DEFAULT_PODCAST_CATEGORIES,
+} from '../categories/categories.constants';
 import { PLATFORM_PROGRAMS } from '../programs/programs.constants';
 import type {
   AdsSettings,
@@ -97,3 +100,6 @@ export const DEFAULT_PROGRAMS_SETTINGS: ProgramConfigEntry[] = PLATFORM_PROGRAMS
 
 export const DEFAULT_PODCAST_CATEGORIES_SETTINGS: CategoryConfigEntry[] =
   DEFAULT_PODCAST_CATEGORIES;
+
+export const DEFAULT_MOVIE_GENRES_SETTINGS: CategoryConfigEntry[] =
+  DEFAULT_MOVIE_GENRES;

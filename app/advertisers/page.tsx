@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Header } from "@/components/header"
+import { Footer } from "@/components/footer"
 import { BottomNavigation } from "@/components/bottom-navigation"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -64,7 +65,11 @@ export default function AdvertisersPortalPage() {
           <h1 className="text-2xl font-bold">Advertise on Prysym TV</h1>
           <p className="text-sm text-muted-foreground mt-2">
             Register your business to run campaigns across home, shorts, movies, and verticals.
-            Campaign creation is managed in{" "}
+            Learn how advertising works on our{" "}
+            <Link href="/advertise" className="text-primary hover:underline">
+              Advertise page
+            </Link>
+            . Campaign creation is managed in{" "}
             <Link href="/admin/ads" className="text-primary hover:underline">
               admin
             </Link>{" "}
@@ -125,7 +130,8 @@ export default function AdvertisersPortalPage() {
           </Button>
         </section>
       </div>
-      <BottomNavigation />
+      <Footer />
+      <BottomNavigation activeTab="none" onTabChange={() => {}} />
     </main>
   )
 }

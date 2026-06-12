@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Put,
   Req,
@@ -17,6 +19,7 @@ import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { AttachEpisodeVideoDto } from './dto/attach-episode-video.dto';
 import { CreateVerticalEpisodeDto } from './dto/create-vertical-episode.dto';
 import { CreateVerticalSeriesDto } from './dto/create-vertical-series.dto';
+import { UpdateVerticalEpisodeDto } from './dto/update-vertical-episode.dto';
 import { VerticalsService } from './verticals.service';
 
 /** Micro-drama / vertical film series (9:16 episodic). */
@@ -62,6 +65,25 @@ export class VerticalsController {
     @Body() body: AttachEpisodeVideoDto,
   ) {
     return this.verticals.attachEpisodeVideo(user.id, episodeId, body);
+  }
+
+  @Patch('episodes/:episodeId')
+  @UseGuards(JwtAuthGuard)
+  updateEpisode(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('episodeId') episodeId: string,
+    @Body() body: UpdateVerticalEpisodeDto,
+  ) {
+    return this.verticals.updateEpisode(user.id, episodeId, body);
+  }
+
+  @Delete('episodes/:episodeId')
+  @UseGuards(JwtAuthGuard)
+  deleteEpisode(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('episodeId') episodeId: string,
+  ) {
+    return this.verticals.deleteEpisode(user.id, episodeId);
   }
 
   @Post('episodes/:episodeId/view')

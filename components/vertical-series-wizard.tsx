@@ -39,6 +39,8 @@ const GENRES = [
   "Mystery",
 ]
 
+const NEW_SERIES_VALUE = "__new__"
+
 type WizardMode = "choose" | "series" | "episode" | "done"
 
 interface VerticalSeriesWizardProps {
@@ -88,7 +90,9 @@ export function VerticalSeriesWizard({
   const [cliffhanger, setCliffhanger] = useState("")
   const [videoFile, setVideoFile] = useState<File | null>(null)
 
-  const activeSlug = createdSeriesSlug ?? selectedSlug
+  const activeSlug =
+    createdSeriesSlug ??
+    (selectedSlug === NEW_SERIES_VALUE ? "" : selectedSlug)
 
   const selectedSeries = useMemo(
     () => mySeries.find((s) => s.slug === activeSlug),
@@ -131,8 +135,12 @@ export function VerticalSeriesWizard({
       .then((res) => {
         setMySeries(res.items)
         if (res.items[0]) setSelectedSlug(res.items[0].slug)
+        else setSelectedSlug(NEW_SERIES_VALUE)
       })
-      .catch(() => setMySeries([]))
+      .catch(() => {
+        setMySeries([])
+        setSelectedSlug(NEW_SERIES_VALUE)
+      })
       .finally(() => setLoadingSeries(false))
   }, [isOpen])
 
@@ -163,38 +171,42 @@ export function VerticalSeriesWizard({
 
   if (!isOpen) return null
 
-  const handleCreateSeries = async () => {
+  const createSeriesRecord = async (): Promise<string> => {
     if (!seriesTitle.trim() || !seriesSlug.trim()) {
-      setError("Series title and URL slug are required")
-      return
+      throw new Error("Series title and URL slug are required")
     }
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(seriesSlug)) {
-      setError("Slug must be lowercase letters, numbers, and hyphens only")
-      return
+      throw new Error("Slug must be lowercase letters, numbers, and hyphens only")
     }
 
+    let posterUrl: string | undefined
+    if (posterFile) {
+      const init = await initBannerUpload(posterFile)
+      posterUrl = await uploadProfileImage(init, posterFile)
+    }
+
+    const slug = seriesSlug.trim()
+    await createVerticalSeries({
+      slug,
+      title: seriesTitle.trim(),
+      tagline: tagline.trim() || undefined,
+      description: description.trim() || undefined,
+      genre,
+      posterUrl,
+    })
+
+    setCreatedSeriesSlug(slug)
+    setSelectedSlug(slug)
+    const res = await fetchMyVerticalSeries()
+    setMySeries(res.items)
+    return slug
+  }
+
+  const handleCreateSeries = async () => {
     setBusy(true)
     setError(null)
     try {
-      let posterUrl: string | undefined
-      if (posterFile) {
-        const init = await initBannerUpload(posterFile)
-        posterUrl = await uploadProfileImage(init, posterFile)
-      }
-
-      await createVerticalSeries({
-        slug: seriesSlug.trim(),
-        title: seriesTitle.trim(),
-        tagline: tagline.trim() || undefined,
-        description: description.trim() || undefined,
-        genre,
-        posterUrl,
-      })
-
-      setCreatedSeriesSlug(seriesSlug.trim())
-      setSelectedSlug(seriesSlug.trim())
-      const res = await fetchMyVerticalSeries()
-      setMySeries(res.items)
+      await createSeriesRecord()
       setMode("episode")
       setEpisodeNumber(1)
     } catch (e) {
@@ -205,9 +217,27 @@ export function VerticalSeriesWizard({
   }
 
   const handleUploadEpisode = async () => {
-    const slug = activeSlug
-    if (!slug || !episodeTitle.trim() || !videoFile) {
-      setError("Series, episode title, and video file are required")
+    if (!episodeTitle.trim() || !videoFile) {
+      setError("Episode title and video file are required")
+      return
+    }
+
+    let slug = activeSlug
+    if (!slug || selectedSlug === NEW_SERIES_VALUE) {
+      setBusy(true)
+      setError(null)
+      try {
+        slug = await createSeriesRecord()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not create series")
+        setBusy(false)
+        return
+      }
+      setBusy(false)
+    }
+
+    if (!slug) {
+      setError("Select a series or create a new one")
       return
     }
 
@@ -497,6 +527,7 @@ export function VerticalSeriesWizard({
                         onChange={(e) => setSelectedSlug(e.target.value)}
                         className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
                       >
+                        <option value={NEW_SERIES_VALUE}>+ New series</option>
                         {mySeries.map((s) => (
                           <option key={s.slug} value={s.slug}>
                             {s.title} ({s.episodes.length} eps)
@@ -506,7 +537,77 @@ export function VerticalSeriesWizard({
                     </div>
                   )}
 
-                  {selectedSeries && (
+                  {!createdSeriesSlug && selectedSlug === NEW_SERIES_VALUE && (
+                    <div className="space-y-3 p-4 rounded-xl border border-border bg-secondary/20">
+                      <p className="text-sm font-medium">New series details</p>
+                      <input
+                        value={seriesTitle}
+                        onChange={(e) => setSeriesTitle(e.target.value)}
+                        placeholder="Series name *"
+                        className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+                      />
+                      <input
+                        value={seriesSlug}
+                        onChange={(e) => {
+                          setSlugTouched(true)
+                          setSeriesSlug(e.target.value.toLowerCase())
+                        }}
+                        placeholder="URL slug * (e.g. midnight-contract)"
+                        className="w-full h-11 px-4 rounded-xl bg-secondary text-sm font-mono"
+                      />
+                      <input
+                        value={tagline}
+                        onChange={(e) => setTagline(e.target.value)}
+                        placeholder="Tagline (optional)"
+                        className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+                      />
+                      <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Description"
+                        rows={2}
+                        className="w-full px-4 py-3 rounded-xl bg-secondary text-sm resize-none"
+                      />
+                      <select
+                        value={genre}
+                        onChange={(e) => setGenre(e.target.value)}
+                        className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+                      >
+                        {GENRES.map((g) => (
+                          <option key={g} value={g}>
+                            {g}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="flex gap-3 p-3 rounded-xl border border-dashed border-border cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => setPosterFile(e.target.files?.[0] ?? null)}
+                        />
+                        {posterPreview ? (
+                          <img
+                            src={posterPreview}
+                            alt="Series cover"
+                            className="w-16 aspect-[9/16] rounded-lg object-cover"
+                          />
+                        ) : (
+                          <div className="w-16 aspect-[9/16] rounded-lg bg-secondary flex items-center justify-center">
+                            <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="text-xs">
+                          <p className="font-medium">Series cover (9:16)</p>
+                          <p className="text-muted-foreground mt-0.5">
+                            {posterFile ? posterFile.name : "Upload poster image"}
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  )}
+
+                  {selectedSeries && selectedSlug !== NEW_SERIES_VALUE && (
                     <div className="p-3 rounded-xl bg-secondary/40 text-sm">
                       <p className="font-medium">{selectedSeries.title}</p>
                       <p className="text-xs text-muted-foreground">

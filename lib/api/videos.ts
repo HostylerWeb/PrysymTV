@@ -11,6 +11,10 @@ export type UploadInitBody = {
   fileName?: string;
   releaseYear?: number;
   ageRating?: string;
+  tagline?: string;
+  director?: string;
+  writers?: string;
+  cast?: Array<{ name: string; role: string }>;
 };
 
 export type UploadInitResponse = {
@@ -53,6 +57,9 @@ export type VideoDetail = {
   releaseYear?: number | null;
   ageRating?: string | null;
   tagline?: string | null;
+  director?: string | null;
+  writers?: string[];
+  cast?: Array<{ name: string; role: string; imageUrl?: string | null }>;
   creator: {
     id: string;
     username: string;

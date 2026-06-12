@@ -1,7 +1,7 @@
 "use client"
 
 import { use, useState, useRef, useEffect, useCallback } from "react"
-import { ChevronLeft, Play, Plus, Check, Share2, Star, Clock, Calendar, Lock, Flag, ThumbsUp } from "lucide-react"
+import { ChevronLeft, Play, Plus, Check, Share2, Clock, Calendar, Lock, Flag, ThumbsUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -14,10 +14,13 @@ import { ShareSheet } from "@/components/share-sheet"
 import { Footer } from "@/components/footer"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { useAuth } from "@/contexts/auth-context"
+import { genreLabel, fetchMovieGenres } from "@/lib/api/categories"
 import { fetchVideo, recordVideoView, toggleVideoLike, toggleVideoSave } from "@/lib/api/videos-feed"
 import { useWatchAnalytics } from "@/lib/hooks/use-watch-analytics"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
+import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 import { saveWatchProgress } from "@/lib/api/history"
+import { fetchServedAd, type ServedAd } from "@/lib/api/ads"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
 import { bumpLikeCount } from "@/lib/engagement-count"
 import type { ApiVideoDetail } from "@/lib/api/videos-feed"
@@ -43,10 +46,15 @@ type MovieDisplay = {
   views: string
   videoUrl: string
   category: string
-  cast: Array<{ name: string; role: string; image: string }>
+  cast: Array<{ name: string; role: string }>
 }
 
-function mapApiToMovie(v: ApiVideoDetail): MovieDisplay {
+function mapApiToMovie(
+  v: ApiVideoDetail,
+  genres: Array<{ slug: string; label: string }>,
+): MovieDisplay {
+  const genreSlug = v.category ?? "drama"
+  const label = genreLabel(genreSlug, genres)
   return {
     id: v.id,
     creatorId: v.creator.id,
@@ -55,23 +63,26 @@ function mapApiToMovie(v: ApiVideoDetail): MovieDisplay {
     banner: videoThumbnail(v.thumbnailUrl),
     year: String(v.releaseYear ?? new Date().getFullYear()),
     rating: v.likesCount > 0 ? formatViewCount(v.likesCount) : "—",
-    genre: v.category ?? "Drama",
-    genres: [v.category ?? "Drama"],
+    genre: label,
+    genres: [label],
     duration: formatDuration(v.durationSeconds),
     ageRating: v.ageRating ?? "PG-13",
     tagline: v.tagline ?? "",
     description: v.description ?? "",
     longDescription: v.description ?? "",
-    director: v.creator.displayName ?? v.creator.username,
-    writers: [],
+    director: v.director ?? v.creator.displayName ?? v.creator.username,
+    writers: v.writers ?? [],
     matchScore:
       v.viewsCount > 0
         ? `${Math.min(99, Math.round((v.likesCount / v.viewsCount) * 100))}%`
         : "—",
     views: formatViewCount(v.viewsCount),
     videoUrl: v.playbackUrl ?? v.videoUrl ?? v.hlsMasterUrl ?? "",
-    category: "movies",
-    cast: [],
+    category: genreSlug,
+    cast: (v.cast ?? []).map((m) => ({
+      name: m.name,
+      role: m.role,
+    })),
   }
 }
 
@@ -89,12 +100,15 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [showPreroll, setShowPreroll] = useState(false)
+  const [prerollAd, setPrerollAd] = useState<ServedAd | null>(null)
+  const [prerollLoading, setPrerollLoading] = useState(false)
   const [isReportOpen, setIsReportOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const progressSent = useRef(0)
   const viewRecorded = useRef(false)
   const { isPlacementEnabled } = usePublicAdsConfig()
+  const showAds = useShouldShowAds()
   useWatchAnalytics(isPlaying ? movie?.id : undefined, { creatorId: movie?.creatorId })
 
   useEffect(() => {
@@ -107,9 +121,9 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
     async function load() {
       setLoading(true)
       try {
-        const api = await fetchVideo(id)
+        const [api, genresRes] = await Promise.all([fetchVideo(id), fetchMovieGenres()])
         if (cancelled) return
-        setMovie(mapApiToMovie(api))
+        setMovie(mapApiToMovie(api, genresRes.items))
         setLikesCount(api.likesCount ?? 0)
         setIsInList(api.saved ?? false)
         setIsLiked(api.liked ?? false)
@@ -141,26 +155,44 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
     [isAuthenticated, movie],
   )
 
-  const handleWatchNow = () => {
-    if (!isAuthenticated) {
-      setIsAuthModalOpen(true)
-      return
-    }
-    if (isPlacementEnabled("movie_preroll")) {
-      setShowPreroll(true)
-    } else {
-      startPlayback()
-    }
-  }
-
-  const startPlayback = () => {
+  const startPlayback = useCallback(() => {
     setShowPreroll(false)
+    setPrerollAd(null)
+    setPrerollLoading(false)
     setIsPlaying(true)
     if (!viewRecorded.current) {
       viewRecorded.current = true
       void recordVideoView(id).catch(() => {})
     }
-    setTimeout(() => videoRef.current?.play(), 100)
+  }, [id])
+
+  const handleWatchNow = () => {
+    if (!isAuthenticated) {
+      setIsAuthModalOpen(true)
+      return
+    }
+    if (!showAds || !isPlacementEnabled("movie_preroll")) {
+      startPlayback()
+      return
+    }
+    setPrerollLoading(true)
+    void fetchServedAd("movie_preroll", { peek: true })
+      .then((peekAd) => {
+        if (!peekAd?.mediaUrl?.trim()) {
+          startPlayback()
+          return
+        }
+        return fetchServedAd("movie_preroll").then((ad) => {
+          if (ad?.mediaUrl?.trim()) {
+            setPrerollAd(ad)
+            setShowPreroll(true)
+          } else {
+            startPlayback()
+          }
+        })
+      })
+      .catch(() => startPlayback())
+      .finally(() => setPrerollLoading(false))
   }
 
   const requireAuth = (action: () => void) => {
@@ -180,8 +212,14 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <div className="max-w-7xl mx-auto w-full">
         <div className="relative w-full aspect-video md:aspect-[21/9] bg-black overflow-hidden">
-          {showPreroll && (
+          {prerollLoading && (
+            <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center">
+              <p className="text-white/70 text-sm">Loading…</p>
+            </div>
+          )}
+          {showPreroll && prerollAd && (
             <AdPreroll
+              servedAd={prerollAd}
               onComplete={startPlayback}
               creatorId={movie.creatorId}
               videoId={movie.id}
@@ -224,14 +262,13 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
           )}
         </div>
 
-        <div className="px-4 md:px-8 py-6 grid md:grid-cols-3 gap-8">
-          <div className="md:col-span-2">
+        <div className="px-4 md:px-8 py-6">
+          <div>
             <div className="md:hidden mb-4">
               <h1 className="text-2xl font-bold">{movie.title}</h1>
               <p className="text-sm text-muted-foreground italic">{movie.tagline}</p>
             </div>
             <div className="flex flex-wrap gap-2 mb-4">
-              <span className="flex items-center gap-1 bg-yellow-500/20 px-2 py-1 rounded-full text-sm"><Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />{likesCount > 0 ? formatViewCount(likesCount) : "—"}</span>
               <span className="flex items-center gap-1 bg-secondary px-2 py-1 rounded-full text-sm"><Calendar className="w-4 h-4" />{movie.year}</span>
               <span className="flex items-center gap-1 bg-secondary px-2 py-1 rounded-full text-sm"><Clock className="w-4 h-4" />{movie.duration}</span>
               <span className="px-2 py-1 rounded-full bg-secondary text-sm">{movie.ageRating}</span>
@@ -265,26 +302,25 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
             <div className="flex flex-wrap gap-2 mb-6">{movie.genres.map((g) => <span key={g} className="px-3 py-1 rounded-full bg-secondary/50 text-sm">{g}</span>)}</div>
             <p className={cn("text-sm text-foreground/80", !showFullDescription && "line-clamp-3 md:line-clamp-none")}>{showFullDescription ? movie.longDescription : movie.description}</p>
             <button onClick={() => setShowFullDescription(!showFullDescription)} className="text-sm text-primary mt-2 md:hidden">{showFullDescription ? "Show Less" : "Read More"}</button>
+            {movie.director && (
+              <div className="mt-8">
+                <h3 className="text-lg font-bold mb-1">Director</h3>
+                <p className="text-sm text-foreground/80">{movie.director}</p>
+              </div>
+            )}
             {movie.cast.length > 0 && (
               <div className="mt-8">
                 <h3 className="text-lg font-bold mb-4">Top Cast</h3>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
+                <ul className="flex flex-wrap gap-x-6 gap-y-3">
                   {movie.cast.map((m) => (
-                    <div key={m.name} className="text-center">
-                      <img src={m.image} alt={m.name} className="w-16 h-16 rounded-full mx-auto mb-2 object-cover" />
-                      <p className="text-xs font-medium">{m.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{m.role}</p>
-                    </div>
+                    <li key={m.name}>
+                      <p className="text-sm font-medium">{m.name}</p>
+                      <p className="text-xs text-muted-foreground">{m.role}</p>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
             )}
-          </div>
-          <div className="hidden md:block p-6 rounded-2xl bg-secondary/20 border border-border h-fit">
-            <p className="text-xs text-muted-foreground">Director</p>
-            <p className="text-sm font-medium mb-3">{movie.director}</p>
-            <p className="text-xs text-muted-foreground">Views</p>
-            <p className="text-sm font-medium">{movie.views}</p>
           </div>
         </div>
       </div>

@@ -1,8 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { X, Upload, Check, Film } from "lucide-react"
+import { X, Upload, Check, Film, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useAdminQuery } from "@/lib/admin/use-admin-query"
+import { fetchAdminMovieGenresConfig } from "@/lib/api/admin"
 import {
   getVideoUploadMaxBytes,
   pollVideoUntilReady,
@@ -10,6 +12,8 @@ import {
 } from "@/lib/api/videos"
 
 const AGE_RATINGS = ["G", "PG", "PG-13", "R", "NC-17", "TV-MA", "NR"]
+
+type CastRow = { name: string; role: string }
 
 interface AdminMovieUploadSheetProps {
   isOpen: boolean
@@ -22,8 +26,17 @@ export function AdminMovieUploadSheet({
   onClose,
   onSuccess,
 }: AdminMovieUploadSheetProps) {
+  const { data: genres } = useAdminQuery(fetchAdminMovieGenresConfig, [])
+  const activeGenres = (genres ?? []).filter((g) => g.isActive)
+  const defaultGenreSlug = activeGenres[0]?.slug ?? "drama"
+
   const [title, setTitle] = useState("")
+  const [tagline, setTagline] = useState("")
   const [description, setDescription] = useState("")
+  const [genre, setGenre] = useState("drama")
+  const [director, setDirector] = useState("")
+  const [writers, setWriters] = useState("")
+  const [cast, setCast] = useState<CastRow[]>([{ name: "", role: "" }])
   const [releaseYear, setReleaseYear] = useState(String(new Date().getFullYear()))
   const [ageRating, setAgeRating] = useState("PG-13")
   const [file, setFile] = useState<File | null>(null)
@@ -36,7 +49,12 @@ export function AdminMovieUploadSheet({
   useEffect(() => {
     if (!isOpen) return
     setTitle("")
+    setTagline("")
     setDescription("")
+    setGenre(defaultGenreSlug)
+    setDirector("")
+    setWriters("")
+    setCast([{ name: "", role: "" }])
     setReleaseYear(String(new Date().getFullYear()))
     setAgeRating("PG-13")
     setFile(null)
@@ -45,9 +63,17 @@ export function AdminMovieUploadSheet({
     setBusy(false)
     setProcessing(false)
     setDone(false)
-  }, [isOpen])
+  }, [isOpen, defaultGenreSlug])
 
   if (!isOpen) return null
+
+  const updateCast = (index: number, patch: Partial<CastRow>) => {
+    setCast((rows) => {
+      const next = [...rows]
+      next[index] = { ...next[index], ...patch }
+      return next
+    })
+  }
 
   const handleUpload = async () => {
     if (!title.trim() || !file) return
@@ -64,6 +90,10 @@ export function AdminMovieUploadSheet({
       return
     }
 
+    const castPayload = cast
+      .map((c) => ({ name: c.name.trim(), role: c.role.trim() }))
+      .filter((c) => c.name && c.role)
+
     setBusy(true)
     setError(null)
     setProgress(0)
@@ -73,8 +103,12 @@ export function AdminMovieUploadSheet({
         {
           type: "movie",
           title: title.trim(),
+          tagline: tagline.trim() || undefined,
           description: description.trim() || undefined,
-          category: "movies",
+          category: genre,
+          director: director.trim() || undefined,
+          writers: writers.trim() || undefined,
+          cast: castPayload.length ? castPayload : undefined,
           releaseYear: year,
           ageRating,
           mimeType: file.type,
@@ -111,7 +145,7 @@ export function AdminMovieUploadSheet({
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="font-semibold text-lg">Upload movie</h2>
-            <p className="text-xs text-muted-foreground">Admin-only catalog title</p>
+            <p className="text-xs text-muted-foreground">Catalog metadata + feature video</p>
           </div>
           <button
             type="button"
@@ -147,8 +181,15 @@ export function AdminMovieUploadSheet({
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Movie title"
+                placeholder="Movie title *"
                 className="w-full h-12 px-4 rounded-xl bg-secondary text-sm"
+              />
+              <input
+                value={tagline}
+                onChange={(e) => setTagline(e.target.value)}
+                placeholder="Tagline (short hook)"
+                className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+                maxLength={300}
               />
               <textarea
                 value={description}
@@ -159,13 +200,17 @@ export function AdminMovieUploadSheet({
                 maxLength={5000}
               />
               <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="number"
-                  value={releaseYear}
-                  onChange={(e) => setReleaseYear(e.target.value)}
-                  placeholder="Release year"
+                <select
+                  value={genre}
+                  onChange={(e) => setGenre(e.target.value)}
                   className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
-                />
+                >
+                  {activeGenres.map((g) => (
+                    <option key={g.slug} value={g.slug}>
+                      {g.label}
+                    </option>
+                  ))}
+                </select>
                 <select
                   value={ageRating}
                   onChange={(e) => setAgeRating(e.target.value)}
@@ -178,6 +223,66 @@ export function AdminMovieUploadSheet({
                   ))}
                 </select>
               </div>
+              <input
+                type="number"
+                value={releaseYear}
+                onChange={(e) => setReleaseYear(e.target.value)}
+                placeholder="Release year"
+                className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+              />
+              <input
+                value={director}
+                onChange={(e) => setDirector(e.target.value)}
+                placeholder="Director"
+                className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+              />
+              <input
+                value={writers}
+                onChange={(e) => setWriters(e.target.value)}
+                placeholder="Writers (comma-separated)"
+                className="w-full h-11 px-4 rounded-xl bg-secondary text-sm"
+              />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Main cast</p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1"
+                    onClick={() => setCast((rows) => [...rows, { name: "", role: "" }])}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add
+                  </Button>
+                </div>
+                {cast.map((row, index) => (
+                  <div key={index} className="flex gap-2">
+                    <input
+                      value={row.name}
+                      onChange={(e) => updateCast(index, { name: e.target.value })}
+                      placeholder="Actor name"
+                      className="flex-1 h-10 px-3 rounded-lg bg-secondary text-sm"
+                    />
+                    <input
+                      value={row.role}
+                      onChange={(e) => updateCast(index, { role: e.target.value })}
+                      placeholder="Role"
+                      className="flex-1 h-10 px-3 rounded-lg bg-secondary text-sm"
+                    />
+                    {cast.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setCast((rows) => rows.filter((_, i) => i !== index))}
+                        className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground"
+                        aria-label="Remove cast member"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
               <label className="block p-8 rounded-xl border-2 border-dashed border-border text-center cursor-pointer hover:border-primary/50">
                 <input
                   type="file"
@@ -187,7 +292,7 @@ export function AdminMovieUploadSheet({
                 />
                 <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm font-medium">
-                  {file ? file.name : "Choose video file"}
+                  {file ? file.name : "Choose video file *"}
                 </p>
               </label>
               {busy && progress > 0 && (

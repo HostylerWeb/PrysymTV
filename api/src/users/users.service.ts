@@ -14,7 +14,9 @@ import {
   mapVideoCard,
   VIDEO_CARD_SELECT,
 } from '../common/mappers/content.mapper';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PlaylistsService } from '../playlists/playlists.service';
 import { BillingService } from '../billing/billing.service';
 import { StorageService } from '../storage/storage.service';
 import { UpdateMeDto } from './dto/update-me.dto';
@@ -31,9 +33,11 @@ import { ReplaceSocialLinksDto } from './dto/social-links.dto';
 export class UsersService {
   constructor(
     private prisma: PrismaService,
+    private readonly notifications: NotificationsService,
     private readonly storage: StorageService,
     private readonly config: ConfigService,
     private readonly billing: BillingService,
+    private readonly playlists: PlaylistsService,
   ) {}
 
   async getMe(userId: string) {
@@ -459,21 +463,7 @@ export class UsersService {
       select: { id: true },
     });
     if (!user) throw new NotFoundException('Creator not found');
-    const playlists = await this.prisma.playlist.findMany({
-      where: { creatorId: user.id, visibility: 'public' },
-      orderBy: { updatedAt: 'desc' },
-      include: { _count: { select: { items: true } } },
-    });
-    return {
-      items: playlists.map((p) => ({
-        id: p.id,
-        title: p.title,
-        description: p.description,
-        coverUrl: p.coverUrl,
-        type: p.type,
-        itemCount: p._count.items,
-      })),
-    };
+    return this.playlists.listPublicByCreatorId(user.id);
   }
 
   async follow(followerId: string, username: string) {
@@ -491,7 +481,7 @@ export class UsersService {
       update: {},
     });
 
-    await this.maybeNotifyFollow(target.id, followerId);
+    void this.notifications.notifyFollow(target.id, followerId);
 
     return { success: true, following: true };
   }
@@ -725,32 +715,6 @@ export class UsersService {
     if (this.config.get<string>('NODE_ENV') === 'production') return false;
     const raw = this.config.get<string>('AUTO_APPROVE_VERTICAL_CREATOR');
     return raw === 'true' || raw === '1';
-  }
-
-  private async maybeNotifyFollow(
-    recipientId: string,
-    actorId: string,
-  ): Promise<void> {
-    const pref = await this.prisma.userNotificationPreference.findUnique({
-      where: { userId_type: { userId: recipientId, type: 'follow' } },
-    });
-    if (pref && !pref.enabled) return;
-
-    const actor = await this.prisma.user.findUnique({
-      where: { id: actorId },
-      select: { displayName: true, username: true },
-    });
-    const name = actor?.displayName || actor?.username || 'Someone';
-
-    await this.prisma.notification.create({
-      data: {
-        userId: recipientId,
-        type: 'follow',
-        actorId,
-        referenceId: actorId,
-        message: `${name} started following you`,
-      },
-    });
   }
 
   private sanitizeUser(user: {

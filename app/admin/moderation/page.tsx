@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
+import { AdminConfirmDialog } from "@/components/admin/admin-confirm-dialog"
 import { AdminFilterBar } from "@/components/admin/admin-filter-bar"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminPagination } from "@/components/admin/admin-pagination"
@@ -9,7 +10,7 @@ import { AdminStatusPill } from "@/components/admin/admin-status-pill"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
 import { AdminDateRangePicker } from "@/components/admin/admin-date-range-picker"
 import { useAdminListDateFilter } from "@/components/admin/use-admin-list-date-filter"
-import { fetchAdminReports } from "@/lib/api/admin"
+import { deleteAdminReport, fetchAdminReports } from "@/lib/api/admin"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -39,9 +40,10 @@ export default function AdminModerationPage() {
   const [tab, setTab] = useState("pending")
   const [page, setPage] = useState(1)
   const [targetType, setTargetType] = useState("all")
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const { dateRange, setDateRange, dateParams, dateDeps } = useAdminListDateFilter()
 
-  const { data, loading, error } = useAdminQuery(
+  const { data, loading, error, reload } = useAdminQuery(
     () =>
       fetchAdminReports({
         page,
@@ -61,11 +63,21 @@ export default function AdminModerationPage() {
   const meta = data?.meta ?? { page: 1, limit: 20, total: 0 }
   const totalPages = Math.ceil(meta.total / meta.limit) || 1
 
+  const handleDelete = async (id: string) => {
+    setDeletingId(id)
+    try {
+      await deleteAdminReport(id)
+      await reload()
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   return (
     <>
       <AdminPageHeader
         title="Content moderation"
-        description="Review user-submitted reports. Dismiss, delete content, or ban offenders."
+        description="Review user-submitted reports. Dismiss, delete content, ban offenders, or remove stale reports when content is already gone."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Moderation" }]}
         actions={
           <Button asChild variant="outline" size="sm" className="rounded-full">
@@ -126,22 +138,51 @@ export default function AdminModerationPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.map((r) => (
-              <TableRow key={r.id}>
-                <TableCell className="font-medium max-w-[200px] truncate">{r.targetTitle}</TableCell>
-                <TableCell className="capitalize text-muted-foreground">{r.targetType}</TableCell>
-                <TableCell className="capitalize">{r.reason}</TableCell>
-                <TableCell>{r.reporter}</TableCell>
-                <TableCell>
-                  <AdminStatusPill status={r.status} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button asChild size="sm" variant="outline" className="rounded-full">
-                    <Link href={`/admin/moderation/${r.id}`}>Review</Link>
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+            {items.map((r) => {
+              const contentRemoved = r.targetTitle === "(removed)"
+              return (
+                <TableRow key={r.id}>
+                  <TableCell className="font-medium max-w-[200px] truncate">
+                    {r.targetTitle}
+                  </TableCell>
+                  <TableCell className="capitalize text-muted-foreground">{r.targetType}</TableCell>
+                  <TableCell className="capitalize">{r.reason}</TableCell>
+                  <TableCell>{r.reporter}</TableCell>
+                  <TableCell>
+                    <AdminStatusPill status={r.status} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      {!contentRemoved && (
+                        <Button asChild size="sm" variant="outline" className="rounded-full">
+                          <Link href={`/admin/moderation/${r.id}`}>Review</Link>
+                        </Button>
+                      )}
+                      <AdminConfirmDialog
+                        title="Remove this report?"
+                        description={
+                          contentRemoved
+                            ? "The reported content no longer exists. This removes the report from the queue permanently."
+                            : "This removes the report record only. It does not delete the reported content."
+                        }
+                        confirmLabel="Remove report"
+                        onConfirm={() => void handleDelete(r.id)}
+                        trigger={
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-full text-destructive border-destructive/30 hover:bg-destructive/10"
+                            disabled={deletingId === r.id}
+                          >
+                            {deletingId === r.id ? "Removing…" : "Delete"}
+                          </Button>
+                        }
+                      />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
       </div>

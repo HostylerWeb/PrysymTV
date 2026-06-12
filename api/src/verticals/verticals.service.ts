@@ -508,4 +508,76 @@ export class VerticalsService {
     });
     return { items };
   }
+
+  private async assertEpisodeOwner(creatorId: string, episodeId: string) {
+    const episode = await this.prisma.verticalEpisode.findUnique({
+      where: { id: episodeId },
+      include: { series: true },
+    });
+    if (!episode) throw new NotFoundException('Episode not found');
+    if (episode.series.creatorId && episode.series.creatorId !== creatorId) {
+      throw new ForbiddenException('Not your episode');
+    }
+    return episode;
+  }
+
+  private async syncSeriesEpisodeCount(seriesId: string) {
+    const count = await this.prisma.verticalEpisode.count({
+      where: { seriesId },
+    });
+    await this.prisma.verticalSeries.update({
+      where: { id: seriesId },
+      data: { totalEpisodes: count },
+    });
+  }
+
+  async updateEpisode(
+    creatorId: string,
+    episodeId: string,
+    dto: {
+      episodeNumber?: number;
+      title?: string;
+      description?: string;
+      cliffhanger?: string;
+    },
+  ) {
+    await this.assertVerticalCreatorApproved(creatorId);
+    const episode = await this.assertEpisodeOwner(creatorId, episodeId);
+
+    if (
+      dto.episodeNumber != null &&
+      dto.episodeNumber !== episode.episodeNumber
+    ) {
+      const conflict = await this.prisma.verticalEpisode.findFirst({
+        where: {
+          seriesId: episode.seriesId,
+          episodeNumber: dto.episodeNumber,
+          NOT: { id: episodeId },
+        },
+      });
+      if (conflict) {
+        throw new ConflictException(
+          `Episode ${dto.episodeNumber} already exists in this series`,
+        );
+      }
+    }
+
+    return this.prisma.verticalEpisode.update({
+      where: { id: episodeId },
+      data: {
+        episodeNumber: dto.episodeNumber,
+        title: dto.title,
+        description: dto.description,
+        cliffhanger: dto.cliffhanger,
+      },
+    });
+  }
+
+  async deleteEpisode(creatorId: string, episodeId: string) {
+    await this.assertVerticalCreatorApproved(creatorId);
+    const episode = await this.assertEpisodeOwner(creatorId, episodeId);
+    await this.prisma.verticalEpisode.delete({ where: { id: episodeId } });
+    await this.syncSeriesEpisodeCount(episode.seriesId);
+    return { success: true };
+  }
 }

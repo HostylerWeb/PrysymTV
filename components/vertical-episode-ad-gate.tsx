@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import Link from "next/link"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   buildAdAttribution,
   fetchServedAd,
-  trackAdClick,
+  isValidServedAd,
+  openAdDestination,
   trackAdImpression,
   type ServedAd,
 } from "@/lib/api/ads"
@@ -14,36 +14,70 @@ import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 import { useAuth } from "@/contexts/auth-context"
 
 type VerticalEpisodeAdGateProps = {
-  seriesId?: string
   creatorId?: string
+  /** When provided, skips the serve request (parent already peeked). */
+  servedAd?: ServedAd
   onComplete: () => void
 }
 
 /** Full-screen ad before the next vertical-film episode plays. */
 export function VerticalEpisodeAdGate({
-  seriesId,
   creatorId,
+  servedAd,
   onComplete,
 }: VerticalEpisodeAdGateProps) {
   const showAds = useShouldShowAds()
   const { user } = useAuth()
   const { isPlacementEnabled, platformCreatorId } = usePublicAdsConfig()
-  const [ad, setAd] = useState<ServedAd | null | undefined>(undefined)
+  const onCompleteRef = useRef(onComplete)
+  onCompleteRef.current = onComplete
+  const finishedRef = useRef(false)
+
+  const complete = useCallback(() => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    onCompleteRef.current()
+  }, [])
+
+  const [ad, setAd] = useState<ServedAd | null | undefined>(
+    servedAd !== undefined
+      ? isValidServedAd(servedAd)
+        ? servedAd
+        : null
+      : undefined,
+  )
+  const [mediaReady, setMediaReady] = useState(false)
   const [countdown, setCountdown] = useState(5)
 
   const placementEnabled = isPlacementEnabled("vertical_episode")
 
   useEffect(() => {
-    if (!showAds || !placementEnabled) {
-      onComplete()
+    finishedRef.current = false
+    setMediaReady(false)
+  }, [servedAd?.id])
+
+  useEffect(() => {
+    if (servedAd !== undefined) {
+      const valid = isValidServedAd(servedAd) ? servedAd : null
+      setAd(valid)
+      if (valid) setCountdown(valid.skipAfterSeconds || 5)
+      if (!valid) complete()
       return
     }
+
+    if (!showAds || !placementEnabled) {
+      setAd(null)
+      complete()
+      return
+    }
+
     void fetchServedAd("vertical_episode").then((served) => {
-      setAd(served)
-      if (served) setCountdown(served.skipAfterSeconds || 5)
-      else onComplete()
+      const valid = isValidServedAd(served) ? served : null
+      setAd(valid)
+      if (valid) setCountdown(valid.skipAfterSeconds || 5)
+      if (!valid) complete()
     })
-  }, [onComplete, showAds, placementEnabled])
+  }, [showAds, placementEnabled, servedAd, complete])
 
   useEffect(() => {
     if (!ad) return
@@ -52,27 +86,19 @@ export function VerticalEpisodeAdGate({
       placement: "vertical_episode",
       creatorId,
       platformCreatorId,
-      videoId: seriesId,
       viewerUserId: user?.id,
     })
     void trackAdImpression(attr)
-  }, [ad, creatorId, platformCreatorId, seriesId, user?.id])
+  }, [ad, creatorId, platformCreatorId, user?.id])
 
   useEffect(() => {
-    if (!ad) return
+    if (!ad || !mediaReady) return
     if (countdown <= 0) return
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000)
     return () => clearTimeout(t)
-  }, [countdown, ad])
+  }, [countdown, ad, mediaReady])
 
-  if (ad === undefined) {
-    return (
-      <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center">
-        <p className="text-white/70 text-sm">Loading sponsor…</p>
-      </div>
-    )
-  }
-
+  if (ad === undefined) return null
   if (!ad) return null
 
   const attr = buildAdAttribution({
@@ -80,36 +106,61 @@ export function VerticalEpisodeAdGate({
     placement: "vertical_episode",
     creatorId,
     platformCreatorId,
-    videoId: seriesId,
     viewerUserId: user?.id,
   })
+
+  const onMediaReady = () => {
+    setMediaReady(true)
+    setCountdown(ad.skipAfterSeconds || 5)
+  }
 
   return (
     <div className="fixed inset-0 z-[100] bg-black flex flex-col max-w-lg mx-auto">
       <div className="flex items-center justify-between px-4 py-3">
-        <Link
+        <a
           href={ad.clickThroughUrl}
-          onClick={() => void trackAdClick(attr)}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => {
+            e.preventDefault()
+            openAdDestination(ad.clickThroughUrl, attr)
+          }}
           className="text-xs text-white/70 hover:text-white underline truncate max-w-[70%]"
         >
           Sponsored · {ad.title}
-        </Link>
-        {countdown <= 0 ? (
+        </a>
+        {mediaReady && countdown <= 0 ? (
           <button
             type="button"
-            onClick={onComplete}
+            onClick={complete}
             className="text-sm font-bold text-white bg-white/20 px-4 py-1.5 rounded-full"
           >
             Continue
           </button>
-        ) : (
+        ) : mediaReady ? (
           <span className="text-sm text-white/70">Continue in {countdown}s</span>
+        ) : (
+          <span className="text-sm text-white/50">Loading…</span>
         )}
       </div>
       {ad.mediaType === "video" ? (
-        <video src={ad.mediaUrl} autoPlay muted playsInline className="flex-1 w-full object-cover" />
+        <video
+          src={ad.mediaUrl}
+          autoPlay
+          muted
+          playsInline
+          onLoadedData={onMediaReady}
+          onError={() => complete()}
+          className="flex-1 w-full object-cover"
+        />
       ) : (
-        <img src={ad.mediaUrl} alt="" className="flex-1 w-full object-cover" />
+        <img
+          src={ad.mediaUrl}
+          alt=""
+          onLoad={onMediaReady}
+          onError={() => complete()}
+          className="flex-1 w-full object-cover"
+        />
       )}
     </div>
   )

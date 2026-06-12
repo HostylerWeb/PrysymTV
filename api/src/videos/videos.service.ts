@@ -26,6 +26,7 @@ import {
 } from '../common/engagement.util';
 import { Queue } from 'bullmq';
 import { AnalyticsService } from '../analytics/analytics.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { VIDEO_PROCESSING_QUEUE } from '../queue/queue.constants';
@@ -41,6 +42,7 @@ export class VideosService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly analytics: AnalyticsService,
+    private readonly notifications: NotificationsService,
     @InjectQueue(VIDEO_PROCESSING_QUEUE) private readonly videoQueue: Queue,
   ) {}
 
@@ -69,6 +71,15 @@ export class VideosService {
         ? (dto.visibility as Visibility)
         : Visibility.public;
 
+    const writers =
+      dto.type === 'movie' && dto.writers
+        ? dto.writers
+            .split(',')
+            .map((w) => w.trim())
+            .filter(Boolean)
+            .slice(0, 12)
+        : [];
+
     const video = await this.prisma.video.create({
       data: {
         creatorId: user.id,
@@ -78,16 +89,31 @@ export class VideosService {
         category:
           dto.category?.trim() ||
           (dto.type === 'movie'
-            ? 'movies'
+            ? 'drama'
             : dto.type === 'podcast'
               ? 'podcast'
               : undefined),
         releaseYear: dto.type === 'movie' ? (dto.releaseYear ?? null) : undefined,
         ageRating:
           dto.type === 'movie' ? dto.ageRating?.trim() || null : undefined,
+        tagline:
+          dto.type === 'movie' ? dto.tagline?.trim() || null : undefined,
+        director:
+          dto.type === 'movie' ? dto.director?.trim() || null : undefined,
+        writers: dto.type === 'movie' ? writers : [],
         tags,
         visibility,
         status: ContentStatus.processing,
+        cast:
+          dto.type === 'movie' && dto.cast?.length
+            ? {
+                create: dto.cast.slice(0, 20).map((member, index) => ({
+                  name: member.name.trim(),
+                  role: member.role.trim(),
+                  sortOrder: index,
+                })),
+              }
+            : undefined,
       },
     });
 
@@ -170,6 +196,7 @@ export class VideosService {
             avatarUrl: true,
           },
         },
+        cast: { orderBy: { sortOrder: 'asc' } },
       },
     });
     if (!video) throw new NotFoundException('Video not found');
@@ -194,11 +221,19 @@ export class VideosService {
       isFollowing = !!follow;
     }
 
+    const { cast, ...rest } = video;
     return {
-      ...this.toPublicVideo(video),
+      ...this.toPublicVideo(rest),
       ...flags,
       isFollowing,
       dislikesCount: video.dislikesCount,
+      director: video.director,
+      writers: video.writers,
+      cast: cast.map((m) => ({
+        name: m.name,
+        role: m.role,
+        imageUrl: m.imageUrl,
+      })),
     };
   }
 
@@ -220,6 +255,8 @@ export class VideosService {
       releaseYear: number | null;
       ageRating: string | null;
       tagline: string | null;
+      director?: string | null;
+      writers?: string[];
       creator: {
         id: string;
         username: string;
@@ -289,6 +326,13 @@ export class VideosService {
     const video = await this.prisma.video.findUnique({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Video not found');
 
+    const parent = parentId
+      ? await this.prisma.comment.findUnique({
+          where: { id: parentId },
+          select: { userId: true },
+        })
+      : null;
+
     const comment = await this.prisma.$transaction(async (tx) => {
       const created = await tx.comment.create({
         data: { userId, videoId, body, parentId },
@@ -302,6 +346,20 @@ export class VideosService {
       });
       return created;
     });
+
+    if (parent) {
+      void this.notifications.notifyCommentReply(
+        parent.userId,
+        userId,
+        videoId,
+      );
+    } else {
+      void this.notifications.notifyCommentOnVideo(
+        video.creatorId,
+        userId,
+        videoId,
+      );
+    }
 
     return comment;
   }
@@ -610,6 +668,7 @@ export class VideosService {
         data: { likesCount: { increment: 1 } },
       });
     });
+    void this.notifications.notifyVideoLike(video.creatorId, userId, videoId);
     return { liked: true, disliked: false };
   }
 
@@ -734,6 +793,11 @@ export class VideosService {
         data: { likesCount: { increment: 1 } },
       });
     });
+    void this.notifications.notifyCommentLike(
+      comment.userId,
+      userId,
+      comment.videoId,
+    );
     return { liked: true, likesCount: comment.likesCount + 1 };
   }
 

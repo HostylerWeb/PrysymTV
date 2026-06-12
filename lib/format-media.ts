@@ -1,7 +1,9 @@
+const DEFAULT_PLACEHOLDER_THUMB = "/placeholder.svg";
+
 function placeholderThumb(): string {
   const fromEnv = process.env.NEXT_PUBLIC_MEDIA_PLACEHOLDER_URL?.trim();
   if (fromEnv) return fromEnv;
-  return "";
+  return DEFAULT_PLACEHOLDER_THUMB;
 }
 
 export function formatDuration(seconds: number): string {
@@ -30,8 +32,7 @@ export function formatViewCount(count: number): string {
 export function videoThumbnail(url: string | null | undefined): string {
   const trimmed = url?.trim();
   if (trimmed) return trimmed;
-  const fallback = placeholderThumb();
-  return fallback || trimmed || "";
+  return placeholderThumb();
 }
 
 export function historyProgressPercent(

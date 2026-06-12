@@ -17,9 +17,11 @@ import type { AdminVideoListItem } from "@/lib/api/admin"
 export function AdminVideoTable({
   items,
   onDelete,
+  onEdit,
 }: {
   items: AdminVideoListItem[]
   onDelete?: (id: string) => void | Promise<void>
+  onEdit?: (id: string) => void
 }) {
   if (items.length === 0) {
     return (
@@ -65,6 +67,16 @@ export function AdminVideoTable({
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
+                  {onEdit && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={() => onEdit(v.id)}
+                    >
+                      Edit
+                    </Button>
+                  )}
                   <Button asChild size="sm" variant="outline" className="rounded-full">
                     <Link href={v.siteHref}>View</Link>
                   </Button>

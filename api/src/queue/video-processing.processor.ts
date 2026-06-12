@@ -7,6 +7,7 @@ import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { getVideoProcessingSettings } from '../config/storage-env';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import {
@@ -30,6 +31,7 @@ export class VideoProcessingProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly config: ConfigService,
+    private readonly notifications: NotificationsService,
   ) {
     super();
   }
@@ -113,6 +115,11 @@ export class VideoProcessingProcessor extends WorkerHost {
       await rm(workRoot, { recursive: true, force: true });
     }
 
+    const prior = await this.prisma.video.findUnique({
+      where: { id: videoId },
+      select: { status: true, creatorId: true, title: true, visibility: true },
+    });
+
     await this.prisma.video.update({
       where: { id: videoId },
       data: {
@@ -122,6 +129,18 @@ export class VideoProcessingProcessor extends WorkerHost {
         durationSeconds,
       },
     });
+
+    if (
+      prior &&
+      prior.status !== ContentStatus.ready &&
+      prior.visibility === 'public'
+    ) {
+      void this.notifications.notifyFollowersOfUpload(
+        prior.creatorId,
+        videoId,
+        prior.title,
+      );
+    }
     this.logger.log(`Video ${videoId} ready (processing mode: skip)`);
   }
 
@@ -165,6 +184,11 @@ export class VideoProcessingProcessor extends WorkerHost {
       }
 
       const masterKey = this.storage.buildHlsMasterKey(videoId);
+      const prior = await this.prisma.video.findUnique({
+        where: { id: videoId },
+        select: { status: true, creatorId: true, title: true, visibility: true },
+      });
+
       await this.prisma.video.update({
         where: { id: videoId },
         data: {
@@ -174,6 +198,18 @@ export class VideoProcessingProcessor extends WorkerHost {
           durationSeconds: probe.durationSeconds,
         },
       });
+
+      if (
+        prior &&
+        prior.status !== ContentStatus.ready &&
+        prior.visibility === 'public'
+      ) {
+        void this.notifications.notifyFollowersOfUpload(
+          prior.creatorId,
+          videoId,
+          prior.title,
+        );
+      }
 
       if (this.storage.getSettings().driver === 's3') {
         await this.storage.deleteObject(objectKey);

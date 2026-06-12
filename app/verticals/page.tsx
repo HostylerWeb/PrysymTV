@@ -41,8 +41,8 @@ export default function VerticalsPage() {
           <h1 className="text-2xl md:text-3xl font-bold">Verticals</h1>
         </div>
         <p className="text-muted-foreground text-sm md:text-base mb-8 max-w-2xl">
-          9:16 micro-dramas built for your phone — bite-sized episodes, cliffhanger endings, and a
-          short sponsor break before every episode.
+          Pocket-sized dramas you watch in portrait. Each episode is a few minutes, ends on a hook,
+          and pulls you straight into the next one.
         </p>
 
         {series.length === 0 ? (

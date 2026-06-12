@@ -33,9 +33,11 @@ import { CategoriesModule } from './categories/categories.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { PublicConfigModule } from './config/config.module';
 import { ReportsModule } from './reports/reports.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
+    NotificationsModule,
     ConfigModule.forRoot({
       isGlobal: true,
       validate: validateEnv,

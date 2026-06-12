@@ -38,7 +38,7 @@ export function ShortsHomeRow({
         {items.map((item) => (
           <Link
             key={item.id}
-            href="/shorts"
+            href={`/shorts/${item.id}`}
             className="flex-shrink-0 w-[120px] group"
           >
             <div className="aspect-[9/16] rounded-xl overflow-hidden bg-secondary mb-2">

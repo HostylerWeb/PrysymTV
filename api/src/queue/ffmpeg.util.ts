@@ -1,5 +1,5 @@
 import { execFile } from 'child_process';
-import { readdir, stat } from 'fs/promises';
+import { access, readdir, readFile, stat, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { promisify } from 'util';
 
@@ -104,6 +104,7 @@ export async function transcodeToHls(
       'hls',
       join(outputDir, 'master.m3u8'),
     ]);
+    await repairHlsPlaylists(outputDir);
     return probe;
   }
 
@@ -124,21 +125,23 @@ export async function transcodeToHls(
       'veryfast',
       '-crf',
       '23',
-      '-c:a',
-      'aac',
-      '-b:a',
-      '128k',
+    ];
+    if (probe.hasAudio) {
+      args.push('-c:a', 'aac', '-b:a', '128k');
+    }
+    args.push(
       '-hls_time',
       '6',
       '-hls_playlist_type',
       'vod',
       '-hls_segment_filename',
-      join(outputDir, 'stream_0/seg_%03d.ts'),
+      join(outputDir, 'seg_%03d.ts'),
       '-f',
       'hls',
       join(outputDir, 'master.m3u8'),
-    ];
+    );
     await execFileAsync(ffmpegPath, args, { maxBuffer: 8 * 1024 * 1024 });
+    await repairHlsPlaylists(outputDir);
     return probe;
   }
 
@@ -181,10 +184,11 @@ export async function transcodeToHls(
     varStreamParts.join(' '),
     '-hls_segment_filename',
     join(outputDir, 'stream_%v/seg_%03d.ts'),
-    join(outputDir, 'master.m3u8'),
+    join(outputDir, 'stream_%v/playlist.m3u8'),
   );
 
   await execFileAsync(ffmpegPath, args, { maxBuffer: 16 * 1024 * 1024 });
+  await repairHlsPlaylists(outputDir);
   return probe;
 }
 
@@ -207,6 +211,139 @@ export async function extractThumbnail(
     '2',
     thumbPath,
   ]);
+}
+
+/**
+ * FFmpeg sometimes writes variant playlists beside segments (stream_0.m3u8 with
+ * `seg_000.ts` entries while files live in stream_0/). Fix segment URIs and
+ * master variant paths so HLS.js resolves segments correctly.
+ */
+export async function repairHlsPlaylists(outputDir: string): Promise<void> {
+  const entries = await readdir(outputDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const variantMatch = /^stream_(\d+)\.m3u8$/.exec(entry.name);
+    if (!variantMatch) continue;
+
+    const streamKey = `stream_${variantMatch[1]}`;
+    const playlistPath = join(outputDir, entry.name);
+    const content = await readFile(playlistPath, 'utf8');
+    const fixed = fixSegmentLines(content, streamKey);
+    if (fixed !== content) {
+      await writeFile(playlistPath, fixed);
+    }
+  }
+
+  const masterPath = join(outputDir, 'master.m3u8');
+  try {
+    let master = await readFile(masterPath, 'utf8');
+    let changed = false;
+
+    if (master.includes('#EXT-X-STREAM-INF')) {
+      const lines: string[] = [];
+      for (const line of master.split('\n')) {
+        const trimmed = line.trim();
+        const variantMatch = /^stream_(\d+)\.m3u8$/.exec(trimmed);
+        if (variantMatch) {
+          const nested = join(
+            outputDir,
+            `stream_${variantMatch[1]}`,
+            'playlist.m3u8',
+          );
+          try {
+            await access(nested);
+            lines.push(`stream_${variantMatch[1]}/playlist.m3u8`);
+            changed = true;
+            continue;
+          } catch {
+            lines.push(line);
+            continue;
+          }
+        }
+        lines.push(line);
+      }
+      const repaired = lines.join('\n');
+      if (repaired !== master) master = repaired;
+    } else {
+      const hasRootSegments = /^seg_\d+\.ts$/m.test(master);
+      const streamSeg = join(outputDir, 'stream_0', 'seg_000.ts');
+      if (hasRootSegments) {
+        try {
+          await access(streamSeg);
+          const fixed = fixSegmentLines(master, 'stream_0');
+          if (fixed !== master) {
+            master = fixed;
+            changed = true;
+          }
+        } catch {
+          /* segments at root — leave as-is */
+        }
+      }
+    }
+
+    if (changed) await writeFile(masterPath, master);
+  } catch {
+    /* no master playlist */
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (!/^stream_\d+$/.test(entry.name)) continue;
+    const playlistPath = join(outputDir, entry.name, 'playlist.m3u8');
+    try {
+      const content = await readFile(playlistPath, 'utf8');
+      const fixed = fixNestedPlaylistSegments(content);
+      if (fixed !== content) await writeFile(playlistPath, fixed);
+    } catch {
+      /* no nested playlist */
+    }
+  }
+}
+
+/** Root variant playlists (stream_N.m3u8) reference segments inside stream_N/. */
+function fixSegmentLines(content: string, segmentPrefix: string): string {
+  return content
+    .split('\n')
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed.endsWith('.ts') || trimmed.startsWith('#')) return line;
+
+      const bare = normalizeSegmentUri(trimmed);
+      if (!bare) return line;
+      if (trimmed === bare) {
+        return `${segmentPrefix}/${bare}`;
+      }
+      return `${segmentPrefix}/${bare}`;
+    })
+    .join('\n');
+}
+
+/** Nested stream_N/playlist.m3u8 files use bare seg_XXX.ts beside the playlist. */
+function fixNestedPlaylistSegments(content: string): string {
+  return content
+    .split('\n')
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed.endsWith('.ts') || trimmed.startsWith('#')) return line;
+      const bare = normalizeSegmentUri(trimmed);
+      return bare ?? line;
+    })
+    .join('\n');
+}
+
+function normalizeSegmentUri(uri: string): string | null {
+  const trimmed = uri.trim();
+  if (!trimmed.endsWith('.ts')) return null;
+  const parts = trimmed.split('/');
+  const last = parts[parts.length - 1];
+  if (!/^seg_\d+\.ts$/.test(last)) return null;
+  if (parts.length >= 3 && parts[parts.length - 2] === parts[parts.length - 3]) {
+    return last;
+  }
+  if (parts.length === 1) return last;
+  if (parts.length === 2 && /^stream_\d+$/.test(parts[0])) return last;
+  return last;
 }
 
 export async function listFilesRecursive(dir: string): Promise<string[]> {

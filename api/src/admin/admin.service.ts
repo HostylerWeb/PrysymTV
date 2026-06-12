@@ -21,7 +21,9 @@ import {
   VerticalCreatorStatus,
   VideoType,
 } from '@prisma/client';
+import { geoFromMetadata } from '../common/geo/request-geo';
 import { AdvertisersService } from '../advertisers/advertisers.service';
+import { PlaylistsService } from '../playlists/playlists.service';
 import { GafService } from '../gaf/gaf.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -64,6 +66,7 @@ export class AdminService {
     private readonly advertisers: AdvertisersService,
     private readonly gaf: GafService,
     private readonly storage: StorageService,
+    private readonly playlists: PlaylistsService,
   ) {}
 
   private paginate(page = 1, limit = 20) {
@@ -303,6 +306,27 @@ export class AdminService {
       createdAt: report.createdAt.toISOString(),
       target,
     };
+  }
+
+  async deleteReport(id: string, adminId: string) {
+    const report = await this.prisma.report.findUnique({ where: { id } });
+    if (!report) throw new NotFoundException('Report not found');
+
+    await this.prisma.report.delete({ where: { id } });
+
+    await this.auditLog.log({
+      adminId,
+      action: 'report.delete',
+      entityType: 'report',
+      entityId: id,
+      metadata: {
+        targetType: report.targetType,
+        targetId: report.targetId,
+        status: report.status,
+      },
+    });
+
+    return { success: true };
   }
 
   async reviewReport(
@@ -1249,11 +1273,119 @@ export class AdminService {
 
   async deleteVideo(id: string) {
     try {
+      await this.playlists.removeContentReferences('video', id);
       await this.prisma.video.delete({ where: { id } });
       return { success: true };
     } catch {
       throw new NotFoundException('Video not found');
     }
+  }
+
+  async getAdminVideo(id: string) {
+    const video = await this.prisma.video.findUnique({
+      where: { id },
+      include: {
+        cast: { orderBy: { sortOrder: 'asc' } },
+        creator: { select: { id: true, username: true, displayName: true } },
+      },
+    });
+    if (!video) throw new NotFoundException('Video not found');
+
+    return {
+      id: video.id,
+      type: video.type,
+      title: video.title,
+      description: video.description ?? '',
+      tagline: video.tagline ?? '',
+      category: video.category ?? '',
+      director: video.director ?? '',
+      writers: video.writers.join(', '),
+      releaseYear: video.releaseYear,
+      ageRating: video.ageRating ?? '',
+      status: video.status,
+      cast: video.cast.map((c) => ({ name: c.name, role: c.role })),
+      creatorId: video.creatorId,
+      creator: video.creator.displayName ?? video.creator.username,
+    };
+  }
+
+  async updateAdminVideo(
+    id: string,
+    body: {
+      title?: string;
+      description?: string;
+      tagline?: string;
+      category?: string;
+      director?: string;
+      writers?: string;
+      releaseYear?: number;
+      ageRating?: string;
+      cast?: Array<{ name: string; role: string }>;
+    },
+  ) {
+    const video = await this.prisma.video.findUnique({ where: { id } });
+    if (!video) throw new NotFoundException('Video not found');
+
+    const writers = body.writers
+      ? body.writers
+          .split(',')
+          .map((w) => w.trim())
+          .filter(Boolean)
+          .slice(0, 12)
+      : undefined;
+
+    const castRows =
+      body.cast
+        ?.map((c) => ({
+          name: c.name.trim(),
+          role: c.role.trim(),
+        }))
+        .filter((c) => c.name && c.role)
+        .slice(0, 20) ?? null;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.video.update({
+        where: { id },
+        data: {
+          ...(body.title !== undefined ? { title: body.title.trim() } : {}),
+          ...(body.description !== undefined
+            ? { description: body.description.trim() || null }
+            : {}),
+          ...(body.tagline !== undefined
+            ? { tagline: body.tagline.trim() || null }
+            : {}),
+          ...(body.category !== undefined
+            ? { category: body.category.trim() || null }
+            : {}),
+          ...(body.director !== undefined
+            ? { director: body.director.trim() || null }
+            : {}),
+          ...(writers !== undefined ? { writers } : {}),
+          ...(body.releaseYear !== undefined
+            ? { releaseYear: body.releaseYear }
+            : {}),
+          ...(body.ageRating !== undefined
+            ? { ageRating: body.ageRating.trim() || null }
+            : {}),
+        },
+      });
+
+      if (castRows !== null) {
+        await tx.videoCast.deleteMany({ where: { videoId: id } });
+        if (castRows.length) {
+          await tx.videoCast.createMany({
+            data: castRows.map((member, index) => ({
+              videoId: id,
+              name: member.name,
+              role: member.role,
+              sortOrder: index,
+            })),
+          });
+        }
+      }
+    });
+
+    return this.getAdminVideo(id);
   }
 
   async deleteComment(id: string) {
@@ -1310,9 +1442,11 @@ export class AdminService {
         category: v.category ?? 'General',
         uploadedAt: v.createdAt.toISOString(),
         siteHref:
-          v.type === VideoType.short
-            ? `/shorts/${v.id}`
-            : `/watch/${v.id}`,
+          v.type === VideoType.movie
+            ? `/movie/${v.id}`
+            : v.type === VideoType.short
+              ? `/shorts/${v.id}`
+              : `/watch/${v.id}`,
       })),
       meta: { page, limit, total },
     };
@@ -1571,6 +1705,7 @@ export class AdminService {
 
   async deletePodcastEpisode(id: string) {
     try {
+      await this.playlists.removeContentReferences('podcast_episode', id);
       await this.prisma.podcastEpisode.delete({ where: { id } });
       return { success: true };
     } catch {
@@ -1652,6 +1787,15 @@ export class AdminService {
   ) {
     this.validateCategoryEntries(categories, 'Podcast categories');
     return this.platformSettings.setPodcastCategories(categories, adminId);
+  }
+
+  getMovieGenresConfig() {
+    return this.platformSettings.getMovieGenres();
+  }
+
+  updateMovieGenresConfig(adminId: string, genres: CategoryConfigEntry[]) {
+    this.validateCategoryEntries(genres, 'Movie genres');
+    return this.platformSettings.setMovieGenres(genres, adminId);
   }
 
   private validateCategoryEntries(
@@ -1902,6 +2046,217 @@ export class AdminService {
     const campaign = await this.prisma.adCampaign.findUnique({ where: { id } });
     if (!campaign) throw new NotFoundException('Campaign not found');
     return campaign;
+  }
+
+  async getAdCampaignAnalytics(campaignId: string) {
+    const campaign = await this.prisma.adCampaign.findUnique({
+      where: { id: campaignId },
+    });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+
+    const adsConfig = await this.platformSettings.getAds();
+    const cpmUsd = adsConfig.impressionRevenueCpmUsd;
+    const spentUsd = Number(
+      new Prisma.Decimal(cpmUsd).div(1000).mul(campaign.deliveredImpressions),
+    );
+    const budgetUsd = Number(campaign.budgetUsd);
+    const deliveryPct =
+      campaign.targetImpressions > 0
+        ? (campaign.deliveredImpressions / campaign.targetImpressions) * 100
+        : 0;
+
+    const [
+      trackedImpressions,
+      trackedClicks,
+      guestImpressions,
+      guestClicks,
+      byPlacement,
+      recentEvents,
+      clickEvents,
+    ] = await Promise.all([
+      this.prisma.contentAdEvent.count({
+        where: { campaignId, eventType: 'ad_impression' },
+      }),
+      this.prisma.contentAdEvent.count({
+        where: { campaignId, eventType: 'ad_click' },
+      }),
+      this.prisma.contentAdEvent.count({
+        where: {
+          campaignId,
+          eventType: 'ad_impression',
+          viewerUserId: null,
+        },
+      }),
+      this.prisma.contentAdEvent.count({
+        where: {
+          campaignId,
+          eventType: 'ad_click',
+          viewerUserId: null,
+        },
+      }),
+      this.prisma.contentAdEvent.groupBy({
+        by: ['placement', 'eventType'],
+        where: { campaignId },
+        _count: { _all: true },
+      }),
+      this.prisma.contentAdEvent.findMany({
+        where: { campaignId },
+        orderBy: { createdAt: 'desc' },
+        take: 40,
+        include: {
+          creator: { select: { username: true, displayName: true } },
+          video: { select: { id: true, title: true } },
+        },
+      }),
+      this.prisma.contentAdEvent.findMany({
+        where: { campaignId, eventType: 'ad_click' },
+        select: { metadata: true },
+      }),
+    ]);
+
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+    const timelineEvents = await this.prisma.contentAdEvent.findMany({
+      where: { campaignId, createdAt: { gte: since } },
+      select: { eventType: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const byDay = new Map<string, { impressions: number; clicks: number }>();
+    for (const event of timelineEvents) {
+      const key = event.createdAt.toISOString().slice(0, 10);
+      const row = byDay.get(key) ?? { impressions: 0, clicks: 0 };
+      if (event.eventType === 'ad_impression') row.impressions += 1;
+      else if (event.eventType === 'ad_click') row.clicks += 1;
+      byDay.set(key, row);
+    }
+
+    const placementMap = new Map<
+      string,
+      { impressions: number; clicks: number }
+    >();
+    for (const row of byPlacement) {
+      const current = placementMap.get(row.placement) ?? {
+        impressions: 0,
+        clicks: 0,
+      };
+      if (row.eventType === 'ad_impression') {
+        current.impressions += row._count._all;
+      } else if (row.eventType === 'ad_click') {
+        current.clicks += row._count._all;
+      }
+      placementMap.set(row.placement, current);
+    }
+
+    const servedImpressions = campaign.deliveredImpressions;
+    const clickCount = campaign.clicks;
+
+    const byLocationMap = new Map<
+      string,
+      {
+        label: string;
+        city: string | null;
+        regionName: string | null;
+        countryCode: string | null;
+        clicks: number;
+      }
+    >();
+    for (const event of clickEvents) {
+      const geo = geoFromMetadata(event.metadata);
+      const label = geo?.label ?? 'Unknown location';
+      const current = byLocationMap.get(label) ?? {
+        label,
+        city: geo?.city ?? null,
+        regionName: geo?.regionName ?? null,
+        countryCode: geo?.countryCode ?? null,
+        clicks: 0,
+      };
+      current.clicks += 1;
+      byLocationMap.set(label, current);
+    }
+
+    return {
+      campaign: {
+        id: campaign.id,
+        title: campaign.title,
+        placement: campaign.placement,
+        status: campaign.status,
+        targetImpressions: campaign.targetImpressions,
+        deliveredImpressions: servedImpressions,
+        clicks: clickCount,
+        budgetUsd,
+        spentUsd,
+        startsAt: campaign.startsAt.toISOString(),
+        endsAt: campaign.endsAt.toISOString(),
+      },
+      summary: {
+        servedImpressions,
+        targetImpressions: campaign.targetImpressions,
+        deliveryPercent: deliveryPct,
+        clicks: clickCount,
+        ctrPercent:
+          servedImpressions > 0 ? (clickCount / servedImpressions) * 100 : 0,
+        trackedImpressions,
+        trackedClicks,
+        budgetUsd,
+        spentUsd,
+        budgetRemainingUsd: Math.max(0, budgetUsd - spentUsd),
+        cpmUsd,
+      },
+      byAudience: {
+        impressions: {
+          guest: guestImpressions,
+          loggedIn: trackedImpressions - guestImpressions,
+          total: trackedImpressions,
+        },
+        clicks: {
+          guest: guestClicks,
+          loggedIn: trackedClicks - guestClicks,
+          total: trackedClicks,
+        },
+      },
+      byPlacement: [...placementMap.entries()].map(([placement, counts]) => ({
+        placement,
+        impressions: counts.impressions,
+        clicks: counts.clicks,
+        ctrPercent:
+          counts.impressions > 0
+            ? (counts.clicks / counts.impressions) * 100
+            : 0,
+      })),
+      timeline: [...byDay.entries()].map(([date, counts]) => ({
+        date,
+        impressions: counts.impressions,
+        clicks: counts.clicks,
+      })),
+      byLocation: [...byLocationMap.values()]
+        .sort((a, b) => b.clicks - a.clicks)
+        .map((row) => ({
+          label: row.label,
+          city: row.city,
+          regionName: row.regionName,
+          countryCode: row.countryCode,
+          clicks: row.clicks,
+        })),
+      recentEvents: recentEvents.map((e) => {
+        const geo = geoFromMetadata(e.metadata);
+        return {
+          id: e.id.toString(),
+          eventType: e.eventType,
+          placement: e.placement,
+          audience: e.viewerUserId ? 'logged_in' : 'guest',
+          viewerUserId: e.viewerUserId,
+          videoId: e.videoId,
+          videoTitle: e.video?.title ?? null,
+          creatorName: e.creator.displayName ?? e.creator.username,
+          location: geo?.label ?? null,
+          city: geo?.city ?? null,
+          regionName: geo?.regionName ?? null,
+          countryCode: geo?.countryCode ?? null,
+          createdAt: e.createdAt.toISOString(),
+        };
+      }),
+    };
   }
 
   createAdCampaign(dto: CreateAdCampaignDto) {
@@ -2606,7 +2961,7 @@ export class AdminService {
         });
         return;
       case ReportTargetType.podcast_episode:
-        await this.prisma.podcastEpisode.delete({ where: { id: targetId } });
+        await this.deletePodcastEpisode(targetId);
         return;
       case ReportTargetType.vertical_episode:
         await this.prisma.verticalEpisode.delete({ where: { id: targetId } });

@@ -1,15 +1,15 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
 import {
   buildAdAttribution,
   fetchServedAd,
-  trackAdClick,
+  openAdDestination,
   trackAdImpression,
   type ServedAd,
 } from "@/lib/api/ads"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
+import { getViewerGeo } from "@/lib/viewer-geo"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -28,6 +28,11 @@ export function AdBanner({ creatorId, videoId, platformCreatorId: platformCreato
   const [ad, setAd] = useState<ServedAd | null>(null)
 
   const placementEnabled = isPlacementEnabled("home_banner")
+
+  useEffect(() => {
+    if (!showAds || !placementEnabled) return
+    void getViewerGeo()
+  }, [showAds, placementEnabled])
 
   useEffect(() => {
     if (!showAds || !placementEnabled) {
@@ -71,19 +76,22 @@ export function AdBanner({ creatorId, videoId, platformCreatorId: platformCreato
     <section className="px-4 py-2">
       <div className="max-w-7xl mx-auto">
         <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Sponsored</p>
-        <Link
+        <a
           href={ad.clickThroughUrl}
-          onClick={() => {
-            void trackAdClick(attr)
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => {
+            e.preventDefault()
+            openAdDestination(ad.clickThroughUrl, attr)
           }}
-          className="block relative w-full aspect-[6/1] md:aspect-[8/1] rounded-xl overflow-hidden border border-border hover:opacity-95 transition-opacity"
+          className="block relative w-full aspect-[6/1] md:aspect-[8/1] rounded-xl overflow-hidden border border-border hover:opacity-95 transition-opacity cursor-pointer"
         >
           {ad.mediaType === "video" ? (
             <video src={ad.mediaUrl} className="w-full h-full object-cover" muted autoPlay playsInline />
           ) : (
             <img src={ad.mediaUrl} alt={ad.title} className="w-full h-full object-cover" />
           )}
-        </Link>
+        </a>
       </div>
     </section>
   )

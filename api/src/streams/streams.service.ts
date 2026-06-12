@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { StreamStatus, StreamerStatus } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 type MediamtxAuthBody = {
@@ -27,6 +28,7 @@ export class StreamsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async listLive() {
@@ -171,22 +173,12 @@ export class StreamsService {
         },
       });
       if (stream) {
-        const alerts = await this.prisma.creatorLiveAlert.findMany({
-          where: { creatorId: stream.creatorId },
-        });
-        if (alerts.length > 0) {
-          const name =
-            stream.creator.displayName ?? stream.creator.username;
-          await this.prisma.notification.createMany({
-            data: alerts.map((a) => ({
-              userId: a.userId,
-              type: 'live' as const,
-              actorId: stream.creatorId,
-              referenceId: stream.id,
-              message: `${name} is live now`,
-            })),
-          });
-        }
+        const name = stream.creator.displayName ?? stream.creator.username;
+        void this.notifications.notifyCreatorWentLive(
+          stream.creatorId,
+          stream.id,
+          name,
+        );
       }
     }
     return { ok: true, hlsPlaybackUrl };

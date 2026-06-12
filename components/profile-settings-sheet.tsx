@@ -48,6 +48,7 @@ import {
 import { mapHistoryToSettingsItems, type SettingsHistoryItem } from "@/lib/map-history"
 import { fetchMyVerticalSeries } from "@/lib/api/verticals-admin"
 import { VerticalSeriesWizard } from "@/components/vertical-series-wizard"
+import { VerticalSeriesEpisodesPanel } from "@/components/vertical-series-episodes-panel"
 import {
   createPodcastShow,
   fetchMyPodcastShows,
@@ -86,8 +87,8 @@ export type ProfileSettingsScreen =
 
 const NOTIFICATION_PREFS = [
   { id: "follow", label: "New followers", description: "When someone follows you" },
-  { id: "like", label: "Likes", description: "When someone likes your content" },
-  { id: "comment", label: "Comments & replies", description: "Comment activity on your videos" },
+  { id: "like", label: "Likes", description: "When someone likes your videos or comments" },
+  { id: "comment", label: "Comments & replies", description: "When someone comments on your videos or replies to you" },
   { id: "live", label: "Live alerts", description: "When creators you follow go live" },
   { id: "upload", label: "New uploads", description: "When subscribed creators post" },
   { id: "gift", label: "Gifts received", description: "When you receive a gift on stream" },
@@ -226,7 +227,13 @@ export function ProfileSettingsSheet({
       id: string
       slug: string
       title: string
-      episodes: Array<{ id: string; episodeNumber: number; title: string }>
+      episodes: Array<{
+        id: string
+        episodeNumber: number
+        title: string
+        description?: string | null
+        cliffhanger?: string | null
+      }>
     }>
   >([])
 
@@ -586,20 +593,14 @@ export function ProfileSettingsSheet({
                 </Button>
               </div>
               {mySeries.length > 0 && (
-                <div className="space-y-2 border-t border-border pt-4">
-                  <h4 className="text-sm font-semibold">Your series</h4>
-                  <ul className="space-y-2">
-                    {mySeries.map((s) => (
-                      <li key={s.id} className="p-3 rounded-xl bg-secondary/30 text-sm">
-                        <p className="font-medium">{s.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          /{s.slug} · {s.episodes.length} episode
-                          {s.episodes.length === 1 ? "" : "s"}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <VerticalSeriesEpisodesPanel
+                  series={mySeries}
+                  onChanged={() => {
+                    void fetchMyVerticalSeries()
+                      .then((res) => setMySeries(res.items))
+                      .catch(() => setMySeries([]))
+                  }}
+                />
               )}
             </div>
           )}

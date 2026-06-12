@@ -42,6 +42,7 @@ import type {
 } from '../platform-settings/platform-settings.types';
 import { UpdateUserImpactDto } from './dto/update-user-impact.dto';
 import { AdminDateRangeQueryDto } from './dto/admin-date-range-query.dto';
+import { UpdateAdminVideoDto } from './dto/update-admin-video.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -145,6 +146,14 @@ export class AdminController {
     @CurrentUser() admin: AuthUserPayload,
   ) {
     return this.admin.reviewReport(id, admin.id, body.action, body.notes);
+  }
+
+  @Delete('reports/:id')
+  deleteReport(
+    @Param('id') id: string,
+    @CurrentUser() admin: AuthUserPayload,
+  ) {
+    return this.admin.deleteReport(id, admin.id);
   }
 
   @Get('users')
@@ -283,6 +292,16 @@ export class AdminController {
   @Post('streams/:id/kill')
   killStream(@Param('id') id: string) {
     return this.admin.killStream(id);
+  }
+
+  @Get('videos/:id')
+  getVideo(@Param('id') id: string) {
+    return this.admin.getAdminVideo(id);
+  }
+
+  @Put('videos/:id')
+  updateVideo(@Param('id') id: string, @Body() body: UpdateAdminVideoDto) {
+    return this.admin.updateAdminVideo(id, body);
   }
 
   @Delete('videos/:id')
@@ -445,6 +464,19 @@ export class AdminController {
     return this.admin.updatePodcastCategoriesConfig(admin.id, body.categories);
   }
 
+  @Get('config/movie-genres')
+  movieGenresConfig() {
+    return this.admin.getMovieGenresConfig();
+  }
+
+  @Put('config/movie-genres')
+  updateMovieGenresConfig(
+    @Body() body: { genres: CategoryConfigEntry[] },
+    @CurrentUser() admin: AuthUserPayload,
+  ) {
+    return this.admin.updateMovieGenresConfig(admin.id, body.genres);
+  }
+
   @Put('coin-packages')
   upsertCoinPackage(@Body() body: UpsertCoinPackageDto) {
     return this.admin.upsertCoinPackage(body);
@@ -473,6 +505,11 @@ export class AdminController {
   @Get('economy/transactions')
   transactions(@Query() query: AdminListQueryDto) {
     return this.admin.listTransactions(query);
+  }
+
+  @Get('ads/campaigns/:id/analytics')
+  getAdCampaignAnalytics(@Param('id') id: string) {
+    return this.admin.getAdCampaignAnalytics(id);
   }
 
   @Get('ads/campaigns/:id')

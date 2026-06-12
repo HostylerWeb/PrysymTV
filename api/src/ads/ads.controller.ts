@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Post,
   Query,
   Req,
@@ -26,22 +27,33 @@ export class AdsController {
   @UseGuards(OptionalJwtAuthGuard)
   async serve(
     @Query('placement') placement: string,
+    @Query('peek') peek: string | undefined,
     @Req() req: Request & { user?: AuthUserPayload | null },
   ) {
     const p = placement as AdPlacement;
     if (!Object.values(AdPlacement).includes(p)) {
       return { ad: null, error: 'Invalid placement' };
     }
-    return this.ads.serve(p, req.user?.id);
+    return this.ads.serve(p, req.user?.id, {
+      peek: peek === '1' || peek === 'true',
+    });
   }
 
   @Post('track/impression')
-  trackImpression(@Body() body: TrackContentAdDto) {
-    return this.analytics.trackContentAd(body, 'ad_impression');
+  trackImpression(
+    @Body() body: TrackContentAdDto,
+    @Req() req: Request & { user?: AuthUserPayload | null },
+    @Headers('x-country-code') countryCode?: string,
+  ) {
+    return this.analytics.trackContentAd(body, 'ad_impression', req, countryCode);
   }
 
   @Post('track/click')
-  trackClick(@Body() body: TrackContentAdDto) {
-    return this.analytics.trackContentAd(body, 'ad_click');
+  trackClick(
+    @Body() body: TrackContentAdDto,
+    @Req() req: Request & { user?: AuthUserPayload | null },
+    @Headers('x-country-code') countryCode?: string,
+  ) {
+    return this.analytics.trackContentAd(body, 'ad_click', req, countryCode);
   }
 }

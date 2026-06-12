@@ -80,6 +80,7 @@ export const PLATFORM_SETTING_KEYS = {
   scorecard: 'scorecard',
   programs: 'programs',
   podcastCategories: 'podcast_categories',
+  movieGenres: 'movie_genres',
 } as const;
 
 export type PlatformSettingKey =

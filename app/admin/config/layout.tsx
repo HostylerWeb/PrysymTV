@@ -11,6 +11,7 @@ const CONFIG_TABS = [
   { href: "/admin/config/scorecard", label: "Scorecard" },
   { href: "/admin/config/programs", label: "Video categories" },
   { href: "/admin/config/podcast-categories", label: "Podcast categories" },
+  { href: "/admin/config/movie-genres", label: "Movie genres" },
   { href: "/admin/config/analytics", label: "Analytics defaults" },
 ]
 

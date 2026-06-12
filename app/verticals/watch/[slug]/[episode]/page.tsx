@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useEffect, useRef, useState } from "react"
+import { use, useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ChevronLeft, ChevronUp, Heart, Bookmark, Flag } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -20,7 +20,9 @@ import { bumpLikeCount } from "@/lib/engagement-count"
 import { useAuth } from "@/contexts/auth-context"
 import { AuthModal } from "@/components/auth-modal"
 import { ReportModal } from "@/components/report-modal"
+import { fetchServedAd, isValidServedAd, type ServedAd } from "@/lib/api/ads"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
+import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 
 export default function VerticalWatchPage({
   params,
@@ -31,9 +33,11 @@ export default function VerticalWatchPage({
   const { isAuthenticated, isLoading: authLoading } = useAuth()
   const episodeNum = parseInt(episodeStr, 10)
   const { isPlacementEnabled } = usePublicAdsConfig()
+  const showAds = useShouldShowAds()
   const [data, setData] = useState<VerticalEpisodePlayback | null>(null)
-  const [showAd, setShowAd] = useState(() => false)
-  const [canPlay, setCanPlay] = useState(false)
+  const [showAd, setShowAd] = useState(false)
+  const [gateAd, setGateAd] = useState<ServedAd | null>(null)
+  const [canPlay, setCanPlay] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isLiked, setIsLiked] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
@@ -43,12 +47,24 @@ export default function VerticalWatchPage({
   const videoRef = useRef<HTMLVideoElement>(null)
   const viewRecorded = useRef(false)
 
+  const prepareEpisodeGate = useCallback(() => {
+    setShowAd(false)
+    setGateAd(null)
+    setCanPlay(true)
+    if (!showAds || !isPlacementEnabled("vertical_episode")) return
+    void fetchServedAd("vertical_episode", { peek: true }).then((peekAd) => {
+      if (!isValidServedAd(peekAd)) return
+      setGateAd(peekAd)
+      setShowAd(true)
+      setCanPlay(false)
+    })
+  }, [showAds, isPlacementEnabled])
+
   useEffect(() => {
     if (authLoading) return
-    setShowAd(isPlacementEnabled("vertical_episode"))
-    setCanPlay(!isPlacementEnabled("vertical_episode"))
     setError(null)
     viewRecorded.current = false
+    prepareEpisodeGate()
     void fetchVerticalEpisode(slug, episodeNum)
       .then((res) => {
         setData(res)
@@ -57,10 +73,11 @@ export default function VerticalWatchPage({
         setSeriesSaved(res.series.saved ?? false)
       })
       .catch(() => setError("Episode not found"))
-  }, [slug, episodeNum, authLoading, isAuthenticated, isPlacementEnabled])
+  }, [slug, episodeNum, authLoading, isAuthenticated, prepareEpisodeGate])
 
   const onAdComplete = () => {
     setShowAd(false)
+    setGateAd(null)
     setCanPlay(true)
   }
 
@@ -81,8 +98,7 @@ export default function VerticalWatchPage({
   const goNextEpisode = () => {
     if (!data?.nextEpisode) return
     const nextNum = data.nextEpisode.episodeNumber
-    setShowAd(isPlacementEnabled("vertical_episode"))
-    setCanPlay(!isPlacementEnabled("vertical_episode"))
+    prepareEpisodeGate()
     viewRecorded.current = false
     void fetchVerticalEpisode(slug, nextNum)
       .then((res) => {
@@ -115,9 +131,9 @@ export default function VerticalWatchPage({
 
   return (
     <main className="min-h-[100dvh] bg-black flex flex-col max-w-lg mx-auto relative">
-      {showAd && (
+      {showAd && gateAd && (
         <VerticalEpisodeAdGate
-          seriesId={series.id}
+          servedAd={gateAd}
           creatorId={series.creatorId ?? undefined}
           onComplete={onAdComplete}
         />

@@ -315,6 +315,12 @@ export function reviewAdminReport(
   });
 }
 
+export function deleteAdminReport(id: string) {
+  return apiRequest<{ success: boolean }>(`/admin/reports/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export function fetchAdminUsers(params?: {
   page?: number;
   limit?: number;
@@ -493,6 +499,47 @@ export function killAdminStream(id: string) {
   return apiRequest(`/admin/streams/${id}/kill`, { method: "POST" });
 }
 
+export type AdminVideoDetail = {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  tagline: string;
+  category: string;
+  director: string;
+  writers: string;
+  releaseYear: number | null;
+  ageRating: string;
+  status: string;
+  cast: Array<{ name: string; role: string }>;
+  creatorId: string;
+  creator: string;
+};
+
+export function fetchAdminVideo(id: string) {
+  return apiRequest<AdminVideoDetail>(`/admin/videos/${id}`);
+}
+
+export function updateAdminVideo(
+  id: string,
+  body: {
+    title?: string;
+    description?: string;
+    tagline?: string;
+    category?: string;
+    director?: string;
+    writers?: string;
+    releaseYear?: number;
+    ageRating?: string;
+    cast?: Array<{ name: string; role: string }>;
+  },
+) {
+  return apiRequest<AdminVideoDetail>(`/admin/videos/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
 export function deleteAdminVideo(id: string) {
   return apiRequest(`/admin/videos/${id}`, { method: "DELETE" });
 }
@@ -607,6 +654,72 @@ export function initAdminAdMediaUpload(body: {
 
 export function fetchAdminAdCampaign(id: string) {
   return apiRequest<AdCampaign>(`/admin/ads/campaigns/${id}`);
+}
+
+export type AdCampaignAnalytics = {
+  campaign: {
+    id: string;
+    title: string;
+    placement: string;
+    status: string;
+    targetImpressions: number;
+    deliveredImpressions: number;
+    clicks: number;
+    budgetUsd: number;
+    spentUsd: number;
+    startsAt: string;
+    endsAt: string;
+  };
+  summary: {
+    servedImpressions: number;
+    targetImpressions: number;
+    deliveryPercent: number;
+    clicks: number;
+    ctrPercent: number;
+    trackedImpressions: number;
+    trackedClicks: number;
+    budgetUsd: number;
+    spentUsd: number;
+    budgetRemainingUsd: number;
+    cpmUsd: number;
+  };
+  byAudience: {
+    impressions: { guest: number; loggedIn: number; total: number };
+    clicks: { guest: number; loggedIn: number; total: number };
+  };
+  byPlacement: Array<{
+    placement: string;
+    impressions: number;
+    clicks: number;
+    ctrPercent: number;
+  }>;
+  timeline: Array<{ date: string; impressions: number; clicks: number }>;
+  byLocation: Array<{
+    label: string;
+    city: string | null;
+    regionName: string | null;
+    countryCode: string | null;
+    clicks: number;
+  }>;
+  recentEvents: Array<{
+    id: string;
+    eventType: "ad_impression" | "ad_click";
+    placement: string;
+    audience: "guest" | "logged_in";
+    viewerUserId: string | null;
+    videoId: string | null;
+    videoTitle: string | null;
+    creatorName: string;
+    location: string | null;
+    city: string | null;
+    regionName: string | null;
+    countryCode: string | null;
+    createdAt: string;
+  }>;
+};
+
+export function fetchAdminAdCampaignAnalytics(id: string) {
+  return apiRequest<AdCampaignAnalytics>(`/admin/ads/campaigns/${id}/analytics`);
 }
 
 export function fetchAdminContentStats() {
@@ -856,6 +969,31 @@ export function updateAdminPodcastCategoriesConfig(
   return apiRequest("/admin/config/podcast-categories", {
     method: "PUT",
     body: { categories },
+  });
+}
+
+export function fetchAdminMovieGenresConfig() {
+  return apiRequest<
+    Array<{
+      slug: string;
+      label: string;
+      isActive: boolean;
+      sortOrder: number;
+    }>
+  >("/admin/config/movie-genres");
+}
+
+export function updateAdminMovieGenresConfig(
+  genres: Array<{
+    slug: string;
+    label: string;
+    isActive: boolean;
+    sortOrder: number;
+  }>,
+) {
+  return apiRequest("/admin/config/movie-genres", {
+    method: "PUT",
+    body: { genres },
   });
 }
 

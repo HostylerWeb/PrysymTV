@@ -14,4 +14,9 @@ export class CategoriesController {
   listPodcasts() {
     return this.categories.listPodcastCategories();
   }
+
+  @Get('movies')
+  listMovies() {
+    return this.categories.listMovieGenres();
+  }
 }

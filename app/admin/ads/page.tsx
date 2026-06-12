@@ -11,6 +11,11 @@ import { dateRangeQueryParams, type AdminDateRangeValue } from "@/lib/admin/date
 import { deleteAdminAdCampaign, duplicateAdminAdCampaign, fetchAdminAdCampaigns } from "@/lib/api/admin"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  deliveryProgressValue,
+  formatCtr,
+  formatDeliveryPercent,
+} from "@/lib/admin/ad-metrics"
 import { Progress } from "@/components/ui/progress"
 import {
   Select,
@@ -150,8 +155,8 @@ export default function AdminAdsPage() {
             {filtered.map((c) => {
               const delivered = c.deliveredImpressions
               const target = c.targetImpressions || 1
-              const pct = Math.round((delivered / target) * 100)
-              const ctr = delivered > 0 ? ((c.clicks / delivered) * 100).toFixed(2) : "0.00"
+              const pctLabel = formatDeliveryPercent(delivered, target)
+              const ctr = formatCtr(c.clicks, delivered)
               return (
                 <TableRow key={c.id}>
                   <TableCell>
@@ -159,10 +164,20 @@ export default function AdminAdsPage() {
                     <p className="text-xs text-muted-foreground">{c.advertiserName}</p>
                   </TableCell>
                   <TableCell className="text-sm capitalize">{c.placement.replace(/_/g, " ")}</TableCell>
-                  <TableCell className="min-w-[140px]">
-                    <div className="flex items-center gap-2">
-                      <Progress value={pct} className="h-2 flex-1" />
-                      <span className="text-xs text-muted-foreground">{pct}%</span>
+                  <TableCell className="min-w-[180px]">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Progress
+                          value={deliveryProgressValue(delivered, target)}
+                          className="h-2 flex-1"
+                        />
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          {pctLabel}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        {delivered.toLocaleString()} / {target.toLocaleString()} served
+                      </p>
                     </div>
                   </TableCell>
                   <TableCell>{ctr}%</TableCell>

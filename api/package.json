@@ -6,12 +6,13 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build",
+    "build": "rm -f tsconfig.build.tsbuildinfo && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "start": "nest start",
+    "start": "npm run start:dev",
     "start:dev": "nest start --watch",
+    "prestart:prod": "npm run build",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/src/main.js",
+    "start:prod": "node dist/main.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -23,7 +24,8 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:purge-demo": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' ts-node prisma/purge-demo-content.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "hls:repair": "npm run build && node -e \"const {repairHlsPlaylists}=require('./dist/queue/ffmpeg.util');const {readdir}=require('fs/promises');const {join}=require('path');(async()=>{const base=join(process.cwd(),'storage/uploads/hls');try{const dirs=await readdir(base,{withFileTypes:true});for(const d of dirs){if(d.isDirectory()){await repairHlsPlaylists(join(base,d.name));console.log('repaired',d.name);}}}catch(e){console.error(e.message);process.exit(1);}})();\""
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
@@ -50,6 +52,7 @@
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.4.2",
+    "geoip-lite": "^1.4.10",
     "helmet": "^8.2.0",
     "ioredis": "^5.11.0",
     "nodemailer": "^8.0.10",
@@ -70,6 +73,7 @@
     "@nestjs/testing": "^11.0.1",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.0",
+    "@types/geoip-lite": "^1.4.4",
     "@types/jest": "^30.0.0",
     "@types/multer": "^2.1.0",
     "@types/node": "^24.0.0",

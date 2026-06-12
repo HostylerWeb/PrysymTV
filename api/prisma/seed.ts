@@ -551,6 +551,26 @@ async function main() {
       { slug: 'concerts', vertical: 'concert', label: 'Concerts', description: 'Live and on-demand concert experiences', href: '/videos?category=concerts', isActive: true, sortOrder: 2 },
       { slug: 'community', vertical: 'community_event', label: 'Community Events', description: 'Local and community programming', href: '/videos?category=community', isActive: true, sortOrder: 3 },
       { slug: 'education', vertical: 'education', label: 'Educational Programs', description: 'Courses, workshops, and learning content', href: '/videos?category=education', isActive: true, sortOrder: 4 },
+      { slug: 'cooking', vertical: 'general', label: 'Cooking', description: 'Recipes, kitchen tutorials, and food culture', href: '/videos?category=cooking', isActive: true, sortOrder: 5 },
+      { slug: 'coaching', vertical: 'education', label: 'Coaching', description: 'Life, career, and skills coaching from creators', href: '/videos?category=coaching', isActive: true, sortOrder: 6 },
+      { slug: 'fitness', vertical: 'sports', label: 'Fitness & Wellness', description: 'Workouts, yoga, nutrition, and healthy living', href: '/videos?category=fitness', isActive: true, sortOrder: 7 },
+      { slug: 'gaming', vertical: 'general', label: 'Gaming', description: 'Gameplay, esports, reviews, and gaming culture', href: '/videos?category=gaming', isActive: true, sortOrder: 8 },
+      { slug: 'music', vertical: 'concert', label: 'Music', description: 'Performances, music videos, and artist content', href: '/videos?category=music', isActive: true, sortOrder: 9 },
+      { slug: 'technology', vertical: 'education', label: 'Technology', description: 'Tech reviews, tutorials, and industry news', href: '/videos?category=technology', isActive: true, sortOrder: 10 },
+      { slug: 'news', vertical: 'general', label: 'News & Commentary', description: 'Current events, analysis, and opinion', href: '/videos?category=news', isActive: true, sortOrder: 11 },
+      { slug: 'comedy', vertical: 'general', label: 'Comedy', description: 'Stand-up, sketches, improv, and humor', href: '/videos?category=comedy', isActive: true, sortOrder: 12 },
+      { slug: 'travel', vertical: 'general', label: 'Travel & Adventure', description: 'Destinations, vlogs, and outdoor exploration', href: '/videos?category=travel', isActive: true, sortOrder: 13 },
+      { slug: 'fashion', vertical: 'general', label: 'Fashion & Beauty', description: 'Style, makeup, trends, and lifestyle', href: '/videos?category=fashion', isActive: true, sortOrder: 14 },
+    ],
+    movie_genres: [
+      { slug: 'action', label: 'Action', isActive: true, sortOrder: 0 },
+      { slug: 'comedy', label: 'Comedy', isActive: true, sortOrder: 1 },
+      { slug: 'drama', label: 'Drama', isActive: true, sortOrder: 2 },
+      { slug: 'thriller', label: 'Thriller', isActive: true, sortOrder: 3 },
+      { slug: 'sci-fi', label: 'Sci-Fi', isActive: true, sortOrder: 4 },
+      { slug: 'horror', label: 'Horror', isActive: true, sortOrder: 5 },
+      { slug: 'romance', label: 'Romance', isActive: true, sortOrder: 6 },
+      { slug: 'documentary', label: 'Documentary', isActive: true, sortOrder: 7 },
     ],
   };
 
@@ -558,7 +578,7 @@ async function main() {
     await prisma.platformSetting.upsert({
       where: { key },
       create: { key, value },
-      update: {},
+      update: key === 'programs' || key === 'movie_genres' ? { value } : {},
     });
   }
 

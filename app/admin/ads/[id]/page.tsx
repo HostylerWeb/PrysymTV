@@ -11,6 +11,7 @@ import {
   AD_CAMPAIGN_REVENUE_RULE_KEY,
   AD_CAMPAIGN_REVENUE_RULE_LABEL,
 } from "@/lib/admin/ad-campaign-constants"
+import { AdCampaignPerformance } from "@/components/admin/ad-campaign-performance"
 import {
   deleteAdminAdCampaign,
   fetchAdminAdCampaign,
@@ -115,9 +116,6 @@ export default function AdminAdDetailPage({
   }
 
   const budget = Number(campaign.budgetUsd)
-  const delivered = campaign.deliveredImpressions
-  const target = campaign.targetImpressions || 1
-  const ctr = delivered > 0 ? ((campaign.clicks / delivered) * 100).toFixed(2) : "0.00"
 
   return (
     <>
@@ -264,10 +262,8 @@ export default function AdminAdDetailPage({
             {saveBusy ? "Saving…" : "Save changes"}
           </Button>
         </TabsContent>
-        <TabsContent value="performance" className="mt-4 space-y-2">
-          <p className="text-sm text-muted-foreground">
-            {delivered.toLocaleString()} / {target.toLocaleString()} impressions · {campaign.clicks} clicks · {ctr}% CTR
-          </p>
+        <TabsContent value="performance" className="mt-4">
+          <AdCampaignPerformance campaign={campaign} />
         </TabsContent>
       </Tabs>
     </>

@@ -54,7 +54,9 @@ export function HlsVideoPlayer({
     }
 
     if (autoPlay) {
-      void el.play().catch(() => {})
+      void el.play().catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return
+      })
     }
 
     return () => {

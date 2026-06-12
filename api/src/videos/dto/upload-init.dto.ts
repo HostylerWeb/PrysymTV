@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsIn,
   IsInt,
   IsOptional,
@@ -8,7 +9,9 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { CastMemberDto } from './cast-member.dto';
 
 const UPLOAD_TYPES = ['short', 'video', 'movie', 'podcast'] as const;
 
@@ -62,4 +65,26 @@ export class UploadInitDto {
   @IsString()
   @MaxLength(16)
   ageRating?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  tagline?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  director?: string;
+
+  /** Comma-separated writer names */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  writers?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CastMemberDto)
+  cast?: CastMemberDto[];
 }

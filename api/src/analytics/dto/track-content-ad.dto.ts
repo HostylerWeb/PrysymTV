@@ -1,5 +1,7 @@
 import { AdPlacement } from '@prisma/client';
-import { IsEnum, IsOptional, IsUUID } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsEnum, IsOptional, IsUUID, ValidateNested } from 'class-validator';
+import { ViewerGeoDto } from './viewer-geo.dto';
 
 export class TrackContentAdDto {
   @IsUUID()
@@ -19,4 +21,10 @@ export class TrackContentAdDto {
   @IsOptional()
   @IsUUID()
   viewerUserId?: string;
+
+  /** Browser-reported city/region when server IP is private (e.g. localhost dev). */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ViewerGeoDto)
+  viewerGeo?: ViewerGeoDto;
 }

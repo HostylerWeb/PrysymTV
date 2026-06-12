@@ -120,7 +120,7 @@
 | `GET` | `/playlists/:id` | ✅ |
 | `GET` | `/search` | ✅ |
 | `GET` | `/search/suggest` | ✅ |
-| `GET` | `/ads/serve` | ✅ Optional Bearer — premium users get `{ ad: null, adFree: true }` |
+| `GET` | `/ads/serve` | ✅ `?placement=&peek=1` — optional Bearer; `peek=1` returns ad without burning an impression |
 | `POST` | `/ads/track/impression` | ✅ |
 | `POST` | `/ads/track/click` | ✅ |
 | `POST` | `/analytics/track` | ✅ Optional JWT — batch `share`, `view`, etc. |
@@ -139,9 +139,15 @@
 | `POST` | `/verticals/series` | ✅ Approved vertical creators only (Bearer) |
 | `POST` | `/verticals/series/:slug/episodes` | ✅ Approved vertical creators only (Bearer) |
 | `PUT` | `/verticals/episodes/:episodeId/video` | ✅ Approved vertical creators only (Bearer) |
+| `PATCH` | `/verticals/episodes/:episodeId` | ✅ Creator edit episode metadata (Bearer, owner) |
+| `DELETE` | `/verticals/episodes/:episodeId` | ✅ Creator delete episode (Bearer, owner) |
 | `GET` | `/programs` | ✅ Reads `platform_settings.programs` (admin-editable) |
 | `GET` | `/programs/:slug` | ✅ Videos + `live_events` for pillar |
-| `GET` | `/config/public` | ✅ Public ads knobs — shorts frequency, placement toggles, skip seconds |
+| `GET` | `/categories/videos` | ✅ Video upload/browse categories |
+| `GET` | `/categories/podcasts` | ✅ Podcast show categories |
+| `GET` | `/categories/movies` | ✅ Movie genre list (admin-managed) |
+| `GET` | `/config/public` | ✅ Public ads knobs — shorts frequency, placement toggles, skip seconds, `platformCreatorId` |
+| `GET` | `/config/viewer-geo` | ✅ Server-resolved viewer city/region/country from request IP (for ad analytics fallback) |
 | `GET` | `/admin/analytics/overview` | ✅ DAU, live, revenue today, pending queues |
 | `GET` | `/admin/analytics/timeseries` | ✅ `?range=7d\|30d\|90d` — DAU, signups, revenue, live hours, top content |
 | `GET` | `/admin/revenue-split-rules` | ✅ |
@@ -170,6 +176,8 @@
 | `GET` | `/admin/stream-history` | ✅ Ended streams |
 | `GET` | `/admin/revenue/ledger` | ✅ Ledger batches (paginated) |
 | `POST` | `/admin/streams/:id/kill` | ✅ |
+| `GET` | `/admin/videos/:id` | ✅ Movie/video metadata for admin edit form |
+| `PUT` | `/admin/videos/:id` | ✅ Update title, description, cast, tags, etc. (not video file) |
 | `DELETE` | `/admin/videos/:id` | ✅ |
 | `DELETE` | `/admin/comments/:id` | ✅ |
 | `GET` | `/admin/content/stats` | ✅ |
@@ -201,7 +209,10 @@
 | `GET` | `/admin/ads/campaigns/:id` | ✅ |
 | `POST` | `/admin/ads/campaigns` | ✅ |
 | `PUT` | `/admin/ads/campaigns/:id/status` | ✅ `{ status }` |
-| `PUT` | `/admin/ads/campaigns/:id` | 📋 Full edit |
+| `PUT` | `/admin/ads/campaigns/:id` | ✅ Full edit |
+| `GET` | `/admin/ads/campaigns/:id/analytics` | ✅ Delivery, CTR, placement, click locations, timeline |
+| `GET` | `/admin/config/movie-genres` | ✅ Movie genre taxonomy |
+| `PUT` | `/admin/config/movie-genres` | ✅ `{ genres: [...] }` |
 
 ---
 
@@ -270,10 +281,22 @@ All `/users/me/*` routes require Bearer auth.
 | `GET /users/me/videos` | ✅ | Paginated |
 | `GET /users/me/saved` | ✅ | Resolves `video`, `movie`, `podcast_episode`, `vertical_episode`, `vertical_series` |
 | `GET /users/me/liked` | ✅ | Resolves `video`, `podcast_episode`, `vertical_episode` |
-| `GET /users/me/notifications` | ✅ | |
+| `GET /users/me/notifications` | ✅ | Paginated in-app feed (`type`, `message`, `actor`, `referenceId`, `isRead`) |
 | `PUT /users/me/notifications/:id/read` | ✅ | |
 | `PUT /users/me/notifications/read-all` | ✅ | |
-| `DELETE /users/me/notifications` | ✅ | |
+| `DELETE /users/me/notifications` | ✅ | Clear all |
+
+**Notification triggers** (respect `GET/PUT /users/me/notification-preferences`; default all on):
+
+| Pref `type` | Created when |
+|-------------|----------------|
+| `follow` | Someone follows you |
+| `like` | Someone likes your video or your comment |
+| `comment` | Someone comments on your video or replies to your comment |
+| `gift` | Someone sends you a gift on stream |
+| `live` | A creator you subscribed to (live-alerts bell) goes live |
+| `upload` | Someone you follow publishes a new public video (processing → `ready`) |
+| `system` | Reserved for platform announcements (admin) |
 | `GET /users/:username` | ✅ | Public profile + `isLive`, `liveStreamId`, `isFollowing`, `isChannelMember`, `liveAlertsOn` |
 | `GET /users/:username/playlists` | ✅ | Public playlists |
 | `GET /users/:username/videos` | ✅ | `?page=&limit=` — public ready videos |
@@ -307,9 +330,9 @@ Aggregates: `liveNow`, `featuredLive`, `trending`, `newReleases`, `movies`, `fea
 | `GET /videos/:id` | ✅ Optional Bearer → `liked`, `saved`, `disliked`, `isFollowing`, `dislikesCount` |
 | `POST /videos/:id/view` | ✅ Increment `viewsCount` (call on playback start) |
 | `GET /videos/:id/comments` | ✅ `?page=&limit=` — optional Bearer → `liked` on each comment/reply |
-| `POST /videos/:id/comments` | ✅ `{ body, parentId? }` |
-| `POST /videos/comments/:commentId/like` | ✅ Toggle comment like |
-| `POST /videos/:id/like` | ✅ Toggle (mutually exclusive with dislike) |
+| `POST /videos/:id/comments` | ✅ `{ body, parentId? }` — notifies video owner (`comment` pref) or parent author on reply |
+| `POST /videos/comments/:commentId/like` | ✅ Toggle comment like — notifies comment author (`like` pref) |
+| `POST /videos/:id/like` | ✅ Toggle (mutually exclusive with dislike) — notifies video owner (`like` pref) |
 | `POST /videos/:id/dislike` | ✅ Toggle (mutually exclusive with like) |
 | `POST /videos/:id/save` | ✅ Toggle |
 | `POST /videos/:id/report` | ✅ `{ reason?, details? }` |
@@ -363,7 +386,7 @@ Bearer required.
 |-------|------|--------|
 | `GET /billing/products` | — | ✅ Coin packages from DB |
 | `GET /billing/gifts/catalog` | — | ✅ |
-| `POST /billing/gifts/send` | Bearer | ✅ Deducts coins, **`viewer_support`** split → creator balance |
+| `POST /billing/gifts/send` | Bearer | ✅ Deducts coins, **`viewer_support`** split → creator balance; in-app `gift` notification to receiver |
 | `POST /billing/stripe/create-checkout` | Bearer | ✅ `{ packageId, productType: "coins" \| "premium" }` |
 | `POST /billing/stripe/webhook` | Stripe signature | ✅ `checkout.session.completed` + `async_payment_succeeded` |
 | `POST` / `GET /billing/stripe/fulfill` | Bearer | ✅ Redirect fallback; verifies session `userId` |
@@ -445,9 +468,11 @@ Frontend: `/podcasts` (API-only, no mocks), `/podcast/:id`, profile settings **P
 | `DELETE /playlists/:id` | Bearer | ✅ |
 | `POST /playlists/:id/items` | Bearer | ✅ `{ itemType: video\|podcast_episode, itemId }` |
 | `DELETE /playlists/:id/items/:itemId` | Bearer | ✅ |
-| `PUT /playlists/:id/reorder` | Bearer | ✅ `{ itemIds: string[] }` playlist item row IDs |
-| `GET /playlists/:id` | — | ✅ Playlist + ordered items (`playlistItemId` on each item) |
-| `GET /users/:username/playlists` | — | ✅ Public playlists for profile |
+| `PUT /playlists/:id/reorder` | Bearer | ✅ `{ items: [{ id, sortOrder }] }` — playlist item row IDs |
+| `GET /playlists/:id` | — | ✅ Playlist + ordered items (`playlistItemId` on each item). Prunes orphaned rows (deleted video/episode). `itemCount` = resolvable items only. |
+| `GET /users/:username/playlists` | — | ✅ Public playlists; `itemCount` counts only items whose content still exists |
+
+**Item counts:** List endpoints count playlist rows whose `video` or `podcast_episode` still exists. Deleting content removes playlist references (admin video/episode delete). `GET /playlists/:id` auto-prunes stale rows on load.
 
 Frontend: profile settings **Playlists**, `AddToPlaylistSheet` on watch + podcast pages.
 
@@ -467,15 +492,71 @@ Frontend: profile settings **Playlists**, `AddToPlaylistSheet` on watch + podcas
 
 ## Ads (`/ads`)
 
-### `GET /ads/serve` ✅
+### Placements (one campaign pool per placement)
 
-**Query:** `placement` — `home_banner` \| `shorts_interstitial` \| `movie_preroll` \| **`vertical_episode`**
+| Placement | Where it runs | When `GET /ads/serve` is called |
+|-----------|---------------|----------------------------------|
+| `home_banner` | Home page sponsored strip | Once when `AdBanner` mounts |
+| `movie_preroll` | Before movie playback | When user starts a movie (`AdPreroll`) |
+| `shorts_interstitial` | Full-screen between Shorts | Every N swipes (`shortsInterstitialEveryNSwipes` from `GET /config/public`; default 5) |
+| `vertical_episode` | Before vertical episode plays | After `peek=1` confirms a playable ad (`VerticalEpisodeAdGate`) |
 
-Returns `{ ad: ServedAd | null }` from active campaigns. With Bearer and active platform Premium: `{ ad: null, adFree: true }`.
+Each placement is independent: a `home_banner` campaign never competes with a `movie_preroll` campaign. Admin can disable a placement globally via `GET/PUT /admin/config/ads` → `placements.{placement}`.
+
+Premium users (active platform subscription): `GET /ads/serve` returns `{ ad: null, adFree: true }` when Bearer is sent.
+
+Clients call `GET /ads/serve?placement=…&peek=1` before showing preroll/interstitial/vertical gates. If `{ ad: null }` or `mediaUrl` is empty, skip the ad UI. The real serve (without `peek`) burns an impression when the ad is shown.
+
+### `GET /ads/serve` ✅ — how a campaign is picked
+
+**Query:** `placement` — `home_banner` \| `shorts_interstitial` \| `movie_preroll` \| `vertical_episode` · optional `peek=1` (or `peek=true`) — return eligible ad **without** incrementing `deliveredImpressions`
+
+**Selection algorithm** (same for all placements):
+
+1. **Filter eligible campaigns** for that `placement` where:
+   - `status = active`
+   - `startsAt ≤ now ≤ endsAt`
+   - `mediaUrl` is non-empty (playable creative)
+   - `deliveredImpressions < targetImpressions`
+   - estimated spend `(deliveredImpressions × CPM / 1000) < budgetUsd`
+2. If none eligible → `{ ad: null }`
+3. **Weighted random pick** among eligible campaigns:
+   - weight = `targetImpressions - deliveredImpressions` (remaining delivery quota)
+   - campaigns with more remaining impressions are more likely to be chosen, but each request is **random** (not round-robin, not strict budget order)
+4. Unless `peek=1`, **increment** `deliveredImpressions` on the picked campaign immediately (counts as “served”)
+5. If served count ≥ target **or** estimated spend ≥ budget → set campaign `status = completed`
+
+So with multiple home banners: **each page load / serve call** rolls weighted random among active campaigns that still have budget and impression cap left. Refreshing can show a different ad. This is **not** pure random equal odds — campaigns closer to their target get lower weight.
+
+**Response:** `{ ad: ServedAd | null }` where `ServedAd` includes `id`, `title`, `mediaUrl`, `clickThroughUrl`, `placement`, `mediaType` (`image` \| `video`), `skipAfterSeconds` (preroll/shorts/vertical only).
 
 ### `POST /ads/track/impression` · `POST /ads/track/click` ✅
 
-**Body:** `{ campaignId, creatorId?, videoId?, placement, viewerUserId? }` — `creatorId` optional (falls back to platform admin). Serve increments `deliveredImpressions`; track records attribution + CPM revenue via `gafRuleKey` / per-campaign `revenueRuleKey`.
+**Body:**
+
+```json
+{
+  "campaignId": "uuid",
+  "creatorId": "uuid?",
+  "videoId": "uuid?",
+  "placement": "home_banner",
+  "viewerUserId": "uuid?",
+  "viewerGeo": {
+    "city": "Newark?",
+    "region": "NJ?",
+    "regionName": "New Jersey?",
+    "countryCode": "US?"
+  }
+}
+```
+
+- `creatorId` optional (falls back to platform admin user).
+- `videoId` optional — must be a **`videos.id` UUID** when set (do not pass vertical `seriesId`; omit for vertical-episode placements).
+- **Serve** increments `deliveredImpressions` (unless `peek=1`); **track/impression** records `content_ad_events` + analytics (player pixel).
+- **track/click** increments `clicks` and stores click location in event `metadata.location`.
+- **Geo:** Server resolves city/region from client IP (or Cloudflare `CF-IPCity` / `CF-Region` headers). If IP is private (localhost), optional `viewerGeo` from the browser is used as fallback. Signed-in users without geo may fall back to profile `countryCode`.
+
+**Admin analytics:** `GET /admin/ads/campaigns/:id/analytics` — delivery %, CTR, guest vs signed-in, by placement, **click locations** (`byLocation`), 30-day timeline, recent events.
 
 ### Advertisers B2B (`/advertisers`) ✅
 
@@ -495,6 +576,7 @@ Frontend: `/advertisers` self-serve portal. Admin: `/admin/advertisers`, `/admin
 | `POST /admin/ads/campaigns/:id/duplicate` | Clone campaign |
 | `POST /admin/ads/media/upload` | Ad creative upload |
 | `GET /admin/ads/campaigns` | Filters: `status`, `placement`, `q`, date range |
+| `GET /admin/ads/campaigns/:id/analytics` | Performance tab: delivery, CTR, audience, placements, click geography, timeline |
 
 Platform ads config adds `impressionRevenueCpmUsd`. `GET /config/public` includes `platformCreatorId` + `placements`.
 
@@ -534,10 +616,12 @@ Platform ads config adds `impressionRevenueCpmUsd`. `GET /config/public` include
 | `POST /verticals/series` | ✅ `{ slug, title, tagline?, description?, genre?, posterUrl? }` — approved only |
 | `POST /verticals/series/:slug/episodes` | ✅ `{ episodeNumber, title, ... }` — approved only |
 | `PUT /verticals/episodes/:episodeId/video` | ✅ `{ videoId }` — after upload; approved only |
+| `PATCH /verticals/episodes/:episodeId` | ✅ Bearer — owner: `{ episodeNumber?, title?, description?, cliffhanger? }` |
+| `DELETE /verticals/episodes/:episodeId` | ✅ Bearer — owner; updates series `totalEpisodes` |
 
 **Vertical creator gate:** `POST /users/apply-vertical-creator` → admin `PUT /admin/vertical-creator-applications/:id` with `{ action: approve \| reject }`. User field: `verticalCreatorStatus` (`none` \| `pending` \| `approved` \| `rejected`). Dev auto-approve: `AUTO_APPROVE_VERTICAL_CREATOR=true`.
 
-Frontend: show **`vertical_episode`** ad before each episode. Logged-in users persist progress via `POST /history/progress` (`contentType: vertical_episode`); guests use `localStorage`.
+Frontend: **`peek=1`** then show **`vertical_episode`** ad only when a playable creative exists. Logged-in users persist progress via `POST /history/progress` (`contentType: vertical_episode`); guests use `localStorage`.
 
 ---
 
@@ -552,12 +636,13 @@ Founder pillars: Podcasts, Sports, Concerts, Community, Education. Consumer disc
 
 ## Categories (`/categories`)
 
-Admin-managed taxonomies for uploads and browse filters. Stored in `platform_settings` (`programs`, `podcast_categories`).
+Admin-managed taxonomies for uploads and browse filters. Stored in `platform_settings` (`programs`, `podcast_categories`, `movie_genres`).
 
 | Route | Status |
 |-------|--------|
 | `GET /categories/videos` | ✅ Active video upload/browse categories (`general` + active programs except podcast hub) |
 | `GET /categories/podcasts` | ✅ Active podcast show categories (labels used on `PodcastShow.category`) |
+| `GET /categories/movies` | ✅ Active movie genres (`slug`, `label`) — admin: `GET/PUT /admin/config/movie-genres` |
 
 ### `GET /videos/feed/videos` ✅
 
@@ -608,7 +693,8 @@ Long-form video browse (`type = video`). Returns live streams when `mode` includ
 
 | Route | Notes |
 |-------|--------|
-| `GET /config/public` | `{ ads: { shortsInterstitialEveryNSwipes, shortsInterstitialEnabled, shortsSkipSeconds, moviePrerollSkipSeconds, placements } }` — consumed by `/shorts` and ad UI |
+| `GET /config/public` | `{ platformCreatorId, membership, ads: { shortsInterstitialEveryNSwipes, shortsInterstitialEnabled, shortsSkipSeconds, moviePrerollSkipSeconds, impressionRevenueCpmUsd, placements } }` — consumed by `/shorts` and ad UI |
+| `GET /config/viewer-geo` | `{ geo: { city, region, regionName, countryCode } \| null }` — server IP geolocation; used instead of third-party browser geo on localhost |
 
 Values are stored in `platform_settings` and edited at `/admin/config/ads`.
 
@@ -648,6 +734,8 @@ Values are stored in `platform_settings` and edited at `/admin/config/ads`.
 |-------|--------|
 | `GET /admin/content/stats` | Counts by type |
 | `GET /admin/content/videos` | `?type=short\|video\|movie` |
+| `GET /admin/videos/:id` | Full metadata for admin movie/video edit sheet |
+| `PUT /admin/videos/:id` | Update metadata (title, description, cast, genre, age rating, etc.) |
 | `GET /admin/content/comments` | |
 | `GET /admin/content/vertical-series` (+ `/:slug/episodes`) | |
 | `GET /admin/content/podcast-shows` (+ `/:showId/episodes`) | |
@@ -664,6 +752,7 @@ Values are stored in `platform_settings` and edited at `/admin/config/ads`.
 | `GET/PUT /admin/config/scorecard` | Mission module %, display prefs |
 | `GET/PUT /admin/config/programs` | Video categories — add/edit/delete; drives `GET /programs`, `GET /categories/videos`, `/videos` chips, long-video upload |
 | `GET/PUT /admin/config/podcast-categories` | Podcast categories — add/edit/delete; drives `GET /categories/podcasts`, `/podcasts` filters, podcast upload |
+| `GET/PUT /admin/config/movie-genres` | Movie genres — add/edit/delete; drives `GET /categories/movies`, `/movies` filters, admin movie upload |
 
 ### Demo / sample content
 
@@ -682,16 +771,16 @@ Seeder flag `SEED_DEMO_CONTENT` (default `true` in dev, set `false` in `api/.env
 | Route | Notes |
 |-------|--------|
 | `GET/PUT /admin/revenue-split-rules/:ruleKey` | Bps must sum to 10000 |
-| `GET/POST /admin/ads/campaigns`, `GET /admin/ads/campaigns/:id`, `PUT …/status` | Campaign CRUD |
+| `GET/POST /admin/ads/campaigns`, `GET /admin/ads/campaigns/:id`, `PUT …/status`, `PUT …/:id` | Campaign CRUD + full edit |
+| `GET /admin/ads/campaigns/:id/analytics` | Sponsor/admin performance + click geography |
 | `GET /admin/economy/gifts`, `GET /admin/economy/transactions` | Activity feeds |
 
 ### Still planned
 
 | Item | Notes |
 |------|--------|
-| `PUT /admin/ads/campaigns/:id` | Full campaign edit |
 | CSV export | Analytics export |
-| Admin audit log | |
+| Advertiser portal analytics | Self-serve campaign reports for `/advertisers` |
 
 **Seeded `revenue_split_rules` keys:** `live_event`, `viewer_support`, `insider_membership`, `ad_gaf_allocation`, `sponsorship`, `creator_subscription`, `coin_purchase`, `store_merchandise`
 
@@ -795,4 +884,4 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 
 ---
 
-*Last updated: 2026-05-31 — Full `/admin/*` operator APIs, `platform_settings` config, `GET /config/public`, `GET /admin/analytics/timeseries`, `GET/PUT /admin/users/:id/impact`. Production Stripe: [`stripe-production.md`](./stripe-production.md).*
+*Last updated: 2026-05-31 — In-app notification triggers (comments, likes, gifts, uploads, live), `GET /config/viewer-geo`, `GET /ads/serve?peek=1`, creator `PATCH/DELETE /verticals/episodes/:id`, `GET/PUT /admin/videos/:id`, HLS playlist repair on transcode. Production Stripe: [`stripe-production.md`](./stripe-production.md).*

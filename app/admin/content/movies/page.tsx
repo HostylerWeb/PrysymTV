@@ -3,11 +3,13 @@
 import { useState } from "react"
 import { Upload } from "lucide-react"
 import { AdminContentVideoPage } from "@/components/admin/admin-content-video-page"
+import { AdminMovieEditSheet } from "@/components/admin/admin-movie-edit-sheet"
 import { AdminMovieUploadSheet } from "@/components/admin/admin-movie-upload-sheet"
 import { Button } from "@/components/ui/button"
 
 export default function AdminContentMoviesPage() {
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
 
   return (
@@ -18,6 +20,7 @@ export default function AdminContentMoviesPage() {
         description="Upload and manage feature-length titles for the public /movies catalog."
         breadcrumbLabel="Movies"
         videoType="movie"
+        onEditItem={(id) => setEditId(id)}
         headerActions={
           <Button
             className="rounded-full gap-2"
@@ -36,6 +39,16 @@ export default function AdminContentMoviesPage() {
           setReloadKey((k) => k + 1)
         }}
       />
+      {editId && (
+        <AdminMovieEditSheet
+          videoId={editId}
+          isOpen
+          onClose={() => setEditId(null)}
+          onSuccess={() => {
+            setReloadKey((k) => k + 1)
+          }}
+        />
+      )}
     </>
   )
 }

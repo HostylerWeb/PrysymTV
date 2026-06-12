@@ -36,4 +36,14 @@ export class CategoriesService {
         .map(({ slug, label }) => ({ slug, label })),
     };
   }
+
+  async listMovieGenres() {
+    const items = await this.platformSettings.getMovieGenres();
+    return {
+      items: items
+        .filter((g) => g.isActive)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map(({ slug, label }) => ({ slug, label })),
+    };
+  }
 }

@@ -8,6 +8,7 @@ export function Footer() {
           &copy; {new Date().getFullYear()} Prysym TV. All rights reserved.
         </div>
         <div className="flex flex-wrap justify-center items-center gap-4 md:gap-6 text-sm text-muted-foreground">
+          <Link href="/advertise" className="hover:text-foreground transition-colors">Advertise</Link>
           <Link href="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link>
           <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
           <Link href="/cookies" className="hover:text-foreground transition-colors">Cookie Policy</Link>

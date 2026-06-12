@@ -1,4 +1,11 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Request } from 'express';
+import {
+  geoFromClientHint,
+  resolveRequestGeo,
+  type RequestGeo,
+} from '../common/geo/request-geo';
+import { ViewerGeoDto } from './dto/viewer-geo.dto';
 import {
   AnalyticsEventType,
   Prisma,
@@ -101,9 +108,40 @@ export class AnalyticsService {
     return admin.id;
   }
 
+  private async resolveAdEventGeo(
+    req: Request,
+    headerCountry?: string,
+    viewerUserId?: string,
+    viewerGeo?: ViewerGeoDto,
+  ): Promise<RequestGeo> {
+    let geo = resolveRequestGeo(req, headerCountry);
+    if (geo.label === 'Unknown location' && viewerGeo) {
+      const fromClient = geoFromClientHint(viewerGeo);
+      if (fromClient) return fromClient;
+    }
+    if (geo.label !== 'Unknown location' || !viewerUserId) return geo;
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: viewerUserId },
+      select: { countryCode: true },
+    });
+    if (!user?.countryCode) return geo;
+
+    geo = {
+      city: null,
+      region: null,
+      regionName: null,
+      countryCode: user.countryCode.toUpperCase().slice(0, 2),
+      label: user.countryCode.toUpperCase().slice(0, 2),
+    };
+    return geo;
+  }
+
   async trackContentAd(
     dto: TrackContentAdDto,
     eventType: 'ad_impression' | 'ad_click',
+    req?: Request,
+    headerCountry?: string,
   ) {
     const adsConfig = await this.platformSettings.getAds();
     const creatorId = dto.creatorId ?? (await this.resolvePlatformCreatorId());
@@ -114,6 +152,15 @@ export class AnalyticsService {
     if (!campaign) throw new NotFoundException('Campaign not found');
 
     const ruleKey = campaign.revenueRuleKey || adsConfig.gafRuleKey;
+    const location =
+      req != null
+        ? await this.resolveAdEventGeo(
+            req,
+            headerCountry,
+            dto.viewerUserId,
+            dto.viewerGeo,
+          )
+        : null;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.contentAdEvent.create({
@@ -124,6 +171,7 @@ export class AnalyticsService {
           placement: dto.placement,
           eventType,
           viewerUserId: dto.viewerUserId,
+          metadata: location ? { location } : undefined,
         },
       });
       await tx.analyticsEvent.create({
@@ -135,6 +183,7 @@ export class AnalyticsService {
             creatorId,
             videoId: dto.videoId,
             placement: dto.placement,
+            ...(location ? { location } : {}),
           },
         },
       });

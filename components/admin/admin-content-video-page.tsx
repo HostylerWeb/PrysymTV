@@ -21,6 +21,7 @@ type Props = {
   breadcrumbLabel: string;
   videoType: "video" | "short" | "movie";
   headerActions?: React.ReactNode;
+  onEditItem?: (id: string) => void;
 };
 
 export function AdminContentVideoPage({
@@ -29,6 +30,7 @@ export function AdminContentVideoPage({
   breadcrumbLabel,
   videoType,
   headerActions,
+  onEditItem,
 }: Props) {
   const [q, setQ] = useState("")
   const [status, setStatus] = useState("all")
@@ -97,6 +99,7 @@ export function AdminContentVideoPage({
 
       <AdminVideoTable
         items={items}
+        onEdit={onEditItem}
         onDelete={(id) => deleteAdminVideo(id).then(() => reload())}
       />
       <AdminPagination

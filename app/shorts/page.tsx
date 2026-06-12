@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, Suspense } from "react"
 import { 
   Heart, 
   MessageCircle, 
@@ -25,6 +25,7 @@ import { Header } from "@/components/header"
 import { useAuth } from "@/contexts/auth-context"
 
 import { AdInterstitial } from "@/components/ad-interstitial"
+import { fetchServedAd, isValidServedAd, type ServedAd } from "@/lib/api/ads"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { useWatchAnalytics } from "@/lib/hooks/use-watch-analytics"
 import { ShareSheet } from "@/components/share-sheet"
@@ -59,7 +60,7 @@ import {
 import { CreateFlowModals, triggerContextualCreate } from "@/components/create-flow-modals"
 import { CreateHeaderButton } from "@/components/create-header-button"
 import { useCreateFlow } from "@/hooks/use-create-flow"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 export type ShortItem = {
   id: string
   creatorId: string
@@ -331,8 +332,10 @@ function ShortVideo({
   )
 }
 
-export default function ShortsPage() {
+function ShortsPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const startShortId = searchParams.get("start")
   const createFlow = useCreateFlow()
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const uploadShort = () =>
@@ -366,6 +369,7 @@ export default function ShortsPage() {
       cancelled = true
     }
   }, [authLoading, isAuthenticated])
+
   const [newComment, setNewComment] = useState("")
   const [replyingTo, setReplyingTo] = useState<{ id: string; user: string } | null>(null)
   const [comments, setComments] = useState<Record<string, VideoComment[]>>({})
@@ -373,10 +377,24 @@ export default function ShortsPage() {
   const [commentPosting, setCommentPosting] = useState(false)
   const [likedCommentIds, setLikedCommentIds] = useState<Set<string>>(new Set())
   const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!startShortId || !feedLoaded || shortsData.length === 0) return
+    const index = shortsData.findIndex((s) => s.id === startShortId)
+    if (index < 0) return
+    setActiveIndex(index)
+    requestAnimationFrame(() => {
+      if (containerRef.current) {
+        containerRef.current.scrollTop = index * containerRef.current.clientHeight
+      }
+    })
+  }, [startShortId, feedLoaded, shortsData])
+
   const [activeTab, setActiveTab] = useState("shorts")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [showAd, setShowAd] = useState(false)
+  const [interstitialAd, setInterstitialAd] = useState<ServedAd | null>(null)
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [shareTarget, setShareTarget] = useState<{ id: string; title: string; url: string } | null>(null)
   const [isReportOpen, setIsReportOpen] = useState(false)
@@ -453,7 +471,11 @@ export default function ShortsPage() {
           shortsViewCount.current > 0 &&
           shortsViewCount.current % n === 0
         ) {
-          setShowAd(true)
+          void fetchServedAd("shorts_interstitial", { peek: true }).then((peekAd) => {
+            if (!isValidServedAd(peekAd)) return
+            setInterstitialAd(peekAd)
+            setShowAd(true)
+          })
         }
       }
     }
@@ -933,9 +955,13 @@ export default function ShortsPage() {
           targetLabel={reportTarget.title}
         />
       )}
-      {showAd && (
+      {showAd && interstitialAd && (
         <AdInterstitial
-          onClose={() => setShowAd(false)}
+          servedAd={interstitialAd}
+          onClose={() => {
+            setShowAd(false)
+            setInterstitialAd(null)
+          }}
           creatorId={shortsData[activeIndex]?.creatorId}
           videoId={shortsData[activeIndex]?.id}
         />
@@ -957,5 +983,19 @@ export default function ShortsPage() {
         }
       `}</style>
     </main>
+  )
+}
+
+export default function ShortsPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="h-screen bg-black flex items-center justify-center">
+          <p className="text-white/60 text-sm">Loading shorts…</p>
+        </main>
+      }
+    >
+      <ShortsPageContent />
+    </Suspense>
   )
 }

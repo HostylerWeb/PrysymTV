@@ -9,7 +9,8 @@ import { AdminStatusPill } from "@/components/admin/admin-status-pill"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
 import { AdminDateRangePicker } from "@/components/admin/admin-date-range-picker"
 import { useAdminListDateFilter } from "@/components/admin/use-admin-list-date-filter"
-import { fetchAdminReports } from "@/lib/api/admin"
+import { AdminConfirmDialog } from "@/components/admin/admin-confirm-dialog"
+import { deleteAdminReport, fetchAdminReports } from "@/lib/api/admin"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -29,9 +30,10 @@ const TABS = [
 export default function AdminModerationHistoryPage() {
   const [tab, setTab] = useState("actioned")
   const [page, setPage] = useState(1)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const { dateRange, setDateRange, dateParams, dateDeps } = useAdminListDateFilter()
 
-  const { data, loading, error } = useAdminQuery(
+  const { data, loading, error, reload } = useAdminQuery(
     () =>
       fetchAdminReports({
         page,
@@ -45,6 +47,16 @@ export default function AdminModerationHistoryPage() {
   const items = data?.items ?? []
   const meta = data?.meta ?? { page: 1, limit: 20, total: 0 }
   const totalPages = Math.ceil(meta.total / meta.limit) || 1
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id)
+    try {
+      await deleteAdminReport(id)
+      await reload()
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   return (
     <>
@@ -107,9 +119,29 @@ export default function AdminModerationHistoryPage() {
                     {new Date(r.createdAt).toLocaleDateString()}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button asChild size="sm" variant="outline" className="rounded-full">
-                      <Link href={`/admin/moderation/${r.id}`}>Open</Link>
-                    </Button>
+                    <div className="flex items-center justify-end gap-2">
+                      {r.targetTitle !== "(removed)" && (
+                        <Button asChild size="sm" variant="outline" className="rounded-full">
+                          <Link href={`/admin/moderation/${r.id}`}>Open</Link>
+                        </Button>
+                      )}
+                      <AdminConfirmDialog
+                        title="Remove this report?"
+                        description="Permanently removes this report from history."
+                        confirmLabel="Remove report"
+                        onConfirm={() => void handleDelete(r.id)}
+                        trigger={
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-full text-destructive border-destructive/30 hover:bg-destructive/10"
+                            disabled={deletingId === r.id}
+                          >
+                            {deletingId === r.id ? "Removing…" : "Delete"}
+                          </Button>
+                        }
+                      />
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

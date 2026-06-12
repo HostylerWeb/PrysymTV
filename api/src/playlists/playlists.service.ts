@@ -19,6 +19,114 @@ import { UpdatePlaylistDto } from './dto/update-playlist.dto';
 export class PlaylistsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async loadValidContentIds(items: Array<{
+    itemType: PlaylistItemType;
+    itemId: string;
+  }>) {
+    const videoIds = [
+      ...new Set(
+        items
+          .filter((i) => i.itemType === PlaylistItemType.video)
+          .map((i) => i.itemId),
+      ),
+    ];
+    const episodeIds = [
+      ...new Set(
+        items
+          .filter((i) => i.itemType === PlaylistItemType.podcast_episode)
+          .map((i) => i.itemId),
+      ),
+    ];
+
+    const [videos, episodes] = await Promise.all([
+      videoIds.length
+        ? this.prisma.video.findMany({
+            where: { id: { in: videoIds } },
+            select: { id: true },
+          })
+        : [],
+      episodeIds.length
+        ? this.prisma.podcastEpisode.findMany({
+            where: { id: { in: episodeIds } },
+            select: { id: true },
+          })
+        : [],
+    ]);
+
+    return {
+      validVideoIds: new Set(videos.map((v) => v.id)),
+      validEpisodeIds: new Set(episodes.map((e) => e.id)),
+    };
+  }
+
+  private isResolvableItem(
+    item: { itemType: PlaylistItemType; itemId: string },
+    validVideoIds: Set<string>,
+    validEpisodeIds: Set<string>,
+  ) {
+    return item.itemType === PlaylistItemType.video
+      ? validVideoIds.has(item.itemId)
+      : validEpisodeIds.has(item.itemId);
+  }
+
+  async countResolvableItems(playlistIds: string[]) {
+    const counts = new Map<string, number>();
+    for (const id of playlistIds) counts.set(id, 0);
+    if (playlistIds.length === 0) return counts;
+
+    const items = await this.prisma.playlistItem.findMany({
+      where: { playlistId: { in: playlistIds } },
+      select: { playlistId: true, itemType: true, itemId: true },
+    });
+    const { validVideoIds, validEpisodeIds } =
+      await this.loadValidContentIds(items);
+
+    for (const item of items) {
+      if (
+        this.isResolvableItem(item, validVideoIds, validEpisodeIds)
+      ) {
+        counts.set(
+          item.playlistId,
+          (counts.get(item.playlistId) ?? 0) + 1,
+        );
+      }
+    }
+    return counts;
+  }
+
+  async pruneOrphanedItems(playlistId: string) {
+    const items = await this.prisma.playlistItem.findMany({
+      where: { playlistId },
+      select: { id: true, itemType: true, itemId: true },
+    });
+    if (items.length === 0) return 0;
+
+    const { validVideoIds, validEpisodeIds } =
+      await this.loadValidContentIds(items);
+    const orphanIds = items
+      .filter(
+        (item) =>
+          !this.isResolvableItem(item, validVideoIds, validEpisodeIds),
+      )
+      .map((item) => item.id);
+
+    if (orphanIds.length === 0) return 0;
+
+    await this.prisma.playlistItem.deleteMany({
+      where: { id: { in: orphanIds } },
+    });
+    return orphanIds.length;
+  }
+
+  async removeContentReferences(
+    itemType: PlaylistItemType,
+    itemId: string,
+  ) {
+    await this.prisma.playlistItem.deleteMany({
+      where: { itemType, itemId },
+    });
+  }
+
   async discoverPublic(limit = 12) {
     const playlists = await this.prisma.playlist.findMany({
       where: { visibility: Visibility.public },
@@ -35,8 +143,16 @@ export class PlaylistsService {
       },
     });
 
-    const withItems = playlists.filter((p) => p._count.items > 0);
-    withItems.sort((a, b) => b._count.items - a._count.items);
+    const resolvableCounts = await this.countResolvableItems(
+      playlists.map((p) => p.id),
+    );
+    const withItems = playlists.filter(
+      (p) => (resolvableCounts.get(p.id) ?? 0) > 0,
+    );
+    withItems.sort(
+      (a, b) =>
+        (resolvableCounts.get(b.id) ?? 0) - (resolvableCounts.get(a.id) ?? 0),
+    );
 
     const coverUrls = await Promise.all(
       withItems.map(async (p) => {
@@ -65,7 +181,7 @@ export class PlaylistsService {
         description: p.description,
         coverUrl: coverUrls[i],
         type: p.type,
-        itemCount: p._count.items,
+        itemCount: resolvableCounts.get(p.id) ?? 0,
         creatorSlug: p.creator.username,
         creatorName: p.creator.displayName ?? p.creator.username,
       })),
@@ -76,8 +192,10 @@ export class PlaylistsService {
     const playlists = await this.prisma.playlist.findMany({
       where: { creatorId: userId },
       orderBy: { updatedAt: 'desc' },
-      include: { _count: { select: { items: true } } },
     });
+    const resolvableCounts = await this.countResolvableItems(
+      playlists.map((p) => p.id),
+    );
     return {
       items: playlists.map((p) => ({
         id: p.id,
@@ -86,8 +204,28 @@ export class PlaylistsService {
         coverUrl: p.coverUrl,
         type: p.type,
         visibility: p.visibility,
-        itemCount: p._count.items,
+        itemCount: resolvableCounts.get(p.id) ?? 0,
         updatedAt: p.updatedAt,
+      })),
+    };
+  }
+
+  async listPublicByCreatorId(creatorId: string) {
+    const playlists = await this.prisma.playlist.findMany({
+      where: { creatorId, visibility: 'public' },
+      orderBy: { updatedAt: 'desc' },
+    });
+    const resolvableCounts = await this.countResolvableItems(
+      playlists.map((p) => p.id),
+    );
+    return {
+      items: playlists.map((p) => ({
+        id: p.id,
+        title: p.title,
+        description: p.description,
+        coverUrl: p.coverUrl,
+        type: p.type,
+        itemCount: resolvableCounts.get(p.id) ?? 0,
       })),
     };
   }
@@ -190,6 +328,8 @@ export class PlaylistsService {
   }
 
   async getOne(id: string) {
+    await this.pruneOrphanedItems(id);
+
     const playlist = await this.prisma.playlist.findUnique({
       where: { id },
       include: {
@@ -278,7 +418,7 @@ export class PlaylistsService {
       coverUrl: playlist.coverUrl,
       type: playlist.type,
       visibility: playlist.visibility,
-      itemCount: playlist.items.length,
+      itemCount: resolvedItems.length,
       creatorSlug: playlist.creator.username,
       creatorName: playlist.creator.displayName ?? playlist.creator.username,
       items: resolvedItems,

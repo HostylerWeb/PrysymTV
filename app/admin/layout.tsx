@@ -3,7 +3,6 @@
 import { notFound } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
-import { AdminTopbar } from "@/components/admin/admin-topbar"
 
 const ADMIN_UI_PREVIEW = process.env.NEXT_PUBLIC_ADMIN_UI_PREVIEW === "true"
 
@@ -25,13 +24,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-background">
       <AdminSidebar />
       <div className="md:pl-64 flex flex-col min-h-screen">
-        <AdminTopbar />
         {ADMIN_UI_PREVIEW && user?.role !== "admin" && (
           <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-center text-xs text-amber-400">
             Admin UI preview mode — auth gate bypassed. Sign in as admin for live API data.
           </div>
         )}
-        <main className="flex-1 p-4 md:p-6 lg:p-8 w-full max-w-[1400px]">{children}</main>
+        <main className="flex-1 p-4 pt-16 md:pt-6 md:p-6 lg:p-8 w-full max-w-[1400px]">{children}</main>
       </div>
     </div>
   )
