@@ -29,26 +29,21 @@ import { useAuth } from "@/contexts/auth-context"
 import { userAvatarUrl } from "@/lib/user-avatar"
 import { useSearchParams } from "next/navigation"
 import {
-  fetchMyVideos,
   fetchMySaved,
   fetchMyLiked,
 } from "@/lib/api/users"
 import { fetchHistory } from "@/lib/api/history"
 import { createCoinCheckout, fulfillCheckout } from "@/lib/api/billing"
+import { ApiError } from "@/lib/api-client"
 import type {
   HistoryItemRecord,
   LikedItemRecord,
   SavedItemRecord,
-  VideoRecord,
 } from "@/lib/api/types"
-import {
-  formatDuration,
-  formatViewCount,
-  videoThumbnail,
-} from "@/lib/format-media"
 import { mapHistoryToSettingsItems } from "@/lib/map-history"
 import { mapLikedItemCard, mapSavedItemCard } from "@/lib/map-profile-items"
 import { CreatorPermissionsCard } from "@/components/creator-permissions-card"
+import { ProfileMyContent } from "@/components/profile-my-content"
 import { CreateFlowModals, openVerticalWizard } from "@/components/create-flow-modals"
 import { CreateHeaderButton } from "@/components/create-header-button"
 import { useCreateFlow } from "@/hooks/use-create-flow"
@@ -58,7 +53,7 @@ import {
 } from "@/lib/api/playlists"
 
 const tabs = [
-  { id: "videos", label: "Videos", icon: Grid3X3 },
+  { id: "content", label: "My content", icon: Grid3X3 },
   { id: "playlists", label: "Playlists", icon: ListMusic },
   { id: "saved", label: "Saved", icon: Bookmark },
   { id: "liked", label: "Liked", icon: Heart },
@@ -97,13 +92,14 @@ function ProfilePageContent() {
       : undefined
 
   const { user, isAuthenticated, isLoading, logout, refreshUser } = useAuth()
-  const [activeTab, setActiveTab] = useState("videos")
+  const [activeTab, setActiveTab] = useState("content")
   const [showSettings, setShowSettings] = useState(false)
   const [settingsOpenTo, setSettingsOpenTo] = useState<ProfileSettingsScreen | undefined>()
   const [navTab, setNavTab] = useState("")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isCoinsModalOpen, setIsCoinsModalOpen] = useState(false)
   const [coinsPurchasing, setCoinsPurchasing] = useState(false)
+  const [coinsPurchaseError, setCoinsPurchaseError] = useState<string | null>(null)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isStreamerModalOpen, setIsStreamerModalOpen] = useState(false)
   const [streamerModalPrefill, setStreamerModalPrefill] = useState<string | undefined>()
@@ -112,7 +108,6 @@ function ProfilePageContent() {
   >(["live"])
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false)
   const [darkModeEnabled, setDarkModeEnabled] = useState(true)
-  const [myVideos, setMyVideos] = useState<VideoRecord[]>([])
   const [savedItems, setSavedItems] = useState<SavedItemRecord[]>([])
   const [likedItems, setLikedItems] = useState<LikedItemRecord[]>([])
   const [watchHistory, setWatchHistory] = useState<HistoryItemRecord[]>([])
@@ -144,7 +139,6 @@ function ProfilePageContent() {
 
   useEffect(() => {
     if (!isAuthenticated || isLoading || !user) {
-      setMyVideos([])
       setSavedItems([])
       setLikedItems([])
       setWatchHistory([])
@@ -156,23 +150,20 @@ function ProfilePageContent() {
     async function loadProfileData() {
       setTabsLoading(true)
       try {
-        const [videosRes, savedRes, likedRes, historyRes, playlistsRes] =
+        const [savedRes, likedRes, historyRes, playlistsRes] =
           await Promise.all([
-            fetchMyVideos(1, 24),
             fetchMySaved(1, 24),
             fetchMyLiked(1, 24),
             fetchHistory(1, 12),
             fetchMyPlaylists(),
           ])
         if (cancelled) return
-        setMyVideos(videosRes.items)
         setSavedItems(savedRes.items)
         setLikedItems(likedRes.items)
         setWatchHistory(historyRes.items)
         setMyPlaylists(playlistsRes.items)
       } catch {
         if (!cancelled) {
-          setMyVideos([])
           setSavedItems([])
           setLikedItems([])
           setWatchHistory([])
@@ -200,6 +191,7 @@ function ProfilePageContent() {
 
   const handlePurchasePackage = async (packageId: string) => {
     setCoinsPurchasing(true)
+    setCoinsPurchaseError(null)
     try {
       const res = await createCoinCheckout(packageId)
       if (res.devMode) {
@@ -210,8 +202,12 @@ function ProfilePageContent() {
       if (res.checkoutUrl) {
         window.location.href = res.checkoutUrl
       }
-    } catch {
-      /* modal stays open */
+    } catch (e) {
+      setCoinsPurchaseError(
+        e instanceof ApiError
+          ? e.message
+          : "Could not start checkout. Stripe may not be configured on the server.",
+      )
     } finally {
       setCoinsPurchasing(false)
     }
@@ -541,41 +537,12 @@ function ProfilePageContent() {
 
       {/* Tab Content */}
       <div className="px-4 py-4 max-w-5xl mx-auto w-full">
-        {tabsLoading && activeTab === "videos" && myVideos.length === 0 ? (
-          <ProfileEmpty message="Loading your videos…" />
-        ) : null}
-
-        {activeTab === "videos" && !tabsLoading && myVideos.length === 0 ? (
-          <ProfileEmpty message="No uploads yet. Tap + in the header to upload a short or long video." />
-        ) : null}
-
-        {activeTab === "videos" && myVideos.length > 0 ? (
-          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 md:gap-3">
-            {myVideos.map((video) => (
-              <Link key={video.id} href={`/watch/${video.id}`}>
-                <div className="relative aspect-square rounded-lg overflow-hidden bg-muted cursor-pointer group">
-                  <img
-                    src={videoThumbnail(video.thumbnailUrl)}
-                    alt={video.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                  <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                    <span className="text-xs text-white font-medium">
-                      {formatViewCount(video.viewsCount)}
-                    </span>
-                    <span className="text-xs text-white bg-black/50 px-1.5 py-0.5 rounded">
-                      {formatDuration(video.durationSeconds)}
-                    </span>
-                  </div>
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Play className="w-8 h-8 text-white fill-white" />
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        ) : null}
+        {activeTab === "content" && (
+          <ProfileMyContent
+            onOpenVerticalUpload={() => openSettingsPanel("verticals")}
+            onOpenPodcastUpload={() => openSettingsPanel("podcasts")}
+          />
+        )}
 
         {activeTab === "playlists" && !tabsLoading && myPlaylists.length === 0 ? (
           <div className="text-center py-12 space-y-3">
@@ -686,10 +653,14 @@ function ProfilePageContent() {
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       <CoinsModal
         isOpen={isCoinsModalOpen}
-        onClose={() => setIsCoinsModalOpen(false)}
+        onClose={() => {
+          setIsCoinsModalOpen(false)
+          setCoinsPurchaseError(null)
+        }}
         currentCoins={user?.coins || 0}
         onPurchasePackage={handlePurchasePackage}
         purchasing={coinsPurchasing}
+        purchaseError={coinsPurchaseError}
       />
       <StreamerApplicationModal
         isOpen={isStreamerModalOpen}

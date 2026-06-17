@@ -12,6 +12,10 @@ type HlsVideoPlayerProps = {
   muted?: boolean
   playsInline?: boolean
   loop?: boolean
+  /** Standard live HLS (~6–10s). */
+  live?: boolean
+  /** LL-HLS fallback when WebRTC is unavailable (~2–4s). */
+  liveLowLatency?: boolean
   onPlay?: () => void
   onTimeUpdate?: (currentTime: number, duration: number) => void
   onEnded?: () => void
@@ -27,6 +31,8 @@ export function HlsVideoPlayer({
   muted = false,
   playsInline = true,
   loop = false,
+  live = false,
+  liveLowLatency = false,
   onPlay,
   onTimeUpdate,
   onEnded,
@@ -40,29 +46,76 @@ export function HlsVideoPlayer({
     if (!el || !src) return
 
     let hls: Hls | null = null
+    let cancelled = false
 
     const isHls = src.includes(".m3u8")
 
-    if (isHls && Hls.isSupported()) {
-      hls = new Hls()
-      hls.loadSource(src)
-      hls.attachMedia(el)
-    } else if (isHls && el.canPlayType("application/vnd.apple.mpegurl")) {
-      el.src = src
-    } else {
-      el.src = src
-    }
-
-    if (autoPlay) {
+    const tryPlay = () => {
+      if (!autoPlay || cancelled) return
       void el.play().catch((err: unknown) => {
         if (err instanceof DOMException && err.name === "AbortError") return
       })
     }
 
+    if (isHls && Hls.isSupported()) {
+      hls = new Hls({
+        enableWorker: true,
+        ...(liveLowLatency
+          ? {
+              lowLatencyMode: true,
+              liveSyncDuration: 1,
+              liveMaxLatencyDuration: 5,
+              maxLiveSyncPlaybackRate: 1.15,
+              backBufferLength: 6,
+              maxBufferLength: 10,
+              maxMaxBufferLength: 15,
+            }
+          : live
+            ? {
+                lowLatencyMode: false,
+                liveSyncDurationCount: 3,
+                liveMaxLatencyDurationCount: 12,
+                maxLiveSyncPlaybackRate: 1,
+                maxBufferLength: 30,
+                maxMaxBufferLength: 60,
+                backBufferLength: 30,
+              }
+            : {
+                maxBufferLength: 60,
+                backBufferLength: 30,
+              }),
+      })
+      hls.attachMedia(el)
+      hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+        hls?.loadSource(src)
+      })
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (live || liveLowLatency) hls?.startLoad(-1)
+        tryPlay()
+      })
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!hls || data.fatal === false) return
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          hls.startLoad()
+          return
+        }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError()
+        }
+      })
+    } else if (isHls && el.canPlayType("application/vnd.apple.mpegurl")) {
+      el.src = src
+      el.addEventListener("loadedmetadata", tryPlay, { once: true })
+    } else {
+      el.src = src
+      tryPlay()
+    }
+
     return () => {
+      cancelled = true
       hls?.destroy()
     }
-  }, [src, autoPlay, videoRef])
+  }, [src, autoPlay, live, liveLowLatency, videoRef])
 
   useEffect(() => {
     const el = videoRef.current

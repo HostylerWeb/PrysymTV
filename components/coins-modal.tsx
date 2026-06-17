@@ -11,6 +11,7 @@ interface CoinsModalProps {
   currentCoins: number
   onPurchasePackage: (packageId: string) => void | Promise<void>
   purchasing?: boolean
+  purchaseError?: string | null
 }
 
 export function CoinsModal({
@@ -19,6 +20,7 @@ export function CoinsModal({
   currentCoins,
   onPurchasePackage,
   purchasing = false,
+  purchaseError = null,
 }: CoinsModalProps) {
   const [packages, setPackages] = useState<CoinPackage[]>([])
 
@@ -71,6 +73,10 @@ export function CoinsModal({
             </div>
           </div>
         </div>
+
+        {purchaseError && (
+          <p className="px-4 pb-2 text-sm text-destructive text-center">{purchaseError}</p>
+        )}
 
         <div className="px-4 pb-4">
           <h4 className="text-sm font-semibold text-foreground mb-3">Choose a Package</h4>

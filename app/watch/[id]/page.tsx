@@ -1,9 +1,11 @@
 "use client"
 
-import { use, useState, useRef, useEffect, useCallback } from "react"
+import { Suspense, use, useState, useRef, useEffect, useCallback } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
-  ChevronLeft, Share2, MoreVertical, ThumbsUp, ThumbsDown, MessageCircle,
+  ChevronLeft, Share2, ThumbsUp, ThumbsDown, MessageCircle,
   Bookmark, ChevronDown, ChevronUp, Send, Volume2, Maximize, Lock, Flag, ListMusic,
+  Play, Pause,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -18,7 +20,7 @@ import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { useAuth } from "@/contexts/auth-context"
 import {
   fetchVideo,
-  fetchMoviesFeed,
+  fetchVideosBrowse,
   recordVideoView,
   toggleVideoLike,
   toggleVideoSave,
@@ -27,6 +29,7 @@ import {
 import {
   fetchVideoComments,
   normalizeVideoComment,
+  deleteVideoComment,
   postVideoComment,
   toggleCommentLike,
   type VideoComment,
@@ -73,9 +76,13 @@ function mapApiToWatch(v: Awaited<ReturnType<typeof fetchVideo>>): WatchVideo {
   }
 }
 
-export default function WatchPage({ params }: { params: Promise<{ id: string }> }) {
+function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const { isAuthenticated, isLoading: authLoading } = useAuth()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const highlightCommentId = searchParams.get("comment")
+  const openCommentsFromUrl = searchParams.get("comments") === "1"
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const videoRef = useRef<HTMLVideoElement>(null)
   const [video, setVideo] = useState<WatchVideo | null>(null)
   const [suggested, setSuggested] = useState<
@@ -85,6 +92,8 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [showControls, setShowControls] = useState(true)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
   const [isLiked, setIsLiked] = useState(false)
   const [likesCount, setLikesCount] = useState(0)
   const [isDisliked, setIsDisliked] = useState(false)
@@ -124,6 +133,21 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
       try {
         const api = await fetchVideo(id)
         if (cancelled) return
+        if (api.type === "short") {
+          const params = new URLSearchParams({ start: id })
+          if (highlightCommentId) {
+            params.set("comments", "1")
+            params.set("comment", highlightCommentId)
+          } else if (openCommentsFromUrl) {
+            params.set("comments", "1")
+          }
+          router.replace(`/shorts?${params}`)
+          return
+        }
+        if (api.type === "movie") {
+          router.replace(`/movie/${id}`)
+          return
+        }
         setVideo(mapApiToWatch(api))
         setLikesCount(api.likesCount ?? 0)
         setIsLiked(api.liked ?? false)
@@ -134,10 +158,10 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
         if (!cancelled) setVideo(null)
       }
       try {
-        const feed = await fetchMoviesFeed(1)
-        if (!cancelled && feed.items.length) {
+        const feed = await fetchVideosBrowse({ page: 1, limit: 12, mode: "videos" })
+        if (!cancelled && feed.videos.items.length) {
           setSuggested(
-            feed.items
+            feed.videos.items
               .filter((v) => v.id !== id)
               .slice(0, 4)
               .map((v) => ({
@@ -167,7 +191,38 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
     return () => {
       cancelled = true
     }
-  }, [id, authLoading, isAuthenticated])
+  }, [id, authLoading, isAuthenticated, router, highlightCommentId, openCommentsFromUrl])
+
+  useEffect(() => {
+    if (!highlightCommentId && !openCommentsFromUrl) return
+    setShowComments(true)
+  }, [highlightCommentId, openCommentsFromUrl])
+
+  useEffect(() => {
+    if (!highlightCommentId || loading) return
+    const t = window.setTimeout(() => {
+      const el = document.getElementById(`comment-${highlightCommentId}`)
+      el?.scrollIntoView({ behavior: "smooth", block: "center" })
+      el?.classList.add("ring-2", "ring-primary", "rounded-lg")
+      window.setTimeout(() => {
+        el?.classList.remove("ring-2", "ring-primary", "rounded-lg")
+      }, 2500)
+    }, 200)
+    return () => window.clearTimeout(t)
+  }, [highlightCommentId, loading, comments])
+
+  useEffect(() => {
+    const el = videoRef.current
+    if (!el) return
+    const onPlayEvt = () => setIsPlaying(true)
+    const onPauseEvt = () => setIsPlaying(false)
+    el.addEventListener("play", onPlayEvt)
+    el.addEventListener("pause", onPauseEvt)
+    return () => {
+      el.removeEventListener("play", onPlayEvt)
+      el.removeEventListener("pause", onPauseEvt)
+    }
+  }, [video])
 
   const persistProgress = useCallback(
     (seconds: number, dur: number, completed = false) => {
@@ -234,6 +289,34 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
     viewRecorded.current = true
     void recordVideoView(id).catch(() => {})
   }, [id])
+
+  const togglePlay = useCallback(() => {
+    const el = videoRef.current
+    if (!el) return
+    if (el.paused) {
+      void el.play().then(() => setIsPlaying(true)).catch(() => {})
+    } else {
+      el.pause()
+      setIsPlaying(false)
+    }
+  }, [])
+
+  const removeComment = (commentId: string) => {
+    if (!window.confirm("Delete this comment?")) return
+    void deleteVideoComment(commentId)
+      .then((res) => {
+        const removed = new Set(res.deletedIds)
+        setComments((prev) =>
+          prev
+            .filter((c) => !removed.has(c.id))
+            .map((c) => ({
+              ...c,
+              replies: (c.replies ?? []).filter((r) => !removed.has(r.id)),
+            })),
+        )
+      })
+      .catch(() => {})
+  }
 
   const handleCommentLike = (commentId: string) => {
     requireAuth(() => {
@@ -314,35 +397,58 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <div className="max-w-6xl mx-auto w-full">
-        <div className="relative w-full aspect-video bg-black" onClick={() => setShowControls(true)}>
+        <div
+          className="relative w-full aspect-video bg-black group"
+          onClick={() => {
+            setShowControls(true)
+            togglePlay()
+          }}
+        >
           <HlsVideoPlayer
             src={video.videoUrl}
             poster={video.thumbnail}
-            className="w-full h-full object-contain"
+            className="w-full h-full object-contain pointer-events-none"
             controls={false}
+            muted={isMuted}
             videoRef={videoRef}
-            onPlay={() => recordViewOnce()}
+            onPlay={() => {
+              setIsPlaying(true)
+              recordViewOnce()
+            }}
             onTimeUpdate={(t, d) => {
               setCurrentTime(t)
               setDuration(d)
               recordViewOnce()
               persistProgress(t, d)
             }}
-            onEnded={() => persistProgress(duration, duration, true)}
+            onEnded={() => {
+              setIsPlaying(false)
+              persistProgress(duration, duration, true)
+            }}
           />
-          <div className={cn("absolute inset-0 transition-opacity pointer-events-none", showControls ? "opacity-100" : "opacity-0")}>
+          {!isPlaying && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-16 h-16 rounded-full bg-black/50 flex items-center justify-center border border-white/30">
+                <Play className="w-8 h-8 text-white fill-white ml-1" />
+              </div>
+            </div>
+          )}
+          <div
+            className={cn("absolute inset-0 transition-opacity pointer-events-none", showControls ? "opacity-100" : "opacity-0 group-hover:opacity-100")}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="absolute top-0 left-0 right-0 flex justify-between p-3 bg-gradient-to-b from-black/70 to-transparent pointer-events-auto">
               <Link href="/"><button type="button" className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><ChevronLeft className="w-6 h-6 text-white" /></button></Link>
               <div className="flex gap-2">
                 <button type="button" onClick={() => setIsShareOpen(true)} className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><Share2 className="w-5 h-5 text-white" /></button>
                 <button type="button" onClick={() => setIsReportOpen(true)} className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><Flag className="w-5 h-5 text-white" /></button>
-                <button type="button" className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><MoreVertical className="w-5 h-5 text-white" /></button>
               </div>
             </div>
             <div className="absolute bottom-0 left-0 right-0 px-3 pb-3 bg-gradient-to-t from-black/70 to-transparent pointer-events-auto">
               <div
                 className="w-full h-1 bg-white/30 rounded-full mb-2 cursor-pointer"
                 onClick={(e) => {
+                  e.stopPropagation()
                   const el = videoRef.current
                   if (!el || !duration) return
                   const rect = e.currentTarget.getBoundingClientRect()
@@ -352,17 +458,43 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
                 <div className="h-full bg-primary rounded-full" style={{ width: `${progress}%` }} />
               </div>
               <div className="flex items-center justify-between text-white text-xs">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      togglePlay()
+                    }}
+                  >
+                    {isPlaying ? (
+                      <Pause className="w-5 h-5" />
+                    ) : (
+                      <Play className="w-5 h-5 fill-white" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const el = videoRef.current
+                      if (!el) return
+                      el.muted = !el.muted
+                      setIsMuted(el.muted)
+                    }}
+                  >
+                    <Volume2 className="w-5 h-5" />
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation()
                     const el = videoRef.current
-                    if (!el) return
-                    el.muted = !el.muted
+                    el?.requestFullscreen?.()
                   }}
                 >
-                  <Volume2 className="w-5 h-5" />
+                  <Maximize className="w-5 h-5" />
                 </button>
-                <Maximize className="w-5 h-5" />
               </div>
             </div>
           </div>
@@ -472,7 +604,7 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
                     <p className="text-sm text-muted-foreground px-2">No comments yet. Be the first.</p>
                   )}
                   {comments.map((c) => (
-                    <div key={c.id} className="space-y-2">
+                    <div key={c.id} id={`comment-${c.id}`} className="space-y-2 scroll-mt-4">
                       <div className="flex gap-2">
                         <img
                           src={userAvatarUrl(c.user.avatarUrl, c.user.username)}
@@ -509,11 +641,20 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
                             >
                               Reply
                             </button>
+                            {user?.id === c.user.id && (
+                              <button
+                                type="button"
+                                className="text-destructive"
+                                onClick={() => removeComment(c.id)}
+                              >
+                                Delete
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
                       {(c.replies ?? []).map((reply) => (
-                        <div key={reply.id} className="flex gap-2 ml-10">
+                        <div key={reply.id} id={`comment-${reply.id}`} className="flex gap-2 ml-10 scroll-mt-4">
                           <img
                             src={userAvatarUrl(reply.user.avatarUrl, reply.user.username)}
                             alt=""
@@ -528,13 +669,24 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
                               />
                             </p>
                             <p className="text-sm text-muted-foreground">{reply.body}</p>
-                            <button
-                              type="button"
-                              className={cn("text-xs text-muted-foreground mt-1", reply.liked && "text-primary")}
-                              onClick={() => handleCommentLike(reply.id)}
-                            >
-                              Like{reply.likesCount > 0 ? ` · ${reply.likesCount}` : ""}
-                            </button>
+                            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                              <button
+                                type="button"
+                                className={cn(reply.liked && "text-primary")}
+                                onClick={() => handleCommentLike(reply.id)}
+                              >
+                                Like{reply.likesCount > 0 ? ` · ${reply.likesCount}` : ""}
+                              </button>
+                              {user?.id === reply.user.id && (
+                                <button
+                                  type="button"
+                                  className="text-destructive"
+                                  onClick={() => removeComment(reply.id)}
+                                >
+                                  Delete
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -591,5 +743,19 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
         />
       )}
     </main>
+  )
+}
+
+export default function WatchPage({ params }: { params: Promise<{ id: string }> }) {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-background flex items-center justify-center">
+          <p className="text-muted-foreground text-sm">Loading…</p>
+        </main>
+      }
+    >
+      <WatchPageContent params={params} />
+    </Suspense>
   )
 }

@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -15,6 +17,7 @@ import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { CreateCommentDto } from './dto/create-comment.dto';
+import { UpdateVideoDto } from './dto/update-video.dto';
 import { UploadCompleteDto } from './dto/upload-complete.dto';
 import { UploadInitDto } from './dto/upload-init.dto';
 import { VideosService } from './videos.service';
@@ -88,6 +91,15 @@ export class VideosController {
     return this.videos.toggleCommentLike(user.id, commentId);
   }
 
+  @Delete('comments/:commentId')
+  @UseGuards(JwtAuthGuard)
+  removeComment(
+    @Param('commentId') commentId: string,
+    @CurrentUser() user: AuthUserPayload,
+  ) {
+    return this.videos.deleteComment(user.id, commentId);
+  }
+
   @Get(':id/comments')
   @UseGuards(OptionalJwtAuthGuard)
   comments(
@@ -158,5 +170,15 @@ export class VideosController {
     @Body() body: { reason?: string; details?: string },
   ) {
     return this.videos.report(user.id, id, body);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard)
+  updateOwned(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: UpdateVideoDto,
+  ) {
+    return this.videos.updateOwned(user.id, id, body);
   }
 }

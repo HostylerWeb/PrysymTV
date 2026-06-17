@@ -17,9 +17,18 @@ export type PublicMembershipConfig = {
   perks: string[];
 };
 
+export type PublicChannelMembershipTier = {
+  priceUsd: number;
+  label: string;
+};
+
 export function fetchPublicConfig() {
-  return apiRequest<{ ads: PublicAdsConfig; membership: PublicMembershipConfig }>(
-    "/config/public",
-    { auth: false },
-  );
+  return apiRequest<{
+    ads: PublicAdsConfig;
+    membership: PublicMembershipConfig;
+    channelMembership: {
+      basic: PublicChannelMembershipTier;
+      premium: PublicChannelMembershipTier;
+    };
+  }>("/config/public", { auth: false });
 }

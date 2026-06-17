@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -19,6 +20,8 @@ import { PlatformSettingsService } from '../platform-settings/platform-settings.
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RevenueSplitService } from '../revenue/revenue-split.service';
+import { StreamsGateway } from '../streams/streams.gateway';
+import { CREATOR_SUB_PLANS } from './creator-sub-plans';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { SendGiftDto } from './dto/send-gift.dto';
 
@@ -36,23 +39,6 @@ const PREMIUM_PLANS: Record<
 const PREMIUM_DURATION_DAYS = 30;
 const CREATOR_SUB_DURATION_DAYS = 30;
 
-/** Paid channel membership (distinct from free Follow and platform Premium ad-free). */
-const CREATOR_SUB_PLANS: Record<
-  string,
-  { tier: SubscriptionTier; priceUsd: number; label: string }
-> = {
-  basic: {
-    tier: SubscriptionTier.basic,
-    priceUsd: 4.99,
-    label: 'Channel Member — 30 days',
-  },
-  premium: {
-    tier: SubscriptionTier.premium,
-    priceUsd: 9.99,
-    label: 'Channel VIP — 30 days',
-  },
-};
-
 @Injectable()
 export class BillingService {
   private stripe: InstanceType<typeof Stripe> | null = null;
@@ -63,6 +49,7 @@ export class BillingService {
     private readonly revenueSplit: RevenueSplitService,
     private readonly config: ConfigService,
     private readonly notifications: NotificationsService,
+    private readonly streamsGateway: StreamsGateway,
   ) {
     const key = this.config.get<string>('STRIPE_SECRET_KEY');
     if (key) {
@@ -232,18 +219,23 @@ export class BillingService {
     const frontend = this.config.get<string>('FRONTEND_URL', 'http://localhost:3001');
 
     if (!this.stripe) {
-      await this.grantCoins(userId, pkg.id, pkg.coins, Number(pkg.priceUsd));
-      return {
-        success: true,
-        devMode: true,
-        coinsAdded: pkg.coins,
-        coinsBalance: (
-          await this.prisma.user.findUnique({
-            where: { id: userId },
-            select: { coinsBalance: true },
-          })
-        )?.coinsBalance,
-      };
+      if (this.config.get<string>('BILLING_DEV_GRANTS') === 'true') {
+        await this.grantCoins(userId, pkg.id, pkg.coins, Number(pkg.priceUsd));
+        return {
+          success: true,
+          devMode: true,
+          coinsAdded: pkg.coins,
+          coinsBalance: (
+            await this.prisma.user.findUnique({
+              where: { id: userId },
+              select: { coinsBalance: true },
+            })
+          )?.coinsBalance,
+        };
+      }
+      throw new ServiceUnavailableException(
+        'Coin purchases require Stripe. Set STRIPE_SECRET_KEY in the API environment.',
+      );
     }
 
     const session = await this.stripe.checkout.sessions.create({
@@ -655,7 +647,10 @@ export class BillingService {
     });
     if (!catalog?.isActive) throw new NotFoundException('Gift not found');
 
-    const sender = await this.prisma.user.findUnique({ where: { id: senderId } });
+    const sender = await this.prisma.user.findUnique({
+      where: { id: senderId },
+      select: { coinsBalance: true, username: true, displayName: true },
+    });
     if (!sender) throw new NotFoundException('Sender not found');
     if (sender.coinsBalance < catalog.coinCost) {
       throw new BadRequestException('Insufficient coins');
@@ -704,7 +699,23 @@ export class BillingService {
       senderId,
       dto.streamId,
       catalog.name,
+      gift.id,
     );
+
+    if (dto.streamId) {
+      this.streamsGateway.emitGift(dto.streamId, {
+        id: gift.id,
+        streamId: dto.streamId,
+        userId: senderId,
+        user: sender.displayName ?? sender.username,
+        giftId: catalog.id,
+        giftName: catalog.name,
+        giftIcon: catalog.animationKey,
+        coins: catalog.coinCost,
+        color: 'text-pink-400',
+        createdAt: new Date().toISOString(),
+      });
+    }
 
     const updatedSender = await this.prisma.user.findUnique({
       where: { id: senderId },

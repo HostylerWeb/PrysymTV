@@ -6,6 +6,7 @@ import {
   Headers,
   Param,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -22,6 +23,7 @@ import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { CreateCreatorSubscriptionDto } from './dto/create-creator-subscription.dto';
 import { RequestPayoutDto } from './dto/request-payout.dto';
 import { SendGiftDto } from './dto/send-gift.dto';
+import { UpsertPayoutProfileDto } from './dto/upsert-payout-profile.dto';
 
 @Controller('billing')
 export class BillingController {
@@ -111,6 +113,21 @@ export class BillingController {
   @UseGuards(JwtAuthGuard)
   creatorBalance(@CurrentUser() user: AuthUserPayload) {
     return this.creatorsBalance.getBalance(user.id);
+  }
+
+  @Get('creators/payout-profile')
+  @UseGuards(JwtAuthGuard)
+  payoutProfile(@CurrentUser() user: AuthUserPayload) {
+    return this.creatorsBalance.getPayoutProfile(user.id);
+  }
+
+  @Put('creators/payout-profile')
+  @UseGuards(JwtAuthGuard)
+  upsertPayoutProfile(
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: UpsertPayoutProfileDto,
+  ) {
+    return this.creatorsBalance.upsertPayoutProfile(user.id, body);
   }
 
   @Post('creators/payouts/request')

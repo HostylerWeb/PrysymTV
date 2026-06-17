@@ -35,7 +35,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { User } from "@/contexts/auth-context"
 import { uploadVideoFlow, pollVideoUntilReady, getVideoUploadMaxBytes } from "@/lib/api/videos"
-import { initStream, getRtmpIngestUrl } from "@/lib/api/streams"
+import { fetchStreamIngestHealth, initStream, getRtmpIngestUrl } from "@/lib/api/streams"
 import { createPremiumCheckout } from "@/lib/api/billing"
 import { fetchPublicConfig, type PublicMembershipConfig } from "@/lib/api/config"
 import { isPremiumActive } from "@/lib/premium"
@@ -53,6 +53,7 @@ import {
   createPodcastShow,
   fetchMyPodcastShows,
   uploadPodcastEpisodeFlow,
+  uploadPodcastShowCover,
   type MyPodcastShow,
 } from "@/lib/api/podcasts-admin"
 import {
@@ -61,7 +62,11 @@ import {
   fetchMyPlaylists,
   type PlaylistSummary,
 } from "@/lib/api/playlists"
-import { fetchPodcastCategories, type ContentCategory } from "@/lib/api/categories"
+import {
+  fetchPodcastCategories,
+  fetchVideoCategories,
+  type ContentCategory,
+} from "@/lib/api/categories"
 import { CreatorDashboardPanel } from "@/components/creator-dashboard-panel"
 import {
   cancelCreatorSubscription,
@@ -123,7 +128,7 @@ const UPLOAD_TYPES = [
 const SHEET_SHELL =
   "absolute bottom-0 left-0 right-0 md:top-1/2 md:left-1/2 md:right-auto md:-translate-x-1/2 md:-translate-y-1/2 bg-background rounded-t-3xl md:rounded-2xl shadow-2xl flex flex-col animate-in slide-in-from-bottom md:zoom-in-95 duration-300 max-h-[88vh] md:max-h-[min(820px,90vh)] md:border md:border-border/80"
 const SHEET_SIZE_DESKTOP =
-  "md:w-[min(720px,94vw)] lg:w-[760px] md:h-[90vh] md:max-h-[92vh] md:min-h-[90vh]"
+  "md:w-[min(920px,96vw)] lg:w-[980px] md:h-[90vh] md:max-h-[92vh] md:min-h-[90vh]"
 const SHEET_HEADER = "flex items-center gap-2 px-4 py-4 md:px-8 md:py-5 border-b border-border shrink-0"
 const SHEET_TITLE = "flex-1 text-center text-lg md:text-xl font-semibold truncate"
 const SHEET_BODY = "flex-1 overflow-y-auto overscroll-contain px-4 pb-6 md:px-8 md:pb-10"
@@ -188,8 +193,14 @@ export function ProfileSettingsSheet({
   const [goLiveError, setGoLiveError] = useState<string | null>(null)
   const [goLiveLoading, setGoLiveLoading] = useState(false)
   const [streamTitle, setStreamTitle] = useState("")
-  const [streamCategory, setStreamCategory] = useState("Gaming")
+  const [streamCategory, setStreamCategory] = useState("General")
+  const [liveCategoryOptions, setLiveCategoryOptions] = useState<ContentCategory[]>([])
   const [copied, setCopied] = useState(false)
+  const [goLiveMode, setGoLiveMode] = useState<"camera" | "obs">("camera")
+  const [ingestHealth, setIngestHealth] = useState<{
+    rtmpReachable: boolean
+    hint: string
+  } | null>(null)
   const [uploadType, setUploadType] = useState<string | null>(null)
   const [uploadTitle, setUploadTitle] = useState("")
   const [uploadFile, setUploadFile] = useState<File | null>(null)
@@ -212,6 +223,7 @@ export function ProfileSettingsSheet({
   const [podcastEpisodeShowId, setPodcastEpisodeShowId] = useState("")
   const [podcastEpisodeTitle, setPodcastEpisodeTitle] = useState("")
   const [podcastAudioFile, setPodcastAudioFile] = useState<File | null>(null)
+  const [podcastShowCoverFile, setPodcastShowCoverFile] = useState<File | null>(null)
   const [podcastBusy, setPodcastBusy] = useState(false)
   const [podcastMessage, setPodcastMessage] = useState<string | null>(null)
   const [myPlaylists, setMyPlaylists] = useState<PlaylistSummary[]>([])
@@ -252,6 +264,28 @@ export function ProfileSettingsSheet({
     void fetchMyVerticalSeries()
       .then((res) => setMySeries(res.items))
       .catch(() => setMySeries([]))
+  }, [isOpen, screen])
+
+  useEffect(() => {
+    if (!isOpen || screen !== "go-live") return
+    void fetchStreamIngestHealth()
+      .then((h) => setIngestHealth({ rtmpReachable: h.rtmpReachable, hint: h.hint }))
+      .catch(() =>
+        setIngestHealth({
+          rtmpReachable: false,
+          hint: "Could not check RTMP ingest. Run: docker compose up -d mediamtx",
+        }),
+      )
+    void fetchVideoCategories()
+      .then((res) => {
+        if (res.items.length > 0) {
+          setLiveCategoryOptions(res.items)
+          setStreamCategory((prev) =>
+            res.items.some((c) => c.label === prev) ? prev : res.items[0].label,
+          )
+        }
+      })
+      .catch(() => setLiveCategoryOptions([]))
   }, [isOpen, screen])
 
   useEffect(() => {
@@ -513,6 +547,10 @@ export function ProfileSettingsSheet({
               copied={copied}
               loading={goLiveLoading}
               error={goLiveError}
+              ingestHealth={ingestHealth}
+              mode={goLiveMode}
+              categoryOptions={liveCategoryOptions}
+              onModeChange={setGoLiveMode}
               onTitleChange={setStreamTitle}
               onCategoryChange={setStreamCategory}
               onGenerateKey={async () => {
@@ -524,6 +562,10 @@ export function ProfileSettingsSheet({
                   setStreamKey(res.streamKey)
                   setStreamId(res.streamId)
                   setRtmpUrl(res.rtmpUrl || getRtmpIngestUrl())
+                  if (goLiveMode === "camera") {
+                    handleClose()
+                    router.push(`/live/${res.streamId}?studio=camera`)
+                  }
                 } catch (e) {
                   setGoLiveError(
                     e instanceof ApiError
@@ -546,7 +588,7 @@ export function ProfileSettingsSheet({
               onOpenLive={() => {
                 if (!streamId) return
                 handleClose()
-                router.push(`/live/${streamId}`)
+                router.push(`/live/${streamId}?studio=${goLiveMode}`)
               }}
               onApplyStreamer={() => {
                 handleClose()
@@ -614,6 +656,7 @@ export function ProfileSettingsSheet({
               episodeShowId={podcastEpisodeShowId}
               episodeTitle={podcastEpisodeTitle}
               audioFile={podcastAudioFile}
+              showCoverFile={podcastShowCoverFile}
               busy={podcastBusy}
               message={podcastMessage}
               onShowTitleChange={setPodcastShowTitle}
@@ -621,6 +664,7 @@ export function ProfileSettingsSheet({
               onEpisodeShowIdChange={setPodcastEpisodeShowId}
               onEpisodeTitleChange={setPodcastEpisodeTitle}
               onAudioFileChange={setPodcastAudioFile}
+              onShowCoverFileChange={setPodcastShowCoverFile}
               onCreateShow={async () => {
                 if (!podcastShowTitle.trim()) return
                 setPodcastBusy(true)
@@ -630,7 +674,11 @@ export function ProfileSettingsSheet({
                     title: podcastShowTitle.trim(),
                     category: podcastShowCategory.trim(),
                   })
+                  if (podcastShowCoverFile) {
+                    await uploadPodcastShowCover(show.id, podcastShowCoverFile)
+                  }
                   setPodcastEpisodeShowId(show.id)
+                  setPodcastShowCoverFile(null)
                   setPodcastMessage("Show created.")
                   const res = await fetchMyPodcastShows()
                   setMyPodcastShows(res.items)
@@ -850,7 +898,7 @@ function MenuPanel({
   }[] = [
     { icon: Crown, label: "Upgrade to Premium", description: "Ad-free viewing & exclusive perks", screen: "premium", accent: "premium" },
     isStreamer
-      ? { icon: Radio, label: "Go Live", description: "Stream key & OBS setup", screen: "go-live", accent: "live" }
+      ? { icon: Radio, label: "Go Live", description: "Live Studio — camera or OBS", screen: "go-live", accent: "live" }
       : {
           icon: Radio,
           label: "Become a Streamer",
@@ -1319,6 +1367,10 @@ function GoLivePanel({
   copied,
   loading,
   error,
+  ingestHealth,
+  mode,
+  categoryOptions,
+  onModeChange,
   onTitleChange,
   onCategoryChange,
   onGenerateKey,
@@ -1335,6 +1387,10 @@ function GoLivePanel({
   copied: boolean
   loading: boolean
   error: string | null
+  ingestHealth: { rtmpReachable: boolean; hint: string } | null
+  mode: "camera" | "obs"
+  categoryOptions: ContentCategory[]
+  onModeChange: (mode: "camera" | "obs") => void
   onTitleChange: (v: string) => void
   onCategoryChange: (v: string) => void
   onGenerateKey: () => void | Promise<void>
@@ -1356,7 +1412,53 @@ function GoLivePanel({
   }
 
   return (
-    <div className="pt-2 md:pt-3 space-y-4 md:space-y-5 md:max-w-xl">
+    <div className="pt-2 md:pt-3 space-y-4 md:space-y-5">
+      <p className="text-sm text-muted-foreground leading-relaxed">
+        Go live from your browser with camera and mic — no extra software required. OBS is optional
+        for creators who need scenes, overlays, or professional capture hardware.
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => onModeChange("camera")}
+          className={`rounded-xl border p-3 text-left transition-colors ${
+            mode === "camera"
+              ? "border-primary bg-primary/10"
+              : "border-border bg-secondary/30 hover:bg-secondary/50"
+          }`}
+        >
+          <p className="text-sm font-semibold">Camera &amp; mic</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Recommended — one tap to Live Studio in your browser.
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => onModeChange("obs")}
+          className={`rounded-xl border p-3 text-left transition-colors ${
+            mode === "obs"
+              ? "border-primary bg-primary/10"
+              : "border-border bg-secondary/30 hover:bg-secondary/50"
+          }`}
+        >
+          <p className="text-sm font-semibold">OBS Studio</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Optional — multi-source layouts, overlays, and capture cards.
+          </p>
+        </button>
+      </div>
+
+      {ingestHealth && (
+        <div
+          className={`p-3 rounded-xl text-xs md:text-sm border ${
+            ingestHealth.rtmpReachable
+              ? "border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400"
+              : "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+          }`}
+        >
+          {ingestHealth.hint}
+        </div>
+      )}
       <div className="md:grid md:grid-cols-2 md:gap-4">
       <input
         value={title}
@@ -1369,41 +1471,81 @@ function GoLivePanel({
         onChange={(e) => onCategoryChange(e.target.value)}
         className="w-full h-11 md:h-12 px-4 rounded-xl bg-secondary text-sm md:text-base md:col-span-2"
       >
-        {["Gaming", "Music", "Technology", "Fitness", "Talk"].map((c) => (
-          <option key={c}>{c}</option>
+        {(categoryOptions.length > 0
+          ? categoryOptions
+          : [
+              { slug: "gaming", label: "Gaming" },
+              { slug: "music", label: "Music" },
+              { slug: "technology", label: "Technology" },
+              { slug: "fitness", label: "Fitness" },
+              { slug: "talk", label: "Talk" },
+            ]
+        ).map((c) => (
+          <option key={c.slug} value={c.label}>
+            {c.label}
+          </option>
         ))}
       </select>
+      <p className="text-xs text-muted-foreground md:col-span-2 -mt-2">
+        Categories are managed in Admin → Config → Video categories.
+      </p>
       </div>
-      <div className="p-3 md:p-4 rounded-xl bg-secondary/30 text-xs md:text-sm space-y-1 font-mono break-all">
-        <p>
-          <span className="text-muted-foreground">Server:</span> {rtmpUrl}
-        </p>
-        <p>
-          <span className="text-muted-foreground">Key:</span> {streamKey ?? "Generate below"}
-        </p>
-      </div>
+      {mode === "obs" && (
+        <div className="p-3 md:p-4 rounded-xl bg-secondary/30 text-xs md:text-sm space-y-1 font-mono break-all">
+          <p>
+            <span className="text-muted-foreground">Server:</span> {rtmpUrl}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Key:</span> {streamKey ?? "Generate below"}
+          </p>
+        </div>
+      )}
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {streamKey ? (
+      {mode === "obs" && streamKey ? (
         <div className="flex gap-2">
           <Button variant="secondary" onClick={onCopy} className="flex-1 rounded-full gap-2">
             {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             {copied ? "Copied" : "Copy server & key"}
           </Button>
           <Button onClick={onOpenLive} className="flex-1 rounded-full">
-            Open Live Page
+            Open Live Studio
           </Button>
         </div>
+      ) : mode === "camera" && streamKey ? (
+        <Button onClick={onOpenLive} className="w-full rounded-full gap-2">
+          <Radio className="w-4 h-4" />
+          Open Live Studio
+        </Button>
       ) : (
         <Button
           onClick={() => void onGenerateKey()}
           disabled={!title.trim() || loading}
           className="w-full rounded-full gap-2"
         >
-          <Key className="w-4 h-4" />
-          {loading ? "Creating stream…" : "Generate Stream Key"}
+          {mode === "camera" ? (
+            <Radio className="w-4 h-4" />
+          ) : (
+            <Key className="w-4 h-4" />
+          )}
+          {loading
+            ? "Opening…"
+            : mode === "camera"
+              ? "Open Live Studio"
+              : "Generate Stream Key"}
         </Button>
       )}
-      <p className="text-xs text-muted-foreground">Paste the server and key into OBS → Settings → Stream.</p>
+      {mode === "obs" ? (
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          In OBS → Settings → Stream: Service <strong>Custom</strong>, Server = RTMP URL above,
+          Stream Key = key above. Keep Live Studio open for chat and gifts — your OBS preview is
+          your real-time monitor.
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Enter a title and open Live Studio to preview your camera and mic. When everything looks
+          good, tap <strong>Go Live</strong> in the studio — viewers won&rsquo;t see you until then.
+        </p>
+      )}
     </div>
   )
 }
@@ -1539,6 +1681,7 @@ function PodcastCreatorPanel({
   episodeShowId,
   episodeTitle,
   audioFile,
+  showCoverFile,
   busy,
   message,
   onShowTitleChange,
@@ -1546,6 +1689,7 @@ function PodcastCreatorPanel({
   onEpisodeShowIdChange,
   onEpisodeTitleChange,
   onAudioFileChange,
+  onShowCoverFileChange,
   onCreateShow,
   onUploadEpisode,
 }: {
@@ -1556,6 +1700,7 @@ function PodcastCreatorPanel({
   episodeShowId: string
   episodeTitle: string
   audioFile: File | null
+  showCoverFile: File | null
   busy: boolean
   message: string | null
   onShowTitleChange: (v: string) => void
@@ -1563,6 +1708,7 @@ function PodcastCreatorPanel({
   onEpisodeShowIdChange: (v: string) => void
   onEpisodeTitleChange: (v: string) => void
   onAudioFileChange: (f: File | null) => void
+  onShowCoverFileChange: (f: File | null) => void
   onCreateShow: () => void | Promise<void>
   onUploadEpisode: () => void | Promise<void>
 }) {
@@ -1587,6 +1733,16 @@ function PodcastCreatorPanel({
             </option>
           ))}
         </select>
+        <label className="block p-4 rounded-xl border border-dashed border-border text-center cursor-pointer hover:border-primary/50">
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => onShowCoverFileChange(e.target.files?.[0] ?? null)}
+          />
+          <p className="text-xs text-muted-foreground mb-1">Show cover (optional)</p>
+          <p className="text-sm">{showCoverFile?.name ?? "Choose image"}</p>
+        </label>
         <Button onClick={() => void onCreateShow()} disabled={busy || !showTitle.trim()} className="w-full rounded-full">
           Create show
         </Button>
@@ -1616,7 +1772,7 @@ function PodcastCreatorPanel({
           <label className="block p-6 rounded-xl border-2 border-dashed border-border text-center cursor-pointer hover:border-primary/50">
             <input
               type="file"
-              accept="audio/*"
+              accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac,.webm"
               className="hidden"
               onChange={(e) => onAudioFileChange(e.target.files?.[0] ?? null)}
             />

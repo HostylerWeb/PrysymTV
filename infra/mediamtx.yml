@@ -1,4 +1,4 @@
-# Prysym TV — local MediaMTX (RTMP ingest → HLS playback)
+# Prysym TV — local MediaMTX (RTMP ingest → WebRTC + HLS playback)
 # OBS: Server = rtmp://localhost:1935/live  |  Stream key = value from Go Live API
 
 logLevel: info
@@ -8,9 +8,25 @@ rtmpAddress: :1935
 
 hls: yes
 hlsAddress: :8888
+hlsAllowOrigins: ["*"]
 hlsAlwaysRemux: yes
+# LL-HLS fallback (~2–4s) when WebRTC unavailable
+hlsVariant: lowLatency
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+hlsSegmentCount: 7
 
-webrtc: no
+webrtc: yes
+webrtcAddress: :8889
+webrtcAllowOrigins:
+  - http://localhost:3001
+  - http://127.0.0.1:3001
+webrtcAdditionalHosts:
+  - 127.0.0.1
+  - localhost
+
+api: yes
+apiAddress: :9997
 
 authMethod: http
 authHTTPAddress: http://host.docker.internal:4000/api/v1/streams/mediamtx/auth

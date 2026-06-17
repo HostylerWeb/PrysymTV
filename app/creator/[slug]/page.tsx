@@ -1,7 +1,6 @@
 "use client"
 
 import { Suspense, use, useState, useEffect } from "react"
-import { useSearchParams } from "next/navigation"
 import { ChevronLeft, Share2, MoreVertical, Play, Users, Video, Heart, Bell, BellOff, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -20,10 +19,6 @@ import {
   toggleCreatorLiveAlerts,
   type PublicCreatorProfile,
 } from "@/lib/api/users"
-import {
-  createCreatorSubscriptionCheckout,
-} from "@/lib/api/billing-monetization"
-import { fulfillCheckout } from "@/lib/api/billing"
 import { fetchPodcastShows } from "@/lib/api/podcasts"
 import { fetchCreatorPlaylists } from "@/lib/api/playlists"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
@@ -54,16 +49,13 @@ export default function CreatorProfilePage(props: { params: Promise<{ slug: stri
 
 function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
-  const searchParams = useSearchParams()
-  const { isAuthenticated, refreshUser } = useAuth()
+  const { isAuthenticated } = useAuth()
   const [profile, setProfile] = useState<PublicCreatorProfile | null>(null)
   const [videos, setVideos] = useState<CreatorVideo[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("videos")
   const [navTab, setNavTab] = useState("home")
   const [isFollowing, setIsFollowing] = useState(false)
-  const [isChannelMember, setIsChannelMember] = useState(false)
-  const [memberBusy, setMemberBusy] = useState(false)
   const [notificationsOn, setNotificationsOn] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
@@ -94,7 +86,6 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
       if (cancelled) return
       setProfile(p)
       setIsFollowing(p?.isFollowing ?? false)
-      setIsChannelMember(p?.isChannelMember ?? false)
       setNotificationsOn(p?.liveAlertsOn ?? false)
       setVideos(
         v.items.map((item) => ({
@@ -132,21 +123,6 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
       cancelled = true
     }
   }, [slug])
-
-  useEffect(() => {
-    const checkout = searchParams.get("checkout")
-    const sessionId = searchParams.get("session_id")
-    if (checkout !== "success" || !sessionId || !isAuthenticated) return
-    void fulfillCheckout(sessionId)
-      .then(() => fetchPublicProfile(slug))
-      .then((p) => {
-        if (p) {
-          setIsChannelMember(p.isChannelMember ?? false)
-        }
-      })
-      .catch(() => {})
-      .finally(() => void refreshUser())
-  }, [searchParams, isAuthenticated, slug, refreshUser])
 
   if (loading) {
     return (
@@ -202,24 +178,6 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
     })
   }
 
-  const handleJoinMember = () => {
-    requireAuth(() => {
-      if (isChannelMember) return
-      setMemberBusy(true)
-      void createCreatorSubscriptionCheckout(profile.id, "basic")
-        .then((res) => {
-          if (res.devMode) {
-            setIsChannelMember(true)
-            return
-          }
-          if (res.checkoutUrl) {
-            window.location.href = res.checkoutUrl
-          }
-        })
-        .finally(() => setMemberBusy(false))
-    })
-  }
-
   const handleNotifyToggle = () => {
     requireAuth(() => {
       void toggleCreatorLiveAlerts(profile.username)
@@ -266,16 +224,6 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
               className="rounded-full"
             >
               {isFollowing ? "Following" : "Follow"}
-            </Button>
-            <Button
-              onClick={handleJoinMember}
-              disabled={memberBusy || isChannelMember}
-              className={cn(
-                "rounded-full",
-                isChannelMember && "bg-primary/20 text-primary border border-primary",
-              )}
-            >
-              {isChannelMember ? "Member" : memberBusy ? "…" : "Join — $4.99/mo"}
             </Button>
             {isFollowing && (
               <Button variant="secondary" size="icon" className="rounded-full" onClick={handleNotifyToggle}>

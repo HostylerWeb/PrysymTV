@@ -35,6 +35,13 @@ export function toggleCommentLike(commentId: string) {
   );
 }
 
+export function deleteVideoComment(commentId: string) {
+  return apiRequest<{ success: boolean; deletedIds: string[] }>(
+    `/videos/comments/${commentId}`,
+    { method: "DELETE" },
+  );
+}
+
 /** Normalize API/Prisma comment payloads for the UI. */
 export function normalizeVideoComment(raw: Record<string, unknown>): VideoComment {
   const user = (raw.user ?? {}) as VideoComment["user"];

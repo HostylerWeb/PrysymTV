@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { AdminVerticalSeriesEditSheet } from "@/components/admin/admin-vertical-series-edit-sheet"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminPagination } from "@/components/admin/admin-pagination"
 import { AdminStatusPill } from "@/components/admin/admin-status-pill"
@@ -22,6 +23,7 @@ import {
 export default function AdminContentVerticalsPage() {
   const [q, setQ] = useState("")
   const [page, setPage] = useState(1)
+  const [editSlug, setEditSlug] = useState<string | null>(null)
 
   const { data, loading, error, reload } = useAdminQuery(
     () => fetchAdminVerticalSeries({ page, limit: 20, q: q || undefined }),
@@ -91,7 +93,21 @@ export default function AdminContentVerticalsPage() {
                 <TableCell>
                   <AdminStatusPill status={s.status} />
                 </TableCell>
-                <TableCell className="text-right space-x-2">
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-2">
+                  <Button asChild size="sm" variant="outline" className="rounded-full">
+                    <Link href={`/verticals/${s.slug}`} target="_blank" rel="noopener noreferrer">
+                      View
+                    </Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full"
+                    onClick={() => setEditSlug(s.slug)}
+                  >
+                    Edit
+                  </Button>
                   <Button asChild size="sm" variant="outline" className="rounded-full">
                     <Link href={`/admin/content/verticals/${s.slug}`}>Episodes</Link>
                   </Button>
@@ -99,6 +115,7 @@ export default function AdminContentVerticalsPage() {
                     itemLabel="series"
                     onConfirm={() => void deleteAdminVerticalSeries(s.slug).then(() => reload())}
                   />
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -113,6 +130,15 @@ export default function AdminContentVerticalsPage() {
         pageSize={meta.limit}
         onPageChange={setPage}
       />
+
+      {editSlug && (
+        <AdminVerticalSeriesEditSheet
+          slug={editSlug}
+          isOpen
+          onClose={() => setEditSlug(null)}
+          onSuccess={() => void reload()}
+        />
+      )}
     </>
   )
 }

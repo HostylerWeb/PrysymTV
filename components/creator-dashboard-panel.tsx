@@ -5,7 +5,12 @@ import { BarChart3, DollarSign, Eye, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ApiError } from "@/lib/api-client"
 import { fetchCreatorDashboard, type CreatorDashboardResponse } from "@/lib/api/analytics"
-import { requestCreatorPayout } from "@/lib/api/billing-monetization"
+import { CreatorPayoutSetup } from "@/components/creator-payout-setup"
+import {
+  fetchCreatorPayoutProfile,
+  requestCreatorPayout,
+  type CreatorPayoutProfile,
+} from "@/lib/api/billing-monetization"
 import { formatViewCount } from "@/lib/format-media"
 
 export function CreatorDashboardPanel({ className }: { className?: string }) {
@@ -13,7 +18,7 @@ export function CreatorDashboardPanel({ className }: { className?: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [payoutAmount, setPayoutAmount] = useState("50")
-  const [payoutMethod, setPayoutMethod] = useState<"paypal" | "bank_transfer" | "crypto">("paypal")
+  const [payoutProfile, setPayoutProfile] = useState<CreatorPayoutProfile | null>(null)
   const [payoutBusy, setPayoutBusy] = useState(false)
   const [payoutMessage, setPayoutMessage] = useState<string | null>(null)
 
@@ -21,8 +26,14 @@ export function CreatorDashboardPanel({ className }: { className?: string }) {
     let cancelled = false
     void (async () => {
       try {
-        const dash = await fetchCreatorDashboard()
-        if (!cancelled) setData(dash)
+        const [dash, profile] = await Promise.all([
+          fetchCreatorDashboard(),
+          fetchCreatorPayoutProfile().catch(() => ({ configured: false as const })),
+        ])
+        if (!cancelled) {
+          setData(dash)
+          setPayoutProfile(profile)
+        }
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof ApiError ? e.message : "Could not load performance data")
@@ -144,6 +155,11 @@ export function CreatorDashboardPanel({ className }: { className?: string }) {
           </div>
         </div>
         <div className="space-y-4">
+          <CreatorPayoutSetup
+            onConfigured={() => {
+              void fetchCreatorPayoutProfile().then(setPayoutProfile)
+            }}
+          />
           <div className="p-4 md:p-6 rounded-xl border border-border bg-secondary/20">
             <p className="text-sm font-semibold">Revenue (30d)</p>
             <ul className="text-xs md:text-sm text-muted-foreground mt-2 space-y-1">
@@ -162,40 +178,42 @@ export function CreatorDashboardPanel({ className }: { className?: string }) {
             <p className="text-xs text-muted-foreground">
               Minimum withdrawal $50. Payouts are reviewed manually (1–5 business days).
             </p>
-            <div className="flex gap-2">
-              <input
-                type="number"
-                min={50}
-                step={1}
-                value={payoutAmount}
-                onChange={(e) => setPayoutAmount(e.target.value)}
-                className="flex-1 h-10 px-3 rounded-lg bg-secondary text-sm"
-                placeholder="Amount (USD)"
-              />
-              <select
-                value={payoutMethod}
-                onChange={(e) =>
-                  setPayoutMethod(e.target.value as "paypal" | "bank_transfer" | "crypto")
-                }
-                className="h-10 px-2 rounded-lg bg-secondary text-sm"
-              >
-                <option value="paypal">PayPal</option>
-                <option value="bank_transfer">Bank</option>
-                <option value="crypto">Crypto</option>
-              </select>
-            </div>
+            {payoutProfile?.configured && (
+              <p className="text-xs text-muted-foreground">
+                Payouts go to your saved{" "}
+                {payoutProfile.method === "bank_transfer"
+                  ? "bank account"
+                  : payoutProfile.method === "crypto"
+                    ? "crypto wallet"
+                    : "PayPal"}
+                .
+              </p>
+            )}
+            <input
+              type="number"
+              min={50}
+              step={1}
+              value={payoutAmount}
+              onChange={(e) => setPayoutAmount(e.target.value)}
+              className="w-full h-10 px-3 rounded-lg bg-secondary text-sm"
+              placeholder="Amount (USD)"
+            />
             <Button
               className="w-full rounded-full"
-              disabled={payoutBusy}
+              disabled={payoutBusy || !payoutProfile?.configured}
               onClick={() => {
                 const amount = Number(payoutAmount)
                 if (!Number.isFinite(amount) || amount < 50) {
                   setPayoutMessage("Enter at least $50")
                   return
                 }
+                if (!payoutProfile?.configured) {
+                  setPayoutMessage("Set up your payment method above first.")
+                  return
+                }
                 setPayoutBusy(true)
                 setPayoutMessage(null)
-                void requestCreatorPayout({ amountUsd: amount, method: payoutMethod })
+                void requestCreatorPayout({ amountUsd: amount })
                   .then((res) => {
                     setPayoutMessage(`Request submitted (${res.payout.status}).`)
                     return fetchCreatorDashboard()

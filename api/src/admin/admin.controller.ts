@@ -42,6 +42,9 @@ import type {
 } from '../platform-settings/platform-settings.types';
 import { UpdateUserImpactDto } from './dto/update-user-impact.dto';
 import { AdminDateRangeQueryDto } from './dto/admin-date-range-query.dto';
+import { UpdateAdminPodcastEpisodeDto } from './dto/update-admin-podcast-episode.dto';
+import { UpdateAdminVerticalEpisodeDto } from './dto/update-admin-vertical-episode.dto';
+import { UpdateAdminVerticalSeriesDto } from './dto/update-admin-vertical-series.dto';
 import { UpdateAdminVideoDto } from './dto/update-admin-video.dto';
 
 @Controller('admin')
@@ -355,9 +358,48 @@ export class AdminController {
     return this.admin.listAdminPodcastEpisodes(showId, query);
   }
 
+  @Get('vertical-series/:slug')
+  getVerticalSeries(@Param('slug') slug: string) {
+    return this.admin.getAdminVerticalSeries(slug);
+  }
+
+  @Put('vertical-series/:slug')
+  updateVerticalSeries(
+    @Param('slug') slug: string,
+    @Body() body: UpdateAdminVerticalSeriesDto,
+  ) {
+    return this.admin.updateAdminVerticalSeries(slug, body);
+  }
+
+  @Get('vertical-episodes/:id')
+  getVerticalEpisode(@Param('id') id: string) {
+    return this.admin.getAdminVerticalEpisode(id);
+  }
+
+  @Put('vertical-episodes/:id')
+  updateVerticalEpisode(
+    @Param('id') id: string,
+    @Body() body: UpdateAdminVerticalEpisodeDto,
+  ) {
+    return this.admin.updateAdminVerticalEpisode(id, body);
+  }
+
   @Delete('vertical-episodes/:id')
   deleteVerticalEpisode(@Param('id') id: string) {
     return this.admin.deleteVerticalEpisode(id);
+  }
+
+  @Get('podcast-episodes/:id')
+  getPodcastEpisode(@Param('id') id: string) {
+    return this.admin.getAdminPodcastEpisode(id);
+  }
+
+  @Put('podcast-episodes/:id')
+  updatePodcastEpisode(
+    @Param('id') id: string,
+    @Body() body: UpdateAdminPodcastEpisodeDto,
+  ) {
+    return this.admin.updateAdminPodcastEpisode(id, body);
   }
 
   @Delete('podcast-episodes/:id')

@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -15,6 +16,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { CreatePodcastEpisodeDto } from './dto/create-episode.dto';
 import { CreatePodcastShowDto } from './dto/create-show.dto';
+import { UpdatePodcastEpisodeDto } from './dto/update-episode.dto';
 import { PodcastUploadCompleteDto } from './dto/podcast-upload-complete.dto';
 import { PodcastUploadInitDto } from './dto/podcast-upload-init.dto';
 import { PodcastsService } from './podcasts.service';
@@ -59,6 +61,31 @@ export class PodcastsController {
   @Get('shows/:id')
   show(@Param('id') id: string) {
     return this.podcasts.getShow(id);
+  }
+
+  @Post('shows/:id/cover/upload/init')
+  @UseGuards(JwtAuthGuard)
+  showCoverUploadInit(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('id') id: string,
+    @Body() body: { mimeType: string; fileName?: string },
+  ) {
+    return this.podcasts.initShowCoverUpload(
+      user.id,
+      id,
+      body.mimeType,
+      body.fileName,
+    );
+  }
+
+  @Post('shows/:id/cover/upload/complete')
+  @UseGuards(JwtAuthGuard)
+  showCoverUploadComplete(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('id') id: string,
+    @Body() body: { objectKey: string },
+  ) {
+    return this.podcasts.completeShowCoverUpload(user.id, id, body.objectKey);
   }
 
   @Post('shows/:showId/episodes')
@@ -135,5 +162,15 @@ export class PodcastsController {
     @Body() body: PodcastUploadCompleteDto,
   ) {
     return this.podcasts.uploadComplete(user.id, id, body);
+  }
+
+  @Patch('episodes/:id')
+  @UseGuards(JwtAuthGuard)
+  updateEpisode(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('id') id: string,
+    @Body() body: UpdatePodcastEpisodeDto,
+  ) {
+    return this.podcasts.updateEpisode(user.id, id, body);
   }
 }

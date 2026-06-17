@@ -3,27 +3,45 @@
 import { Users } from "lucide-react"
 import Link from "next/link"
 import { userAvatarUrl } from "@/lib/user-avatar"
+import { LiveStreamThumbnail } from "@/components/live-stream-thumbnail"
 
 interface LiveCardProps {
   id: string
   slug?: string
   title: string
-  thumbnail: string
+  thumbnail?: string
+  hlsPlaybackUrl?: string | null
   streamer: string
+  streamerSlug?: string
   viewers: string
   category: string
-  avatar?: string
+  avatar?: string | null
 }
 
-export function LiveCard({ id, slug, title, thumbnail, streamer, viewers, category, avatar }: LiveCardProps) {
+export function LiveCard({
+  id,
+  slug,
+  title,
+  thumbnail,
+  hlsPlaybackUrl,
+  streamer,
+  streamerSlug,
+  viewers,
+  category,
+  avatar,
+}: LiveCardProps) {
   return (
     <Link href={`/live/${slug ?? id}`}>
       <div className="group flex-shrink-0 w-[300px] md:w-[340px] cursor-pointer">
         {/* Thumbnail */}
         <div className="relative aspect-video rounded-lg overflow-hidden bg-muted mb-2">
-          <img
-            src={thumbnail}
-            alt={title}
+          <LiveStreamThumbnail
+            title={title}
+            hlsPlaybackUrl={hlsPlaybackUrl}
+            thumbnailUrl={thumbnail}
+            streamerAvatar={avatar}
+            streamerSlug={streamerSlug ?? slug ?? streamer}
+            streamer={streamer}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
           
@@ -51,7 +69,7 @@ export function LiveCard({ id, slug, title, thumbnail, streamer, viewers, catego
         <div className="flex gap-3">
           <div className="w-10 h-10 rounded-full bg-muted flex-shrink-0 overflow-hidden ring-2 ring-primary">
             <img
-              src={userAvatarUrl(avatar, streamer)}
+              src={userAvatarUrl(avatar, streamerSlug ?? slug ?? streamer)}
               alt={streamer}
               className="w-full h-full object-cover"
             />

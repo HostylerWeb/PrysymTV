@@ -4,11 +4,15 @@ import { Play } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { userAvatarUrl } from "@/lib/user-avatar"
+import { LiveStreamThumbnail } from "@/components/live-stream-thumbnail"
 
 interface VideoCardProps {
   id: string
   title: string
   thumbnail: string
+  hlsPlaybackUrl?: string | null
+  streamerSlug?: string
+  streamerAvatar?: string | null
   duration?: string
   views?: string
   channel?: string
@@ -25,6 +29,9 @@ export function VideoCard({
   id,
   title,
   thumbnail,
+  hlsPlaybackUrl,
+  streamerSlug,
+  streamerAvatar,
   duration,
   views,
   channel,
@@ -46,11 +53,23 @@ export function VideoCard({
       >
         {/* Thumbnail */}
         <div className="relative aspect-video rounded-lg overflow-hidden bg-muted mb-2">
-          <img
-            src={thumbnail}
-            alt={title}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-          />
+          {isLive ? (
+            <LiveStreamThumbnail
+              title={title}
+              hlsPlaybackUrl={hlsPlaybackUrl}
+              thumbnailUrl={thumbnail}
+              streamerAvatar={streamerAvatar ?? channelAvatar}
+              streamerSlug={streamerSlug ?? channel}
+              streamer={channel}
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
+          ) : (
+            <img
+              src={thumbnail}
+              alt={title}
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
+          )}
           
           {/* Overlay on hover */}
           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

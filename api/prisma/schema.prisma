@@ -449,6 +449,7 @@ model User {
   impactSnapshots       CreatorImpactSnapshot[]
   creatorBalances       CreatorBalanceLedger[]
   taxProfile            CreatorTaxProfile?
+  payoutProfile         CreatorPayoutProfile?
   fraudSignals          FraudSignal[]
   revenueSplitUpdates   RevenueSplitRule[]    @relation("SplitRuleUpdater")
   platformSettingsUpdated PlatformSetting[]   @relation("PlatformSettingUpdater")
@@ -861,6 +862,7 @@ model Notification {
   actorId     String?          @map("actor_id") @db.Uuid
   referenceId String?          @map("reference_id") @db.Uuid
   message     String
+  metadata    Json?
   isRead      Boolean          @default(false) @map("is_read")
   createdAt   DateTime         @default(now()) @map("created_at")
   user        User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
@@ -954,16 +956,27 @@ model AnalyticsEvent {
   @@map("analytics_events")
 }
 
+model CreatorPayoutProfile {
+  userId      String       @id @map("user_id") @db.Uuid
+  method      PayoutMethod
+  detailsJson Json         @map("details_json")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("creator_payout_profiles")
+}
+
 model CreatorPayout {
-  id            String       @id @default(uuid()) @db.Uuid
-  creatorId     String       @map("creator_id") @db.Uuid
-  amountUsd     Decimal      @map("amount_usd") @db.Decimal(10, 2)
-  method        PayoutMethod
-  status        PayoutStatus @default(requested)
-  processedById String?      @map("processed_by") @db.Uuid
-  createdAt     DateTime     @default(now()) @map("created_at")
-  creator       User         @relation("CreatorPayouts", fields: [creatorId], references: [id], onDelete: Cascade)
-  processedBy   User?        @relation("PayoutProcessor", fields: [processedById], references: [id])
+  id                String       @id @default(uuid()) @db.Uuid
+  creatorId         String       @map("creator_id") @db.Uuid
+  amountUsd         Decimal      @map("amount_usd") @db.Decimal(10, 2)
+  method            PayoutMethod
+  payoutDetailsJson Json?        @map("payout_details_json")
+  status            PayoutStatus @default(requested)
+  processedById     String?      @map("processed_by") @db.Uuid
+  createdAt         DateTime     @default(now()) @map("created_at")
+  creator           User         @relation("CreatorPayouts", fields: [creatorId], references: [id], onDelete: Cascade)
+  processedBy       User?        @relation("PayoutProcessor", fields: [processedById], references: [id])
 
   @@index([creatorId, status])
   @@map("creator_payouts")

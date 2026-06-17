@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -457,11 +458,17 @@ export class AdminService {
         socialLinks: { orderBy: { sortOrder: 'asc' } },
         streamerApplication: true,
         verticalCreatorApplication: true,
+        payoutProfile: true,
         _count: {
           select: {
             videos: true,
             reportsFiled: true,
             reportsReviewed: true,
+            followers: true,
+            following: true,
+            streams: true,
+            podcastShows: true,
+            verticalSeries: true,
           },
         },
       },
@@ -500,18 +507,89 @@ export class AdminService {
       }),
     ]);
 
-    const content = await this.prisma.video.findMany({
-      where: { creatorId: id },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-      select: {
-        id: true,
-        title: true,
-        type: true,
-        status: true,
-        viewsCount: true,
-      },
-    });
+    const [videos, verticalEpisodes, podcastEpisodes, verticalSeries] =
+      await Promise.all([
+        this.prisma.video.findMany({
+          where: { creatorId: id },
+          orderBy: { createdAt: 'desc' },
+          take: 30,
+          select: {
+            id: true,
+            title: true,
+            type: true,
+            status: true,
+            viewsCount: true,
+          },
+        }),
+        this.prisma.verticalEpisode.findMany({
+          where: { series: { creatorId: id } },
+          orderBy: { createdAt: 'desc' },
+          take: 30,
+          select: {
+            id: true,
+            title: true,
+            episodeNumber: true,
+            status: true,
+            viewsCount: true,
+            series: { select: { slug: true, title: true } },
+          },
+        }),
+        this.prisma.podcastEpisode.findMany({
+          where: { creatorId: id },
+          orderBy: { createdAt: 'desc' },
+          take: 30,
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            playsCount: true,
+            show: { select: { title: true } },
+          },
+        }),
+        this.prisma.verticalSeries.findMany({
+          where: { creatorId: id },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          select: {
+            slug: true,
+            title: true,
+            status: true,
+            totalEpisodes: true,
+          },
+        }),
+      ]);
+
+    const content = [
+      ...videos.map((v) => ({
+        type: v.type,
+        title: v.title,
+        id: v.id,
+        views: v.viewsCount,
+        status: v.status,
+        siteHref:
+          v.type === 'movie'
+            ? `/movie/${v.id}`
+            : v.type === 'short'
+              ? `/shorts/${v.id}`
+              : `/watch/${v.id}`,
+      })),
+      ...verticalEpisodes.map((ep) => ({
+        type: 'vertical_episode',
+        title: `${ep.series.title} — Ep ${ep.episodeNumber}: ${ep.title}`,
+        id: ep.id,
+        views: ep.viewsCount,
+        status: ep.status,
+        siteHref: `/verticals/watch/${ep.series.slug}/${ep.episodeNumber}`,
+      })),
+      ...podcastEpisodes.map((ep) => ({
+        type: 'podcast_episode',
+        title: ep.show.title ? `${ep.show.title} — ${ep.title}` : ep.title,
+        id: ep.id,
+        views: ep.playsCount,
+        status: ep.status,
+        siteHref: `/podcast/${ep.id}`,
+      })),
+    ].sort((a, b) => b.views - a.views);
 
     const payouts = await this.prisma.creatorPayout.findMany({
       where: { creatorId: id },
@@ -555,18 +633,37 @@ export class AdminService {
       partnerTier: user.partnerTier,
       coins: user.coinsBalance,
       bio: user.bio,
+      avatarUrl: user.avatarUrl,
+      premiumTier: user.premiumTier,
       joinedAt: user.createdAt.toISOString().slice(0, 10),
+      socialLinks: user.socialLinks.map((l) => ({
+        label: l.label,
+        url: l.url,
+      })),
       counts: {
         videos: user._count.videos,
+        followers: user._count.followers,
+        following: user._count.following,
+        streams: user._count.streams,
+        podcastShows: user._count.podcastShows,
+        verticalSeries: user._count.verticalSeries,
         reportsFiled: user._count.reportsFiled,
       },
-      content: content.map((v) => ({
-        type: v.type,
-        title: v.title,
-        id: v.id,
-        views: v.viewsCount,
-        status: v.status,
+      verticalSeries: verticalSeries.map((s) => ({
+        slug: s.slug,
+        title: s.title,
+        status: s.status,
+        episodeCount: s.totalEpisodes,
+        siteHref: `/verticals/${s.slug}`,
       })),
+      content,
+      payoutProfile: user.payoutProfile
+        ? {
+            method: user.payoutProfile.method,
+            details: user.payoutProfile.detailsJson as Record<string, string>,
+            updatedAt: user.payoutProfile.updatedAt.toISOString(),
+          }
+        : null,
       financial: {
         balanceUsd: Number(balanceUsd),
         lifetimeEarningsUsd: Number(balance._sum.amountUsd ?? 0),
@@ -574,7 +671,12 @@ export class AdminService {
         payouts: payouts.map((p) => ({
           id: p.id,
           amountUsd: Number(p.amountUsd),
+          method: p.method,
           status: p.status,
+          payoutDetails: (p.payoutDetailsJson ?? null) as Record<
+            string,
+            string
+          > | null,
           date: p.createdAt.toISOString().slice(0, 10),
         })),
         giftsReceived: giftsReceived.map((g) => ({
@@ -912,6 +1014,10 @@ export class AdminService {
         creatorId: p.creatorId,
         amountUsd: Number(p.amountUsd),
         method: p.method,
+        payoutDetails: (p.payoutDetailsJson ?? null) as Record<
+          string,
+          string
+        > | null,
         status: p.status,
         taxStatus: 'not_submitted',
         createdAt: p.createdAt.toISOString(),
@@ -1272,11 +1378,15 @@ export class AdminService {
   }
 
   async deleteVideo(id: string) {
+    const video = await this.prisma.video.findUnique({ where: { id } });
+    if (!video) throw new NotFoundException('Video not found');
     try {
       await this.playlists.removeContentReferences('video', id);
+      await this.storage.purgeVideoAssets(video);
       await this.prisma.video.delete({ where: { id } });
       return { success: true };
-    } catch {
+    } catch (err) {
+      if (err instanceof NotFoundException) throw err;
       throw new NotFoundException('Video not found');
     }
   }
@@ -1606,7 +1716,7 @@ export class AdminService {
         comments: 0,
         status: ep.status === ContentStatus.ready ? 'published' : ep.status,
         uploadedAt: ep.createdAt.toISOString(),
-        siteHref: `/verticals/${series.slug}/${ep.id}`,
+        siteHref: `/verticals/watch/${series.slug}/${ep.episodeNumber}`,
       })),
       meta: { page, limit, total },
     };
@@ -1688,27 +1798,204 @@ export class AdminService {
         comments: 0,
         status: ep.status === ContentStatus.ready ? 'published' : ep.status,
         publishedAt: (ep.publishedAt ?? ep.createdAt).toISOString(),
-        siteHref: `/podcasts/${showId}/${ep.id}`,
+        siteHref: `/podcast/${ep.id}`,
       })),
       meta: { page, limit, total },
     };
   }
 
+  async getAdminVerticalSeries(slug: string) {
+    const series = await this.prisma.verticalSeries.findUnique({
+      where: { slug },
+      include: { creator: { select: { username: true, displayName: true } } },
+    });
+    if (!series) throw new NotFoundException('Series not found');
+
+    return {
+      slug: series.slug,
+      title: series.title,
+      tagline: series.tagline ?? '',
+      description: series.description ?? '',
+      genre: series.genre ?? '',
+      status: series.status,
+      creator: series.creator
+        ? (series.creator.displayName ?? series.creator.username)
+        : '—',
+      siteHref: `/verticals/${series.slug}`,
+    };
+  }
+
+  async updateAdminVerticalSeries(
+    slug: string,
+    body: {
+      title?: string;
+      tagline?: string;
+      description?: string;
+      genre?: string;
+    },
+  ) {
+    const series = await this.prisma.verticalSeries.findUnique({ where: { slug } });
+    if (!series) throw new NotFoundException('Series not found');
+
+    await this.prisma.verticalSeries.update({
+      where: { slug },
+      data: {
+        ...(body.title !== undefined ? { title: body.title.trim() } : {}),
+        ...(body.tagline !== undefined
+          ? { tagline: body.tagline.trim() || null }
+          : {}),
+        ...(body.description !== undefined
+          ? { description: body.description.trim() || null }
+          : {}),
+        ...(body.genre !== undefined ? { genre: body.genre.trim() || null } : {}),
+      },
+    });
+
+    return this.getAdminVerticalSeries(slug);
+  }
+
+  async getAdminVerticalEpisode(id: string) {
+    const episode = await this.prisma.verticalEpisode.findUnique({
+      where: { id },
+      include: {
+        series: { select: { slug: true, title: true } },
+      },
+    });
+    if (!episode) throw new NotFoundException('Episode not found');
+
+    return {
+      id: episode.id,
+      seriesSlug: episode.series.slug,
+      seriesTitle: episode.series.title,
+      episodeNumber: episode.episodeNumber,
+      title: episode.title,
+      description: episode.description ?? '',
+      cliffhanger: episode.cliffhanger ?? '',
+      status: episode.status,
+      siteHref: `/verticals/watch/${episode.series.slug}/${episode.episodeNumber}`,
+    };
+  }
+
+  async updateAdminVerticalEpisode(
+    id: string,
+    body: {
+      episodeNumber?: number;
+      title?: string;
+      description?: string;
+      cliffhanger?: string;
+    },
+  ) {
+    const episode = await this.prisma.verticalEpisode.findUnique({
+      where: { id },
+      include: { series: { select: { slug: true } } },
+    });
+    if (!episode) throw new NotFoundException('Episode not found');
+
+    if (
+      body.episodeNumber != null &&
+      body.episodeNumber !== episode.episodeNumber
+    ) {
+      const conflict = await this.prisma.verticalEpisode.findFirst({
+        where: {
+          seriesId: episode.seriesId,
+          episodeNumber: body.episodeNumber,
+          NOT: { id },
+        },
+      });
+      if (conflict) {
+        throw new ConflictException(
+          `Episode ${body.episodeNumber} already exists in this series`,
+        );
+      }
+    }
+
+    await this.prisma.verticalEpisode.update({
+      where: { id },
+      data: {
+        ...(body.episodeNumber !== undefined
+          ? { episodeNumber: body.episodeNumber }
+          : {}),
+        ...(body.title !== undefined ? { title: body.title.trim() } : {}),
+        ...(body.description !== undefined
+          ? { description: body.description.trim() || null }
+          : {}),
+        ...(body.cliffhanger !== undefined
+          ? { cliffhanger: body.cliffhanger.trim() || null }
+          : {}),
+      },
+    });
+
+    return this.getAdminVerticalEpisode(id);
+  }
+
+  async getAdminPodcastEpisode(id: string) {
+    const episode = await this.prisma.podcastEpisode.findUnique({
+      where: { id },
+      include: {
+        show: { select: { id: true, title: true } },
+      },
+    });
+    if (!episode) throw new NotFoundException('Episode not found');
+
+    return {
+      id: episode.id,
+      showId: episode.showId,
+      showTitle: episode.show.title,
+      title: episode.title,
+      description: episode.description ?? '',
+      status: episode.status,
+      siteHref: `/podcast/${episode.id}`,
+    };
+  }
+
+  async updateAdminPodcastEpisode(
+    id: string,
+    body: { title?: string; description?: string },
+  ) {
+    const episode = await this.prisma.podcastEpisode.findUnique({ where: { id } });
+    if (!episode) throw new NotFoundException('Episode not found');
+
+    await this.prisma.podcastEpisode.update({
+      where: { id },
+      data: {
+        ...(body.title !== undefined ? { title: body.title.trim() } : {}),
+        ...(body.description !== undefined
+          ? { description: body.description.trim() || null }
+          : {}),
+      },
+    });
+
+    return this.getAdminPodcastEpisode(id);
+  }
+
   async deleteVerticalEpisode(id: string) {
+    const episode = await this.prisma.verticalEpisode.findUnique({
+      where: { id },
+    });
+    if (!episode) throw new NotFoundException('Episode not found');
     try {
+      await this.storage.purgePublicMediaUrl(episode.videoUrl);
+      await this.storage.purgePublicMediaUrl(episode.thumbnailUrl);
       await this.prisma.verticalEpisode.delete({ where: { id } });
       return { success: true };
-    } catch {
+    } catch (err) {
+      if (err instanceof NotFoundException) throw err;
       throw new NotFoundException('Episode not found');
     }
   }
 
   async deletePodcastEpisode(id: string) {
+    const episode = await this.prisma.podcastEpisode.findUnique({
+      where: { id },
+    });
+    if (!episode) throw new NotFoundException('Episode not found');
     try {
       await this.playlists.removeContentReferences('podcast_episode', id);
+      await this.storage.purgePodcastEpisodeAssets(episode);
       await this.prisma.podcastEpisode.delete({ where: { id } });
       return { success: true };
-    } catch {
+    } catch (err) {
+      if (err instanceof NotFoundException) throw err;
       throw new NotFoundException('Episode not found');
     }
   }
@@ -2634,9 +2921,14 @@ export class AdminService {
   async deletePodcastShow(id: string, adminId: string) {
     const show = await this.prisma.podcastShow.findUnique({
       where: { id },
-      select: { id: true, title: true },
+      include: { episodes: true },
     });
     if (!show) throw new NotFoundException('Podcast show not found');
+    for (const episode of show.episodes) {
+      await this.playlists.removeContentReferences('podcast_episode', episode.id);
+      await this.storage.purgePodcastEpisodeAssets(episode);
+    }
+    await this.storage.purgePodcastShowAssets(show);
     await this.prisma.podcastShow.delete({ where: { id } });
     await this.auditLog.log({
       adminId,
@@ -2651,9 +2943,13 @@ export class AdminService {
   async deleteVerticalSeries(slug: string, adminId: string) {
     const series = await this.prisma.verticalSeries.findUnique({
       where: { slug },
-      select: { id: true, slug: true, title: true },
+      include: { episodes: true },
     });
     if (!series) throw new NotFoundException('Vertical series not found');
+    for (const episode of series.episodes) {
+      await this.storage.purgePublicMediaUrl(episode.videoUrl);
+      await this.storage.purgePublicMediaUrl(episode.thumbnailUrl);
+    }
     await this.prisma.verticalSeries.delete({ where: { id: series.id } });
     await this.auditLog.log({
       adminId,

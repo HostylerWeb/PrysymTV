@@ -1,11 +1,7 @@
-import { IsEnum, IsNumber, Min } from 'class-validator';
-import { PayoutMethod } from '@prisma/client';
+import { IsNumber, Min } from 'class-validator';
 
 export class RequestPayoutDto {
   @IsNumber()
   @Min(1)
   amountUsd!: number;
-
-  @IsEnum(PayoutMethod)
-  method!: PayoutMethod;
 }

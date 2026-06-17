@@ -1,7 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ContentStatus } from '@prisma/client';
+import { ContentStatus, VideoType } from '@prisma/client';
 import { Job } from 'bullmq';
 import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -64,12 +64,17 @@ export class VideoProcessingProcessor extends WorkerHost {
         await this.processSkipMode(videoId, objectKey, settings.ffmpegPath, ffprobePath);
         return;
       }
+      const isShort = video.type === VideoType.short;
+      if (isShort) {
+        this.logger.log(`Video ${videoId}: shorts profile (single 720p HLS)`);
+      }
       await this.processFfmpegMode(
         videoId,
         objectKey,
         settings.ffmpegPath,
         ffprobePath,
         settings.tmpDir,
+        isShort ? 'single' : 'adaptive',
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -117,7 +122,13 @@ export class VideoProcessingProcessor extends WorkerHost {
 
     const prior = await this.prisma.video.findUnique({
       where: { id: videoId },
-      select: { status: true, creatorId: true, title: true, visibility: true },
+      select: {
+        status: true,
+        creatorId: true,
+        title: true,
+        visibility: true,
+        type: true,
+      },
     });
 
     await this.prisma.video.update({
@@ -139,6 +150,7 @@ export class VideoProcessingProcessor extends WorkerHost {
         prior.creatorId,
         videoId,
         prior.title,
+        prior.type,
       );
     }
     this.logger.log(`Video ${videoId} ready (processing mode: skip)`);
@@ -150,6 +162,7 @@ export class VideoProcessingProcessor extends WorkerHost {
     ffmpegPath: string,
     ffprobePath: string,
     tmpDirOverride: string,
+    profile: 'adaptive' | 'single' = 'adaptive',
   ) {
     const workRoot = tmpDirOverride
       ? join(tmpDirOverride, videoId)
@@ -163,7 +176,14 @@ export class VideoProcessingProcessor extends WorkerHost {
       await this.storage.downloadToFile(objectKey, inputPath);
       await mkdir(hlsDir, { recursive: true });
 
-      const probe = await transcodeToHls(inputPath, hlsDir, ffmpegPath, ffprobePath);
+      const probe = await transcodeToHls(
+        inputPath,
+        hlsDir,
+        ffmpegPath,
+        ffprobePath,
+        profile,
+        720,
+      );
 
       if (probe.hasVideo) {
         await extractThumbnail(inputPath, thumbPath, ffmpegPath, true);
@@ -186,7 +206,13 @@ export class VideoProcessingProcessor extends WorkerHost {
       const masterKey = this.storage.buildHlsMasterKey(videoId);
       const prior = await this.prisma.video.findUnique({
         where: { id: videoId },
-        select: { status: true, creatorId: true, title: true, visibility: true },
+        select: {
+          status: true,
+          creatorId: true,
+          title: true,
+          visibility: true,
+          type: true,
+        },
       });
 
       await this.prisma.video.update({
@@ -208,6 +234,7 @@ export class VideoProcessingProcessor extends WorkerHost {
           prior.creatorId,
           videoId,
           prior.title,
+          prior.type,
         );
       }
 

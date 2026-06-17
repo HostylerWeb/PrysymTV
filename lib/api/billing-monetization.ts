@@ -39,10 +39,32 @@ export function fetchCreatorBalance() {
   return apiRequest<CreatorBalance>("/billing/creators/balance");
 }
 
-export function requestCreatorPayout(body: {
-  amountUsd: number;
-  method: "paypal" | "bank_transfer" | "crypto";
+export type CreatorPayoutMethod = "paypal" | "bank_transfer" | "crypto";
+
+export type CreatorPayoutProfile =
+  | { configured: false }
+  | {
+      configured: true;
+      method: CreatorPayoutMethod;
+      details: Record<string, string>;
+      updatedAt: string;
+    };
+
+export function fetchCreatorPayoutProfile() {
+  return apiRequest<CreatorPayoutProfile>("/billing/creators/payout-profile");
+}
+
+export function saveCreatorPayoutProfile(body: {
+  method: CreatorPayoutMethod;
+  details: Record<string, string>;
 }) {
+  return apiRequest<Extract<CreatorPayoutProfile, { configured: true }>>(
+    "/billing/creators/payout-profile",
+    { method: "PUT", body },
+  );
+}
+
+export function requestCreatorPayout(body: { amountUsd: number }) {
   return apiRequest<{
     success: boolean;
     payout: {

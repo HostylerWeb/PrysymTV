@@ -8,10 +8,12 @@ interface LiveStream {
   slug?: string
   title: string
   thumbnail: string
+  hlsPlaybackUrl?: string | null
   streamer: string
+  streamerSlug?: string
   viewers: string
   category: string
-  avatar?: string
+  avatar?: string | null
 }
 
 interface LiveRowProps {

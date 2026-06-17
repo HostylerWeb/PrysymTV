@@ -1,0 +1,11 @@
+# MediaMTX with curl for runOnReady / runOnNotReady webhooks to the API.
+# Official image is distroless (no shell / package manager), so we layer on Alpine.
+FROM alpine:3.20
+
+RUN apk add --no-cache curl ca-certificates
+
+COPY --from=bluenviron/mediamtx:latest /mediamtx /mediamtx
+
+EXPOSE 1935 8888
+
+ENTRYPOINT ["/mediamtx"]

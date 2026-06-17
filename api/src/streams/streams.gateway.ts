@@ -23,6 +23,19 @@ type StreamChatPayload = {
   createdAt: string;
 };
 
+export type StreamGiftPayload = {
+  id: string;
+  streamId: string;
+  userId: string;
+  user: string;
+  giftId: string;
+  giftName: string;
+  giftIcon: string;
+  coins: number;
+  color: string;
+  createdAt: string;
+};
+
 const CHAT_COLORS = [
   'text-cyan-400',
   'text-pink-400',
@@ -166,5 +179,13 @@ export class StreamsGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
     this.server.to(`stream:${body.streamId}`).emit('message', payload);
     return { ok: true };
+  }
+
+  emitStreamEnded(streamId: string) {
+    this.server.to(`stream:${streamId}`).emit('streamEnded', { streamId });
+  }
+
+  emitGift(streamId: string, payload: StreamGiftPayload) {
+    this.server.to(`stream:${streamId}`).emit('gift', payload);
   }
 }

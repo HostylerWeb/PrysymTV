@@ -93,24 +93,60 @@ export default function AdminUserDetailPage({
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
+          <div className="flex flex-wrap gap-3">
+            <Button asChild variant="outline" size="sm" className="rounded-full">
+              <Link href={`/creator/${user.username}`} target="_blank" rel="noopener noreferrer">
+                Public profile
+              </Link>
+            </Button>
+          </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Field label="Role" value={user.role} />
             <Field label="Partner tier" value={user.partnerTier} />
+            <Field label="Premium" value={user.premiumTier} />
             <Field label="Coins" value={String(user.coins)} />
             <Field label="Joined" value={user.joinedAt} />
+            <Field label="Followers" value={String(user.counts.followers)} />
+            <Field label="Following" value={String(user.counts.following)} />
+            <Field label="Live streams" value={String(user.counts.streams)} />
           </div>
-          <div className="grid sm:grid-cols-3 gap-4">
+          {user.bio && (
             <div className="rounded-xl border border-border p-4">
-              <p className="text-xs text-muted-foreground">Content items</p>
+              <p className="text-xs text-muted-foreground mb-1">Bio</p>
+              <p className="text-sm">{user.bio}</p>
+            </div>
+          )}
+          {user.socialLinks.length > 0 && (
+            <div className="rounded-xl border border-border p-4">
+              <p className="text-xs text-muted-foreground mb-2">Social links</p>
+              <ul className="space-y-1 text-sm">
+                {user.socialLinks.map((l) => (
+                  <li key={l.url}>
+                    <span className="text-muted-foreground">{l.label}:</span>{" "}
+                    <a href={l.url} className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+                      {l.url}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="rounded-xl border border-border p-4">
+              <p className="text-xs text-muted-foreground">Videos / shorts / movies</p>
               <p className="text-2xl font-bold mt-1">{user.counts.videos}</p>
+            </div>
+            <div className="rounded-xl border border-border p-4">
+              <p className="text-xs text-muted-foreground">Vertical series</p>
+              <p className="text-2xl font-bold mt-1">{user.counts.verticalSeries}</p>
+            </div>
+            <div className="rounded-xl border border-border p-4">
+              <p className="text-xs text-muted-foreground">Podcast shows</p>
+              <p className="text-2xl font-bold mt-1">{user.counts.podcastShows}</p>
             </div>
             <div className="rounded-xl border border-border p-4">
               <p className="text-xs text-muted-foreground">Balance</p>
               <p className="text-2xl font-bold mt-1">${user.financial.balanceUsd.toLocaleString()}</p>
-            </div>
-            <div className="rounded-xl border border-border p-4">
-              <p className="text-xs text-muted-foreground">Reports received</p>
-              <p className="text-2xl font-bold mt-1">{user.reports.received.length}</p>
             </div>
           </div>
         </TabsContent>
@@ -139,38 +175,114 @@ export default function AdminUserDetailPage({
           )}
         </TabsContent>
 
-        <TabsContent value="content">
+        <TabsContent value="content" className="space-y-6">
+          {user.verticalSeries.length > 0 && (
+            <div>
+              <h3 className="font-semibold mb-3">Vertical series</h3>
+              <div className="rounded-xl border border-border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Series</TableHead>
+                      <TableHead className="text-right">Episodes</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">View</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {user.verticalSeries.map((s) => (
+                      <TableRow key={s.slug}>
+                        <TableCell className="font-medium">{s.title}</TableCell>
+                        <TableCell className="text-right">{s.episodeCount}</TableCell>
+                        <TableCell>
+                          <AdminStatusPill status={s.status} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button asChild size="sm" variant="outline" className="rounded-full">
+                            <Link href={s.siteHref} target="_blank" rel="noopener noreferrer">
+                              Open
+                            </Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
           {user.content.length === 0 ? (
             <p className="text-sm text-muted-foreground">No uploaded content.</p>
           ) : (
-            <div className="rounded-xl border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead className="text-right">Views</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {user.content.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="capitalize">{item.type}</TableCell>
-                      <TableCell className="font-medium max-w-[240px] truncate">{item.title}</TableCell>
-                      <TableCell className="text-right tabular-nums">{item.views.toLocaleString()}</TableCell>
-                      <TableCell>
-                        <AdminStatusPill status={item.status} />
-                      </TableCell>
+            <div>
+              <h3 className="font-semibold mb-3">All content</h3>
+              <div className="rounded-xl border border-border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Title</TableHead>
+                      <TableHead className="text-right">Views</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">View</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {user.content.map((item) => (
+                      <TableRow key={`${item.type}-${item.id}`}>
+                        <TableCell className="capitalize text-xs">
+                          {item.type.replace(/_/g, " ")}
+                        </TableCell>
+                        <TableCell className="font-medium max-w-[240px] truncate">{item.title}</TableCell>
+                        <TableCell className="text-right tabular-nums">{item.views.toLocaleString()}</TableCell>
+                        <TableCell>
+                          <AdminStatusPill status={item.status} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button asChild size="sm" variant="outline" className="rounded-full">
+                            <Link href={item.siteHref} target="_blank" rel="noopener noreferrer">
+                              Open
+                            </Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="financial" className="space-y-6">
+          <div className="rounded-xl border border-border p-5 space-y-3">
+            <h3 className="font-semibold">Saved payout method</h3>
+            {user.payoutProfile ? (
+              <>
+                <p className="text-sm text-muted-foreground capitalize">
+                  {user.payoutProfile.method.replace(/_/g, " ")} · updated{" "}
+                  {new Date(user.payoutProfile.updatedAt).toLocaleDateString()}
+                </p>
+                <ul className="text-sm space-y-1">
+                  {Object.entries(user.payoutProfile.details).map(([key, value]) => (
+                    <li key={key} className="flex gap-2">
+                      <span className="text-muted-foreground capitalize shrink-0">
+                        {key.replace(/([A-Z])/g, " $1")}:
+                      </span>
+                      <span className="font-medium break-all">{value}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Not configured — creator must set this in Performance &amp; Revenue before
+                requesting payouts.
+              </p>
+            )}
+          </div>
+
           <div className="grid sm:grid-cols-3 gap-4">
             <div className="rounded-xl border border-border p-4">
               <p className="text-sm text-muted-foreground">Available balance</p>
@@ -225,6 +337,8 @@ export default function AdminUserDetailPage({
                     <TableRow>
                       <TableHead>ID</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Method</TableHead>
+                      <TableHead>Pay to</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Date</TableHead>
                     </TableRow>
@@ -232,8 +346,24 @@ export default function AdminUserDetailPage({
                   <TableBody>
                     {user.financial.payouts.map((p) => (
                       <TableRow key={p.id}>
-                        <TableCell className="font-mono text-xs">{p.id}</TableCell>
+                        <TableCell className="font-mono text-xs">{p.id.slice(0, 8)}…</TableCell>
                         <TableCell className="text-right">${p.amountUsd}</TableCell>
+                        <TableCell className="capitalize text-xs">
+                          {p.method.replace(/_/g, " ")}
+                        </TableCell>
+                        <TableCell className="text-xs max-w-[200px]">
+                          {p.payoutDetails ? (
+                            <ul className="space-y-0.5">
+                              {Object.entries(p.payoutDetails).map(([k, v]) => (
+                                <li key={k} className="truncate">
+                                  <span className="text-muted-foreground">{k}:</span> {v}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
                         <TableCell>
                           <AdminStatusPill status={p.status} />
                         </TableCell>

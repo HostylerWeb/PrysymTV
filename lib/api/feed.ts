@@ -8,6 +8,7 @@ export type FeedHomeResponse = {
     slug: string;
     title: string;
     thumbnailUrl: string | null;
+    hlsPlaybackUrl: string | null;
     streamer: string;
     streamerSlug: string;
     streamerAvatar: string | null;
@@ -20,7 +21,9 @@ export type FeedHomeResponse = {
     slug: string;
     title: string;
     thumbnailUrl: string | null;
+    hlsPlaybackUrl: string | null;
     streamer: string;
+    streamerAvatar: string | null;
     viewerCount: number;
   } | null;
   trending: VideoCard[];

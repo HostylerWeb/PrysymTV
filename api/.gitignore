@@ -3,4 +3,4 @@ dist
 .env
 .env.local
 coverage
-storage/
+/storage/

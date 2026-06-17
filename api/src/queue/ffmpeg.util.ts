@@ -73,15 +73,66 @@ export function pickTranscodeHeights(sourceHeight: number): number[] {
   return picked.length > 0 ? picked : [Math.min(360, cap)];
 }
 
+/** Shorts: one stream, capped at maxHeight (default 720p), never upscale. */
+export function pickSingleTranscodeHeight(
+  sourceHeight: number,
+  maxHeight = 720,
+): number {
+  if (sourceHeight <= 0) return maxHeight;
+  return Math.min(sourceHeight, maxHeight);
+}
+
+export type TranscodeProfile = 'adaptive' | 'single';
+
 /**
  * Produces HLS VOD with master.m3u8 and stream_%v folders (multi-bitrate when video).
  * Audio-only inputs get a single AAC HLS stream.
  */
+async function transcodeSingleVideoHls(
+  inputPath: string,
+  outputDir: string,
+  ffmpegPath: string,
+  probe: MediaProbe,
+  height: number,
+): Promise<void> {
+  const args = [
+    '-y',
+    '-i',
+    inputPath,
+    '-vf',
+    `scale=-2:${height}`,
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-crf',
+    '23',
+  ];
+  if (probe.hasAudio) {
+    args.push('-c:a', 'aac', '-b:a', '128k');
+  }
+  args.push(
+    '-hls_time',
+    '6',
+    '-hls_playlist_type',
+    'vod',
+    '-hls_segment_filename',
+    join(outputDir, 'seg_%03d.ts'),
+    '-f',
+    'hls',
+    join(outputDir, 'master.m3u8'),
+  );
+  await execFileAsync(ffmpegPath, args, { maxBuffer: 8 * 1024 * 1024 });
+  await repairHlsPlaylists(outputDir);
+}
+
 export async function transcodeToHls(
   inputPath: string,
   outputDir: string,
   ffmpegPath: string,
   ffprobePath: string,
+  profile: TranscodeProfile = 'adaptive',
+  maxHeight = 720,
 ): Promise<MediaProbe> {
   const probe = await probeMedia(inputPath, ffprobePath);
 
@@ -108,40 +159,23 @@ export async function transcodeToHls(
     return probe;
   }
 
+  if (profile === 'single') {
+    const h = pickSingleTranscodeHeight(probe.height, maxHeight);
+    await transcodeSingleVideoHls(inputPath, outputDir, ffmpegPath, probe, h);
+    return probe;
+  }
+
   const heights = pickTranscodeHeights(probe.height);
   const n = heights.length;
 
   if (n === 1) {
-    const h = heights[0];
-    const args = [
-      '-y',
-      '-i',
+    await transcodeSingleVideoHls(
       inputPath,
-      '-vf',
-      `scale=-2:${h}`,
-      '-c:v',
-      'libx264',
-      '-preset',
-      'veryfast',
-      '-crf',
-      '23',
-    ];
-    if (probe.hasAudio) {
-      args.push('-c:a', 'aac', '-b:a', '128k');
-    }
-    args.push(
-      '-hls_time',
-      '6',
-      '-hls_playlist_type',
-      'vod',
-      '-hls_segment_filename',
-      join(outputDir, 'seg_%03d.ts'),
-      '-f',
-      'hls',
-      join(outputDir, 'master.m3u8'),
+      outputDir,
+      ffmpegPath,
+      probe,
+      heights[0],
     );
-    await execFileAsync(ffmpegPath, args, { maxBuffer: 8 * 1024 * 1024 });
-    await repairHlsPlaylists(outputDir);
     return probe;
   }
 

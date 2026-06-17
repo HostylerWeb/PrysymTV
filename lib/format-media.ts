@@ -1,3 +1,5 @@
+import { userAvatarUrl } from "@/lib/user-avatar";
+
 const DEFAULT_PLACEHOLDER_THUMB = "/placeholder.svg";
 
 function placeholderThumb(): string {
@@ -33,6 +35,19 @@ export function videoThumbnail(url: string | null | undefined): string {
   const trimmed = url?.trim();
   if (trimmed) return trimmed;
   return placeholderThumb();
+}
+
+/** Poster for live cards: saved thumb → creator avatar → placeholder. */
+export function liveStreamPosterUrl(item: {
+  thumbnailUrl?: string | null;
+  streamerAvatar?: string | null;
+  streamerSlug?: string | null;
+  streamer?: string | null;
+}): string {
+  const thumb = item.thumbnailUrl?.trim();
+  if (thumb) return thumb;
+  const seed = item.streamerSlug ?? item.streamer ?? "live";
+  return userAvatarUrl(item.streamerAvatar, seed);
 }
 
 export function historyProgressPercent(

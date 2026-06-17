@@ -8,6 +8,6 @@ import { StreamsService } from './streams.service';
   imports: [AuthModule],
   controllers: [StreamsController],
   providers: [StreamsService, StreamsGateway],
-  exports: [StreamsService],
+  exports: [StreamsService, StreamsGateway],
 })
 export class StreamsModule {}

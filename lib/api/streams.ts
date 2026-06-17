@@ -15,7 +15,15 @@ export type StreamDetail = {
   startedAgo: string;
   description?: string | null;
   hlsPlaybackUrl?: string | null;
+  webrtcPlaybackUrl?: string | null;
   creatorId: string;
+  studio?: StreamStudioInfo;
+};
+
+export type StreamStudioInfo = {
+  streamKey: string;
+  rtmpUrl: string;
+  whipPublishUrl: string;
 };
 
 export type StreamInitResponse = {
@@ -27,7 +35,7 @@ export type StreamInitResponse = {
 
 export function fetchStream(idOrSlug: string) {
   return apiRequest<StreamDetail>(`/streams/${encodeURIComponent(idOrSlug)}`, {
-    auth: false,
+    auth: true,
   });
 }
 
@@ -40,6 +48,23 @@ export function initStream(title: string, category?: string) {
     method: "POST",
     body: { title, ...(category ? { category } : {}) },
   });
+}
+
+export function fetchStreamIngestHealth() {
+  return apiRequest<{
+    rtmpUrl: string;
+    hlsPublicUrl: string;
+    rtmpReachable: boolean;
+    mediamtxRequired: boolean;
+    hint: string;
+  }>("/streams/ingest/health", { auth: false });
+}
+
+export function endStream(streamId: string) {
+  return apiRequest<{ success: boolean; status: string }>(
+    `/streams/${encodeURIComponent(streamId)}/end`,
+    { method: "POST" },
+  );
 }
 
 export function getRtmpIngestUrl(): string {

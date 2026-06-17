@@ -184,6 +184,35 @@ export class VideosService {
     };
   }
 
+  async updateOwned(
+    userId: string,
+    id: string,
+    body: { title?: string; description?: string },
+  ) {
+    const video = await this.prisma.video.findUnique({ where: { id } });
+    if (!video) throw new NotFoundException('Video not found');
+    if (video.creatorId !== userId) {
+      throw new ForbiddenException('You can only edit your own uploads');
+    }
+
+    return this.prisma.video.update({
+      where: { id },
+      data: {
+        ...(body.title !== undefined ? { title: body.title.trim() } : {}),
+        ...(body.description !== undefined
+          ? { description: body.description.trim() || null }
+          : {}),
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        type: true,
+        status: true,
+      },
+    });
+  }
+
   async getOne(id: string, viewerId?: string) {
     const video = await this.prisma.video.findUnique({
       where: { id },
@@ -352,16 +381,53 @@ export class VideosService {
         parent.userId,
         userId,
         videoId,
+        comment.id,
+        video.type,
       );
     } else {
       void this.notifications.notifyCommentOnVideo(
         video.creatorId,
         userId,
         videoId,
+        comment.id,
+        video.type,
       );
     }
 
     return comment;
+  }
+
+  async deleteComment(userId: string, commentId: string) {
+    const comment = await this.prisma.comment.findUnique({
+      where: { id: commentId },
+      include: { replies: { select: { id: true } } },
+    });
+    if (!comment) throw new NotFoundException('Comment not found');
+    if (comment.userId !== userId) {
+      throw new ForbiddenException('You can only delete your own comments');
+    }
+
+    const idsToDelete = comment.parentId
+      ? [commentId]
+      : [commentId, ...comment.replies.map((r) => r.id)];
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.like.deleteMany({
+        where: {
+          targetType: LikeTargetType.comment,
+          targetId: { in: idsToDelete },
+        },
+      });
+      await tx.comment.deleteMany({
+        where: { id: { in: idsToDelete } },
+      });
+      await tx.video.update({
+        where: { id: comment.videoId },
+        data: { commentsCount: { decrement: idsToDelete.length } },
+      });
+    });
+
+    return { success: true, deletedIds: idsToDelete };
   }
 
   async shortsFeed(cursor?: string, limit = 20, viewerId?: string) {
@@ -554,6 +620,7 @@ export class VideosService {
     id: string;
     title: string;
     thumbnailUrl: string | null;
+    hlsPlaybackUrl: string | null;
     viewerCount: number;
     category: string | null;
     vertical: ContentVertical | null;
@@ -569,7 +636,8 @@ export class VideosService {
       id: s.id,
       slug: s.creator.username,
       title: s.title,
-      thumbnailUrl: s.thumbnailUrl,
+      thumbnailUrl: s.thumbnailUrl ?? s.creator.avatarUrl,
+      hlsPlaybackUrl: s.hlsPlaybackUrl,
       viewerCount: s.viewerCount,
       category: s.category,
       vertical: s.vertical,
@@ -668,7 +736,12 @@ export class VideosService {
         data: { likesCount: { increment: 1 } },
       });
     });
-    void this.notifications.notifyVideoLike(video.creatorId, userId, videoId);
+    void this.notifications.notifyVideoLike(
+      video.creatorId,
+      userId,
+      videoId,
+      video.type,
+    );
     return { liked: true, disliked: false };
   }
 
@@ -748,6 +821,7 @@ export class VideosService {
   async toggleCommentLike(userId: string, commentId: string) {
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
+      include: { video: { select: { type: true } } },
     });
     if (!comment) throw new NotFoundException('Comment not found');
 
@@ -797,6 +871,8 @@ export class VideosService {
       comment.userId,
       userId,
       comment.videoId,
+      commentId,
+      comment.video.type,
     );
     return { liked: true, likesCount: comment.likesCount + 1 };
   }

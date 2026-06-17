@@ -9,6 +9,24 @@ export type StreamChatMessage = {
   message: string;
   color: string;
   createdAt: string;
+  type?: "message" | "gift";
+  giftId?: string;
+  giftName?: string;
+  giftIcon?: string;
+  coins?: number;
+};
+
+export type StreamGiftEvent = {
+  id: string;
+  streamId: string;
+  userId: string;
+  user: string;
+  giftId: string;
+  giftName: string;
+  giftIcon: string;
+  coins: number;
+  color: string;
+  createdAt: string;
 };
 
 export function connectStreamChat(streamId: string) {

@@ -49,7 +49,9 @@ export default function Home() {
       slug: string
       title: string
       thumbnail: string
+      hlsPlaybackUrl: string | null
       streamer: string
+      streamerSlug: string
       viewers: string
       category: string
       avatar: string | null
@@ -104,7 +106,9 @@ export default function Home() {
           slug: feed.featuredLive.slug,
           title: feed.featuredLive.title,
           thumbnailUrl: feed.featuredLive.thumbnailUrl,
+          hlsPlaybackUrl: feed.featuredLive.hlsPlaybackUrl,
           streamer: feed.featuredLive.streamer,
+          streamerAvatar: feed.featuredLive.streamerAvatar,
           viewerCount: feed.featuredLive.viewerCount,
         })
       }
@@ -114,7 +118,9 @@ export default function Home() {
           slug: s.slug,
           title: s.title,
           thumbnail: s.thumbnailUrl ?? "",
+          hlsPlaybackUrl: s.hlsPlaybackUrl,
           streamer: s.streamer,
+          streamerSlug: s.streamerSlug,
           viewers: String(s.viewers),
           category: s.category ?? "Live",
           avatar: s.streamerAvatar,

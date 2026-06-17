@@ -2,6 +2,7 @@
 
 import { use, useState } from "react"
 import Link from "next/link"
+import { AdminPodcastEpisodeEditSheet } from "@/components/admin/admin-podcast-episode-edit-sheet"
 import { AdminDeleteButton } from "@/components/admin/admin-confirm-dialog"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminPagination } from "@/components/admin/admin-pagination"
@@ -25,6 +26,7 @@ export default function AdminPodcastEpisodesPage({
 }) {
   const { showId } = use(params)
   const [page, setPage] = useState(1)
+  const [editEpisodeId, setEditEpisodeId] = useState<string | null>(null)
 
   const { data, loading, error, reload } = useAdminQuery(
     () => fetchAdminPodcastEpisodes(showId, { page, limit: 20 }),
@@ -82,8 +84,18 @@ export default function AdminPodcastEpisodesPage({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={() => setEditEpisodeId(ep.id)}
+                    >
+                      Edit
+                    </Button>
                     <Button asChild size="sm" variant="outline" className="rounded-full">
-                      <Link href={ep.siteHref}>View</Link>
+                      <Link href={ep.siteHref} target="_blank" rel="noopener noreferrer">
+                        View
+                      </Link>
                     </Button>
                     <AdminDeleteButton
                       itemLabel={ep.title}
@@ -104,6 +116,15 @@ export default function AdminPodcastEpisodesPage({
         pageSize={meta.limit}
         onPageChange={setPage}
       />
+
+      {editEpisodeId && (
+        <AdminPodcastEpisodeEditSheet
+          episodeId={editEpisodeId}
+          isOpen
+          onClose={() => setEditEpisodeId(null)}
+          onSuccess={() => void reload()}
+        />
+      )}
     </>
   )
 }

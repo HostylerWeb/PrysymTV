@@ -6,11 +6,13 @@ import {
   Param,
   Post,
   Query,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { StreamsService } from './streams.service';
@@ -37,6 +39,11 @@ export class StreamsController {
     return this.streams.listLive();
   }
 
+  @Get('ingest/health')
+  ingestHealth() {
+    return this.streams.ingestHealth();
+  }
+
   /** MediaMTX external HTTP authentication (no JWT). */
   @Post('mediamtx/auth')
   @HttpCode(200)
@@ -61,8 +68,19 @@ export class StreamsController {
     return this.streams.mediamtxDone(path ?? '');
   }
 
+  @Post(':id/end')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
+  endStream(@CurrentUser() user: AuthUserPayload, @Param('id') id: string) {
+    return this.streams.endStream(id, user.id);
+  }
+
   @Get(':id')
-  getOne(@Param('id') id: string) {
-    return this.streams.getOne(id);
+  @UseGuards(OptionalJwtAuthGuard)
+  getOne(
+    @Param('id') id: string,
+    @Req() req: Request & { user?: AuthUserPayload | null },
+  ) {
+    return this.streams.getOne(id, req.user?.id);
   }
 }

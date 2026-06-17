@@ -54,7 +54,8 @@ export class FeedService {
         id: s.id,
         slug: s.creator.username,
         title: s.title,
-        thumbnailUrl: s.thumbnailUrl,
+        thumbnailUrl: s.thumbnailUrl ?? s.creator.avatarUrl,
+        hlsPlaybackUrl: s.hlsPlaybackUrl,
         streamer: s.creator.displayName ?? s.creator.username,
         streamerSlug: s.creator.username,
         streamerAvatar: s.creator.avatarUrl,
@@ -67,8 +68,11 @@ export class FeedService {
             id: liveStreams[0].id,
             slug: liveStreams[0].creator.username,
             title: liveStreams[0].title,
-            thumbnailUrl: liveStreams[0].thumbnailUrl,
+            thumbnailUrl:
+              liveStreams[0].thumbnailUrl ?? liveStreams[0].creator.avatarUrl,
+            hlsPlaybackUrl: liveStreams[0].hlsPlaybackUrl,
             streamer: liveStreams[0].creator.displayName ?? liveStreams[0].creator.username,
+            streamerAvatar: liveStreams[0].creator.avatarUrl,
             viewerCount: liveStreams[0].viewerCount,
           }
         : null,

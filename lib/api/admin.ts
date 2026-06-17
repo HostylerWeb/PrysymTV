@@ -81,19 +81,50 @@ export type AdminUserListItem = {
 
 export type AdminUserDetail = AdminUserListItem & {
   bio: string | null;
-  counts: { videos: number; reportsFiled: number };
+  avatarUrl: string | null;
+  premiumTier: string;
+  socialLinks: Array<{ label: string; url: string }>;
+  counts: {
+    videos: number;
+    followers: number;
+    following: number;
+    streams: number;
+    podcastShows: number;
+    verticalSeries: number;
+    reportsFiled: number;
+  };
+  verticalSeries: Array<{
+    slug: string;
+    title: string;
+    status: string;
+    episodeCount: number;
+    siteHref: string;
+  }>;
   content: Array<{
     type: string;
     title: string;
     id: string;
     views: number;
     status: string;
+    siteHref: string;
   }>;
+  payoutProfile: {
+    method: string;
+    details: Record<string, string>;
+    updatedAt: string;
+  } | null;
   financial: {
     balanceUsd: number;
     lifetimeEarningsUsd: number;
     coins: number;
-    payouts: Array<{ id: string; amountUsd: number; status: string; date: string }>;
+    payouts: Array<{
+      id: string;
+      amountUsd: number;
+      method: string;
+      status: string;
+      payoutDetails: Record<string, string> | null;
+      date: string;
+    }>;
     giftsReceived: Array<{ gift: string; from: string; coins: number; date: string }>;
   };
   reports: {
@@ -147,6 +178,7 @@ export type AdminPayout = {
   creatorId: string;
   amountUsd: number;
   method: string;
+  payoutDetails: Record<string, string> | null;
   status: string;
   taxStatus: string;
   createdAt: string;
@@ -810,8 +842,93 @@ export function fetchAdminPodcastEpisodes(
   }>(`/admin/content/podcast-shows/${showId}/episodes${qs(params ?? {})}`);
 }
 
+export type AdminVerticalSeriesDetail = {
+  slug: string;
+  title: string;
+  tagline: string;
+  description: string;
+  genre: string;
+  status: string;
+  creator: string;
+  siteHref: string;
+};
+
+export type AdminVerticalEpisodeDetail = {
+  id: string;
+  seriesSlug: string;
+  seriesTitle: string;
+  episodeNumber: number;
+  title: string;
+  description: string;
+  cliffhanger: string;
+  status: string;
+  siteHref: string;
+};
+
+export type AdminPodcastEpisodeDetail = {
+  id: string;
+  showId: string;
+  showTitle: string;
+  title: string;
+  description: string;
+  status: string;
+  siteHref: string;
+};
+
+export function fetchAdminVerticalSeriesDetail(slug: string) {
+  return apiRequest<AdminVerticalSeriesDetail>(`/admin/vertical-series/${slug}`);
+}
+
+export function updateAdminVerticalSeries(
+  slug: string,
+  body: {
+    title?: string;
+    tagline?: string;
+    description?: string;
+    genre?: string;
+  },
+) {
+  return apiRequest<AdminVerticalSeriesDetail>(`/admin/vertical-series/${slug}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchAdminVerticalEpisode(id: string) {
+  return apiRequest<AdminVerticalEpisodeDetail>(`/admin/vertical-episodes/${id}`);
+}
+
+export function updateAdminVerticalEpisode(
+  id: string,
+  body: {
+    episodeNumber?: number;
+    title?: string;
+    description?: string;
+    cliffhanger?: string;
+  },
+) {
+  return apiRequest<AdminVerticalEpisodeDetail>(`/admin/vertical-episodes/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
 export function deleteAdminVerticalEpisode(id: string) {
   return apiRequest(`/admin/vertical-episodes/${id}`, { method: "DELETE" });
+}
+
+export function fetchAdminPodcastEpisode(id: string) {
+  return apiRequest<AdminPodcastEpisodeDetail>(`/admin/podcast-episodes/${id}`);
+}
+
+export function updateAdminPodcastEpisode(
+  id: string,
+  body: { title?: string; description?: string },
+) {
+  return apiRequest<AdminPodcastEpisodeDetail>(`/admin/podcast-episodes/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
 }
 
 export function deleteAdminPodcastEpisode(id: string) {

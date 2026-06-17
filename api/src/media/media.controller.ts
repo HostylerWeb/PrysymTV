@@ -118,6 +118,57 @@ export class MediaController {
     };
   }
 
+  @Post('podcast-cover-upload')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+    }),
+  )
+  async podcastCoverUpload(
+    @CurrentUser() user: AuthUserPayload,
+    @Body('objectKey') objectKey: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (this.storage.getSettings().driver !== 'local') {
+      throw new ForbiddenException(
+        'Multipart podcast cover upload is only available when STORAGE_DRIVER=local',
+      );
+    }
+    if (!file?.buffer?.length || !objectKey?.trim()) {
+      throw new ForbiddenException('Missing file or objectKey');
+    }
+
+    const key = objectKey.replace(/^\/+/, '');
+    const showId = key.match(
+      /^uploads\/podcasts\/shows\/([0-9a-f-]{36})\/cover\./i,
+    )?.[1];
+    if (!showId) {
+      throw new ForbiddenException('Invalid podcast cover object key');
+    }
+
+    const show = await this.prisma.podcastShow.findUnique({
+      where: { id: showId },
+    });
+    if (!show) throw new NotFoundException('Show not found');
+    if (show.creatorId !== user.id) {
+      throw new ForbiddenException('Not your show');
+    }
+
+    const max = 10 * 1024 * 1024;
+    if (file.size > max) {
+      throw new ForbiddenException('Cover image exceeds 10 MB limit');
+    }
+
+    const abs = this.storage.getLocalAbsolutePath(key);
+    await writeFile(abs, file.buffer);
+    return {
+      success: true,
+      objectKey: key,
+      publicUrl: this.storage.getPublicUrl(key),
+    };
+  }
+
   @Post('podcast-upload')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(

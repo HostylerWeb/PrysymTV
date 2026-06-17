@@ -309,11 +309,13 @@ function VideosBrowseContent() {
                       id={stream.id}
                       slug={stream.slug}
                       title={stream.title}
-                      thumbnail={videoThumbnail(stream.thumbnailUrl)}
+                      thumbnail={stream.thumbnailUrl ?? undefined}
+                      hlsPlaybackUrl={stream.hlsPlaybackUrl}
                       streamer={stream.streamer}
+                      streamerSlug={stream.streamerSlug}
                       viewers={formatViewCount(stream.viewerCount)}
                       category={stream.category ?? stream.vertical ?? "Live"}
-                      avatar={userAvatarUrl(stream.streamerAvatar, stream.streamer)}
+                      avatar={stream.streamerAvatar}
                     />
                   ))}
                 </div>
@@ -327,9 +329,12 @@ function VideosBrowseContent() {
                     key={stream.id}
                     id={stream.slug}
                     title={stream.title}
-                    thumbnail={videoThumbnail(stream.thumbnailUrl)}
+                    thumbnail={stream.thumbnailUrl ?? ""}
+                    hlsPlaybackUrl={stream.hlsPlaybackUrl}
+                    streamerSlug={stream.streamerSlug}
+                    streamerAvatar={stream.streamerAvatar}
                     channel={stream.streamer}
-                    channelAvatar={userAvatarUrl(stream.streamerAvatar, stream.streamer)}
+                    channelAvatar={userAvatarUrl(stream.streamerAvatar, stream.streamerSlug)}
                     isLive
                     liveViewers={`${formatViewCount(stream.viewerCount)} watching`}
                     type="live"

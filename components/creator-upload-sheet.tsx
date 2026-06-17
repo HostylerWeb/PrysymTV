@@ -14,6 +14,7 @@ import {
   createPodcastShow,
   fetchMyPodcastShows,
   uploadPodcastEpisodeFlow,
+  uploadPodcastShowCover,
   type MyPodcastShow,
 } from "@/lib/api/podcasts-admin"
 import {
@@ -48,8 +49,8 @@ const KIND_META: Record<
   podcast: {
     title: "Podcast Episode",
     icon: Headphones,
-    accept: "audio/*",
-    hint: "Pick or create a show, then upload audio",
+    accept: "audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac,.webm",
+    hint: "Audio episode (MP3, M4A, WAV…). Optional cover when creating a new show.",
   },
 }
 
@@ -121,6 +122,7 @@ export function CreatorUploadSheet({
   const [newShowTitle, setNewShowTitle] = useState("")
   const [newShowDescription, setNewShowDescription] = useState("")
   const [newShowCategory, setNewShowCategory] = useState("General")
+  const [newShowCoverFile, setNewShowCoverFile] = useState<File | null>(null)
   const [podcastMode, setPodcastMode] = useState<"existing" | "new">("existing")
 
   const [playlists, setPlaylists] = useState<PlaylistSummary[]>([])
@@ -253,6 +255,9 @@ export function CreatorUploadSheet({
             category: newShowCategory,
           })
           targetShowId = created.id
+          if (newShowCoverFile) {
+            await uploadPodcastShowCover(targetShowId, newShowCoverFile)
+          }
         }
         const { episodeId } = await uploadPodcastEpisodeFlow(
           targetShowId,
@@ -410,6 +415,17 @@ export function CreatorUploadSheet({
                           </option>
                         ))}
                       </select>
+                      <label className="block text-xs text-muted-foreground">
+                        Show cover (optional)
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="mt-1 block w-full text-sm"
+                          onChange={(e) =>
+                            setNewShowCoverFile(e.target.files?.[0] ?? null)
+                          }
+                        />
+                      </label>
                     </>
                   )}
                 </div>

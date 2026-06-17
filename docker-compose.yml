@@ -33,12 +33,17 @@ services:
       retries: 10
 
   mediamtx:
-    image: bluenviron/mediamtx:latest
+    build:
+      context: ./infra
+      dockerfile: Dockerfile.mediamtx
+    image: prysymtv-mediamtx:local
     container_name: prysymtv-mediamtx
     restart: unless-stopped
     ports:
       - "1935:1935"
       - "8888:8888"
+      - "8889:8889"
+      - "9997:9997"
     volumes:
       - ./infra/mediamtx.yml:/mediamtx.yml:ro
     command: ["/mediamtx.yml"]

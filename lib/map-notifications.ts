@@ -1,5 +1,9 @@
 import { formatDistanceToNow } from "date-fns";
 import { userAvatarUrl } from "@/lib/user-avatar";
+import {
+  buildNotificationActionUrl,
+  type NotificationMetadata,
+} from "@/lib/notification-target";
 
 export type ApiNotification = {
   id: string;
@@ -7,6 +11,7 @@ export type ApiNotification = {
   message: string;
   isRead: boolean;
   referenceId: string | null;
+  metadata?: NotificationMetadata | null;
   createdAt: string;
   actor: {
     id: string;
@@ -26,26 +31,6 @@ export type NotificationListItem = {
   avatar: string;
   actionUrl?: string;
 };
-
-function notificationHref(n: ApiNotification): string | undefined {
-  if (!n.referenceId) return undefined;
-  switch (n.type) {
-    case "follow":
-      return n.actor
-        ? `/creator/${n.actor.username.replace(/^@/, "")}`
-        : undefined;
-    case "like":
-    case "comment":
-    case "upload":
-      return `/watch/${n.referenceId}`;
-    case "live":
-      return `/live/${n.referenceId}`;
-    case "gift":
-      return `/live/${n.referenceId}`;
-    default:
-      return undefined;
-  }
-}
 
 export function mapNotificationToListItem(n: ApiNotification): NotificationListItem {
   const actorName =
@@ -67,6 +52,11 @@ export function mapNotificationToListItem(n: ApiNotification): NotificationListI
     time: formatDistanceToNow(new Date(n.createdAt), { addSuffix: true }),
     isRead: n.isRead,
     avatar,
-    actionUrl: notificationHref(n),
+    actionUrl: buildNotificationActionUrl(
+      n.type,
+      n.referenceId,
+      n.metadata,
+      n.actor?.username,
+    ),
   };
 }

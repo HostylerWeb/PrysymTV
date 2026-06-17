@@ -97,6 +97,7 @@ export default function AdminPayoutsPage() {
               <TableHead>Creator</TableHead>
               <TableHead>Amount</TableHead>
               <TableHead>Method</TableHead>
+              <TableHead>Pay to</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Requested</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -108,6 +109,22 @@ export default function AdminPayoutsPage() {
                 <TableCell>{p.creator}</TableCell>
                 <TableCell>${p.amountUsd.toLocaleString()}</TableCell>
                 <TableCell className="capitalize">{p.method.replace(/_/g, " ")}</TableCell>
+                <TableCell className="text-xs max-w-[220px]">
+                  {p.payoutDetails ? (
+                    <ul className="space-y-0.5">
+                      {Object.entries(p.payoutDetails).map(([key, value]) => (
+                        <li key={key} className="truncate">
+                          <span className="text-muted-foreground capitalize">
+                            {key.replace(/([A-Z])/g, " $1")}:
+                          </span>{" "}
+                          {value}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
                 <TableCell>
                   <AdminStatusPill status={p.status} />
                 </TableCell>

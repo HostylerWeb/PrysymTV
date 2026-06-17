@@ -136,6 +136,7 @@ export class PodcastsService {
           select: {
             id: true,
             title: true,
+            description: true,
             status: true,
             durationSeconds: true,
             publishedAt: true,
@@ -159,6 +160,74 @@ export class PodcastsService {
       },
     });
     return show;
+  }
+
+  async initShowCoverUpload(
+    userId: string,
+    showId: string,
+    mimeType: string,
+    fileName?: string,
+  ) {
+    const show = await this.prisma.podcastShow.findUnique({
+      where: { id: showId },
+    });
+    if (!show) throw new NotFoundException('Show not found');
+    if (show.creatorId !== userId) {
+      throw new ForbiddenException('Not your show');
+    }
+
+    const objectKey = this.storage.buildPodcastShowCoverKey(showId, fileName);
+    const target = await this.storage.createUploadTargetForKey(
+      objectKey,
+      mimeType,
+    );
+    if (target.uploadMethod === 'POST') {
+      const base = this.storage.getSettings().apiPublicUrl.replace(/\/$/, '');
+      target.uploadUrl = `${base}/media/podcast-cover-upload`;
+    }
+    return {
+      showId,
+      objectKey: target.objectKey,
+      uploadUrl: target.uploadUrl,
+      uploadMethod: target.uploadMethod,
+      uploadHeaders: target.uploadHeaders,
+      expiresIn: target.expiresIn,
+      publicUrl: this.storage.getPublicUrl(objectKey),
+    };
+  }
+
+  async completeShowCoverUpload(
+    userId: string,
+    showId: string,
+    objectKey: string,
+  ) {
+    const show = await this.prisma.podcastShow.findUnique({
+      where: { id: showId },
+    });
+    if (!show) throw new NotFoundException('Show not found');
+    if (show.creatorId !== userId) {
+      throw new ForbiddenException('Not your show');
+    }
+
+    const key = objectKey.replace(/^\/+/, '');
+    const expectedPrefix = `uploads/podcasts/shows/${showId}/cover`;
+    if (!key.startsWith(expectedPrefix)) {
+      throw new BadRequestException('Invalid cover object key');
+    }
+
+    const exists = await this.storage.objectExists(key);
+    if (!exists) {
+      throw new BadRequestException(
+        'Cover image not found. Finish uploading the image first.',
+      );
+    }
+
+    const coverUrl = this.storage.getPublicUrl(key);
+    await this.prisma.podcastShow.update({
+      where: { id: showId },
+      data: { coverUrl },
+    });
+    return { showId, coverUrl };
   }
 
   async createEpisode(
@@ -188,6 +257,29 @@ export class PodcastsService {
     return episode;
   }
 
+  async updateEpisode(
+    userId: string,
+    episodeId: string,
+    body: { title?: string; description?: string },
+  ) {
+    await this.assertEpisodeOwner(userId, episodeId);
+    return this.prisma.podcastEpisode.update({
+      where: { id: episodeId },
+      data: {
+        ...(body.title !== undefined ? { title: body.title.trim() } : {}),
+        ...(body.description !== undefined
+          ? { description: body.description.trim() || null }
+          : {}),
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+      },
+    });
+  }
+
   async uploadInit(
     userId: string,
     episodeId: string,
@@ -199,14 +291,10 @@ export class PodcastsService {
       episode.id,
       dto.fileName,
     );
-    const target = await this.storage.createUploadTargetForKey(
+    const target = await this.storage.createAudioUploadTargetForKey(
       objectKey,
       dto.mimeType,
     );
-    if (target.uploadMethod === 'POST') {
-      const base = this.storage.getSettings().apiPublicUrl.replace(/\/$/, '');
-      target.uploadUrl = `${base}/media/podcast-upload`;
-    }
     return {
       episodeId: episode.id,
       objectKey: target.objectKey,

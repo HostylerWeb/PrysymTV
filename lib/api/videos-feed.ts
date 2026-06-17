@@ -64,6 +64,7 @@ export type LiveBrowseItem = {
   slug: string;
   title: string;
   thumbnailUrl: string | null;
+  hlsPlaybackUrl: string | null;
   viewerCount: number;
   category: string | null;
   vertical: string | null;

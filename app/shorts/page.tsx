@@ -32,6 +32,7 @@ import { ShareSheet } from "@/components/share-sheet"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
 import {
   fetchShortsFeed,
+  fetchVideo,
   recordVideoView,
   toggleVideoLike,
   toggleVideoSave,
@@ -41,6 +42,7 @@ import { saveWatchProgress } from "@/lib/api/history"
 import {
   fetchVideoComments,
   normalizeVideoComment,
+  deleteVideoComment,
   postVideoComment,
   toggleCommentLike as apiToggleCommentLike,
   type VideoComment,
@@ -92,6 +94,27 @@ function mapShortFromApi(card: ShortVideoCard): ShortItem {
     saves: "0",
     music: `Original Sound - ${card.channelSlug}`,
     isFollowing: false,
+  }
+}
+
+function mapShortFromVideoDetail(
+  v: Awaited<ReturnType<typeof fetchVideo>>,
+): ShortItem {
+  const slug = v.creator.username
+  return {
+    id: v.id,
+    creatorId: v.creator.id,
+    videoUrl: v.playbackUrl ?? v.videoUrl ?? v.hlsMasterUrl ?? "",
+    username: `@${slug}`,
+    userSlug: slug,
+    userAvatar: userAvatarUrl(v.creator.avatarUrl, slug),
+    caption: v.title,
+    likes: formatViewCount(v.likesCount ?? 0),
+    comments: formatViewCount(v.commentsCount ?? 0),
+    shares: "0",
+    saves: "0",
+    music: `Original Sound - ${slug}`,
+    isFollowing: v.isFollowing ?? false,
   }
 }
 
@@ -336,6 +359,8 @@ function ShortsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const startShortId = searchParams.get("start")
+  const openCommentsFromUrl = searchParams.get("comments") === "1"
+  const highlightCommentId = searchParams.get("comment")
   const createFlow = useCreateFlow()
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const uploadShort = () =>
@@ -378,17 +403,68 @@ function ShortsPageContent() {
   const [likedCommentIds, setLikedCommentIds] = useState<Set<string>>(new Set())
   const containerRef = useRef<HTMLDivElement>(null)
 
+  const [deepLinkReady, setDeepLinkReady] = useState(false)
+
   useEffect(() => {
-    if (!startShortId || !feedLoaded || shortsData.length === 0) return
+    if (!startShortId || !feedLoaded) return
+    setDeepLinkReady(false)
+    let cancelled = false
+
+    const scrollToIndex = (index: number) => {
+      setActiveIndex(index)
+      requestAnimationFrame(() => {
+        if (containerRef.current) {
+          containerRef.current.scrollTop = index * containerRef.current.clientHeight
+        }
+        setDeepLinkReady(true)
+      })
+    }
+
     const index = shortsData.findIndex((s) => s.id === startShortId)
-    if (index < 0) return
-    setActiveIndex(index)
-    requestAnimationFrame(() => {
-      if (containerRef.current) {
-        containerRef.current.scrollTop = index * containerRef.current.clientHeight
-      }
-    })
-  }, [startShortId, feedLoaded, shortsData])
+    if (index >= 0) {
+      scrollToIndex(index)
+      return
+    }
+
+    void fetchVideo(startShortId)
+      .then((v) => {
+        if (cancelled) return
+        if (v.type === "movie") {
+          router.replace(`/movie/${v.id}`)
+          return
+        }
+        if (v.type !== "short") {
+          const qs = highlightCommentId
+            ? `?comments=1&comment=${encodeURIComponent(highlightCommentId)}`
+            : openCommentsFromUrl
+              ? "?comments=1"
+              : ""
+          router.replace(`/watch/${v.id}${qs}`)
+          return
+        }
+        const item = mapShortFromVideoDetail(v)
+        setShortsData((prev) => [item, ...prev.filter((s) => s.id !== item.id)])
+        scrollToIndex(0)
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [startShortId, feedLoaded, shortsData, router, highlightCommentId, openCommentsFromUrl])
+
+  useEffect(() => {
+    if (!highlightCommentId || !showComments || commentsLoading) return
+    const t = window.setTimeout(() => {
+      const el = document.getElementById(`comment-${highlightCommentId}`)
+      el?.scrollIntoView({ behavior: "smooth", block: "center" })
+      el?.classList.add("ring-2", "ring-primary", "rounded-lg")
+      window.setTimeout(() => {
+        el?.classList.remove("ring-2", "ring-primary", "rounded-lg")
+      }, 2500)
+    }, 150)
+    return () => window.clearTimeout(t)
+  }, [highlightCommentId, showComments, commentsLoading, comments])
 
   const [activeTab, setActiveTab] = useState("shorts")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -607,6 +683,37 @@ function ShortsPageContent() {
       .finally(() => setCommentsLoading(false))
   }
 
+  useEffect(() => {
+    if (!startShortId || !deepLinkReady || !openCommentsFromUrl) return
+    openComments(startShortId)
+  }, [startShortId, deepLinkReady, openCommentsFromUrl])
+
+  const removeComment = (shortId: string, commentId: string) => {
+    if (!window.confirm("Delete this comment?")) return
+    void deleteVideoComment(commentId)
+      .then((res) => {
+        const removed = new Set(res.deletedIds)
+        setComments((prev) => {
+          const list = prev[shortId] ?? []
+          return {
+            ...prev,
+            [shortId]: list
+              .filter((c) => !removed.has(c.id))
+              .map((c) => ({
+                ...c,
+                replies: (c.replies ?? []).filter((r) => !removed.has(r.id)),
+              })),
+          }
+        })
+        setLikedCommentIds((prev) => {
+          const next = new Set(prev)
+          for (const id of res.deletedIds) next.delete(id)
+          return next
+        })
+      })
+      .catch(() => {})
+  }
+
   const toggleCommentLike = (commentId: string) => {
     if (!isAuthenticated) return setIsAuthModalOpen(true)
     void apiToggleCommentLike(commentId)
@@ -808,7 +915,7 @@ function ShortsPageContent() {
                 (comments[activeShortForComments] || []).map((comment) => {
                   const commentLiked = likedCommentIds.has(comment.id)
                   return (
-                  <div key={comment.id} className="flex flex-col gap-2">
+                  <div key={comment.id} id={`comment-${comment.id}`} className="flex flex-col gap-2 scroll-mt-4">
                     <div className="flex gap-3">
                       <img
                         src={userAvatarUrl(comment.user.avatarUrl, comment.user.username)}
@@ -833,6 +940,15 @@ function ShortsPageContent() {
                             if (!isAuthenticated) return setIsAuthModalOpen(true);
                             setReplyingTo({ id: comment.id, user: commentAuthorLabel(comment) });
                           }}>Reply</button>
+                          {user?.id === comment.user.id && activeShortForComments && (
+                            <button
+                              type="button"
+                              className="text-destructive"
+                              onClick={() => removeComment(activeShortForComments, comment.id)}
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -843,7 +959,7 @@ function ShortsPageContent() {
                         {comment.replies?.map((reply) => {
                           const replyLiked = likedCommentIds.has(reply.id)
                           return (
-                          <div key={reply.id} className="flex gap-3">
+                          <div key={reply.id} id={`comment-${reply.id}`} className="flex gap-3 scroll-mt-4">
                             <img
                               src={userAvatarUrl(reply.user.avatarUrl, reply.user.username)}
                               alt={commentAuthorLabel(reply)}
@@ -863,6 +979,15 @@ function ShortsPageContent() {
                                   <Heart className={cn("w-3 h-3", replyLiked && "fill-primary")} />
                                   {reply.likesCount > 0 ? reply.likesCount : null}
                                 </button>
+                                {user?.id === reply.user.id && activeShortForComments && (
+                                  <button
+                                    type="button"
+                                    className="text-destructive"
+                                    onClick={() => removeComment(activeShortForComments, reply.id)}
+                                  >
+                                    Delete
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>

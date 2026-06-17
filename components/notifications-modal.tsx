@@ -112,13 +112,6 @@ export function NotificationsModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const syncUnread = useCallback(
-    (items: NotificationListItem[]) => {
-      onUnreadChange?.(items.filter((n) => !n.isRead).length)
-    },
-    [onUnreadChange],
-  )
-
   const load = useCallback(async () => {
     if (!isAuthenticated) return
     setLoading(true)
@@ -127,19 +120,22 @@ export function NotificationsModal({
       const res = await fetchNotifications(1, 50)
       const mapped = res.items.map(mapNotificationToListItem)
       setNotificationList(mapped)
-      syncUnread(mapped)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not load notifications")
       setNotificationList([])
-      syncUnread([])
     } finally {
       setLoading(false)
     }
-  }, [isAuthenticated, syncUnread])
+  }, [isAuthenticated])
 
   useEffect(() => {
     if (isOpen && isAuthenticated) void load()
   }, [isOpen, isAuthenticated, load])
+
+  useEffect(() => {
+    if (!isOpen) return
+    onUnreadChange?.(notificationList.filter((n) => !n.isRead).length)
+  }, [notificationList, onUnreadChange, isOpen])
 
   const filteredNotifications =
     activeFilter === "unread"
@@ -149,11 +145,9 @@ export function NotificationsModal({
   const unreadCount = notificationList.filter((n) => !n.isRead).length
 
   const markOneRead = async (id: string) => {
-    setNotificationList((list) => {
-      const next = list.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-      syncUnread(next)
-      return next
-    })
+    setNotificationList((list) =>
+      list.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
+    )
     try {
       await markNotificationRead(id)
     } catch {
@@ -162,11 +156,7 @@ export function NotificationsModal({
   }
 
   const markAllAsRead = async () => {
-    setNotificationList((list) => {
-      const next = list.map((n) => ({ ...n, isRead: true }))
-      syncUnread(next)
-      return next
-    })
+    setNotificationList((list) => list.map((n) => ({ ...n, isRead: true })))
     try {
       await markAllNotificationsRead()
     } catch {
@@ -178,7 +168,6 @@ export function NotificationsModal({
     try {
       await clearAllNotifications()
       setNotificationList([])
-      syncUnread([])
     } catch {
       /* keep list */
     }

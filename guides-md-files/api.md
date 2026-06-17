@@ -64,12 +64,14 @@
 | `GET` | `/videos/:id/comments` | ✅ Optional JWT → each comment/reply includes `liked` |
 | `POST` | `/videos/:id/comments` | ✅ Bearer; `{ body, parentId? }` |
 | `POST` | `/videos/comments/:commentId/like` | ✅ Toggle comment like |
+| `DELETE` | `/videos/comments/:commentId` | ✅ Author deletes own comment |
 | `GET` | `/videos/:id` | ✅ Optional JWT → `liked`, `saved`, `disliked`, `isFollowing`, `dislikesCount` |
 | `POST` | `/videos/:id/view` | ✅ Increment `viewsCount` on play |
 | `POST` | `/videos/:id/like` | ✅ Toggle (clears dislike) |
 | `POST` | `/videos/:id/dislike` | ✅ Toggle (clears like) |
 | `POST` | `/videos/:id/save` | ✅ |
 | `POST` | `/videos/:id/report` | ✅ |
+| `PATCH` | `/videos/:id` | ✅ Bearer — owner edits title, description, visibility, etc. |
 | `POST` | `/media/upload/:videoId` | ✅ (local `STORAGE_DRIVER` only, multipart) |
 | `POST` | `/media/profile-upload` | ✅ Local avatar/banner PUT target |
 | `POST` | `/media/podcast-upload` | ✅ Local podcast audio PUT target |
@@ -87,14 +89,18 @@
 | `GET` | `/billing/subscriptions/me` | ✅ |
 | `DELETE` | `/billing/subscriptions/:id` | ✅ Cancel membership |
 | `GET` | `/billing/creators/balance` | ✅ Available USD + pending payout rows |
-| `POST` | `/billing/creators/payouts/request` | ✅ Min from `platform_settings.economy.minPayoutUsd` (default $50) |
+| `GET` | `/billing/creators/payout-profile` | ✅ Saved payout method + details (PayPal / bank / crypto) |
+| `PUT` | `/billing/creators/payout-profile` | ✅ `{ method, details }` — required before requesting payouts |
+| `POST` | `/billing/creators/payouts/request` | ✅ `{ amountUsd }` — uses saved profile; min from `platform_settings.economy.minPayoutUsd` (default $50) |
 | `POST` | `/billing/gifts/send` | ✅ (coins + `viewer_support` revenue split) |
 | `POST` | `/streams/init` | ✅ Requires `streamer_status: approved` |
+| `GET` | `/streams/ingest/health` | ✅ Bearer — RTMP/HLS reachability for Go Live |
 | `POST` | `/streams/mediamtx/auth` | ✅ MediaMTX HTTP auth (no Bearer) |
 | `POST` | `/streams/webhooks/ready` | ✅ |
 | `POST` | `/streams/webhooks/done` | ✅ |
 | `GET` | `/streams/live` | ✅ |
-| `GET` | `/streams/:id` | ✅ (UUID or creator `username`) |
+| `POST` | `/streams/:id/end` | ✅ Bearer — stream owner ends broadcast; kicks RTMP + notifies viewers |
+| `GET` | `/streams/:id` | ✅ (UUID or creator `username`); polls HLS fallback when webhook missed |
 | WS | `/streams` (Socket.IO) | ✅ `join`, `message`, `history` — Bearer in handshake |
 | `GET` | `/podcasts/shows` | ✅ |
 | `GET` | `/podcasts/shows/featured` | ✅ |
@@ -107,6 +113,7 @@
 | `GET` | `/podcasts/episodes/feed` | ✅ Optional JWT → `liked`, `saved` |
 | `GET` | `/podcasts/episodes/:id` | ✅ Optional JWT → `liked`, `saved` |
 | `POST` | `/podcasts/episodes/:id/play` | ✅ |
+| `PATCH` | `/podcasts/episodes/:id` | ✅ Bearer — owner edits episode metadata |
 | `POST` | `/podcasts/episodes/:id/like` | ✅ Toggle |
 | `POST` | `/podcasts/episodes/:id/save` | ✅ Toggle favorite |
 | `GET` | `/playlists/discover` | ✅ Public playlists with items (sidebar/discover) |
@@ -178,6 +185,9 @@
 | `POST` | `/admin/streams/:id/kill` | ✅ |
 | `GET` | `/admin/videos/:id` | ✅ Movie/video metadata for admin edit form |
 | `PUT` | `/admin/videos/:id` | ✅ Update title, description, cast, tags, etc. (not video file) |
+| `PUT` | `/admin/vertical-series/:slug` | ✅ Series metadata |
+| `PUT` | `/admin/vertical-episodes/:id` | ✅ Episode metadata |
+| `PUT` | `/admin/podcast-episodes/:id` | ✅ Episode metadata |
 | `DELETE` | `/admin/videos/:id` | ✅ |
 | `DELETE` | `/admin/comments/:id` | ✅ |
 | `GET` | `/admin/content/stats` | ✅ |
@@ -286,6 +296,8 @@ All `/users/me/*` routes require Bearer auth.
 | `PUT /users/me/notifications/read-all` | ✅ | |
 | `DELETE /users/me/notifications` | ✅ | Clear all |
 
+Notifications include optional `metadata` (`videoType`, `videoId`, `commentId`, `dedupeKey`) for deep links and deduplication. Like notifications use `dedupeKey` so unlike → like again does **not** re-notify.
+
 **Notification triggers** (respect `GET/PUT /users/me/notification-preferences`; default all on):
 
 | Pref `type` | Created when |
@@ -332,10 +344,12 @@ Aggregates: `liveNow`, `featuredLive`, `trending`, `newReleases`, `movies`, `fea
 | `GET /videos/:id/comments` | ✅ `?page=&limit=` — optional Bearer → `liked` on each comment/reply |
 | `POST /videos/:id/comments` | ✅ `{ body, parentId? }` — notifies video owner (`comment` pref) or parent author on reply |
 | `POST /videos/comments/:commentId/like` | ✅ Toggle comment like — notifies comment author (`like` pref) |
+| `DELETE /videos/comments/:commentId` | ✅ Bearer — author deletes own comment (replies removed if top-level) |
 | `POST /videos/:id/like` | ✅ Toggle (mutually exclusive with dislike) — notifies video owner (`like` pref) |
 | `POST /videos/:id/dislike` | ✅ Toggle (mutually exclusive with like) |
 | `POST /videos/:id/save` | ✅ Toggle |
 | `POST /videos/:id/report` | ✅ `{ reason?, details? }` |
+| `PATCH /videos/:id` | ✅ Bearer — owner updates title, description, visibility, tags, etc. |
 
 **Engagement model:** Likes and dislikes are stored in `likes` / `dislikes` tables with denormalized counters on `videos`. Comment likes use `likes` with `target_type: comment`.
 
@@ -394,7 +408,9 @@ Bearer required.
 | `GET /billing/subscriptions/me` | Bearer | ✅ Active creator memberships |
 | `DELETE /billing/subscriptions/:id` | Bearer | ✅ Cancel (no refund; access until period end) |
 | `GET /billing/creators/balance` | Bearer | ✅ Available + pending payout requests |
-| `POST /billing/creators/payouts/request` | Bearer | ✅ `{ amountUsd, method: paypal\|bank_transfer\|crypto }` min $50 |
+| `GET /billing/creators/payout-profile` | Bearer | ✅ `{ method, details, updatedAt }` or `null` |
+| `PUT /billing/creators/payout-profile` | Bearer | ✅ `{ method: paypal\|bank_transfer\|crypto, details: { ... } }` |
+| `POST /billing/creators/payouts/request` | Bearer | ✅ `{ amountUsd }` — snapshots saved profile into payout row; min $50 |
 
 **Monetization V1 scope:** Platform Premium = site-wide ad-free. Channel membership = paid support for one creator (separate from free Follow). Payout fulfillment is manual until admin UI. See [`stripe-production.md`](./stripe-production.md).
 
@@ -415,11 +431,13 @@ Bearer required.
 | Route | Status |
 |-------|--------|
 | `POST /streams/init` | ✅ `{ title, category? }` — requires `streamer_status: approved`; RTMP key + MediaMTX webhooks |
+| `GET /streams/ingest/health` | ✅ Bearer — `{ rtmp, hls, mediamtx }` for Go Live diagnostics |
 | `POST /streams/mediamtx/auth` | ✅ MediaMTX HTTP auth (no Bearer) |
 | `POST /streams/webhooks/ready` | ✅ `?path=live/{streamKey}` — marks stream live; notifies `creator_live_alerts` subscribers |
 | `POST /streams/webhooks/done` | ✅ Ends stream |
 | `GET /streams/live` | ✅ All `live` streams |
-| `GET /streams/:id` | ✅ By stream UUID **or** creator `username` (e.g. `progamerx`) |
+| `POST /streams/:id/end` | ✅ Bearer — owner ends stream; disconnects publisher via MediaMTX API; Socket.IO `streamEnded` to room |
+| `GET /streams/:id` | ✅ By stream UUID **or** creator `username`; if HLS playlist exists but webhook missed, syncs to `live` |
 
 ### Live chat (WebSocket) ✅
 
@@ -432,6 +450,7 @@ Bearer required.
 | `message` | Client → Server | `{ streamId, message }` → broadcast `message` |
 | `history` | Server → Client | Last ~80 messages |
 | `message` | Server → Client | `{ id, streamId, userId, user, message, color, createdAt }` |
+| `streamEnded` | Server → Client | `{ streamId }` — broadcast ended; stop player and show offline |
 
 ---
 
@@ -450,6 +469,7 @@ Bearer required.
 | `GET /podcasts/episodes/feed` | Optional JWT | ✅ Latest episodes + `liked` / `saved` when authenticated |
 | `GET /podcasts/episodes/:id` | Optional JWT | ✅ Episode + `liked` + `saved` when authenticated |
 | `POST /podcasts/episodes/:id/play` | — | ✅ Increment plays |
+| `PATCH /podcasts/episodes/:id` | Bearer | ✅ Owner updates title, description, etc. |
 | `POST /podcasts/episodes/:id/like` | Bearer | ✅ Toggle like |
 | `POST /podcasts/episodes/:id/save` | Bearer | ✅ Toggle save (favorites) |
 
@@ -718,7 +738,8 @@ Values are stored in `platform_settings` and edited at `/admin/config/ads`.
 | Route | Notes |
 |-------|--------|
 | `GET/PUT /admin/reports`, `GET /admin/reports/:id` | Report queue + review actions |
-| `GET /admin/users`, `GET /admin/users/:id` | Search, detail, tabs |
+| `GET /admin/users`, `GET /admin/users/:id` | Search; detail includes `payoutProfile`, `socialLinks`, `premiumTier`, `verticalSeries[]`, `content[]` with `siteHref`, payout history with `method` + `payoutDetails` |
+| `GET /admin/payouts` | `?status=` — each row includes `payoutDetails` snapshot |
 | `GET/PUT /admin/users/:id/impact` | Per-creator `creator_impact_snapshots` by `periodMonth` |
 | `PUT /admin/users/:id/ban`, `/verify`, `/partner-tier`, `/coins` | User admin actions |
 | `GET/PUT /admin/streamer-applications/:id` | Approve/reject streamer applications |
@@ -736,6 +757,9 @@ Values are stored in `platform_settings` and edited at `/admin/config/ads`.
 | `GET /admin/content/videos` | `?type=short\|video\|movie` |
 | `GET /admin/videos/:id` | Full metadata for admin movie/video edit sheet |
 | `PUT /admin/videos/:id` | Update metadata (title, description, cast, genre, age rating, etc.) |
+| `PUT /admin/vertical-series/:slug` | Series title, description, status, etc. |
+| `PUT /admin/vertical-episodes/:id` | Episode metadata |
+| `PUT /admin/podcast-episodes/:id` | Episode metadata |
 | `GET /admin/content/comments` | |
 | `GET /admin/content/vertical-series` (+ `/:slug/episodes`) | |
 | `GET /admin/content/podcast-shows` (+ `/:showId/episodes`) | |
@@ -848,7 +872,7 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 | `STRIPE_WEBHOOK_SECRET` | No | — | Required with Stripe; see [`stripe-production.md`](./stripe-production.md) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | No | — | Password-reset email |
 
-**Live stack:** `docker compose up -d mediamtx` exposes RTMP `:1935` and HLS `:8888`. MediaMTX calls `POST /streams/mediamtx/auth` and webhooks on the API (no Bearer). Run the API on the host so the container can reach `host.docker.internal:4000`.
+**Live stack:** `docker compose up -d mediamtx` (custom image `prysymtv-mediamtx:local` includes `curl` for webhooks) exposes RTMP `:1935` and HLS `:8888`. MediaMTX calls `POST /streams/mediamtx/auth` and `POST /streams/webhooks/ready|done` on the API (no Bearer). Run the API on the host so the container can reach `host.docker.internal:4000`. See [how-to-run.md](./how-to-run.md) § Live streaming.
 
 **Profile images:** Avatar/banner use `POST /users/me/avatar/upload` and `/banner/upload`. With `STORAGE_DRIVER=local`, the client POSTs to `/media/profile-upload`; with `s3`, PUT to a presigned URL.
 
@@ -884,4 +908,4 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 
 ---
 
-*Last updated: 2026-05-31 — In-app notification triggers (comments, likes, gifts, uploads, live), `GET /config/viewer-geo`, `GET /ads/serve?peek=1`, creator `PATCH/DELETE /verticals/episodes/:id`, `GET/PUT /admin/videos/:id`, HLS playlist repair on transcode. Production Stripe: [`stripe-production.md`](./stripe-production.md).*
+*Last updated: 2026-05-31 — Creator payout profile (`GET/PUT /billing/creators/payout-profile`), payout request uses saved profile, admin user detail + payout `payoutDetails`, `GET /streams/ingest/health`, MediaMTX curl image + HLS sync fallback, `PATCH /videos/:id`, `PATCH /podcasts/episodes/:id`, admin `PUT` vertical/podcast episode edits. Production Stripe: [`stripe-production.md`](./stripe-production.md).*

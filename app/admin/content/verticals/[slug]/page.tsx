@@ -6,6 +6,8 @@ import { AdminDeleteButton } from "@/components/admin/admin-confirm-dialog"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminPagination } from "@/components/admin/admin-pagination"
 import { AdminStatusPill } from "@/components/admin/admin-status-pill"
+import { AdminVerticalEpisodeEditSheet } from "@/components/admin/admin-vertical-episode-edit-sheet"
+import { AdminVerticalSeriesEditSheet } from "@/components/admin/admin-vertical-series-edit-sheet"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
 import { deleteAdminVerticalEpisode, fetchAdminVerticalEpisodes } from "@/lib/api/admin"
 import { Button } from "@/components/ui/button"
@@ -25,6 +27,8 @@ export default function AdminVerticalEpisodesPage({
 }) {
   const { slug } = use(params)
   const [page, setPage] = useState(1)
+  const [editEpisodeId, setEditEpisodeId] = useState<string | null>(null)
+  const [editSeriesOpen, setEditSeriesOpen] = useState(false)
 
   const { data, loading, error, reload } = useAdminQuery(
     () => fetchAdminVerticalEpisodes(slug, { page, limit: 20 }),
@@ -53,6 +57,21 @@ export default function AdminVerticalEpisodesPage({
           { label: "Verticals", href: "/admin/content/verticals" },
           { label: series.title },
         ]}
+        actions={
+          <div className="flex gap-2">
+            <Button asChild size="sm" variant="outline" className="rounded-full">
+              <Link href={`/verticals/${slug}`}>View series</Link>
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full"
+              onClick={() => setEditSeriesOpen(true)}
+            >
+              Edit series
+            </Button>
+          </div>
+        }
       />
 
       <div className="rounded-xl border border-border overflow-hidden">
@@ -82,8 +101,18 @@ export default function AdminVerticalEpisodesPage({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={() => setEditEpisodeId(ep.id)}
+                    >
+                      Edit
+                    </Button>
                     <Button asChild size="sm" variant="outline" className="rounded-full">
-                      <Link href={ep.siteHref}>View</Link>
+                      <Link href={ep.siteHref} target="_blank" rel="noopener noreferrer">
+                        View
+                      </Link>
                     </Button>
                     <AdminDeleteButton
                       itemLabel={ep.title}
@@ -103,6 +132,21 @@ export default function AdminVerticalEpisodesPage({
         totalItems={meta.total}
         pageSize={meta.limit}
         onPageChange={setPage}
+      />
+
+      {editEpisodeId && (
+        <AdminVerticalEpisodeEditSheet
+          episodeId={editEpisodeId}
+          isOpen
+          onClose={() => setEditEpisodeId(null)}
+          onSuccess={() => void reload()}
+        />
+      )}
+      <AdminVerticalSeriesEditSheet
+        slug={slug}
+        isOpen={editSeriesOpen}
+        onClose={() => setEditSeriesOpen(false)}
+        onSuccess={() => void reload()}
       />
     </>
   )

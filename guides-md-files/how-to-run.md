@@ -9,7 +9,8 @@ This guide covers local development on Linux/macOS/WSL. You need **Node.js 20+**
 | Service | Folder | URL (default) | Purpose |
 |---------|--------|---------------|---------|
 | PostgreSQL | Docker | `localhost:5433` | Main database |
-| Redis | Docker | `localhost:6380` | Cache / queues (future) |
+| Redis | Docker | `localhost:6380` | Cache / queues (BullMQ video jobs) |
+| **MediaMTX** | Docker (`infra/`) | RTMP `localhost:1935`, HLS `localhost:8888` | Live ingest (OBS → HLS) |
 | **API** (NestJS) | `api/` | http://localhost:4000/api/v1 | Backend REST API |
 | **Frontend** (Next.js) | project root | http://localhost:3001 | Web app UI |
 
@@ -80,23 +81,8 @@ From the **repo root**:
 
 ```bash
 docker compose up -d
-docker compose ps   # postgres + redis + mediamtx should be "healthy" / running
+docker compose ps   # postgres + redis should be "healthy"; mediamtx should be "running"
 ```
-
-Optional **live ingest** (Sprint C — RTMP → HLS):
-
-```bash
-docker compose up -d mediamtx
-```
-
-Add to `api/.env`:
-
-```env
-RTMP_INGEST_URL=rtmp://localhost:1935/live
-MEDIAMTX_HLS_PUBLIC_URL=http://localhost:8888
-```
-
-In **OBS** (or any RTMP publisher): Server = `rtmp://localhost:1935/live`, Stream Key = value from **Profile → Settings → Go Live** after you generate a key. When publishing starts, the API sets `hlsPlaybackUrl` and the live page plays HLS from `http://localhost:8888/live/{streamKey}/index.m3u8`.
 
 **Streamer approval (dev):** set `AUTO_APPROVE_STREAMER=true` in `api/.env`. New applications are approved immediately; existing `pending` users are upgraded on the next `GET /users/me` (refresh profile). Production will use the admin dashboard later.
 
@@ -243,6 +229,74 @@ After `-v`, run `npm run db:migrate` and `npm run db:seed` again in `api/`.
 ### CORS errors from browser
 
 Set `CORS_ORIGIN=http://localhost:3001` in `api/.env` (match your frontend URL exactly).
+
+### Live streaming (MediaMTX + OBS)
+
+MediaMTX is included in `docker compose up -d`. It receives RTMP from OBS and serves HLS to the browser. The API validates stream keys and receives webhooks when a publisher goes live.
+
+#### 1. Start / rebuild MediaMTX
+
+The compose service builds a custom image (`prysymtv-mediamtx:local`) from `infra/Dockerfile.mediamtx` — it extends the official MediaMTX image with **curl**, which is required for `runOnReady` / `runOnNotReady` webhooks to the API.
+
+```bash
+# From repo root — first time or after infra/Dockerfile.mediamtx changes:
+docker compose build mediamtx
+docker compose up -d mediamtx
+
+# Check container is up
+docker compose ps mediamtx
+docker logs prysymtv-mediamtx --tail 30
+```
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| `1935` | RTMP | OBS / encoder ingest (`rtmp://localhost:1935/live`) |
+| `8888` | HTTP | LL-HLS fallback (`http://localhost:8888/live/{streamKey}/index.m3u8`) |
+| `8889` | HTTP | **WebRTC** playback (`http://localhost:8889/live/{streamKey}/whep`) — used on `/live/[id]` (~1s delay) |
+| `9997` | HTTP | MediaMTX control API (end-stream / kick publisher) |
+
+Config file: `infra/mediamtx.yml` (mounted read-only into the container).
+
+#### 2. API environment
+
+Add to `api/.env` (restart API after changes):
+
+```env
+RTMP_INGEST_URL=rtmp://localhost:1935/live
+MEDIAMTX_HLS_PUBLIC_URL=http://localhost:8888
+MEDIAMTX_WEBRTC_PUBLIC_URL=http://localhost:8889
+MEDIAMTX_API_URL=http://localhost:9997
+```
+
+The API must run on the **host** (not inside Docker) so MediaMTX can reach it at `host.docker.internal:4000` for auth and webhooks.
+
+#### 3. Go Live workflow
+
+1. Approve streamer access (`AUTO_APPROVE_STREAMER=true` in dev, or admin approves application).
+2. In the app: **Profile → Settings → Go Live** → generate a stream key (creates a `scheduled` stream row).
+3. In **OBS** (or any RTMP publisher):
+   - **Server:** `rtmp://localhost:1935/live`
+   - **Stream key:** the key shown in Go Live (not the stream UUID).
+4. Start streaming in OBS. MediaMTX calls `POST /streams/webhooks/ready`; the API sets `status: live` and `hlsPlaybackUrl`.
+5. Open the live page (`/live/{streamId}` from Go Live). HLS URL pattern:  
+   `http://localhost:8888/live/{streamKey}/index.m3u8`
+6. **End stream:** on your own live page, use **End stream** (disconnects OBS and tells all viewers the broadcast ended).
+
+**Low delay:** The live watch page uses **WebRTC** (`:8889`) first (~1s delay), with LL-HLS as fallback. In OBS → **Settings → Output**, set **Keyframe Interval** to **1** or **2** seconds and encoder profile **baseline** (helps WebRTC). Restart MediaMTX after config changes: `docker compose restart mediamtx`, then reconnect OBS.
+
+**Health check:** `GET /streams/ingest/health` — reports whether MediaMTX RTMP/HLS ports respond. The Go Live panel shows this in dev.
+
+#### 4. Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|----------------|-----|
+| OBS “Failed to connect” | MediaMTX not running | `docker compose up -d mediamtx` |
+| OBS connects but `/live/...` says offline | Webhook never reached API | Rebuild image: `docker compose build mediamtx && docker compose up -d mediamtx`. Check logs for `curl: executable file not found` — fixed by custom Dockerfile. |
+| OBS connects, still offline | API not on port 4000 | Start `npm run start:dev` in `api/` |
+| Wrong stream / auth rejected | Reused or expired key | Generate a **new** key in Go Live for each broadcast |
+| HLS works in VLC but not browser | CORS / mixed content | Use `http://localhost:8888` in dev; ensure `MEDIAMTX_HLS_PUBLIC_URL` matches |
+
+If webhooks fail, the API also polls HLS when you load `GET /streams/:id` and can mark the stream live when the playlist exists (fallback for local dev).
 
 ### Prisma / schema changes
 

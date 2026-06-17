@@ -1,6 +1,7 @@
 import { Controller, Get, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { AnalyticsService } from '../analytics/analytics.service';
+import { CREATOR_SUB_PLANS } from '../billing/creator-sub-plans';
 import { resolveRequestGeo } from '../common/geo/request-geo';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 
@@ -44,6 +45,16 @@ export class ConfigController {
           'Ad-free on Shorts, Verticals, and Movies',
           'Skip movie preroll ads',
         ],
+      },
+      channelMembership: {
+        basic: {
+          priceUsd: CREATOR_SUB_PLANS.basic.priceUsd,
+          label: CREATOR_SUB_PLANS.basic.label,
+        },
+        premium: {
+          priceUsd: CREATOR_SUB_PLANS.premium.priceUsd,
+          label: CREATOR_SUB_PLANS.premium.label,
+        },
       },
       ads: {
         shortsInterstitialEveryNSwipes: ads.shortsInterstitialEveryNSwipes,
