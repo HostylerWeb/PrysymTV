@@ -128,6 +128,7 @@ export class VideoProcessingProcessor extends WorkerHost {
         title: true,
         visibility: true,
         type: true,
+        verticalEpisodeId: true,
       },
     });
 
@@ -146,14 +147,43 @@ export class VideoProcessingProcessor extends WorkerHost {
       prior.status !== ContentStatus.ready &&
       prior.visibility === 'public'
     ) {
-      void this.notifications.notifyFollowersOfUpload(
-        prior.creatorId,
-        videoId,
-        prior.title,
-        prior.type,
-      );
+      void this.notifyUploadFollowers(videoId, prior);
     }
     this.logger.log(`Video ${videoId} ready (processing mode: skip)`);
+  }
+
+  private async notifyUploadFollowers(
+    videoId: string,
+    prior: {
+      creatorId: string;
+      title: string;
+      type: VideoType;
+      verticalEpisodeId: string | null;
+    },
+  ) {
+    if (prior.verticalEpisodeId) {
+      const episode = await this.prisma.verticalEpisode.findUnique({
+        where: { id: prior.verticalEpisodeId },
+        include: { series: { select: { slug: true } } },
+      });
+      if (episode?.series?.slug) {
+        void this.notifications.notifyFollowersOfVerticalEpisode(
+          prior.creatorId,
+          episode.id,
+          prior.title,
+          episode.series.slug,
+          episode.episodeNumber,
+          videoId,
+        );
+        return;
+      }
+    }
+    void this.notifications.notifyFollowersOfUpload(
+      prior.creatorId,
+      videoId,
+      prior.title,
+      prior.type,
+    );
   }
 
   private async processFfmpegMode(
@@ -212,6 +242,7 @@ export class VideoProcessingProcessor extends WorkerHost {
           title: true,
           visibility: true,
           type: true,
+          verticalEpisodeId: true,
         },
       });
 
@@ -230,12 +261,7 @@ export class VideoProcessingProcessor extends WorkerHost {
         prior.status !== ContentStatus.ready &&
         prior.visibility === 'public'
       ) {
-        void this.notifications.notifyFollowersOfUpload(
-          prior.creatorId,
-          videoId,
-          prior.title,
-          prior.type,
-        );
+        void this.notifyUploadFollowers(videoId, prior);
       }
 
       if (this.storage.getSettings().driver === 's3') {

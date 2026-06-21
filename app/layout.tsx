@@ -33,7 +33,7 @@ export default function RootLayout({
         <AuthProvider>
           {children}
         </AuthProvider>
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+        {process.env.VERCEL === "1" && <Analytics />}
       </body>
     </html>
   )

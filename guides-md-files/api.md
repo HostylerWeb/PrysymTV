@@ -848,6 +848,8 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 | `CORS_ORIGIN` | Yes | — | Frontend origin, e.g. `http://localhost:3001` |
 | `FRONTEND_URL` | Yes | — | Stripe success/cancel redirects, password-reset links |
 | `NODE_ENV` | No | `development` | `development` \| `production` \| `test` |
+| `THROTTLE_TTL_MS` | No | `60000` | Rate-limit window (ms); **per client IP**, not global |
+| `THROTTLE_LIMIT` | No | `1000` | Max HTTP requests per IP per window; see [security-checklist.md](./security-checklist.md#api-rate-limit-quota) |
 | `STORAGE_DRIVER` | Yes | `local` | `local` or `s3` |
 | `LOCAL_STORAGE_ROOT` | If `local` | `./storage` | Filesystem root for uploads |
 | `LOCAL_STORAGE_PUBLIC_BASE_URL` | If `local` | — | Public URL prefix for served files |

@@ -82,7 +82,7 @@ export function FeaturedLive({ stream }: FeaturedLiveProps) {
             <p className="text-muted-foreground text-sm flex-1 line-clamp-4">
               Join thousands watching live on Prysym TV.
             </p>
-            <Link href={`/live/${stream.slug}`} className="mt-4">
+            <Link href={`/live/${stream.id}`} className="mt-4">
               <Button className="w-full rounded-full gap-2">
                 <Play className="w-4 h-4 fill-current" />
                 Watch Live

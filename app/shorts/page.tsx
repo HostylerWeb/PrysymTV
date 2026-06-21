@@ -13,8 +13,11 @@ import {
   Volume2,
   VolumeX,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Gift,
 } from "lucide-react"
+import { GiftSheet } from "@/components/gift-sheet"
+import { PageLoadingSkeleton } from "@/components/content-skeletons"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -128,6 +131,7 @@ interface ShortVideoProps {
   onSave: () => void
   onFollow: () => void
   onReport: () => void
+  onGift: () => void
   isLiked: boolean
   isSaved: boolean
   isFollowing: boolean
@@ -145,6 +149,7 @@ function ShortVideo({
   onSave, 
   onFollow,
   onReport,
+  onGift,
   isLiked,
   isSaved,
   isFollowing,
@@ -153,13 +158,20 @@ function ShortVideo({
 }: ShortVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [isMuted, setIsMuted] = useState(true)
+  const [isMuted, setIsMuted] = useState(false)
   const [showControls, setShowControls] = useState(false)
 
   useEffect(() => {
     if (videoRef.current) {
       if (isActive) {
-        videoRef.current.play().catch(() => {})
+        videoRef.current.muted = isMuted
+        videoRef.current.play().catch(() => {
+          if (videoRef.current) {
+            videoRef.current.muted = true
+            setIsMuted(true)
+            void videoRef.current.play().catch(() => {})
+          }
+        })
         setIsPlaying(true)
       } else {
         videoRef.current.pause()
@@ -167,7 +179,7 @@ function ShortVideo({
         setIsPlaying(false)
       }
     }
-  }, [isActive])
+  }, [isActive, isMuted])
 
   const togglePlay = () => {
     if (videoRef.current) {
@@ -200,18 +212,18 @@ function ShortVideo({
   }
 
   return (
-    <div className="relative w-full h-full bg-black snap-start snap-always">
+    <div className="relative w-full h-full bg-black snap-start snap-always flex items-center justify-center">
       {/* Video */}
       <HlsVideoPlayer
         src={short.videoUrl}
-        className="w-full h-full object-cover"
+        className="w-full h-full object-contain"
         controls={false}
         muted={isMuted}
         playsInline
         loop
         videoRef={videoRef}
       />
-      <button type="button" className="absolute inset-0 z-10" onClick={togglePlay} aria-label="Toggle play" />
+      <button type="button" className="absolute inset-0 z-[1]" onClick={togglePlay} aria-label="Toggle play" />
 
       {/* Play/Pause Indicator */}
       {showControls && (
@@ -230,24 +242,29 @@ function ShortVideo({
       <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60 pointer-events-none" />
 
       {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-10">
+      <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-20 pointer-events-none">
         <h1 className="text-lg font-bold text-white">Shorts</h1>
-        <div className="flex items-center gap-3">
-          <button onClick={toggleMute} className="p-2">
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <button
+            type="button"
+            onClick={toggleMute}
+            className="p-2 relative z-20"
+            aria-label={isMuted ? "Unmute" : "Mute"}
+          >
             {isMuted ? (
-              <VolumeX className="w-6 h-6 text-white" />
+              <VolumeX className="w-5 h-5 md:w-6 md:h-6 text-white" />
             ) : (
-              <Volume2 className="w-6 h-6 text-white" />
+              <Volume2 className="w-5 h-5 md:w-6 md:h-6 text-white" />
             )}
           </button>
-          <button type="button" className="p-2" onClick={onReport}>
-            <MoreVertical className="w-6 h-6 text-white" />
+          <button type="button" className="p-2 relative z-20" onClick={onReport}>
+            <MoreVertical className="w-5 h-5 md:w-6 md:h-6 text-white" />
           </button>
         </div>
       </div>
 
       {/* Right Side Actions */}
-      <div className="absolute right-3 bottom-32 flex flex-col items-center gap-5 z-10">
+      <div className="absolute right-2 md:right-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] flex flex-col items-center gap-2.5 md:gap-5 z-20">
         {/* Profile */}
         <div className="flex flex-col items-center gap-1">
           <Link href={`/creator/${short.userSlug}`}>
@@ -255,7 +272,7 @@ function ShortVideo({
               <img
                 src={short.userAvatar}
                 alt={short.username}
-                className="w-12 h-12 rounded-full border-2 border-white object-cover"
+                className="w-9 h-9 md:w-12 md:h-12 rounded-full border-2 border-white object-cover"
               />
               {!isFollowing && (
                 <button
@@ -263,7 +280,7 @@ function ShortVideo({
                     e.preventDefault()
                     handleAction(onFollow)
                   }}
-                  className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-primary flex items-center justify-center"
+                  className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 md:w-6 md:h-6 rounded-full bg-primary flex items-center justify-center"
                 >
                   <span className="text-white text-lg leading-none">+</span>
                 </button>
@@ -278,11 +295,11 @@ function ShortVideo({
           className="flex flex-col items-center gap-1"
         >
           <div className={cn(
-            "w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center",
+            "w-9 h-9 md:w-12 md:h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center",
             isLiked && "bg-primary/20"
           )}>
             <Heart className={cn(
-              "w-7 h-7 text-white transition-all",
+              "w-5 h-5 md:w-7 md:h-7 text-white transition-all",
               isLiked && "fill-primary text-primary scale-110"
             )} />
           </div>
@@ -294,8 +311,8 @@ function ShortVideo({
           onClick={() => handleAction(onComment)}
           className="flex flex-col items-center gap-1"
         >
-          <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center">
-            <MessageCircle className="w-7 h-7 text-white" />
+          <div className="w-9 h-9 md:w-12 md:h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center">
+            <MessageCircle className="w-5 h-5 md:w-7 md:h-7 text-white" />
           </div>
           <span className="text-white text-xs font-medium">{formatEngagementCount(counts.comments)}</span>
         </button>
@@ -306,15 +323,26 @@ function ShortVideo({
           className="flex flex-col items-center gap-1"
         >
           <div className={cn(
-            "w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center",
+            "w-9 h-9 md:w-12 md:h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center",
             isSaved && "bg-yellow-500/20"
           )}>
             <Bookmark className={cn(
-              "w-7 h-7 text-white transition-all",
+              "w-5 h-5 md:w-7 md:h-7 text-white transition-all",
               isSaved && "fill-yellow-500 text-yellow-500"
             )} />
           </div>
           <span className="text-white text-xs font-medium">{formatEngagementCount(counts.saves)}</span>
+        </button>
+
+        {/* Gift */}
+        <button
+          onClick={() => handleAction(onGift)}
+          className="flex flex-col items-center gap-1"
+        >
+          <div className="w-9 h-9 md:w-12 md:h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center">
+            <Gift className="w-5 h-5 md:w-7 md:h-7 text-white" />
+          </div>
+          <span className="text-white text-[10px] md:text-xs font-medium">Gift</span>
         </button>
 
         {/* Share */}
@@ -322,8 +350,8 @@ function ShortVideo({
           onClick={onShare}
           className="flex flex-col items-center gap-1"
         >
-          <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center">
-            <Share2 className="w-7 h-7 text-white" />
+          <div className="w-9 h-9 md:w-12 md:h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center">
+            <Share2 className="w-5 h-5 md:w-7 md:h-7 text-white" />
           </div>
           <span className="text-white text-xs font-medium">{formatEngagementCount(counts.shares)}</span>
         </button>
@@ -331,7 +359,7 @@ function ShortVideo({
       </div>
 
       {/* Bottom Info */}
-      <div className="absolute left-0 right-16 bottom-24 p-4 z-10">
+      <div className="absolute left-0 right-14 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] p-4 z-20">
         <Link href={`/creator/${short.username.replace('@', '')}`}>
           <h3 className="text-white font-bold text-base mb-1">{short.username}</h3>
         </Link>
@@ -347,7 +375,7 @@ function ShortVideo({
       </div>
 
       {/* Swipe Indicator */}
-      <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 animate-bounce opacity-50">
+      <div className="absolute bottom-[calc(3.5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 animate-bounce opacity-50 z-20">
         <ChevronUp className="w-5 h-5 text-white" />
         <span className="text-white/60 text-[10px]">Swipe up</span>
       </div>
@@ -474,6 +502,8 @@ function ShortsPageContent() {
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [shareTarget, setShareTarget] = useState<{ id: string; title: string; url: string } | null>(null)
   const [isReportOpen, setIsReportOpen] = useState(false)
+  const [isGiftOpen, setIsGiftOpen] = useState(false)
+  const [giftTarget, setGiftTarget] = useState<{ creatorId: string; name: string; videoId: string } | null>(null)
   const [reportTarget, setReportTarget] = useState<{ id: string; title: string } | null>(null)
   const [engagement, setEngagement] = useState<Record<string, EngagementCounts>>({})
   const shortsViewCount = useRef(0)
@@ -821,12 +851,14 @@ function ShortsPageContent() {
   return (
     <main className="h-screen bg-black overflow-hidden md:pl-20">
       <div className="fixed top-0 left-0 right-0 z-[55] md:left-20 pointer-events-none">
-        <div className="flex items-center justify-end gap-2 px-4 py-4 pointer-events-auto bg-gradient-to-b from-black/70 to-transparent">
-          <CreateHeaderButton
-            variant="on-dark"
-            label="Upload short"
-            onClick={uploadShort}
-          />
+        <div className="flex items-center justify-end gap-2 px-4 py-4 bg-gradient-to-b from-black/70 to-transparent">
+          <div className="pointer-events-auto">
+            <CreateHeaderButton
+              variant="on-dark"
+              label="Upload short"
+              onClick={uploadShort}
+            />
+          </div>
         </div>
       </div>
 
@@ -851,6 +883,14 @@ function ShortsPageContent() {
               onReport={() => {
                 setReportTarget({ id: short.id, title: short.caption })
                 setIsReportOpen(true)
+              }}
+              onGift={() => {
+                setGiftTarget({
+                  creatorId: short.creatorId,
+                  name: short.username.replace("@", ""),
+                  videoId: short.id,
+                })
+                setIsGiftOpen(true)
               }}
               isLiked={likedShorts.has(short.id)}
               isSaved={savedShorts.has(short.id)}
@@ -1078,6 +1118,19 @@ function ShortsPageContent() {
           targetType="video"
           targetId={reportTarget.id}
           targetLabel={reportTarget.title}
+        />
+      )}
+      {giftTarget && (
+        <GiftSheet
+          isOpen={isGiftOpen}
+          onClose={() => {
+            setIsGiftOpen(false)
+            setGiftTarget(null)
+          }}
+          receiverId={giftTarget.creatorId}
+          receiverName={giftTarget.name}
+          videoId={giftTarget.videoId}
+          onNeedAuth={() => setIsAuthModalOpen(true)}
         />
       )}
       {showAd && interstitialAd && (

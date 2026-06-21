@@ -11,6 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { StreamStatus, StreamerStatus } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { verticalFromCategorySlug } from '../common/utils/category-vertical.util';
 import { StreamsGateway } from './streams.gateway';
 
 type MediamtxAuthBody = {
@@ -36,6 +37,8 @@ export class StreamsService {
   ) {}
 
   async listLive() {
+    await this.syncStreamsFromIngest();
+
     const items = await this.prisma.stream.findMany({
       where: { status: StreamStatus.live },
       orderBy: { viewerCount: 'desc' },
@@ -61,26 +64,42 @@ export class StreamsService {
         idOrSlug,
       );
 
-    const stream = await this.prisma.stream.findFirst({
-      where: isUuid
-        ? { id: idOrSlug }
-        : {
-            creator: { username: idOrSlug.toLowerCase() },
-            status: { in: [StreamStatus.live, StreamStatus.ended] },
-          },
-      orderBy: { startedAt: 'desc' },
-      include: {
-        creator: {
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
-            avatarUrl: true,
-            bio: true,
-          },
+    const include = {
+      creator: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatarUrl: true,
+          bio: true,
         },
       },
-    });
+    } as const;
+
+    let stream;
+    if (isUuid) {
+      stream = await this.prisma.stream.findFirst({
+        where: { id: idOrSlug },
+        include,
+      });
+    } else {
+      const slug = idOrSlug.toLowerCase();
+      stream = await this.prisma.stream.findFirst({
+        where: { creator: { username: slug }, status: StreamStatus.live },
+        orderBy: { startedAt: 'desc' },
+        include,
+      });
+      if (!stream) {
+        stream = await this.prisma.stream.findFirst({
+          where: {
+            creator: { username: slug },
+            status: { in: [StreamStatus.scheduled, StreamStatus.ended] },
+          },
+          orderBy: { startedAt: 'desc' },
+          include,
+        });
+      }
+    }
     if (!stream) throw new NotFoundException('Stream not found');
 
     if (
@@ -109,8 +128,51 @@ export class StreamsService {
     return this.mapStream(stream, viewerId);
   }
 
+  /** When webhooks fail, promote scheduled streams that already have an HLS manifest. */
+  /** Promote scheduled streams on air; end stale rows with no HLS manifest. */
+  async syncStreamsFromIngest() {
+    await this.syncScheduledStreamsFromIngest();
+
+    const staleLive = await this.prisma.stream.findMany({
+      where: {
+        status: StreamStatus.live,
+        temporaryStreamToken: { not: null },
+      },
+      select: { id: true, temporaryStreamToken: true },
+    });
+    for (const row of staleLive) {
+      const key = row.temporaryStreamToken!;
+      if (await this.hlsManifestAvailable(key)) continue;
+      await this.prisma.stream.updateMany({
+        where: { id: row.id, status: StreamStatus.live },
+        data: {
+          status: StreamStatus.ended,
+          endedAt: new Date(),
+          hlsPlaybackUrl: null,
+        },
+      });
+      this.streamsGateway.emitStreamEnded(row.id);
+      this.logger.log(`Stream ended (no HLS): ${key}`);
+    }
+  }
+
+  async syncScheduledStreamsFromIngest() {
+    const scheduled = await this.prisma.stream.findMany({
+      where: {
+        status: StreamStatus.scheduled,
+        temporaryStreamToken: { not: null },
+      },
+      select: { temporaryStreamToken: true },
+    });
+    await Promise.all(
+      scheduled.map((s) =>
+        this.trySyncLiveFromHls(s.temporaryStreamToken!),
+      ),
+    );
+  }
+
   /** Fallback when MediaMTX webhooks cannot reach the API (e.g. missing curl in container). */
-  private async trySyncLiveFromHls(streamKey: string) {
+  private async hlsManifestAvailable(streamKey: string): Promise<boolean> {
     const hlsBase = (
       this.config.get<string>('MEDIAMTX_HLS_PUBLIC_URL') ?? 'http://localhost:8888'
     ).replace(/\/$/, '');
@@ -120,12 +182,15 @@ export class StreamsService {
         method: 'GET',
         signal: AbortSignal.timeout(2500),
       });
-      if (res.ok) {
-        await this.mediamtxReady(`live/${streamKey}`);
-      }
+      return res.ok;
     } catch {
-      /* ingest not up yet */
+      return false;
     }
+  }
+
+  private async trySyncLiveFromHls(streamKey: string) {
+    if (!(await this.hlsManifestAvailable(streamKey))) return;
+    await this.mediamtxReady(`live/${streamKey}`);
   }
 
   async ingestHealth() {
@@ -187,6 +252,7 @@ export class StreamsService {
         creatorId,
         title,
         category: category?.trim() || 'Live',
+        vertical: verticalFromCategorySlug(category?.trim()) ?? undefined,
         status: StreamStatus.scheduled,
         temporaryStreamToken: `sk_${randomUUID().replace(/-/g, '')}`,
       },

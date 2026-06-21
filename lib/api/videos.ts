@@ -9,6 +9,7 @@ export type UploadInitBody = {
   tags?: string;
   mimeType: string;
   fileName?: string;
+  verticalEpisodeId?: string;
   releaseYear?: number;
   ageRating?: string;
   tagline?: string;

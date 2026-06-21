@@ -76,6 +76,24 @@ export function resolvePodcastAudioMime(file: File): string {
   return (ext && byExt[ext]) || "audio/mpeg"
 }
 
+export function resolvePodcastMediaMime(file: File): string {
+  const type = file.type?.trim() ?? ""
+  if (type.startsWith("video/")) return type
+  if (type.startsWith("audio/") || type === "application/octet-stream") {
+    return resolvePodcastAudioMime(file)
+  }
+  const ext = file.name.split(".").pop()?.toLowerCase()
+  const videoExt: Record<string, string> = {
+    mp4: "video/mp4",
+    mov: "video/quicktime",
+    mkv: "video/x-matroska",
+    webm: "video/webm",
+    m4v: "video/mp4",
+  }
+  if (ext && videoExt[ext]) return videoExt[ext]
+  return resolvePodcastAudioMime(file)
+}
+
 export type PodcastUploadInit = {
   episodeId: string;
   objectKey: string;
@@ -102,7 +120,7 @@ export function initPodcastEpisodeUpload(episodeId: string, file: File) {
     {
       method: "POST",
       body: {
-        mimeType: resolvePodcastAudioMime(file),
+        mimeType: resolvePodcastMediaMime(file),
         fileName: file.name,
       },
     },
@@ -156,7 +174,9 @@ export function completePodcastEpisodeUpload(
   return apiRequest<{
     episodeId: string;
     status: string;
-    audioUrl: string;
+    mediaType?: string;
+    audioUrl: string | null;
+    videoUrl?: string | null;
     durationSeconds: number;
   }>(`/podcasts/episodes/${episodeId}/upload/complete`, {
     method: "POST",
@@ -202,7 +222,7 @@ export async function uploadPodcastEpisodeFlow(
   title: string,
   file: File,
   description?: string,
-): Promise<{ episodeId: string; audioUrl: string }> {
+): Promise<{ episodeId: string; audioUrl: string | null; videoUrl?: string | null }> {
   const episode = await createPodcastEpisode(showId, {
     title,
     description,
@@ -210,5 +230,9 @@ export async function uploadPodcastEpisodeFlow(
   const init = await initPodcastEpisodeUpload(episode.id, file);
   await uploadPodcastAudio(init, file);
   const done = await completePodcastEpisodeUpload(episode.id, init.objectKey);
-  return { episodeId: done.episodeId, audioUrl: done.audioUrl };
+  return {
+    episodeId: done.episodeId,
+    audioUrl: done.audioUrl,
+    videoUrl: done.videoUrl ?? null,
+  };
 }

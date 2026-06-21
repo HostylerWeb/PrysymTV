@@ -103,6 +103,15 @@ export class EnvironmentVariables {
   @IsInt()
   UPLOAD_MAX_BYTES?: number;
 
+  /** Per client IP — not a shared global cap. Default 1000 req / 60s in app.module. */
+  @IsOptional()
+  @IsInt()
+  THROTTLE_TTL_MS?: number;
+
+  @IsOptional()
+  @IsInt()
+  THROTTLE_LIMIT?: number;
+
   @IsOptional()
   @IsString()
   UPLOAD_ALLOWED_MIME_PREFIXES?: string;

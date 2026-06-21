@@ -55,6 +55,10 @@ export class UploadInitDto {
   fileName?: string;
 
   @IsOptional()
+  @IsString()
+  verticalEpisodeId?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1888)

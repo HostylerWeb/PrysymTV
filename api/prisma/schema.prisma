@@ -83,6 +83,11 @@ enum PlaylistType {
   mixed
 }
 
+enum PodcastMediaType {
+  audio
+  video
+}
+
 enum PlaylistItemType {
   video
   podcast_episode
@@ -573,6 +578,7 @@ model Video {
   director        String?
   writers         String[]      @default([])
   vertical        ContentVertical? @map("vertical")
+  verticalEpisodeId String?       @map("vertical_episode_id") @db.Uuid
   visibility      Visibility    @default(public)
   status          ContentStatus @default(processing)
   viewsCount      Int           @default(0) @map("views_count")
@@ -625,14 +631,16 @@ model PodcastShow {
 }
 
 model PodcastEpisode {
-  id              String        @id @default(uuid()) @db.Uuid
-  showId          String        @map("show_id") @db.Uuid
-  creatorId       String        @map("creator_id") @db.Uuid
+  id              String            @id @default(uuid()) @db.Uuid
+  showId          String            @map("show_id") @db.Uuid
+  creatorId       String            @map("creator_id") @db.Uuid
   title           String
   description     String?
-  coverUrl        String?       @map("cover_url")
-  audioUrl        String?       @map("audio_url")
-  durationSeconds Int           @default(0) @map("duration_seconds")
+  coverUrl        String?           @map("cover_url")
+  mediaType       PodcastMediaType  @default(audio) @map("media_type")
+  audioUrl        String?           @map("audio_url")
+  videoUrl        String?           @map("video_url")
+  durationSeconds Int               @default(0) @map("duration_seconds")
   visibility      Visibility    @default(public)
   status          ContentStatus @default(processing)
   playsCount      Int           @default(0) @map("plays_count")

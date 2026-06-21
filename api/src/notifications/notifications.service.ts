@@ -13,6 +13,10 @@ export type NotificationMetadata = {
   videoType?: VideoType | string;
   videoId?: string;
   commentId?: string;
+  contentType?: 'video' | 'vertical_episode' | 'podcast_episode';
+  seriesSlug?: string;
+  episodeNumber?: number;
+  podcastEpisodeId?: string;
 };
 
 @Injectable()
@@ -238,22 +242,66 @@ export class NotificationsService {
     videoTitle: string,
     videoType: VideoType,
   ): Promise<void> {
+    await this.notifyFollowersOfContent({
+      creatorId,
+      referenceId: videoId,
+      title: videoTitle,
+      dedupeKey: `upload:${videoId}`,
+      metadata: {
+        dedupeKey: `upload:${videoId}`,
+        videoType,
+        videoId,
+        contentType: 'video',
+      },
+    });
+  }
+
+  async notifyFollowersOfVerticalEpisode(
+    creatorId: string,
+    episodeId: string,
+    episodeTitle: string,
+    seriesSlug: string,
+    episodeNumber: number,
+    videoId?: string,
+  ): Promise<void> {
+    await this.notifyFollowersOfContent({
+      creatorId,
+      referenceId: episodeId,
+      title: episodeTitle,
+      dedupeKey: `upload:vertical:${episodeId}`,
+      metadata: {
+        dedupeKey: `upload:vertical:${episodeId}`,
+        contentType: 'vertical_episode',
+        seriesSlug,
+        episodeNumber,
+        videoId,
+      },
+    });
+  }
+
+  private async notifyFollowersOfContent(params: {
+    creatorId: string;
+    referenceId: string;
+    title: string;
+    dedupeKey: string;
+    metadata: NotificationMetadata;
+  }): Promise<void> {
     const creator = await this.prisma.user.findUnique({
-      where: { id: creatorId },
+      where: { id: params.creatorId },
       select: { displayName: true, username: true },
     });
     const name = creator?.displayName || creator?.username || 'A creator you follow';
 
     const followers = await this.prisma.follow.findMany({
-      where: { followingId: creatorId },
+      where: { followingId: params.creatorId },
       select: { followerId: true },
     });
     if (followers.length === 0) return;
 
     for (const follower of followers) {
-      if (follower.followerId === creatorId) continue;
+      if (follower.followerId === params.creatorId) continue;
       if (!(await this.isPrefEnabled(follower.followerId, 'upload'))) continue;
-      if (await this.alreadySent(follower.followerId, `upload:${videoId}`)) {
+      if (await this.alreadySent(follower.followerId, params.dedupeKey)) {
         continue;
       }
 
@@ -261,14 +309,10 @@ export class NotificationsService {
         data: {
           userId: follower.followerId,
           type: 'upload',
-          actorId: creatorId,
-          referenceId: videoId,
-          message: `${name} posted "${videoTitle}"`,
-          metadata: {
-            dedupeKey: `upload:${videoId}`,
-            videoType,
-            videoId,
-          },
+          actorId: params.creatorId,
+          referenceId: params.referenceId,
+          message: `${name} posted "${params.title}"`,
+          metadata: params.metadata as Prisma.InputJsonValue,
         },
       });
     }

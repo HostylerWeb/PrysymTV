@@ -11,6 +11,7 @@ async function bootstrap() {
   const config = app.get(ConfigService);
 
   app.setGlobalPrefix('api/v1');
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },

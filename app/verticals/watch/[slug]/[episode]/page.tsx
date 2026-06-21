@@ -2,7 +2,8 @@
 
 import { use, useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ChevronLeft, ChevronUp, Heart, Bookmark, Flag } from "lucide-react"
+import { ChevronLeft, ChevronUp, Heart, Bookmark, Flag, Gift } from "lucide-react"
+import { GiftSheet } from "@/components/gift-sheet"
 import { cn } from "@/lib/utils"
 import { VerticalEpisodeAdGate } from "@/components/vertical-episode-ad-gate"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
@@ -44,6 +45,7 @@ export default function VerticalWatchPage({
   const [seriesSaved, setSeriesSaved] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isReportOpen, setIsReportOpen] = useState(false)
+  const [isGiftOpen, setIsGiftOpen] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const viewRecorded = useRef(false)
 
@@ -223,6 +225,14 @@ export default function VerticalWatchPage({
               </button>
               <button
                 type="button"
+                onClick={() => requireAuth(() => setIsGiftOpen(true))}
+                className="w-9 h-9 rounded-full bg-black/50 flex items-center justify-center"
+                aria-label="Send gift"
+              >
+                <Gift className="w-4 h-4 text-white" />
+              </button>
+              <button
+                type="button"
                 onClick={() => setIsReportOpen(true)}
                 className="w-9 h-9 rounded-full bg-black/50 flex items-center justify-center"
                 aria-label="Report"
@@ -308,6 +318,15 @@ export default function VerticalWatchPage({
           targetType="vertical_episode"
           targetId={data.episode.id}
           targetLabel={`${data.series.title} · ${data.episode.title}`}
+        />
+      )}
+      {data?.series.creatorId && (
+        <GiftSheet
+          isOpen={isGiftOpen}
+          onClose={() => setIsGiftOpen(false)}
+          receiverId={data.series.creatorId}
+          receiverName={data.series.title}
+          onNeedAuth={() => setIsAuthModalOpen(true)}
         />
       )}
     </main>

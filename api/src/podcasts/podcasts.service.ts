@@ -9,6 +9,7 @@ import {
   ContentStatus,
   DislikeTargetType,
   LikeTargetType,
+  PodcastMediaType,
   SavedItemType,
   Visibility,
 } from '@prisma/client';
@@ -56,7 +57,13 @@ export class PodcastsService {
         episodes: { some: { status: ContentStatus.ready } },
       },
       include: {
-        creator: { select: { username: true, displayName: true } },
+        creator: {
+          select: {
+            username: true,
+            displayName: true,
+            _count: { select: { followers: true } },
+          },
+        },
         _count: { select: { episodes: true } },
         episodes: {
           where: { status: ContentStatus.ready },
@@ -70,8 +77,10 @@ export class PodcastsService {
 
     const sorted = shows
       .sort((a, b) => {
-        if (b.followersCount !== a.followersCount) {
-          return b.followersCount - a.followersCount;
+        const aFollowers = a.creator._count.followers;
+        const bFollowers = b.creator._count.followers;
+        if (bFollowers !== aFollowers) {
+          return bFollowers - aFollowers;
         }
         const aDate = a.episodes[0]?.publishedAt?.getTime() ?? 0;
         const bDate = b.episodes[0]?.publishedAt?.getTime() ?? 0;
@@ -79,7 +88,12 @@ export class PodcastsService {
       })
       .slice(0, limit);
 
-    return { items: sorted };
+    return {
+      items: sorted.map((show) => ({
+        ...show,
+        followersCount: show.creator._count.followers,
+      })),
+    };
   }
 
   async featuredShow() {
@@ -286,17 +300,18 @@ export class PodcastsService {
     dto: PodcastUploadInitDto,
   ) {
     const episode = await this.assertEpisodeOwner(userId, episodeId);
-    this.storage.assertAudioMime(dto.mimeType);
-    const objectKey = this.storage.buildPodcastAudioKey(
-      episode.id,
-      dto.fileName,
-    );
-    const target = await this.storage.createAudioUploadTargetForKey(
+    const mediaType = this.storage.assertPodcastMediaMime(dto.mimeType);
+    const objectKey =
+      mediaType === 'video'
+        ? this.storage.buildPodcastVideoKey(episode.id, dto.fileName)
+        : this.storage.buildPodcastAudioKey(episode.id, dto.fileName);
+    const target = await this.storage.createPodcastMediaUploadTargetForKey(
       objectKey,
       dto.mimeType,
     );
     return {
       episodeId: episode.id,
+      mediaType,
       objectKey: target.objectKey,
       uploadUrl: target.uploadUrl,
       uploadMethod: target.uploadMethod,
@@ -335,7 +350,12 @@ export class PodcastsService {
     try {
       await this.storage.downloadToFile(objectKey, inputPath);
       const probe = await probeMedia(inputPath, ffprobePath);
-      if (!probe.hasAudio) {
+      const isVideo = objectKey.includes('/video');
+      if (isVideo) {
+        if (!probe.hasVideo) {
+          throw new BadRequestException('File does not contain video');
+        }
+      } else if (!probe.hasAudio) {
         throw new BadRequestException('File does not contain audio');
       }
       durationSeconds = Math.max(1, Math.round(probe.durationSeconds));
@@ -343,12 +363,16 @@ export class PodcastsService {
       await rm(workRoot, { recursive: true, force: true });
     }
 
-    const audioUrl = this.storage.getPublicUrl(objectKey);
+    const mediaUrl = this.storage.getPublicUrl(objectKey);
+    const isVideoUpload = objectKey.includes('/video');
     const updated = await this.prisma.podcastEpisode.update({
       where: { id: episodeId },
       data: {
         status: ContentStatus.ready,
-        audioUrl,
+        mediaType: isVideoUpload ? PodcastMediaType.video : PodcastMediaType.audio,
+        ...(isVideoUpload
+          ? { videoUrl: mediaUrl, audioUrl: null }
+          : { audioUrl: mediaUrl, videoUrl: null }),
         durationSeconds,
         publishedAt: new Date(),
       },
@@ -357,7 +381,9 @@ export class PodcastsService {
     return {
       episodeId: updated.id,
       status: updated.status,
+      mediaType: updated.mediaType,
       audioUrl: updated.audioUrl,
+      videoUrl: updated.videoUrl,
       durationSeconds: updated.durationSeconds,
     };
   }

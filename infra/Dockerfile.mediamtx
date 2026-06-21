@@ -6,6 +6,6 @@ RUN apk add --no-cache curl ca-certificates
 
 COPY --from=bluenviron/mediamtx:latest /mediamtx /mediamtx
 
-EXPOSE 1935 8888
+EXPOSE 1935 8888 8889 8189
 
 ENTRYPOINT ["/mediamtx"]

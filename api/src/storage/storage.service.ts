@@ -113,6 +113,26 @@ export class StorageService implements OnModuleInit {
     }
   }
 
+  assertPodcastMediaMime(mimeType: string): 'audio' | 'video' {
+    if (
+      mimeType.startsWith('audio/') ||
+      mimeType === 'application/octet-stream'
+    ) {
+      return 'audio';
+    }
+    if (mimeType.startsWith('video/')) {
+      return 'video';
+    }
+    throw new BadRequestException(
+      'Only audio or video uploads are allowed for podcast episodes',
+    );
+  }
+
+  buildPodcastVideoKey(episodeId: string, fileName?: string): string {
+    const extension = this.extensionFromFileName(fileName) || '.mp4';
+    return `uploads/podcasts/${episodeId}/video${extension}`;
+  }
+
   buildPodcastAudioKey(episodeId: string, fileName?: string): string {
     const extension = this.extensionFromFileName(fileName) || '.mp3';
     return `uploads/podcasts/${episodeId}${extension}`;
@@ -206,12 +226,12 @@ export class StorageService implements OnModuleInit {
     return `uploads/podcasts/shows/${showId}/cover${extension}`;
   }
 
-  /** Podcast episode audio files. */
-  async createAudioUploadTargetForKey(
+  /** Podcast episode audio or video files. */
+  async createPodcastMediaUploadTargetForKey(
     objectKey: string,
     mimeType: string,
   ): Promise<UploadTarget> {
-    this.assertAudioMime(mimeType);
+    this.assertPodcastMediaMime(mimeType);
     const key = objectKey.replace(/^\/+/, '');
     const expiresIn = this.settings.presignExpiresSeconds;
 

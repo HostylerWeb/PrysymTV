@@ -31,7 +31,7 @@ export function LiveCard({
   avatar,
 }: LiveCardProps) {
   return (
-    <Link href={`/live/${slug ?? id}`}>
+    <Link href={`/live/${id}`}>
       <div className="group flex-shrink-0 w-[300px] md:w-[340px] cursor-pointer">
         {/* Thumbnail */}
         <div className="relative aspect-video rounded-lg overflow-hidden bg-muted mb-2">

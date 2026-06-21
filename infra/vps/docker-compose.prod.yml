@@ -1,0 +1,54 @@
+# Production stack — Postgres, Redis, MediaMTX (bind to localhost except RTMP/HLS ports).
+# Secrets: /etc/prysym/secrets.env (chmod 600, root:root)
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: prysym-postgres
+    restart: unless-stopped
+    env_file:
+      - /etc/prysym/secrets.env
+    environment:
+      POSTGRES_USER: prysym
+      POSTGRES_DB: prysymtv
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - prysym_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prysym -d prysymtv"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: prysym-redis
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
+    env_file:
+      - /etc/prysym/secrets.env
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - prysym_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  mediamtx:
+    build:
+      context: ..
+      dockerfile: Dockerfile.mediamtx
+    image: prysym-mediamtx:latest
+    container_name: prysym-mediamtx
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /opt/prysym/stack/mediamtx.yml:/mediamtx.yml:ro
+    command: ["/mediamtx.yml"]
+
+volumes:
+  prysym_pg_data:
+  prysym_redis_data:

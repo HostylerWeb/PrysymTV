@@ -99,7 +99,7 @@ export function LiveStudioPanel({
           </div>
         </div>
 
-        <div className="relative w-full aspect-video lg:aspect-auto lg:flex-1 lg:min-h-[300px] bg-zinc-950 rounded-none lg:rounded-xl overflow-hidden shrink-0 border border-border/50">
+        <div className="relative w-full flex-1 min-h-[45vh] aspect-video lg:aspect-auto lg:min-h-[300px] bg-zinc-950 rounded-none lg:rounded-xl overflow-hidden shrink-0 border border-border/50">
           {useCamera ? (
             <BrowserLivePublisher
               whipPublishUrl={studio!.whipPublishUrl}
@@ -171,12 +171,14 @@ export function LiveStudioPanel({
         </div>
 
         <div className="flex-1 flex flex-col min-h-0 lg:hidden border-t border-border">
-          <StudioChatPanel
-            messages={chatMessages}
-            messageInput={messageInput}
-            onMessageInputChange={onMessageInputChange}
-            onSendMessage={onSendMessage}
-          />
+          {(onAir || isPublishing) && (
+            <StudioChatPanel
+              messages={chatMessages}
+              messageInput={messageInput}
+              onMessageInputChange={onMessageInputChange}
+              onSendMessage={onSendMessage}
+            />
+          )}
         </div>
       </div>
 

@@ -303,12 +303,16 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
 
   const togglePlayerFullscreen = () => {
     const el = playerContainerRef.current
+    const video = liveVideoRef.current
     if (!el) return
     if (document.fullscreenElement) {
       void document.exitFullscreen()
-    } else {
-      void el.requestFullscreen().catch(() => {})
+      return
     }
+    void el.requestFullscreen().catch(() => {
+      const webkitVideo = video as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null
+      webkitVideo?.webkitEnterFullscreen?.()
+    })
   }
 
   const sendMessage = () => {
@@ -367,7 +371,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
         <div className="flex-1 flex flex-col min-h-0 min-w-0">
           <div
             ref={playerContainerRef}
-            className="relative w-full aspect-video lg:aspect-auto lg:flex-1 lg:min-h-[320px] bg-black rounded-none lg:rounded-xl overflow-hidden shrink-0"
+            className="relative w-full flex-1 min-h-[40vh] aspect-video lg:aspect-auto lg:min-h-[320px] bg-black rounded-none lg:rounded-xl overflow-hidden shrink-0"
           >
             {isLive && (stream.webrtcPlaybackUrl || stream.hlsPlaybackUrl) ? (
               <LiveBroadcastPlayer
@@ -460,7 +464,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
                 <button
                   type="button"
                   onClick={togglePlayerFullscreen}
-                  className="hidden md:flex w-10 h-10 rounded-full bg-black/40 backdrop-blur items-center justify-center"
+                  className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-black/40 backdrop-blur flex items-center justify-center"
                   aria-label="Fullscreen"
                 >
                   <Maximize className="w-5 h-5 text-white" />

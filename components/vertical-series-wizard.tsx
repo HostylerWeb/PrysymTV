@@ -264,6 +264,7 @@ export function VerticalSeriesWizard({
           title: episodeTitle.trim(),
           mimeType: videoFile.type,
           fileName: videoFile.name,
+          verticalEpisodeId: ep.id,
         },
         videoFile,
         setUploadProgress,

@@ -1,0 +1,36 @@
+# MediaMTX — production (host network; API on localhost:4000)
+logLevel: info
+
+rtmp: yes
+rtmpAddress: :1935
+
+hls: yes
+hlsAddress: :8888
+hlsAllowOrigins: ["*"]
+hlsAlwaysRemux: yes
+hlsVariant: lowLatency
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+hlsSegmentCount: 7
+
+webrtc: yes
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: :8189
+webrtcAllowOrigins:
+  - PRYSYM_PUBLIC_ORIGIN
+webrtcAdditionalHosts:
+  - PRYSYM_PUBLIC_HOST
+  - PRYSYM_PUBLIC_IP
+
+api: yes
+apiAddress: 127.0.0.1:9997
+
+authMethod: http
+authHTTPAddress: http://127.0.0.1:4000/api/v1/streams/mediamtx/auth
+
+paths:
+  ~^live/(.+)$:
+    source: publisher
+    runOnReady: curl -fsS -X POST "http://127.0.0.1:4000/api/v1/streams/webhooks/ready?path=$MTX_PATH"
+    runOnNotReady: curl -fsS -X POST "http://127.0.0.1:4000/api/v1/streams/webhooks/done?path=$MTX_PATH"

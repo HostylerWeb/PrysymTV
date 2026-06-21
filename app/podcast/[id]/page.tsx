@@ -1,9 +1,11 @@
 "use client"
 
 import { use, useState, useEffect, useRef, useCallback } from "react"
-import { ChevronLeft, Play, Pause, Heart, Share2, Plus, Bookmark, Flag } from "lucide-react"
+import { ChevronLeft, Play, Pause, Heart, Share2, Plus, Bookmark, Flag, Gift } from "lucide-react"
+import { GiftSheet } from "@/components/gift-sheet"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { BottomNavigation } from "@/components/bottom-navigation"
@@ -28,6 +30,7 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
   const { id } = use(params)
   const { isAuthenticated, isLoading: authLoading } = useAuth()
   const audioRef = useRef<HTMLAudioElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const progressSent = useRef(0)
 
   const [loading, setLoading] = useState(true)
@@ -37,6 +40,7 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [isPlaylistOpen, setIsPlaylistOpen] = useState(false)
   const [isReportOpen, setIsReportOpen] = useState(false)
+  const [isGiftOpen, setIsGiftOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [liked, setLiked] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -89,12 +93,21 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
   )
 
   useEffect(() => {
+    if (!episode) return
+    const isVideo = episode.mediaType === "video" || !!episode.videoUrl
+    if (isVideo) {
+      const video = videoRef.current
+      if (!video || !episode.videoUrl) return
+      if (isPlaying) void video.play().catch(() => setIsPlaying(false))
+      else video.pause()
+      return
+    }
     const audio = audioRef.current
-    if (!audio || !episode?.audioUrl) return
+    if (!audio || !episode.audioUrl) return
     audio.src = episode.audioUrl
     if (isPlaying) void audio.play().catch(() => setIsPlaying(false))
     else audio.pause()
-  }, [episode?.audioUrl, isPlaying, episode?.id])
+  }, [episode, isPlaying])
 
   if (loading || !episode) {
     return (
@@ -105,6 +118,7 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
   }
 
   const hostSlug = episode.hostSlug
+  const isVideoEpisode = episode.mediaType === "video" || !!episode.videoUrl
 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
@@ -116,11 +130,28 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
         >
           <ChevronLeft className="w-4 h-4" /> Back to Podcasts
         </Link>
-        <img
-          src={episode.cover}
-          alt=""
-          className="w-full max-w-sm aspect-square rounded-2xl object-cover mx-auto mb-6 shadow-xl"
-        />
+        {isVideoEpisode && episode.videoUrl ? (
+          <div className="w-full max-w-2xl mx-auto mb-6 rounded-2xl overflow-hidden bg-black aspect-video shadow-xl">
+            <HlsVideoPlayer
+              src={episode.videoUrl}
+              className="w-full h-full object-contain"
+              controls
+              playsInline
+              videoRef={videoRef}
+              onTimeUpdate={(currentTime) => persistProgress(currentTime)}
+              onEnded={() => {
+                persistProgress(episode.durationSeconds, true)
+                setIsPlaying(false)
+              }}
+            />
+          </div>
+        ) : (
+          <img
+            src={episode.cover}
+            alt=""
+            className="w-full max-w-sm aspect-square rounded-2xl object-cover mx-auto mb-6 shadow-xl"
+          />
+        )}
         <p className="text-sm text-primary font-medium text-center mb-1">
           {episode.show?.title ?? episode.podcast}
         </p>
@@ -132,7 +163,7 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
         {episode.description && (
           <p className="text-sm text-foreground/80 mb-8">{episode.description}</p>
         )}
-        {episode.audioUrl ? (
+        {episode.audioUrl && !isVideoEpisode ? (
           <audio
             ref={audioRef}
             className="hidden"
@@ -147,14 +178,18 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
             }}
           />
         ) : null}
+        {!isVideoEpisode && (
+          <div className="flex justify-center mb-4">
+            <button
+              type="button"
+              onClick={() => setIsPlaying(!isPlaying)}
+              className="w-16 h-16 rounded-full bg-primary text-white flex items-center justify-center"
+            >
+              {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8 ml-1" />}
+            </button>
+          </div>
+        )}
         <div className="flex justify-center gap-4 mb-8">
-          <button
-            type="button"
-            onClick={() => setIsPlaying(!isPlaying)}
-            className="w-16 h-16 rounded-full bg-primary text-white flex items-center justify-center"
-          >
-            {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8 ml-1" />}
-          </button>
           <button
             type="button"
             onClick={() => {
@@ -213,6 +248,19 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
           </button>
           <button
             type="button"
+            onClick={() => {
+              if (!isAuthenticated) {
+                setIsAuthModalOpen(true)
+                return
+              }
+              setIsGiftOpen(true)
+            }}
+            className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center"
+          >
+            <Gift className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
             onClick={() => setIsReportOpen(true)}
             className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center"
             aria-label="Report episode"
@@ -265,6 +313,15 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
         targetId={episode.id}
         targetLabel={episode.title}
       />
+      {episode.creatorId && (
+        <GiftSheet
+          isOpen={isGiftOpen}
+          onClose={() => setIsGiftOpen(false)}
+          receiverId={episode.creatorId}
+          receiverName={episode.hostName}
+          onNeedAuth={() => setIsAuthModalOpen(true)}
+        />
+      )}
     </main>
   )
 }

@@ -94,18 +94,23 @@ export class BillingService {
     const frontend = this.config.get<string>('FRONTEND_URL', 'http://localhost:3001');
 
     if (!this.stripe) {
-      const sub = await this.grantCreatorSubscription({
-        subscriberId,
-        creatorId,
-        tier: plan.tier,
-        amountUsd: plan.priceUsd,
-      });
-      return {
-        success: true,
-        devMode: true,
-        subscriptionId: sub.id,
-        currentPeriodEnd: sub.currentPeriodEnd,
-      };
+      if (this.config.get<string>('BILLING_DEV_GRANTS') === 'true') {
+        const sub = await this.grantCreatorSubscription({
+          subscriberId,
+          creatorId,
+          tier: plan.tier,
+          amountUsd: plan.priceUsd,
+        });
+        return {
+          success: true,
+          devMode: true,
+          subscriptionId: sub.id,
+          currentPeriodEnd: sub.currentPeriodEnd,
+        };
+      }
+      throw new ServiceUnavailableException(
+        'Creator memberships require Stripe. Set STRIPE_SECRET_KEY in the API environment.',
+      );
     }
 
     const session = await this.stripe.checkout.sessions.create({
@@ -291,17 +296,22 @@ export class BillingService {
     const frontend = this.config.get<string>('FRONTEND_URL', 'http://localhost:3001');
 
     if (!this.stripe) {
-      await this.grantPremium(userId, plan.tier, plan.priceUsd);
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { premiumTier: true, premiumExpiresAt: true },
-      });
-      return {
-        success: true,
-        devMode: true,
-        premiumTier: user?.premiumTier,
-        premiumExpiresAt: user?.premiumExpiresAt,
-      };
+      if (this.config.get<string>('BILLING_DEV_GRANTS') === 'true') {
+        await this.grantPremium(userId, plan.tier, plan.priceUsd);
+        const user = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { premiumTier: true, premiumExpiresAt: true },
+        });
+        return {
+          success: true,
+          devMode: true,
+          premiumTier: user?.premiumTier,
+          premiumExpiresAt: user?.premiumExpiresAt,
+        };
+      }
+      throw new ServiceUnavailableException(
+        'Membership requires Stripe. Set STRIPE_SECRET_KEY in the API environment.',
+      );
     }
 
     const session = await this.stripe.checkout.sessions.create({

@@ -1,7 +1,9 @@
 "use client"
 
 import { Suspense, use, useState, useEffect } from "react"
-import { ChevronLeft, Share2, MoreVertical, Play, Users, Video, Heart, Bell, BellOff, Check } from "lucide-react"
+import { ChevronLeft, Share2, MoreVertical, Play, Users, Video, Heart, Bell, BellOff, Check, Gift } from "lucide-react"
+import { GiftSheet } from "@/components/gift-sheet"
+import { PageLoadingSkeleton } from "@/components/content-skeletons"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -36,11 +38,7 @@ type CreatorVideo = {
 export default function CreatorProfilePage(props: { params: Promise<{ slug: string }> }) {
   return (
     <Suspense
-      fallback={
-        <main className="min-h-screen flex items-center justify-center bg-background md:pl-20">
-          <p className="text-muted-foreground">Loading creator…</p>
-        </main>
-      }
+      fallback={<PageLoadingSkeleton label="Loading creator…" />}
     >
       <CreatorProfilePageContent {...props} />
     </Suspense>
@@ -60,6 +58,7 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
+  const [isGiftOpen, setIsGiftOpen] = useState(false)
   const [podcastShows, setPodcastShows] = useState<
     Array<{ id: string; title: string; cover: string; episodes: number }>
   >([])
@@ -230,6 +229,13 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
                 {notificationsOn ? <Bell className="w-5 h-5 fill-current" /> : <BellOff className="w-5 h-5" />}
               </Button>
             )}
+            <Button
+              variant="secondary"
+              className="rounded-full gap-2"
+              onClick={() => requireAuth(() => setIsGiftOpen(true))}
+            >
+              <Gift className="w-4 h-4" /> Tip
+            </Button>
           </div>
         </div>
 
@@ -344,6 +350,13 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} initialMode="login" />
       <ShareSheet isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} title={name} />
+      <GiftSheet
+        isOpen={isGiftOpen}
+        onClose={() => setIsGiftOpen(false)}
+        receiverId={profile.id}
+        receiverName={name}
+        onNeedAuth={() => setIsAuthModalOpen(true)}
+      />
     </main>
   )
 }

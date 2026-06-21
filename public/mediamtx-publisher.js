@@ -87,6 +87,28 @@ class MediaMTXWebRTCPublisher {
       : [];
   }
 
+  /** Preserve reverse-proxy path prefix (e.g. /webrtc) when resolving WHIP session URLs. */
+  static #resolveSessionUrl(location, endpointUrl) {
+    const loc = (location ?? "").trim();
+    if (!loc) {
+      throw new Error("missing location header");
+    }
+
+    const base = new URL(endpointUrl);
+
+    if (loc.startsWith("/live/")) {
+      const proxyPrefix = base.pathname.replace(
+        /\/live\/[^/]+\/(?:whip|whep)\/?$/,
+        "",
+      );
+      if (proxyPrefix && proxyPrefix !== base.pathname) {
+        return `${base.origin}${proxyPrefix}${loc}`;
+      }
+    }
+
+    return new URL(loc, base).toString();
+  }
+
   static #parseOffer(offer) {
     const ret = {
       iceUfrag: "",
@@ -400,10 +422,10 @@ class MediaMTXWebRTCPublisher {
           throw new Error(`bad status code ${res.status}`);
       }
 
-      this.#sessionUrl = new URL(
+      this.#sessionUrl = MediaMTXWebRTCPublisher.#resolveSessionUrl(
         res.headers.get("location"),
         this.#conf.url,
-      ).toString();
+      );
 
       return res.text();
     });

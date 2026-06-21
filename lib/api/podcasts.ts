@@ -28,6 +28,8 @@ export type PodcastEpisodeCard = {
   cover: string;
   plays: string;
   audioUrl: string | null;
+  videoUrl?: string | null;
+  mediaType?: "audio" | "video";
   description?: string;
   liked?: boolean;
   saved?: boolean;
@@ -50,7 +52,9 @@ type ApiEpisode = {
   title: string;
   description?: string | null;
   coverUrl?: string | null;
-  audioUrl?: string | null;
+  audioUrl: string | null;
+  videoUrl?: string | null;
+  mediaType?: "audio" | "video";
   durationSeconds?: number;
   playsCount?: number;
   publishedAt?: string | null;
@@ -90,6 +94,8 @@ function mapEpisode(raw: ApiEpisode): PodcastEpisodeCard {
     cover: videoThumbnail(raw.coverUrl ?? raw.show?.coverUrl),
     plays: formatViewCount(raw.playsCount ?? 0),
     audioUrl: raw.audioUrl ?? null,
+    videoUrl: raw.videoUrl ?? null,
+    mediaType: raw.mediaType ?? (raw.videoUrl ? "video" : "audio"),
     description: raw.description ?? undefined,
   };
 }
@@ -187,6 +193,7 @@ export function mapPodcastEpisodeDetail(raw: ApiEpisode & { liked?: boolean; sav
       : null,
     hostSlug: raw.creator?.username,
     hostName: raw.creator?.displayName ?? raw.creator?.username ?? "Host",
+    creatorId: (raw.creator as { id?: string } | undefined)?.id,
     liked: raw.liked ?? false,
     saved: raw.saved ?? false,
   };

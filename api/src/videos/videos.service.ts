@@ -29,9 +29,11 @@ import { AnalyticsService } from '../analytics/analytics.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { StreamsService } from '../streams/streams.service';
 import { VIDEO_PROCESSING_QUEUE } from '../queue/queue.constants';
 import type { VideoProcessingJobData } from '../queue/video-processing.processor';
 import { mapVideoCard, VIDEO_CARD_SELECT } from '../common/mappers/content.mapper';
+import { verticalFromCategorySlug, categorySlugsForVertical } from '../common/utils/category-vertical.util';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { UploadCompleteDto } from './dto/upload-complete.dto';
 import { UploadInitDto } from './dto/upload-init.dto';
@@ -43,6 +45,7 @@ export class VideosService {
     private readonly storage: StorageService,
     private readonly analytics: AnalyticsService,
     private readonly notifications: NotificationsService,
+    private readonly streams: StreamsService,
     @InjectQueue(VIDEO_PROCESSING_QUEUE) private readonly videoQueue: Queue,
   ) {}
 
@@ -80,19 +83,23 @@ export class VideosService {
             .slice(0, 12)
         : [];
 
+    const categorySlug =
+      dto.category?.trim() ||
+      (dto.type === 'movie'
+        ? 'drama'
+        : dto.type === 'podcast'
+          ? 'podcast'
+          : undefined);
+
     const video = await this.prisma.video.create({
       data: {
         creatorId: user.id,
         type: this.mapUploadType(dto.type),
         title: dto.title.trim(),
         description: dto.description?.trim() || null,
-        category:
-          dto.category?.trim() ||
-          (dto.type === 'movie'
-            ? 'drama'
-            : dto.type === 'podcast'
-              ? 'podcast'
-              : undefined),
+        category: categorySlug,
+        vertical: verticalFromCategorySlug(categorySlug),
+        verticalEpisodeId: dto.verticalEpisodeId?.trim() || null,
         releaseYear: dto.type === 'movie' ? (dto.releaseYear ?? null) : undefined,
         ageRating:
           dto.type === 'movie' ? dto.ageRating?.trim() || null : undefined,
@@ -512,7 +519,14 @@ export class VideosService {
     if (vertical && vertical !== 'all') {
       const allowed = Object.values(ContentVertical);
       if (allowed.includes(vertical as ContentVertical)) {
-        videoWhere.vertical = vertical as ContentVertical;
+        const v = vertical as ContentVertical;
+        const slugs = categorySlugsForVertical(v);
+        videoWhere.OR = [
+          { vertical: v },
+          ...(slugs.length
+            ? [{ vertical: null, category: { in: slugs } }]
+            : []),
+        ];
       }
     }
 
@@ -527,7 +541,14 @@ export class VideosService {
     if (vertical && vertical !== 'all') {
       const allowed = Object.values(ContentVertical);
       if (allowed.includes(vertical as ContentVertical)) {
-        streamWhere.vertical = vertical as ContentVertical;
+        const v = vertical as ContentVertical;
+        const slugs = categorySlugsForVertical(v);
+        streamWhere.OR = [
+          { vertical: v },
+          ...(slugs.length
+            ? [{ vertical: null, category: { in: slugs } }]
+            : []),
+        ];
       }
     }
 
@@ -536,6 +557,10 @@ export class VideosService {
       meta: { page, limit, total: 0 },
     };
     const emptyLive = { items: [] as Array<Record<string, unknown>> };
+
+    if (mode === 'live' || mode === 'all') {
+      await this.streams.syncStreamsFromIngest();
+    }
 
     if (mode === 'live') {
       const streams = await this.prisma.stream.findMany({

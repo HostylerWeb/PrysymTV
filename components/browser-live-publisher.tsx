@@ -324,7 +324,7 @@ export function BrowserLivePublisher({
       <div className="relative flex-1 min-h-0">
         <video
           ref={videoRef}
-          className="w-full h-full object-cover [transform:scaleX(-1)]"
+          className="w-full h-full object-contain [transform:scaleX(-1)]"
           playsInline
           muted
           autoPlay
@@ -382,11 +382,12 @@ export function BrowserLivePublisher({
       </div>
 
       {!publishing && previewReady && (
-        <div className="shrink-0 border-t border-white/10 bg-zinc-900/95 p-3 space-y-3">
-          <p className="text-xs text-zinc-400">
-            Choose your camera and microphone before going live.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <details className="shrink-0 border-t border-white/10 bg-zinc-900/95 p-3 group">
+          <summary className="text-xs text-zinc-300 cursor-pointer list-none flex items-center justify-between">
+            <span>Camera &amp; microphone</span>
+            <span className="text-zinc-500 group-open:hidden">Tap to change</span>
+          </summary>
+          <div className="mt-3 space-y-3">
             <label className="block space-y-1.5">
               <span className="text-xs font-medium text-zinc-300 flex items-center gap-1.5">
                 <Video className="w-3.5 h-3.5" />
@@ -430,7 +431,7 @@ export function BrowserLivePublisher({
               </select>
             </label>
           </div>
-        </div>
+        </details>
       )}
     </div>
   )

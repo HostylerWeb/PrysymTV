@@ -1,13 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { AnalyticsEventType, ContentStatus, StreamStatus, VideoType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { StreamsService } from '../streams/streams.service';
 import { mapVideoCard, VIDEO_CARD_SELECT } from '../common/mappers/content.mapper';
 
 @Injectable()
 export class FeedService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly streams: StreamsService,
+  ) {}
 
   async home(userId?: string) {
+    await this.streams.syncStreamsFromIngest();
+
     const [liveStreams, movies, videos, featuredMovie, continueWatching] =
       await Promise.all([
       this.prisma.stream.findMany({

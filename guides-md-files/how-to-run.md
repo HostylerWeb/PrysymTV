@@ -411,11 +411,13 @@ cd api && npm audit # API (Prisma CLI may show dev-only advisories — do not us
 - Set `NODE_ENV=production` on the API (secure cookies).
 - Host Postgres/Redis managed (Neon, Upstash, etc.) — update `DATABASE_URL` / `REDIS_URL`.
 - Deploy API and frontend separately; point `NEXT_PUBLIC_API_URL` at your public API domain.
+- **API rate limit** — default 1000 req/min **per IP**; raise with `THROTTLE_LIMIT` / `THROTTLE_TTL_MS` in `api/.env`. See [security-checklist.md](./security-checklist.md#api-rate-limit-quota).
 
 ---
 
 ## Related docs
 
 - [security-checklist.md](./security-checklist.md) — audits, prod requirements, known dev-only risks
+- [vps-production.md](./vps-production.md) — fresh VPS bootstrap (Docker, nginx, TLS, firewall)
 - [api.md](./api.md) — REST API reference (mobile + web)
 - [backend-development-plan.md](./backend-development-plan.md) — full backend roadmap

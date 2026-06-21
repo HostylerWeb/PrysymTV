@@ -4,9 +4,11 @@ import { Suspense, use, useState, useRef, useEffect, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   ChevronLeft, Share2, ThumbsUp, ThumbsDown, MessageCircle,
-  Bookmark, ChevronDown, ChevronUp, Send, Volume2, Maximize, Lock, Flag, ListMusic,
-  Play, Pause,
+  Bookmark, ChevronDown, ChevronUp, Send, Volume2, Maximize, Minimize2, Lock, Flag, ListMusic,
+  Play, Pause, Gift,
 } from "lucide-react"
+import { GiftSheet } from "@/components/gift-sheet"
+import { WatchPageSkeleton } from "@/components/content-skeletons"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -84,6 +86,7 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
   const openCommentsFromUrl = searchParams.get("comments") === "1"
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const videoRef = useRef<HTMLVideoElement>(null)
+  const playerContainerRef = useRef<HTMLDivElement>(null)
   const [video, setVideo] = useState<WatchVideo | null>(null)
   const [suggested, setSuggested] = useState<
     Array<{ id: string; title: string; thumbnail: string; duration: string; channel: string; views: string }>
@@ -111,6 +114,8 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
   const [isReportOpen, setIsReportOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [isPlaylistOpen, setIsPlaylistOpen] = useState(false)
+  const [isGiftOpen, setIsGiftOpen] = useState(false)
+  const [isImmersive, setIsImmersive] = useState(false)
   const progressSent = useRef(0)
   const viewRecorded = useRef(false)
   useWatchAnalytics(video?.id, { creatorId: video?.creatorId })
@@ -118,6 +123,39 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
   useEffect(() => {
     viewRecorded.current = false
   }, [id])
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsImmersive(Boolean(document.fullscreenElement))
+    }
+    document.addEventListener("fullscreenchange", onFullscreenChange)
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange)
+      document.body.style.overflow = ""
+    }
+  }, [])
+
+  useEffect(() => {
+    document.body.style.overflow = isImmersive ? "hidden" : ""
+    return () => {
+      document.body.style.overflow = ""
+    }
+  }, [isImmersive])
+
+  const togglePlayerFullscreen = () => {
+    const container = playerContainerRef.current
+    if (!container) return
+    if (document.fullscreenElement || isImmersive) {
+      if (document.fullscreenElement) void document.exitFullscreen()
+      setIsImmersive(false)
+      return
+    }
+    if (window.matchMedia("(max-width: 768px)").matches) {
+      setIsImmersive(true)
+      return
+    }
+    void container.requestFullscreen().catch(() => setIsImmersive(true))
+  }
 
   useEffect(() => {
     if (authLoading) return
@@ -385,9 +423,9 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
   }
 
   if (loading || !video) {
-    return (
+    return loading ? <WatchPageSkeleton /> : (
       <main className="min-h-screen flex items-center justify-center bg-background">
-        <p className="text-muted-foreground">{loading ? "Loading…" : "Video not found"}</p>
+        <p className="text-muted-foreground">Video not found</p>
       </main>
     )
   }
@@ -398,7 +436,11 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <div className="max-w-6xl mx-auto w-full">
         <div
-          className="relative w-full aspect-video bg-black group"
+          ref={playerContainerRef}
+          className={cn(
+            "relative w-full aspect-video bg-black group",
+            isImmersive && "fixed inset-0 z-[100] aspect-auto h-[100dvh] w-screen max-w-none",
+          )}
           onClick={() => {
             setShowControls(true)
             togglePlay()
@@ -489,11 +531,15 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation()
-                    const el = videoRef.current
-                    el?.requestFullscreen?.()
+                    togglePlayerFullscreen()
                   }}
+                  aria-label={isImmersive ? "Exit fullscreen" : "Fullscreen"}
                 >
-                  <Maximize className="w-5 h-5" />
+                  {isImmersive ? (
+                    <Minimize2 className="w-5 h-5" />
+                  ) : (
+                    <Maximize className="w-5 h-5" />
+                  )}
                 </button>
               </div>
             </div>
@@ -510,6 +556,9 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
             </button>
             <button type="button" onClick={handleDislike} className={cn("flex items-center gap-2 px-4 py-2 rounded-full text-sm", isDisliked ? "bg-primary text-primary-foreground" : "bg-secondary")}>
               <ThumbsDown className="w-4 h-4" />
+            </button>
+            <button type="button" onClick={() => requireAuth(() => setIsGiftOpen(true))} className="flex items-center gap-2 px-4 py-2 rounded-full bg-secondary text-sm">
+              <Gift className="w-4 h-4" /> Gift
             </button>
             <button type="button" onClick={() => setIsShareOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-full bg-secondary text-sm"><Share2 className="w-4 h-4" /> Share</button>
             <button type="button" onClick={handleSave} className={cn("flex items-center gap-2 px-4 py-2 rounded-full text-sm", isSaved ? "bg-primary text-primary-foreground" : "bg-secondary")}>
@@ -742,19 +791,21 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
           itemTitle={video.title}
         />
       )}
+      <GiftSheet
+        isOpen={isGiftOpen}
+        onClose={() => setIsGiftOpen(false)}
+        receiverId={video.creatorId}
+        receiverName={video.channel}
+        videoId={video.id}
+        onNeedAuth={() => setIsAuthModalOpen(true)}
+      />
     </main>
   )
 }
 
 export default function WatchPage({ params }: { params: Promise<{ id: string }> }) {
   return (
-    <Suspense
-      fallback={
-        <main className="min-h-screen bg-background flex items-center justify-center">
-          <p className="text-muted-foreground text-sm">Loading…</p>
-        </main>
-      }
-    >
+    <Suspense fallback={<WatchPageSkeleton />}>
       <WatchPageContent params={params} />
     </Suspense>
   )

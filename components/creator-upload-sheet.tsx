@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { X, Upload, Check, Video, Headphones, ListMusic } from "lucide-react"
+import { X, Upload, Check, Video, Headphones, ListMusic, ImageIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
@@ -49,8 +49,8 @@ const KIND_META: Record<
   podcast: {
     title: "Podcast Episode",
     icon: Headphones,
-    accept: "audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac,.webm",
-    hint: "Audio episode (MP3, M4A, WAV…). Optional cover when creating a new show.",
+    accept: "audio/*,video/*,.mp3,.m4a,.wav,.ogg,.aac,.flac,.webm,.mp4,.mov,.mkv",
+    hint: "Upload an audio or video episode. Add show artwork when creating a new show.",
   },
 }
 
@@ -123,7 +123,9 @@ export function CreatorUploadSheet({
   const [newShowDescription, setNewShowDescription] = useState("")
   const [newShowCategory, setNewShowCategory] = useState("General")
   const [newShowCoverFile, setNewShowCoverFile] = useState<File | null>(null)
+  const [newShowCoverPreview, setNewShowCoverPreview] = useState<string | null>(null)
   const [podcastMode, setPodcastMode] = useState<"existing" | "new">("existing")
+  const [podcastMediaType, setPodcastMediaType] = useState<"audio" | "video">("audio")
 
   const [playlists, setPlaylists] = useState<PlaylistSummary[]>([])
   const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<Set<string>>(
@@ -153,7 +155,10 @@ export function CreatorUploadSheet({
     setNewShowTitle("")
     setNewShowDescription("")
     setNewShowCategory("General")
+    setNewShowCoverFile(null)
+    setNewShowCoverPreview(null)
     setPodcastMode("existing")
+    setPodcastMediaType("audio")
     setSelectedPlaylistIds(new Set())
   }, [isOpen, kind])
 
@@ -242,6 +247,18 @@ export function CreatorUploadSheet({
 
     try {
       if (kind === "podcast") {
+        const mime = file.type || ""
+        const isVideoFile = mime.startsWith("video/") || /\.(mp4|mov|mkv|m4v|webm)$/i.test(file.name)
+        if (podcastMediaType === "audio" && isVideoFile) {
+          setError("You selected Audio — choose an audio file or switch to Video.")
+          setBusy(false)
+          return
+        }
+        if (podcastMediaType === "video" && !isVideoFile && mime.startsWith("audio/")) {
+          setError("You selected Video — choose a video file or switch to Audio.")
+          setBusy(false)
+          return
+        }
         let targetShowId = showId
         if (podcastMode === "new" || !targetShowId) {
           if (!newShowTitle.trim()) {
@@ -415,19 +432,68 @@ export function CreatorUploadSheet({
                           </option>
                         ))}
                       </select>
-                      <label className="block text-xs text-muted-foreground">
-                        Show cover (optional)
+                      <label className="block p-4 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 text-center cursor-pointer hover:border-primary/70 transition-colors">
                         <input
                           type="file"
                           accept="image/*"
-                          className="mt-1 block w-full text-sm"
-                          onChange={(e) =>
-                            setNewShowCoverFile(e.target.files?.[0] ?? null)
-                          }
+                          className="hidden"
+                          onChange={(e) => {
+                            const picked = e.target.files?.[0] ?? null
+                            setNewShowCoverFile(picked)
+                            if (newShowCoverPreview) URL.revokeObjectURL(newShowCoverPreview)
+                            setNewShowCoverPreview(picked ? URL.createObjectURL(picked) : null)
+                          }}
                         />
+                        {newShowCoverPreview ? (
+                          <img
+                            src={newShowCoverPreview}
+                            alt="Show cover preview"
+                            className="w-24 h-24 rounded-xl object-cover mx-auto mb-2"
+                          />
+                        ) : (
+                          <ImageIcon className="w-8 h-8 text-primary mx-auto mb-2" />
+                        )}
+                        <p className="text-sm font-medium text-foreground">Show cover art</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {newShowCoverFile?.name ?? "Tap to upload artwork (recommended)"}
+                        </p>
                       </label>
                     </>
                   )}
+                  <div className="flex gap-2 p-1 rounded-xl bg-secondary/60">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPodcastMediaType("audio")
+                        setFile(null)
+                      }}
+                      className={cn(
+                        "flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5",
+                        podcastMediaType === "audio"
+                          ? "bg-background shadow-sm"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      <Headphones className="w-3.5 h-3.5" />
+                      Audio
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPodcastMediaType("video")
+                        setFile(null)
+                      }}
+                      className={cn(
+                        "flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5",
+                        podcastMediaType === "video"
+                          ? "bg-background shadow-sm"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      <Video className="w-3.5 h-3.5" />
+                      Video
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -542,13 +608,25 @@ export function CreatorUploadSheet({
               >
                 <input
                   type="file"
-                  accept={meta.accept}
+                  accept={
+                    kind === "podcast"
+                      ? podcastMediaType === "video"
+                        ? "video/*,.mp4,.mov,.mkv,.webm"
+                        : "audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac,.webm"
+                      : meta.accept
+                  }
                   className="hidden"
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 />
                 <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
                 <p className="text-sm font-medium">
-                  {file ? file.name : "Tap to choose file"}
+                  {file
+                    ? file.name
+                    : kind === "podcast"
+                      ? podcastMediaType === "video"
+                        ? "Tap to choose video file"
+                        : "Tap to choose audio file"
+                      : "Tap to choose file"}
                 </p>
               </label>
 

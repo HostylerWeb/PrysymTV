@@ -3,7 +3,26 @@ export type NotificationMetadata = {
   videoType?: string;
   videoId?: string;
   commentId?: string;
+  contentType?: "video" | "vertical_episode" | "podcast_episode";
+  seriesSlug?: string;
+  episodeNumber?: number;
+  podcastEpisodeId?: string;
 };
+
+function verticalEpisodeUrl(
+  seriesSlug?: string,
+  episodeNumber?: number,
+  commentId?: string,
+  openComments = false,
+): string | undefined {
+  if (!seriesSlug || episodeNumber == null) return undefined;
+  return `/verticals/watch/${seriesSlug}/${episodeNumber}${commentQuery(commentId, openComments)}`;
+}
+
+function podcastEpisodeUrl(podcastEpisodeId?: string): string | undefined {
+  if (!podcastEpisodeId) return undefined;
+  return `/podcast/${podcastEpisodeId}`;
+}
 
 function commentQuery(commentId?: string, openComments = false): string {
   const params = new URLSearchParams();
@@ -23,6 +42,22 @@ export function buildNotificationActionUrl(
   const videoId = metadata?.videoId ?? referenceId ?? undefined;
   const videoType = metadata?.videoType;
   const commentId = metadata?.commentId;
+  const contentType = metadata?.contentType;
+
+  if (contentType === "vertical_episode") {
+    const url = verticalEpisodeUrl(
+      metadata?.seriesSlug,
+      metadata?.episodeNumber,
+      commentId,
+      type === "comment",
+    );
+    if (url) return url;
+  }
+
+  if (contentType === "podcast_episode") {
+    const url = podcastEpisodeUrl(metadata?.podcastEpisodeId ?? referenceId ?? undefined);
+    if (url) return url;
+  }
 
   switch (type) {
     case "follow":
@@ -31,6 +66,14 @@ export function buildNotificationActionUrl(
 
     case "like":
     case "comment": {
+      if (contentType === "vertical_episode") {
+        return verticalEpisodeUrl(
+          metadata?.seriesSlug,
+          metadata?.episodeNumber,
+          commentId,
+          type === "comment",
+        );
+      }
       if (!videoId) return undefined;
       if (videoType === "short") {
         const params = new URLSearchParams({ start: videoId });
@@ -47,6 +90,9 @@ export function buildNotificationActionUrl(
     }
 
     case "upload": {
+      if (contentType === "vertical_episode") {
+        return verticalEpisodeUrl(metadata?.seriesSlug, metadata?.episodeNumber);
+      }
       if (!videoId) return undefined;
       if (videoType === "short") return `/shorts?start=${encodeURIComponent(videoId)}`;
       if (videoType === "movie") return `/movie/${videoId}`;
