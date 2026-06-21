@@ -96,7 +96,7 @@ function mapShortFromApi(card: ShortVideoCard): ShortItem {
     shares: formatViewCount(card.sharesCount ?? 0),
     saves: "0",
     music: `Original Sound - ${card.channelSlug}`,
-    isFollowing: false,
+    isFollowing: card.isFollowing ?? false,
   }
 }
 
@@ -135,6 +135,7 @@ interface ShortVideoProps {
   isLiked: boolean
   isSaved: boolean
   isFollowing: boolean
+  isSelf: boolean
   isAuthenticated: boolean
   onAuthRequired: () => void
 }
@@ -153,6 +154,7 @@ function ShortVideo({
   isLiked,
   isSaved,
   isFollowing,
+  isSelf,
   isAuthenticated,
   onAuthRequired
 }: ShortVideoProps) {
@@ -274,13 +276,16 @@ function ShortVideo({
                 alt={short.username}
                 className="w-9 h-9 md:w-12 md:h-12 rounded-full border-2 border-white object-cover"
               />
-              {!isFollowing && (
+              {!isFollowing && !isSelf && (
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.preventDefault()
+                    e.stopPropagation()
                     handleAction(onFollow)
                   }}
-                  className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 md:w-6 md:h-6 rounded-full bg-primary flex items-center justify-center"
+                  className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 md:w-6 md:h-6 rounded-full bg-primary flex items-center justify-center z-10"
+                  aria-label={`Follow ${short.username}`}
                 >
                   <span className="text-white text-lg leading-none">+</span>
                 </button>
@@ -398,9 +403,7 @@ function ShortsPageContent() {
   const [activeIndex, setActiveIndex] = useState(0)
   const [likedShorts, setLikedShorts] = useState<Set<string>>(new Set())
   const [savedShorts, setSavedShorts] = useState<Set<string>>(new Set())
-  const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set(
-    shortsData.filter(s => s.isFollowing).map(s => s.username)
-  ))
+  const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set())
   const [showComments, setShowComments] = useState(false)
   const [activeShortForComments, setActiveShortForComments] = useState<string | null>(null)
 
@@ -414,6 +417,13 @@ function ShortsPageContent() {
         setShortsData(res.items.map(mapShortFromApi))
         setLikedShorts(new Set(res.items.filter((i) => i.liked).map((i) => i.id)))
         setSavedShorts(new Set(res.items.filter((i) => i.saved).map((i) => i.id)))
+        setFollowedUsers(
+          new Set(
+            res.items
+              .filter((i) => i.isFollowing)
+              .map((i) => `@${i.channelSlug}`),
+          ),
+        )
       })
       .finally(() => {
         if (!cancelled) setFeedLoaded(true)
@@ -472,6 +482,9 @@ function ShortsPageContent() {
         }
         const item = mapShortFromVideoDetail(v)
         setShortsData((prev) => [item, ...prev.filter((s) => s.id !== item.id)])
+        if (item.isFollowing) {
+          setFollowedUsers((prev) => new Set(prev).add(item.username))
+        }
         scrollToIndex(0)
       })
       .catch(() => {})
@@ -895,6 +908,7 @@ function ShortsPageContent() {
               isLiked={likedShorts.has(short.id)}
               isSaved={savedShorts.has(short.id)}
               isFollowing={followedUsers.has(short.username)}
+              isSelf={!!user && short.creatorId === user.id}
               isAuthenticated={isAuthenticated}
               onAuthRequired={() => setIsAuthModalOpen(true)}
             />

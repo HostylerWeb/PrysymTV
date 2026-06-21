@@ -117,6 +117,33 @@ export async function enrichVideoCardsForViewer(
   return flags;
 }
 
+/** Whether the viewer follows each creator (by creator user id). */
+export async function enrichCreatorFollowForViewer(
+  prisma: PrismaService,
+  userId: string | undefined,
+  creatorIds: string[],
+): Promise<Map<string, boolean>> {
+  const uniqueIds = [...new Set(creatorIds)];
+  const result = new Map<string, boolean>();
+  if (!userId || uniqueIds.length === 0) {
+    for (const id of uniqueIds) result.set(id, false);
+    return result;
+  }
+
+  const follows = await prisma.follow.findMany({
+    where: {
+      followerId: userId,
+      followingId: { in: uniqueIds },
+    },
+    select: { followingId: true },
+  });
+  const followed = new Set(follows.map((f) => f.followingId));
+  for (const id of uniqueIds) {
+    result.set(id, followed.has(id));
+  }
+  return result;
+}
+
 export async function getLikedCommentIds(
   prisma: PrismaService,
   userId: string | undefined,

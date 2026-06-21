@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { BarChart3, DollarSign, Eye, TrendingUp } from "lucide-react"
+import { BarChart3, DollarSign, Eye, Gift, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ApiError } from "@/lib/api-client"
 import { fetchCreatorDashboard, type CreatorDashboardResponse } from "@/lib/api/analytics"
@@ -62,6 +62,27 @@ export function CreatorDashboardPanel({ className }: { className?: string }) {
       : "$0.00"
   }
 
+  const fmtCoins = (n: number) => n.toLocaleString()
+
+  const giftStats = [
+    {
+      label: "Coins received (30d)",
+      value: `🪙 ${fmtCoins(data.gifts.coinsReceived30d)}`,
+    },
+    {
+      label: "Gift value (30d)",
+      value: fmtUsd(data.gifts.grossValue30dUsd),
+    },
+    {
+      label: `Your earnings (${data.gifts.creatorSharePercent}%)`,
+      value: fmtUsd(data.gifts.earnings30dUsd),
+    },
+    {
+      label: "Gifts received (30d)",
+      value: String(data.gifts.giftCount30d),
+    },
+  ]
+
   const perfStats = [
     { label: "Views (24h)", value: formatViewCount(data.performance.views24h), icon: Eye },
     { label: "Views (7d)", value: formatViewCount(data.performance.views7d), icon: TrendingUp },
@@ -93,6 +114,78 @@ export function CreatorDashboardPanel({ className }: { className?: string }) {
           {data.partnerTier}
         </p>
       )}
+
+      <div>
+        <h3 className="text-sm font-semibold mb-2">Gifts &amp; tips</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Viewers send gifts in coins (1 coin = $0.01). You keep{" "}
+          {data.gifts.creatorSharePercent}% of each gift; the rest goes to the platform and
+          community fund.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4">
+          {giftStats.map((s) => (
+            <div
+              key={s.label}
+              className="p-3 md:p-4 rounded-xl bg-secondary/30 border border-border"
+            >
+              <Gift className="w-4 h-4 md:w-5 md:h-5 text-primary mb-1 md:mb-2" />
+              <p className="text-xl md:text-2xl font-bold">{s.value}</p>
+              <p className="text-[10px] md:text-xs text-muted-foreground">{s.label}</p>
+            </div>
+          ))}
+        </div>
+        {data.gifts.coinsReceivedLifetime > 0 && (
+          <p className="text-xs text-muted-foreground mb-4">
+            Lifetime: 🪙 {fmtCoins(data.gifts.coinsReceivedLifetime)} coins (
+            {fmtUsd(data.gifts.grossValueLifetimeUsd)} gross) ·{" "}
+            {fmtUsd(data.gifts.earningsLifetimeUsd)} earned from{" "}
+            {data.gifts.giftCountLifetime} gifts
+          </p>
+        )}
+        {data.gifts.recent.length > 0 ? (
+          <div className="rounded-xl border border-border overflow-hidden">
+            <div className="px-3 py-2 bg-secondary/30 border-b border-border">
+              <p className="text-xs font-semibold">Recent gifts</p>
+            </div>
+            <ul className="divide-y divide-border">
+              {data.gifts.recent.map((g) => (
+                <li
+                  key={g.id}
+                  className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">
+                      {g.giftName}{" "}
+                      <span className="text-muted-foreground font-normal">
+                        from {g.fromDisplayName ?? `@${g.fromUsername}`}
+                      </span>
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {new Date(g.createdAt).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-semibold">🪙 {fmtCoins(g.coins)}</p>
+                    <p className="text-[10px] text-primary">
+                      +{fmtUsd(g.creatorEarningsUsd)} ({data.gifts.creatorSharePercent}%)
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No gifts yet. Gifts sent on your videos, shorts, live streams, and profile will
+            appear here.
+          </p>
+        )}
+      </div>
 
       <div>
         <h3 className="text-sm font-semibold mb-2">Performance</h3>
@@ -164,6 +257,10 @@ export function CreatorDashboardPanel({ className }: { className?: string }) {
             <p className="text-sm font-semibold">Revenue (30d)</p>
             <ul className="text-xs md:text-sm text-muted-foreground mt-2 space-y-1">
               <li>Total earnings: {fmtUsd(data.financial.earnings30dUsd)}</li>
+              <li>
+                Gifts &amp; tips (your {data.gifts.creatorSharePercent}%):{" "}
+                {fmtUsd(data.financial.giftsEarnings30dUsd)}
+              </li>
               <li>Ad revenue: {fmtUsd(data.financial.adRevenueUsd)}</li>
               <li>Sponsorships: {fmtUsd(data.financial.sponsorshipRevenueUsd)}</li>
               <li>Merch: {fmtUsd(data.financial.merchandiseRevenueUsd)}</li>

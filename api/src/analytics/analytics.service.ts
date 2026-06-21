@@ -19,6 +19,8 @@ import { RevenueSplitService } from '../revenue/revenue-split.service';
 import { TrackEventsDto } from './dto/track-events.dto';
 import { TrackContentAdDto } from './dto/track-content-ad.dto';
 
+const COIN_USD = new Prisma.Decimal('0.01');
+
 @Injectable()
 export class AnalyticsService {
   private platformCreatorIdCache: string | null | undefined;
@@ -314,7 +316,12 @@ export class AnalyticsService {
       adClicks30d,
       watchEvents30d,
       balanceSum,
-      gifts30d,
+      giftStats30d,
+      giftStatsLifetime,
+      giftEarnings30d,
+      giftEarningsLifetime,
+      recentGifts,
+      viewerSupportRule,
       likes30d,
       comments30d,
       latestImpact,
@@ -345,9 +352,36 @@ export class AnalyticsService {
         where: { creatorId, entryType: 'credit' },
         _sum: { amountUsd: true },
       }),
-      this.prisma.viewerSupportTransaction.count({
+      this.prisma.gift.aggregate({
         where: { receiverId: creatorId, createdAt: { gte: since30d } },
+        _sum: { coinValue: true },
+        _count: true,
       }),
+      this.prisma.gift.aggregate({
+        where: { receiverId: creatorId },
+        _sum: { coinValue: true },
+        _count: true,
+      }),
+      this.sumGiftLedgerCredits(creatorId, since30d),
+      this.sumGiftLedgerCredits(creatorId),
+      this.prisma.gift.findMany({
+        where: { receiverId: creatorId },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        include: {
+          sender: { select: { username: true, displayName: true } },
+          catalog: { select: { name: true } },
+          revenueBatch: {
+            include: {
+              entries: {
+                where: { party: 'creator' },
+                select: { amountUsd: true },
+              },
+            },
+          },
+        },
+      }),
+      this.revenueSplit.getRule('viewer_support'),
       this.prisma.like.count({
         where: {
           createdAt: { gte: since30d },
@@ -457,6 +491,11 @@ export class AnalyticsService {
     ].sort((a, b) => b.viewsCount - a.viewsCount);
 
     const computedImpactUsd = Number(gafInflow._sum.amountUsd ?? 0);
+    const coinsReceived30d = giftStats30d._sum.coinValue ?? 0;
+    const coinsReceivedLifetime = giftStatsLifetime._sum.coinValue ?? 0;
+    const creatorSharePercent = viewerSupportRule.creatorBps / 100;
+    const grossGifts30dUsd = COIN_USD.mul(coinsReceived30d);
+    const grossGiftsLifetimeUsd = COIN_USD.mul(coinsReceivedLifetime);
 
     return {
       partnerTier: user?.partnerTier ?? 'standard',
@@ -467,7 +506,7 @@ export class AnalyticsService {
         views30d,
         watchHours30d: Math.round(watchHours30d * 10) / 10,
         subscribers: user?._count.followers ?? 0,
-        engagement30d: likes30d + comments30d + gifts30d,
+        engagement30d: likes30d + comments30d + giftStats30d._count,
         retentionRate: latestImpact?.retentionRate ?? null,
       },
       advertising: {
@@ -488,6 +527,8 @@ export class AnalyticsService {
         merchandiseRevenueUsd:
           latestImpact?.merchandiseRevenueUsd?.toString() ?? '0',
         donationsUsd: latestImpact?.donationsUsd?.toString() ?? '0',
+        giftsEarnings30dUsd: giftEarnings30d.toFixed(2),
+        giftsEarningsLifetimeUsd: giftEarningsLifetime.toFixed(2),
         pendingPayoutUsd: availableBalance.toFixed(2),
         availableBalanceUsd: availableBalance.toFixed(2),
         lifetimeCreditsUsd: balanceSum._sum.amountUsd?.toString() ?? '0',
@@ -500,9 +541,50 @@ export class AnalyticsService {
         ).toFixed(2),
         workforceOpportunities: latestImpact?.workforceOpportunities ?? 0,
       },
+      gifts: {
+        creatorSharePercent,
+        coinsReceived30d,
+        coinsReceivedLifetime,
+        giftCount30d: giftStats30d._count,
+        giftCountLifetime: giftStatsLifetime._count,
+        grossValue30dUsd: grossGifts30dUsd.toFixed(2),
+        grossValueLifetimeUsd: grossGiftsLifetimeUsd.toFixed(2),
+        earnings30dUsd: giftEarnings30d.toFixed(2),
+        earningsLifetimeUsd: giftEarningsLifetime.toFixed(2),
+        recent: recentGifts.map((g) => {
+          const creatorUsd =
+            g.revenueBatch?.entries[0]?.amountUsd ??
+            COIN_USD.mul(g.coinValue).mul(viewerSupportRule.creatorBps).div(10000);
+          return {
+            id: g.id,
+            giftName: g.catalog.name,
+            fromUsername: g.sender.username,
+            fromDisplayName: g.sender.displayName,
+            coins: g.coinValue,
+            grossUsd: COIN_USD.mul(g.coinValue).toFixed(2),
+            creatorEarningsUsd: creatorUsd.toFixed(2),
+            createdAt: g.createdAt.toISOString(),
+          };
+        }),
+      },
       topContent: allContent.slice(0, 5),
       content: allContent,
     };
+  }
+
+  private async sumGiftLedgerCredits(creatorId: string, since?: Date) {
+    const rows = await this.prisma.revenueLedgerEntry.findMany({
+      where: {
+        party: 'creator',
+        ...(since ? { createdAt: { gte: since } } : {}),
+        batch: {
+          creatorId,
+          sourceType: RevenueSourceType.gift,
+        },
+      },
+      select: { amountUsd: true },
+    });
+    return rows.reduce((s, r) => s.plus(r.amountUsd), new Prisma.Decimal(0));
   }
 
   private async sumLedgerCredits(creatorId: string, since: Date) {

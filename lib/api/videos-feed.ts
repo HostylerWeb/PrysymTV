@@ -9,6 +9,7 @@ export type ShortVideoCard = VideoCard & {
   liked?: boolean;
   saved?: boolean;
   disliked?: boolean;
+  isFollowing?: boolean;
 };
 
 export type ApiVideoDetail = VideoDetail & {

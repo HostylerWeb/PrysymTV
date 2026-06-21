@@ -19,6 +19,7 @@ import {
   VideoType,
 } from '@prisma/client';
 import {
+  enrichCreatorFollowForViewer,
   enrichVideoCardsForViewer,
   getLikedCommentIds,
   getViewerVideoFlags,
@@ -449,18 +450,29 @@ export class VideosService {
     const hasMore = items.length > limit;
     const page = hasMore ? items.slice(0, limit) : items;
     const typesById = new Map(page.map((v) => [v.id, v.type]));
-    const flags = await enrichVideoCardsForViewer(
-      this.prisma,
-      viewerId,
-      page.map((v) => v.id),
-      typesById,
-    );
+    const [flags, followByCreator] = await Promise.all([
+      enrichVideoCardsForViewer(
+        this.prisma,
+        viewerId,
+        page.map((v) => v.id),
+        typesById,
+      ),
+      enrichCreatorFollowForViewer(
+        this.prisma,
+        viewerId,
+        page.map((v) => v.creator.id),
+      ),
+    ]);
 
     return {
       items: page.map((v) => {
         const card = mapVideoCard(v);
         const f = flags.get(v.id) ?? { liked: false, saved: false, disliked: false };
-        return { ...card, ...f };
+        return {
+          ...card,
+          ...f,
+          isFollowing: followByCreator.get(v.creator.id) ?? false,
+        };
       }),
       nextCursor: hasMore ? String(skip + limit) : null,
     };

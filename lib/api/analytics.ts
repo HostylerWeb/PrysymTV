@@ -25,9 +25,32 @@ export type CreatorDashboardResponse = {
     sponsorshipRevenueUsd: string;
     merchandiseRevenueUsd: string;
     donationsUsd: string;
+    giftsEarnings30dUsd: string;
+    giftsEarningsLifetimeUsd: string;
     pendingPayoutUsd: string;
     availableBalanceUsd: string;
     lifetimeCreditsUsd: string;
+  };
+  gifts: {
+    creatorSharePercent: number;
+    coinsReceived30d: number;
+    coinsReceivedLifetime: number;
+    giftCount30d: number;
+    giftCountLifetime: number;
+    grossValue30dUsd: string;
+    grossValueLifetimeUsd: string;
+    earnings30dUsd: string;
+    earningsLifetimeUsd: string;
+    recent: Array<{
+      id: string;
+      giftName: string;
+      fromUsername: string;
+      fromDisplayName: string | null;
+      coins: number;
+      grossUsd: string;
+      creatorEarningsUsd: string;
+      createdAt: string;
+    }>;
   };
   communityImpact: {
     jobsSupported: number;
