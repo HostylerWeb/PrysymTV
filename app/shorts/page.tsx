@@ -265,8 +265,9 @@ function ShortVideo({
         </div>
       </div>
 
-      {/* Right Side Actions */}
-      <div className="absolute right-2 md:right-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] flex flex-col items-center gap-2.5 md:gap-5 z-20">
+      {/* Right Side Actions — centered vertically in the space above mobile bottom nav */}
+      <div className="absolute right-2 md:right-3 top-14 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-8 z-20 flex flex-col items-center justify-center pointer-events-none">
+        <div className="flex flex-col items-center gap-2 md:gap-5 pointer-events-auto">
         {/* Profile */}
         <div className="flex flex-col items-center gap-1">
           <Link href={`/creator/${short.userSlug}`}>
@@ -361,6 +362,7 @@ function ShortVideo({
           <span className="text-white text-xs font-medium">{formatEngagementCount(counts.shares)}</span>
         </button>
 
+        </div>
       </div>
 
       {/* Bottom Info */}

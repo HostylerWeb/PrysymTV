@@ -28,6 +28,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { AuthModal } from "@/components/auth-modal"
 import { userAvatarUrl } from "@/lib/user-avatar"
 import { CreateFlowModals, triggerContextualCreate } from "@/components/create-flow-modals"
+import { PodcastPageSkeleton } from "@/components/content-skeletons"
 import { useCreateFlow } from "@/hooks/use-create-flow"
 import { useRouter } from "next/navigation"
 import { fetchPodcastCategories } from "@/lib/api/categories"
@@ -369,13 +370,15 @@ export default function PodcastsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-background pb-32 md:pb-20 md:pl-20 flex items-center justify-center">
+      <main className="min-h-screen bg-background pb-32 md:pb-20 md:pl-20">
         <Header
-        onSearchClick={() => setIsSearchOpen(true)}
-        onCreateClick={uploadPodcast}
-        createLabel="Upload podcast episode"
-      />
-        <p className="text-sm text-muted-foreground">Loading podcasts…</p>
+          onSearchClick={() => setIsSearchOpen(true)}
+          onCreateClick={uploadPodcast}
+          createLabel="Upload podcast episode"
+        />
+        <PodcastPageSkeleton />
+        <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       </main>
     )
   }

@@ -10,6 +10,7 @@ import { Smartphone } from "lucide-react"
 import { CreateFlowModals, triggerContextualCreate } from "@/components/create-flow-modals"
 import { useCreateFlow } from "@/hooks/use-create-flow"
 import { useAuth } from "@/contexts/auth-context"
+import { VerticalsPageSkeleton } from "@/components/content-skeletons"
 
 export default function VerticalsPage() {
   const createFlow = useCreateFlow()
@@ -23,9 +24,20 @@ export default function VerticalsPage() {
   const [activeTab, setActiveTab] = useState("verticals")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [series, setSeries] = useState<VerticalSeriesCard[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    void fetchVerticalSeriesList().then((res) => setSeries(res.items))
+    let cancelled = false
+    void fetchVerticalSeriesList()
+      .then((res) => {
+        if (!cancelled) setSeries(res.items)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return (
@@ -45,7 +57,9 @@ export default function VerticalsPage() {
           and pulls you straight into the next one.
         </p>
 
-        {series.length === 0 ? (
+        {loading ? (
+          <VerticalsPageSkeleton />
+        ) : series.length === 0 ? (
           <p className="text-muted-foreground">No series published yet. Check back soon.</p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
