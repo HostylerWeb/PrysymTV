@@ -1,7 +1,7 @@
 "use client"
 
 import { use, useState, useRef, useEffect, useCallback } from "react"
-import { ChevronLeft, Play, Plus, Check, Share2, Clock, Calendar, Lock, Flag, ThumbsUp } from "lucide-react"
+import { ChevronLeft, Play, Plus, Check, Share2, Clock, Calendar, Lock, Flag, ThumbsUp, Maximize, Minimize2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -24,6 +24,8 @@ import { fetchServedAd, type ServedAd } from "@/lib/api/ads"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
 import { bumpLikeCount } from "@/lib/engagement-count"
 import type { ApiVideoDetail } from "@/lib/api/videos-feed"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { useImmersivePlayer } from "@/lib/hooks/use-immersive-player"
 
 type MovieDisplay = {
   id: string
@@ -105,6 +107,14 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
   const [isReportOpen, setIsReportOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const isMobile = useIsMobile()
+  const {
+    playerContainerRef,
+    isImmersive,
+    toggleImmersive,
+    exitImmersive,
+    immersiveClassName,
+  } = useImmersivePlayer()
   const progressSent = useRef(0)
   const viewRecorded = useRef(false)
   const { isPlacementEnabled } = usePublicAdsConfig()
@@ -211,7 +221,13 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <div className="max-w-7xl mx-auto w-full">
-        <div className="relative w-full aspect-video md:aspect-[21/9] bg-black overflow-hidden">
+        <div
+          ref={playerContainerRef}
+          className={cn(
+            "relative w-full aspect-video md:aspect-[21/9] bg-black overflow-hidden",
+            isImmersive && immersiveClassName,
+          )}
+        >
           {prerollLoading && (
             <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center">
               <p className="text-white/70 text-sm">Loading…</p>
@@ -233,11 +249,41 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
                 className="w-full h-full object-contain"
                 autoPlay
                 controls
+                disableNativeFullscreen={isMobile}
+                onNativeFullscreenBlocked={toggleImmersive}
+                playsInline
                 videoRef={videoRef}
                 onTimeUpdate={(t, d) => persistProgress(t, d)}
                 onEnded={() => persistProgress(0, 0, true)}
               />
-              <button type="button" onClick={() => setIsPlaying(false)} className="absolute top-4 left-4 z-50 w-10 h-10 rounded-full bg-black/60 flex items-center justify-center text-white">✕</button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isImmersive) exitImmersive()
+                  setIsPlaying(false)
+                }}
+                className="absolute top-4 left-4 z-[110] w-10 h-10 rounded-full bg-black/60 flex items-center justify-center text-white"
+                aria-label="Close player"
+              >
+                ✕
+              </button>
+              {isMobile && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleImmersive()
+                  }}
+                  className="absolute bottom-4 right-4 z-[110] w-10 h-10 rounded-full bg-black/60 flex items-center justify-center text-white"
+                  aria-label={isImmersive ? "Exit fullscreen" : "Fullscreen"}
+                >
+                  {isImmersive ? (
+                    <Minimize2 className="w-5 h-5" />
+                  ) : (
+                    <Maximize className="w-5 h-5" />
+                  )}
+                </button>
+              )}
             </>
           ) : (
             <>

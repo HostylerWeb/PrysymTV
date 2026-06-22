@@ -32,6 +32,11 @@ import { PodcastPageSkeleton } from "@/components/content-skeletons"
 import { useCreateFlow } from "@/hooks/use-create-flow"
 import { useRouter } from "next/navigation"
 import { fetchPodcastCategories } from "@/lib/api/categories"
+import { HlsVideoPlayer } from "@/components/hls-video-player"
+
+function isVideoEpisode(ep?: PodcastEpisodeCard | null) {
+  return ep?.mediaType === "video" || !!ep?.videoUrl
+}
 
 const FALLBACK_PODCAST_FILTER_CATEGORIES = [
   "All",
@@ -99,23 +104,33 @@ function PlayerBar({
 }) {
   const episode = episodes[currentIndex]
   const audioRef = useRef<HTMLAudioElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(true)
   const [progress, setProgress] = useState(12)
   const [muted, setMuted] = useState(false)
   const liked = episode?.liked ?? false
+  const isVideo = isVideoEpisode(episode)
 
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio || !episode?.audioUrl) return
+    if (!audio || !episode?.audioUrl || isVideo) return
     audio.src = episode.audioUrl
     audio.muted = muted
     if (isPlaying) void audio.play().catch(() => setIsPlaying(false))
     else audio.pause()
-  }, [episode?.id, episode?.audioUrl, isPlaying, muted])
+  }, [episode?.id, episode?.audioUrl, isPlaying, muted, isVideo])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !episode?.videoUrl || !isVideo) return
+    video.muted = muted
+    if (isPlaying) void video.play().catch(() => setIsPlaying(false))
+    else video.pause()
+  }, [episode?.id, episode?.videoUrl, isPlaying, muted, isVideo])
 
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio || episode?.audioUrl) return
+    if (!audio || episode?.audioUrl || isVideo) return
     if (!isPlaying || !episode) return
     const timer = setInterval(() => {
       setProgress((p) => {
@@ -133,7 +148,7 @@ function PlayerBar({
       })
     }, 1000)
     return () => clearInterval(timer)
-  }, [isPlaying, episode, currentIndex, episodes.length, onIndexChange, episode?.audioUrl])
+  }, [isPlaying, episode, currentIndex, episodes.length, onIndexChange, episode?.audioUrl, isVideo])
 
   useEffect(() => {
     setProgress(8)
@@ -150,6 +165,30 @@ function PlayerBar({
   }
 
   return (
+    <>
+      {isVideo && episode.videoUrl ? (
+        <div className="fixed left-0 right-0 md:left-20 z-[45] bottom-[calc(7.5rem+env(safe-area-inset-bottom))] md:bottom-[4.75rem] px-3 md:px-6 pointer-events-none">
+          <div className="max-w-2xl mx-auto aspect-video rounded-xl overflow-hidden bg-black shadow-2xl border border-border pointer-events-auto">
+            <HlsVideoPlayer
+              key={episode.id}
+              src={episode.videoUrl}
+              poster={episode.cover}
+              className="w-full h-full object-contain"
+              controls
+              playsInline
+              videoRef={videoRef}
+              muted={muted}
+              onTimeUpdate={(t, d) => {
+                if (d > 0) setProgress((t / d) * 100)
+              }}
+              onEnded={() => {
+                if (currentIndex < episodes.length - 1) onIndexChange(currentIndex + 1)
+                else setIsPlaying(false)
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
     <div className="fixed bottom-16 md:bottom-0 md:left-20 left-0 right-0 z-40 bg-card/95 backdrop-blur-xl border-t border-border shadow-2xl">
       {episode?.audioUrl ? (
         <audio
@@ -180,7 +219,12 @@ function PlayerBar({
           <img src={episode.cover} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 hover:opacity-90" />
         </Link>
         <Link href={`/podcast/${episode.id}`} className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-foreground truncate hover:text-primary">{episode.title}</p>
+          <p className="text-xs font-semibold text-foreground truncate hover:text-primary">
+            {episode.title}
+            {isVideo ? (
+              <span className="ml-1.5 text-[10px] font-medium text-primary/80">Video</span>
+            ) : null}
+          </p>
           <p className="text-xs text-muted-foreground truncate">{episode.podcast}</p>
         </Link>
         <div className="flex items-center gap-1">
@@ -240,6 +284,7 @@ function PlayerBar({
         </div>
       </div>
     </div>
+    </>
   )
 }
 
@@ -538,7 +583,12 @@ export default function PodcastsPage() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground line-clamp-1">{ep.title}</p>
+                    <p className="text-sm font-semibold text-foreground line-clamp-1">
+                      {ep.title}
+                      {isVideoEpisode(ep) ? (
+                        <span className="ml-2 text-[10px] font-medium text-primary">Video</span>
+                      ) : null}
+                    </p>
                     <p className="text-xs text-muted-foreground">{ep.podcast} · {ep.date}</p>
                   </div>
 

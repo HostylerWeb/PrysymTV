@@ -44,6 +44,7 @@ import { bumpLikeCount } from "@/lib/engagement-count"
 import { userAvatarUrl } from "@/lib/user-avatar"
 import { followUser, unfollowUser } from "@/lib/api/users"
 import { useWatchAnalytics } from "@/lib/hooks/use-watch-analytics"
+import { useImmersivePlayer } from "@/lib/hooks/use-immersive-player"
 
 type WatchVideo = {
   id: string
@@ -86,7 +87,12 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
   const openCommentsFromUrl = searchParams.get("comments") === "1"
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const videoRef = useRef<HTMLVideoElement>(null)
-  const playerContainerRef = useRef<HTMLDivElement>(null)
+  const {
+    playerContainerRef,
+    isImmersive,
+    toggleImmersive,
+    immersiveClassName,
+  } = useImmersivePlayer()
   const [video, setVideo] = useState<WatchVideo | null>(null)
   const [suggested, setSuggested] = useState<
     Array<{ id: string; title: string; thumbnail: string; duration: string; channel: string; views: string }>
@@ -115,7 +121,6 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [isPlaylistOpen, setIsPlaylistOpen] = useState(false)
   const [isGiftOpen, setIsGiftOpen] = useState(false)
-  const [isImmersive, setIsImmersive] = useState(false)
   const progressSent = useRef(0)
   const viewRecorded = useRef(false)
   useWatchAnalytics(video?.id, { creatorId: video?.creatorId })
@@ -123,39 +128,6 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
   useEffect(() => {
     viewRecorded.current = false
   }, [id])
-
-  useEffect(() => {
-    const onFullscreenChange = () => {
-      setIsImmersive(Boolean(document.fullscreenElement))
-    }
-    document.addEventListener("fullscreenchange", onFullscreenChange)
-    return () => {
-      document.removeEventListener("fullscreenchange", onFullscreenChange)
-      document.body.style.overflow = ""
-    }
-  }, [])
-
-  useEffect(() => {
-    document.body.style.overflow = isImmersive ? "hidden" : ""
-    return () => {
-      document.body.style.overflow = ""
-    }
-  }, [isImmersive])
-
-  const togglePlayerFullscreen = () => {
-    const container = playerContainerRef.current
-    if (!container) return
-    if (document.fullscreenElement || isImmersive) {
-      if (document.fullscreenElement) void document.exitFullscreen()
-      setIsImmersive(false)
-      return
-    }
-    if (window.matchMedia("(max-width: 768px)").matches) {
-      setIsImmersive(true)
-      return
-    }
-    void container.requestFullscreen().catch(() => setIsImmersive(true))
-  }
 
   useEffect(() => {
     if (authLoading) return
@@ -439,7 +411,7 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
           ref={playerContainerRef}
           className={cn(
             "relative w-full aspect-video bg-black group",
-            isImmersive && "fixed inset-0 z-[100] aspect-auto h-[100dvh] w-screen max-w-none",
+            isImmersive && immersiveClassName,
           )}
           onClick={() => {
             setShowControls(true)
@@ -451,6 +423,8 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
             poster={video.thumbnail}
             className="w-full h-full object-contain pointer-events-none"
             controls={false}
+            disableNativeFullscreen
+            onNativeFullscreenBlocked={toggleImmersive}
             muted={isMuted}
             videoRef={videoRef}
             onPlay={() => {
@@ -531,7 +505,7 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation()
-                    togglePlayerFullscreen()
+                    toggleImmersive()
                   }}
                   aria-label={isImmersive ? "Exit fullscreen" : "Fullscreen"}
                 >

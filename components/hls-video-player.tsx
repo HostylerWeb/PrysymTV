@@ -20,6 +20,10 @@ type HlsVideoPlayerProps = {
   onTimeUpdate?: (currentTime: number, duration: number) => void
   onEnded?: () => void
   videoRef?: React.RefObject<HTMLVideoElement | null>
+  /** Block iOS/Safari native video fullscreen (prevents rotation conflicts on mobile). */
+  disableNativeFullscreen?: boolean
+  /** Called when native fullscreen was blocked so the app can enter CSS immersive mode. */
+  onNativeFullscreenBlocked?: () => void
 }
 
 export function HlsVideoPlayer({
@@ -37,6 +41,8 @@ export function HlsVideoPlayer({
   onTimeUpdate,
   onEnded,
   videoRef: externalRef,
+  disableNativeFullscreen = false,
+  onNativeFullscreenBlocked,
 }: HlsVideoPlayerProps) {
   const internalRef = useRef<HTMLVideoElement>(null)
   const videoRef = externalRef ?? internalRef
@@ -133,6 +139,33 @@ export function HlsVideoPlayer({
     }
   }, [onPlay, onTimeUpdate, onEnded, videoRef])
 
+  useEffect(() => {
+    const el = videoRef.current
+    if (!el || !disableNativeFullscreen) return
+
+    const blockNativeFullscreen = (e: Event) => {
+      e.preventDefault()
+      onNativeFullscreenBlocked?.()
+    }
+
+    el.setAttribute("playsinline", "true")
+    el.setAttribute("webkit-playsinline", "true")
+    el.addEventListener("webkitbeginfullscreen", blockNativeFullscreen)
+
+    const onDocumentFullscreen = () => {
+      if (document.fullscreenElement === el) {
+        void document.exitFullscreen()
+        onNativeFullscreenBlocked?.()
+      }
+    }
+    document.addEventListener("fullscreenchange", onDocumentFullscreen)
+
+    return () => {
+      el.removeEventListener("webkitbeginfullscreen", blockNativeFullscreen)
+      document.removeEventListener("fullscreenchange", onDocumentFullscreen)
+    }
+  }, [disableNativeFullscreen, onNativeFullscreenBlocked, videoRef, src])
+
   if (!src) {
     return (
       <div className={className ?? "w-full h-full bg-black flex items-center justify-center text-white/60"}>
@@ -147,6 +180,8 @@ export function HlsVideoPlayer({
       className={className ?? "w-full h-full object-contain"}
       poster={poster ?? undefined}
       controls={controls}
+      controlsList={disableNativeFullscreen ? "nofullscreen noremoteplayback" : undefined}
+      disablePictureInPicture={disableNativeFullscreen}
       muted={muted}
       playsInline={playsInline}
       loop={loop}

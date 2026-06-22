@@ -14,7 +14,7 @@ export class FeedService {
   async home(userId?: string) {
     await this.streams.syncStreamsFromIngest();
 
-    const [liveStreams, movies, videos, featuredMovie, continueWatching] =
+    const [liveStreams, movies, newReleaseMovies, videos, featuredMovie, continueWatching] =
       await Promise.all([
       this.prisma.stream.findMany({
         where: { status: StreamStatus.live },
@@ -35,6 +35,12 @@ export class FeedService {
         where: { type: VideoType.movie, status: ContentStatus.ready, visibility: 'public' },
         orderBy: { viewsCount: 'desc' },
         take: 12,
+        select: VIDEO_CARD_SELECT,
+      }),
+      this.prisma.video.findMany({
+        where: { type: VideoType.movie, status: ContentStatus.ready, visibility: 'public' },
+        orderBy: { createdAt: 'desc' },
+        take: 8,
         select: VIDEO_CARD_SELECT,
       }),
       this.prisma.video.findMany({
@@ -83,7 +89,7 @@ export class FeedService {
           }
         : null,
       trending: videos.map(mapVideoCard),
-      newReleases: movies.slice(0, 8).map(mapVideoCard),
+      newReleases: newReleaseMovies.map(mapVideoCard),
       movies: movies.map(mapVideoCard),
       featuredMovie: featuredMovie ? mapVideoCard(featuredMovie) : null,
     };
