@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   ContentStatus,
+  StoreCreatorStatus,
   StreamerStatus,
   VerticalCreatorStatus,
 } from '@prisma/client';
@@ -253,6 +254,16 @@ export class UsersService {
     const description =
       dto.description?.trim() ||
       'Creator access requested from profile unlock flow.';
+
+    if (
+      dto.features.includes(CreatorAccessFeature.store) &&
+      !dto.acceptedStoreTerms
+    ) {
+      throw new BadRequestException(
+        'You must acknowledge the Terms of Service and Community Guidelines before requesting Creator Store access',
+      );
+    }
+
     const results: Record<string, string> = {};
 
     for (const feature of dto.features) {
@@ -313,6 +324,40 @@ export class UsersService {
         } else {
           results.live = 'needs_id_verification';
         }
+      }
+
+      if (feature === CreatorAccessFeature.store) {
+        if (user.storeCreatorStatus === StoreCreatorStatus.approved) {
+          results.store = 'already_approved';
+          continue;
+        }
+        if (user.storeCreatorStatus === StoreCreatorStatus.pending) {
+          results.store = 'pending';
+          continue;
+        }
+
+        await this.prisma.$transaction([
+          this.prisma.storeCreatorApplication.upsert({
+            where: { userId },
+            create: {
+              userId,
+              description,
+              idDocumentUrl: user.streamerApplication?.idDocumentUrl ?? null,
+              status: 'pending',
+              acceptedTerms: true,
+            },
+            update: {
+              description,
+              status: 'pending',
+              acceptedTerms: true,
+            },
+          }),
+          this.prisma.user.update({
+            where: { id: userId },
+            data: { storeCreatorStatus: StoreCreatorStatus.pending },
+          }),
+        ]);
+        results.store = 'pending';
       }
     }
 
@@ -416,6 +461,7 @@ export class UsersService {
       isFollowing,
       isChannelMember,
       liveAlertsOn,
+      hasStore: user.storeCreatorStatus === StoreCreatorStatus.approved,
     };
   }
 
@@ -729,6 +775,7 @@ export class UsersService {
     isVerified: boolean;
     streamerStatus: string;
     verticalCreatorStatus: string;
+    storeCreatorStatus: string;
     partnerTier?: string;
     programVerticals?: { vertical: string }[];
     coinsBalance: number;
@@ -751,6 +798,7 @@ export class UsersService {
       isVerified: user.isVerified,
       streamerStatus: user.streamerStatus,
       verticalCreatorStatus: user.verticalCreatorStatus,
+      storeCreatorStatus: user.storeCreatorStatus,
       partnerTier: user.partnerTier ?? 'standard',
       programVerticals:
         user.programVerticals?.map((p) => p.vertical) ?? [],

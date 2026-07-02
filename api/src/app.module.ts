@@ -34,6 +34,7 @@ import { PlatformSettingsModule } from './platform-settings/platform-settings.mo
 import { PublicConfigModule } from './config/config.module';
 import { ReportsModule } from './reports/reports.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { StoresModule } from './stores/stores.module';
 
 @Module({
   imports: [
@@ -105,6 +106,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     ReportsModule,
     AdminModule,
     MediaModule,
+    StoresModule,
   ],
   providers: [
     {

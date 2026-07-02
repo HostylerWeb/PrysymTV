@@ -20,10 +20,14 @@ import { ApplyStreamerDto } from './dto/apply-streamer.dto';
 import { ApplyVerticalCreatorDto } from './dto/apply-vertical-creator.dto';
 import { RequestCreatorAccessDto } from './dto/request-creator-access.dto';
 import { ReplaceSocialLinksDto } from './dto/social-links.dto';
+import { StoresService } from '../stores/stores.service';
 
 @Controller('users')
 export class UsersController {
-  constructor(private users: UsersService) {}
+  constructor(
+    private users: UsersService,
+    private stores: StoresService,
+  ) {}
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
@@ -219,6 +223,11 @@ export class UsersController {
   @Get(':username/playlists')
   getPublicPlaylists(@Param('username') username: string) {
     return this.users.getPublicPlaylists(username);
+  }
+
+  @Get(':username/store')
+  getPublicStore(@Param('username') username: string) {
+    return this.stores.getPublicStoreByUsername(username);
   }
 
   @Get(':username')

@@ -14,8 +14,8 @@ export type CreateFlowState = {
   setVerticalWizardIntent: (v: "new_series" | "add_episode" | undefined) => void
   unlockOpen: boolean
   setUnlockOpen: (v: boolean) => void
-  unlockPreselect?: "vertical" | "live"
-  setUnlockPreselect: (v: "vertical" | "live" | undefined) => void
+  unlockPreselect?: "vertical" | "live" | "store"
+  setUnlockPreselect: (v: "vertical" | "live" | "store" | undefined) => void
   authOpen: boolean
   setAuthOpen: (v: boolean) => void
 }
@@ -29,7 +29,7 @@ export function useCreateFlow(): CreateFlowState {
   >()
   const [unlockOpen, setUnlockOpen] = useState(false)
   const [unlockPreselect, setUnlockPreselect] = useState<
-    "vertical" | "live" | undefined
+    "vertical" | "live" | "store" | undefined
   >()
   const [authOpen, setAuthOpen] = useState(false)
 

@@ -31,6 +31,7 @@ const TYPE_FILTERS: Array<{ id: "all" | AdminApplicationType; label: string }> =
   { id: "all", label: "All types" },
   { id: "streamer", label: "Live streaming" },
   { id: "vertical", label: "Vertical series" },
+  { id: "store", label: "Creator Store" },
 ]
 
 function ApplicationTypePill({ type }: { type: AdminApplicationType }) {
@@ -40,10 +41,12 @@ function ApplicationTypePill({ type }: { type: AdminApplicationType }) {
         "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
         type === "streamer"
           ? "bg-green-500/15 text-green-500"
-          : "bg-violet-500/15 text-violet-400",
+          : type === "vertical"
+            ? "bg-violet-500/15 text-violet-400"
+            : "bg-amber-500/15 text-amber-500",
       )}
     >
-      {type === "streamer" ? "Live" : "Vertical"}
+      {type === "streamer" ? "Live" : type === "vertical" ? "Vertical" : "Store"}
     </span>
   )
 }
@@ -53,7 +56,9 @@ export default function AdminApplicationsPage() {
   const initialType = searchParams.get("type")
   const [tab, setTab] = useState("pending")
   const [typeFilter, setTypeFilter] = useState<"all" | AdminApplicationType>(
-    initialType === "streamer" || initialType === "vertical" ? initialType : "all",
+    initialType === "streamer" || initialType === "vertical" || initialType === "store"
+      ? initialType
+      : "all",
   )
   const [page, setPage] = useState(1)
 
@@ -87,7 +92,7 @@ export default function AdminApplicationsPage() {
     <>
       <AdminPageHeader
         title="Applications"
-        description="Review live streaming (ID verification) and vertical series access in one queue."
+        description="Review live streaming, vertical series, and Creator Store access in one queue."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Applications" }]}
       />
 

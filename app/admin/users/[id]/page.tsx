@@ -85,6 +85,7 @@ export default function AdminUserDetailPage({
         <TabsList className="mb-6 flex-wrap h-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="streamer">Streamer</TabsTrigger>
+          <TabsTrigger value="store">Store</TabsTrigger>
           <TabsTrigger value="content">Content</TabsTrigger>
           <TabsTrigger value="financial">Financial</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
@@ -172,6 +173,52 @@ export default function AdminUserDetailPage({
                 Open vertical series application
               </Link>
             </Button>
+          )}
+        </TabsContent>
+
+        <TabsContent value="store" className="space-y-6">
+          <p className="text-sm text-muted-foreground">
+            Store access:{" "}
+            <AdminStatusPill status={user.storeCreatorStatus ?? "none"} />
+          </p>
+          {user.storeCreatorApplication && (
+            <Button asChild variant="outline" className="rounded-full">
+              <Link href={`/admin/applications/store/${user.storeCreatorApplication.id}`}>
+                Open Creator Store application
+              </Link>
+            </Button>
+          )}
+          {(user.storeProducts?.length ?? 0) === 0 ? (
+            <p className="text-sm text-muted-foreground">No store products listed.</p>
+          ) : (
+            <div className="rounded-xl border border-border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead>Stock</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(user.storeProducts ?? []).map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-medium">{p.title}</TableCell>
+                      <TableCell className="capitalize">
+                        {p.productType === "merchandise" ? "Physical" : p.productType}
+                      </TableCell>
+                      <TableCell>${p.priceUsd.toFixed(2)}</TableCell>
+                      <TableCell>{p.inventory ?? "—"}</TableCell>
+                      <TableCell>
+                        <AdminStatusPill status={p.status === "active" ? "active" : "pending"} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </TabsContent>
 

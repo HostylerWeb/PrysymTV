@@ -16,6 +16,7 @@ import {
   Building2,
   Landmark,
   ScrollText,
+  ShoppingBag,
 } from "lucide-react"
 
 export type AdminNavItem = {
@@ -44,6 +45,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     title: "Content",
     items: [
       { id: "content", label: "Library", href: "/admin/content", icon: Film },
+      { id: "store-products", label: "Store products", href: "/admin/store-products", icon: ShoppingBag },
     ],
   },
   {

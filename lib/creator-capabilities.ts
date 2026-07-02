@@ -5,7 +5,8 @@ export type CreatorCapabilityId =
   | "videos"
   | "podcasts"
   | "verticals"
-  | "live";
+  | "live"
+  | "store";
 
 export type CreatorCapability = {
   id: CreatorCapabilityId;
@@ -59,6 +60,13 @@ export function getCreatorCapabilities(user: User | null): CreatorCapability[] {
       allowed: user.streamerStatus === "approved",
       pending: user.streamerStatus === "pending",
       description: "Broadcast live with OBS",
+    },
+    {
+      id: "store",
+      label: "Store",
+      allowed: user.storeCreatorStatus === "approved",
+      pending: user.storeCreatorStatus === "pending",
+      description: "Sell physical and digital products",
     },
   ];
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, use, useState, useEffect } from "react"
-import { ChevronLeft, Share2, MoreVertical, Play, Users, Video, Heart, Bell, BellOff, Check, Gift } from "lucide-react"
+import { ChevronLeft, Share2, Play, Users, Video, Bell, BellOff, Check, Gift, ShoppingBag } from "lucide-react"
 import { GiftSheet } from "@/components/gift-sheet"
 import { PageLoadingSkeleton } from "@/components/content-skeletons"
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,7 @@ import { SearchModal } from "@/components/search-modal"
 import { Footer } from "@/components/footer"
 import { AuthModal } from "@/components/auth-modal"
 import { ShareSheet } from "@/components/share-sheet"
+import { CreatorStoreTab } from "@/components/creator-store-tab"
 import { useAuth } from "@/contexts/auth-context"
 import {
   fetchCreatorVideos,
@@ -23,6 +24,7 @@ import {
 } from "@/lib/api/users"
 import { fetchPodcastShows } from "@/lib/api/podcasts"
 import { fetchCreatorPlaylists } from "@/lib/api/playlists"
+import { fetchCreatorStore, type CreatorStoreSummary, type PublicStoreProduct } from "@/lib/api/stores"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
 import { userAvatarUrl } from "@/lib/user-avatar"
 
@@ -65,6 +67,11 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
   const [playlists, setPlaylists] = useState<
     Array<{ id: string; title: string; coverUrl: string | null; itemCount: number }>
   >([])
+  const [storeData, setStoreData] = useState<{
+    store: CreatorStoreSummary
+    products: PublicStoreProduct[]
+  } | null>(null)
+  const [storeLoading, setStoreLoading] = useState(false)
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -114,6 +121,17 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
         void fetchCreatorPlaylists(slug)
           .then((res) => setPlaylists(res.items))
           .catch(() => setPlaylists([]))
+        if (p.hasStore) {
+          setStoreLoading(true)
+          void fetchCreatorStore(slug)
+            .then((res) => setStoreData(res))
+            .catch(() => setStoreData(null))
+            .finally(() => {
+              if (!cancelled) setStoreLoading(false)
+            })
+        } else {
+          setStoreData(null)
+        }
       }
       setLoading(false)
     }
@@ -147,7 +165,6 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
   const name = profile.displayName ?? slug
   const username = `@${profile.username}`
   const avatar = userAvatarUrl(profile.avatarUrl, slug)
-  const banner = profile.bannerUrl?.trim() || null
   const bio = profile.bio ?? ""
   const subscribers = formatViewCount(profile.followersCount)
   const videosCount = String(profile.videosCount)
@@ -158,6 +175,15 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
 
   const shortsList = videos.filter((v) => v.type === "short")
   const longVideos = videos.filter((v) => v.type !== "short")
+
+  const profileTabs = [
+    "videos",
+    "shorts",
+    "live",
+    "podcasts",
+    "playlists",
+    ...(profile.hasStore ? ["store"] : []),
+  ] as const
 
   const requireAuth = (action: () => void) => {
     if (!isAuthenticated) {
@@ -188,21 +214,27 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <div className="max-w-6xl mx-auto w-full">
-        <div className="relative w-full h-32 md:h-64 md:mt-4 md:rounded-2xl overflow-hidden bg-gradient-to-br from-primary/25 via-secondary to-background">
-          {banner ? (
-            <img src={banner} alt="" className="w-full h-full object-cover" />
-          ) : null}
-          <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
-          <div className="absolute top-0 left-0 right-0 flex justify-between p-4">
-            <Link href="/"><button type="button" className="w-10 h-10 rounded-full bg-background/30 backdrop-blur-sm flex items-center justify-center"><ChevronLeft className="w-6 h-6 text-white" /></button></Link>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setIsShareOpen(true)} className="w-10 h-10 rounded-full bg-background/30 backdrop-blur-sm flex items-center justify-center"><Share2 className="w-5 h-5 text-white" /></button>
-              <button type="button" className="w-10 h-10 rounded-full bg-background/30 backdrop-blur-sm flex items-center justify-center"><MoreVertical className="w-5 h-5 text-white" /></button>
-            </div>
-          </div>
+        <div className="px-4 md:px-8 pt-4 md:pt-6 flex items-center justify-between">
+          <Link href="/">
+            <button
+              type="button"
+              className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors"
+              aria-label="Back"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          </Link>
+          <button
+            type="button"
+            onClick={() => setIsShareOpen(true)}
+            className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors"
+            aria-label="Share profile"
+          >
+            <Share2 className="w-5 h-5" />
+          </button>
         </div>
 
-        <div className="px-4 md:px-8 -mt-10 md:-mt-16 relative z-10 flex flex-col md:flex-row md:items-end gap-4 mb-8">
+        <div className="px-4 md:px-8 pt-4 md:pt-6 flex flex-col md:flex-row md:items-end gap-4 mb-8">
           <img src={avatar} alt={name} className="w-20 h-20 md:w-32 md:h-32 rounded-full ring-4 ring-background object-cover" />
           <div className="flex-1 md:pb-2">
             <div className="flex items-center gap-2">
@@ -248,10 +280,25 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
           </div>
         </div>
 
-        <div className="border-b border-border px-4 md:px-8 flex gap-6 overflow-x-auto">
-          {["videos", "shorts", "live", "podcasts", "playlists"].map((tab) => (
-            <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={cn("py-4 text-sm font-medium capitalize border-b-2 -mb-px whitespace-nowrap", activeTab === tab ? "border-primary text-foreground" : "border-transparent text-muted-foreground")}>{tab}</button>
-          ))}
+        <div className="border-b border-border px-4 md:px-8">
+          <div className="flex gap-6 overflow-x-auto overflow-y-hidden scrollbar-hide md:overflow-visible -mb-px">
+            {profileTabs.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  "shrink-0 h-11 flex items-center gap-1.5 text-sm font-medium capitalize border-b-2 whitespace-nowrap transition-colors",
+                  activeTab === tab
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {tab === "store" && <ShoppingBag className="w-3.5 h-3.5" />}
+                {tab}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="px-4 md:px-8 py-6">
@@ -343,13 +390,33 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
               </div>
             )
           )}
+          {activeTab === "store" && profile.hasStore && (
+            storeLoading && !storeData ? (
+              <p className="text-center py-20 text-muted-foreground text-sm">Loading store…</p>
+            ) : storeData ? (
+              <CreatorStoreTab store={storeData.store} products={storeData.products} />
+            ) : (
+              <p className="text-center py-20 text-muted-foreground text-sm">
+                Store is not available right now.
+              </p>
+            )
+          )}
         </div>
       </div>
       <Footer />
       <BottomNavigation activeTab={navTab} onTabChange={setNavTab} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} initialMode="login" />
-      <ShareSheet isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} title={name} />
+      <ShareSheet
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        title={name}
+        url={
+          typeof window !== "undefined"
+            ? `${window.location.origin}/creator/${profile.username}`
+            : undefined
+        }
+      />
       <GiftSheet
         isOpen={isGiftOpen}
         onClose={() => setIsGiftOpen(false)}

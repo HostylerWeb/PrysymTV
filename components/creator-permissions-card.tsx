@@ -7,6 +7,7 @@ import {
   LayoutGrid,
   Lock,
   Radio,
+  ShoppingBag,
   Sparkles,
   Video,
 } from "lucide-react"
@@ -25,6 +26,7 @@ const CAP_ICONS: Record<CreatorCapabilityId, typeof Video> = {
   podcasts: Headphones,
   verticals: LayoutGrid,
   live: Radio,
+  store: ShoppingBag,
 }
 
 interface CreatorPermissionsCardProps {
@@ -41,27 +43,14 @@ export function CreatorPermissionsCard({ user, onUnlock }: CreatorPermissionsCar
 
   return (
     <div className="rounded-xl border border-border/80 bg-card/40 px-3 py-3 md:px-4 md:py-3.5">
-      <div className="flex items-center justify-between gap-3 mb-2.5">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-foreground leading-tight">Creator access</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-            {readyCount}/{caps.length} formats · use <span className="text-foreground/80">+</span> to create
-          </p>
-        </div>
-        {showUnlock && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 rounded-full px-2.5 text-[11px] shrink-0 gap-1"
-            onClick={onUnlock}
-          >
-            <Sparkles className="w-3 h-3" />
-            Unlock
-          </Button>
-        )}
+      <div className="mb-2.5">
+        <p className="text-xs font-semibold text-foreground leading-tight">Creator access</p>
+        <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+          {readyCount}/{caps.length} formats · use <span className="text-foreground/80">+</span> to create
+        </p>
       </div>
 
-      <div className="grid grid-cols-5 gap-1.5 md:gap-2">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 md:gap-2">
         {caps.map((cap) => {
           const Icon = CAP_ICONS[cap.id]
           const state = cap.allowed ? "ready" : cap.pending ? "pending" : "locked"
@@ -110,6 +99,16 @@ export function CreatorPermissionsCard({ user, onUnlock }: CreatorPermissionsCar
           )
         })}
       </div>
+
+      {showUnlock && (
+        <Button
+          onClick={onUnlock}
+          className="mt-3 w-full h-9 rounded-full text-sm font-semibold gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+        >
+          <Sparkles className="w-4 h-4" />
+          Unlock more features
+        </Button>
+      )}
     </div>
   )
 }

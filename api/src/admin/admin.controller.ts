@@ -27,6 +27,7 @@ import { ProcessPayoutDto } from './dto/process-payout.dto';
 import { ReviewReportDto } from './dto/review-report.dto';
 import { ReviewStreamerApplicationDto } from './dto/review-streamer-application.dto';
 import { ReviewVerticalCreatorApplicationDto } from './dto/review-vertical-creator-application.dto';
+import { ReviewStoreCreatorApplicationDto } from './dto/review-store-creator-application.dto';
 import { UpdatePartnerTierDto } from './dto/update-partner-tier.dto';
 import { UpdateRevenueSplitRuleDto } from './dto/update-revenue-split-rule.dto';
 import { VerifyUserDto } from './dto/verify-user.dto';
@@ -261,6 +262,30 @@ export class AdminController {
       body.action,
       body.notes,
     );
+  }
+
+  @Get('store-creator-applications/:id')
+  getStoreCreatorApplication(@Param('id') id: string) {
+    return this.admin.getStoreCreatorApplication(id);
+  }
+
+  @Put('store-creator-applications/:id')
+  reviewStoreCreatorApplication(
+    @Param('id') id: string,
+    @Body() body: ReviewStoreCreatorApplicationDto,
+    @CurrentUser() admin: AuthUserPayload,
+  ) {
+    return this.admin.reviewStoreCreatorApplication(
+      id,
+      admin.id,
+      body.action,
+      body.notes,
+    );
+  }
+
+  @Get('store-products')
+  listStoreProducts(@Query() query: AdminListQueryDto) {
+    return this.admin.listStoreProducts(query);
   }
 
   @Get('payouts')

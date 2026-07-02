@@ -28,6 +28,13 @@ enum VerticalCreatorStatus {
   rejected
 }
 
+enum StoreCreatorStatus {
+  none
+  pending
+  approved
+  rejected
+}
+
 enum PremiumTier {
   none
   basic
@@ -399,6 +406,7 @@ model User {
   isBanned          Boolean        @default(false) @map("is_banned")
   streamerStatus         StreamerStatus         @default(none) @map("streamer_status")
   verticalCreatorStatus  VerticalCreatorStatus  @default(none) @map("vertical_creator_status")
+  storeCreatorStatus     StoreCreatorStatus     @default(none) @map("store_creator_status")
   partnerTier            CreatorPartnerTier     @default(standard) @map("partner_tier")
   coinsBalance      Int            @default(0) @map("coins_balance")
   premiumTier       PremiumTier    @default(none) @map("premium_tier")
@@ -411,6 +419,7 @@ model User {
 
   streamerApplication        StreamerApplication?
   verticalCreatorApplication VerticalCreatorApplication?
+  storeCreatorApplication    StoreCreatorApplication?
   socialLinks                UserSocialLink[]
   notificationPrefs     UserNotificationPreference[]
   refreshSessions       RefreshSession[]
@@ -443,6 +452,7 @@ model User {
   payoutsProcessed      CreatorPayout[]     @relation("PayoutProcessor")
   applicationsReviewed         StreamerApplication[]         @relation("ApplicationReviewer")
   verticalApplicationsReviewed VerticalCreatorApplication[]  @relation("VerticalApplicationReviewer")
+  storeApplicationsReviewed  StoreCreatorApplication[]     @relation("StoreApplicationReviewer")
   liveEvents                   LiveEvent[]
   creatorStore          CreatorStore?
   storeOrdersAsBuyer    StoreOrder[]          @relation("StoreBuyer")
@@ -512,6 +522,23 @@ model VerticalCreatorApplication {
   reviewedBy    User?             @relation("VerticalApplicationReviewer", fields: [reviewedById], references: [id])
 
   @@map("vertical_creator_applications")
+}
+
+model StoreCreatorApplication {
+  id            String            @id @default(uuid()) @db.Uuid
+  userId        String            @unique @map("user_id") @db.Uuid
+  description   String
+  idDocumentUrl String?           @map("id_document_url")
+  status        ApplicationStatus @default(pending)
+  reviewedById  String?           @map("reviewed_by") @db.Uuid
+  reviewNotes   String?           @map("review_notes")
+  acceptedTerms Boolean           @default(false) @map("accepted_terms")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy    User?             @relation("StoreApplicationReviewer", fields: [reviewedById], references: [id])
+
+  @@map("store_creator_applications")
 }
 
 model UserSocialLink {
@@ -1162,7 +1189,7 @@ model StoreProduct {
   digitalUrl   String?           @map("digital_url")
   inventory    Int?
   status       StoreProductStatus @default(draft)
-  revenueRuleKey String          @default("live_event") @map("revenue_rule_key")
+  revenueRuleKey String          @default("store_merchandise") @map("revenue_rule_key")
   createdAt    DateTime          @default(now()) @map("created_at")
   updatedAt    DateTime          @updatedAt @map("updated_at")
   store        CreatorStore      @relation(fields: [storeId], references: [id], onDelete: Cascade)

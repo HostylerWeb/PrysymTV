@@ -21,6 +21,7 @@ export function mapMeToUser(me: MeResponse): User {
     streamerStatus: status,
     isVerticalCreator: verticalStatus === "approved",
     verticalCreatorStatus: verticalStatus,
+    storeCreatorStatus: me.storeCreatorStatus ?? "none",
     followersCount: me.followersCount,
     followingCount: me.followingCount,
     videosCount: me.videosCount,

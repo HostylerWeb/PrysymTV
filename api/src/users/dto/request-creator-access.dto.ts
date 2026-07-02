@@ -1,6 +1,7 @@
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsOptional,
   IsString,
@@ -11,6 +12,7 @@ import {
 export enum CreatorAccessFeature {
   vertical = 'vertical',
   live = 'live',
+  store = 'store',
 }
 
 export class RequestCreatorAccessDto {
@@ -24,4 +26,8 @@ export class RequestCreatorAccessDto {
   @MinLength(10)
   @MaxLength(2000)
   description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  acceptedStoreTerms?: boolean;
 }

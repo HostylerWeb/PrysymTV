@@ -39,7 +39,7 @@
 | `PUT` | `/users/me/social-links` | ✅ |
 | `POST` | `/users/apply-streamer` | ✅ Dev: `AUTO_APPROVE_STREAMER=true` approves instantly |
 | `POST` | `/users/apply-vertical-creator` | ✅ `{ description, idDocumentUrl, portfolioUrl? }` — dev: `AUTO_APPROVE_VERTICAL_CREATOR=true` |
-| `POST` | `/users/request-creator-access` | ✅ `{ features: ['vertical','live'], description? }` — verified streamers auto-unlock vertical |
+| `POST` | `/users/request-creator-access` | ✅ `{ features: ['vertical','live','store'], description?, acceptedStoreTerms? }` — store requires `acceptedStoreTerms: true`; admin reviews store |
 | `POST` | `/reports` | ✅ Bearer — `{ targetType, targetId, reason, details? }` |
 | `GET` | `/users/me/videos` | ✅ |
 | `GET` | `/users/me/saved` | ✅ |
@@ -53,7 +53,8 @@
 | `POST` | `/users/me/streamer-id/upload` | ✅ Presign / local ID document for streamer application |
 | `GET` | `/users/:username/videos` | ✅ Public creator uploads |
 | `GET` | `/users/:username/playlists` | ✅ Public playlists |
-| `GET` | `/users/:username` | ✅ Includes `isFollowing`, `isChannelMember`, `liveAlertsOn` |
+| `GET` | `/users/:username/store` | ✅ Public Creator Store (approved sellers only) |
+| `GET` | `/users/:username` | ✅ Includes `hasStore`, `isFollowing`, `isChannelMember`, `liveAlertsOn` |
 | `POST` | `/users/:username/follow` | ✅ |
 | `DELETE` | `/users/:username/follow` | ✅ |
 | `POST` | `/users/:username/live-alerts` | ✅ Toggle live notifications for a creator (notify bell) |
@@ -135,6 +136,11 @@
 | `DELETE` | `/playlists/:id/items/:itemId` | ✅ |
 | `PUT` | `/playlists/:id/reorder` | ✅ |
 | `GET` | `/playlists/:id` | ✅ |
+| `GET` | `/stores/me` | ✅ Bearer — creator store + products (requires `storeCreatorStatus: approved`) |
+| `PUT` | `/stores/me` | ✅ Bearer — `{ displayName?, description? }` |
+| `POST` | `/stores/me/products` | ✅ Bearer — create product |
+| `PUT` | `/stores/me/products/:id` | ✅ Bearer — update product |
+| `DELETE` | `/stores/me/products/:id` | ✅ Bearer — delete product |
 | `GET` | `/search` | ✅ |
 | `GET` | `/search/suggest` | ✅ |
 | `GET` | `/ads/serve` | ✅ `?placement=&peek=1` — optional Bearer; `peek=1` returns ad without burning an impression |
@@ -181,13 +187,16 @@
 | `PUT` | `/admin/users/:id/verify` | ✅ `{ verified }` |
 | `PUT` | `/admin/users/:id/partner-tier` | ✅ `{ partnerTier }` |
 | `PUT` | `/admin/users/:id/coins` | ✅ `{ delta }` |
-| `GET` | `/admin/applications` | ✅ Unified queue — `?status=&type=streamer\|vertical\|all` |
+| `GET` | `/admin/applications` | ✅ Unified queue — `?status=&type=streamer\|vertical\|store\|all` |
 | `GET` | `/admin/streamer-applications` | ✅ Legacy — prefer `/admin/applications` |
 | `GET` | `/admin/streamer-applications/:id` | ✅ |
 | `PUT` | `/admin/streamer-applications/:id` | ✅ `{ action: approve \| reject, notes? }` |
 | `GET` | `/admin/vertical-creator-applications` | ✅ Legacy — prefer `/admin/applications` |
 | `GET` | `/admin/vertical-creator-applications/:id` | ✅ |
 | `PUT` | `/admin/vertical-creator-applications/:id` | ✅ `{ action: approve \| reject, notes? }` |
+| `GET` | `/admin/store-creator-applications/:id` | ✅ Creator Store access application |
+| `PUT` | `/admin/store-creator-applications/:id` | ✅ `{ action: approve \| reject, notes? }` — approve creates `creator_stores` row |
+| `GET` | `/admin/store-products` | ✅ `?page=&limit=&q=` — all active store products globally |
 | `GET` | `/admin/payouts` | ✅ `?status=` |
 | `PUT` | `/admin/payouts/:id` | ✅ `{ action: processing \| complete \| reject }` |
 | `GET` | `/admin/live-streams` | ✅ |
@@ -268,7 +277,6 @@
 | Prefix | Purpose |
 |--------|---------|
 | `/events` | Live events — tickets, schedule |
-| `/stores` | Creator Store |
 | `/support` | Tips, donations, super chats |
 | `/gaf` | GAF ledger (admin — `GET /admin/gaf/ledger` exists) |
 | `/insider` | Platform Insider $4.99/mo |
@@ -558,6 +566,7 @@ All `/users/me/*` routes require Bearer auth.
 | `GET/PUT /users/me/notification-preferences` | ✅ | |
 | `PUT /users/me/social-links` | ✅ | `{ links: [{ label, url, sortOrder }] }` |
 | `POST /users/apply-streamer` | ✅ | |
+| `POST /users/request-creator-access` | ✅ | `{ features, description?, acceptedStoreTerms? }` — see **Public creator routes** below |
 | `GET /users/me/videos` | ✅ | Paginated |
 | `GET /users/me/saved` | ✅ | Resolves `video`, `movie`, `podcast_episode`, `vertical_episode`, `vertical_series` |
 | `GET /users/me/liked` | ✅ | Resolves `video`, `podcast_episode`, `vertical_episode` |
@@ -594,12 +603,31 @@ See [React Native integration — deep links](#push--in-app-notification-deep-li
 | `live` | A creator you subscribed to (live-alerts bell) goes live |
 | `upload` | Someone you follow publishes a new public video (processing → `ready`) |
 | `system` | Reserved for platform announcements (admin) |
-| `GET /users/:username` | ✅ | Public profile + `isLive`, `liveStreamId`, `isFollowing`, `isChannelMember`, `liveAlertsOn` |
+
+**Public creator routes** (no auth unless noted):
+
+| Route | Status | Notes |
+|-------|--------|-------|
+| `GET /users/:username` | ✅ | Public profile + `hasStore`, `isLive`, `liveStreamId`, `isFollowing`, `isChannelMember`, `liveAlertsOn` (latter three when JWT sent) |
 | `GET /users/:username/playlists` | ✅ | Public playlists |
 | `GET /users/:username/videos` | ✅ | `?page=&limit=` — public ready videos |
-| `POST /users/:username/follow` | ✅ | |
-| `DELETE /users/:username/follow` | ✅ | |
-| `POST /users/:username/live-alerts` | ✅ | Toggle per-creator live notifications; subscribers get in-app `live` notification when stream goes live |
+| `GET /users/:username/store` | ✅ | Published store + active products (`404` if store not approved) |
+| `POST /users/:username/follow` | ✅ | Bearer |
+| `DELETE /users/:username/follow` | ✅ | Bearer |
+| `POST /users/:username/live-alerts` | ✅ | Bearer — toggle per-creator live notifications |
+
+**Creator access request** (`POST /users/request-creator-access`, Bearer):
+
+```json
+{
+  "features": ["vertical", "live", "store"],
+  "description": "optional note",
+  "acceptedStoreTerms": true
+}
+```
+
+- `store` always creates a pending `store_creator_applications` row for admin review; requires `acceptedStoreTerms: true` when `store` is in `features`.
+- `vertical` / `live` may auto-approve when streamer ID is already verified (same as before).
 
 ---
 
@@ -855,6 +883,60 @@ Frontend reference: `/podcasts` browse, `/podcast/:id` player, `POST /history/pr
 **Item counts:** List endpoints count playlist rows whose `video` or `podcast_episode` still exists. Deleting content removes playlist references (admin video/episode delete). `GET /playlists/:id` auto-prunes stale rows on load.
 
 Frontend: profile settings **Playlists**, `AddToPlaylistSheet` on watch + podcast pages.
+
+---
+
+## Creator Store (`/stores`, `/users/:username/store`)
+
+Creators request access via `POST /users/request-creator-access` with `features: ['store']`. Admins approve at `PUT /admin/store-creator-applications/:id`. User field: `storeCreatorStatus` (`none` \| `pending` \| `approved` \| `rejected`).
+
+Revenue split key for products: `store_merchandise` (configured at `GET/PUT /admin/revenue-split-rules/store_merchandise`).
+
+### Seller routes (Bearer, `storeCreatorStatus: approved`)
+
+| Route | Body / notes |
+|-------|----------------|
+| `GET /stores/me` | `{ store, products[] }` — auto-creates `creator_stores` on first access after approval |
+| `PUT /stores/me` | `{ displayName?, description? }` |
+| `POST /stores/me/products` | `{ productType: merchandise \| digital, title, description?, priceUsd, imageUrl, digitalUrl?, inventory? }` — `digitalUrl` required for digital; `inventory` required for merchandise |
+| `PUT /stores/me/products/:id` | Partial update; `status` can be set to `active` \| `draft` \| `archived` |
+| `DELETE /stores/me/products/:id` | Hard delete |
+
+### Public catalog
+
+### `GET /users/:username/store` ✅
+
+No auth. Returns `404` unless the creator has `storeCreatorStatus: approved` and a published store.
+
+```json
+{
+  "store": {
+    "id": "uuid",
+    "slug": "creator-handle",
+    "displayName": "Shop name",
+    "description": null,
+    "bannerUrl": null,
+    "isPublished": true,
+    "createdAt": "2026-07-02T22:39:45.767Z"
+  },
+  "products": [
+    {
+      "id": "uuid",
+      "productType": "merchandise",
+      "title": "T-shirt",
+      "description": "…",
+      "priceUsd": 24.99,
+      "imageUrl": "https://…",
+      "inventory": 10,
+      "createdAt": "…"
+    }
+  ]
+}
+```
+
+Public product objects **omit** `digitalUrl`. Checkout / orders are not implemented yet.
+
+Frontend: profile **Store** tab (seller), `/creator/:username` **Store** tab (buyer browse).
 
 ---
 
@@ -1127,7 +1209,7 @@ Values are stored in `platform_settings` and edited at `/admin/config/ads`.
 
 | Route | Notes |
 |-------|--------|
-| `GET /admin/analytics/overview` | `{ dau, liveNow, liveViewers, revenueTodayUsd, pendingReports, pendingPayouts, pendingPayoutsUsd, pendingApplications, pendingStreamerApplications, pendingVerticalCreatorApplications }` |
+| `GET /admin/analytics/overview` | `{ dau, liveNow, liveViewers, revenueTodayUsd, pendingReports, pendingPayouts, pendingPayoutsUsd, pendingApplications, pendingStreamerApplications, pendingVerticalCreatorApplications, pendingStoreCreatorApplications }` |
 | `GET /admin/analytics/timeseries` | `?range=7d\|30d\|90d` — daily buckets + `revenueBySource`, `topContent`, `premiumSubscribers` |
 
 ### Moderation, users, streamers, payouts, live
@@ -1135,12 +1217,14 @@ Values are stored in `platform_settings` and edited at `/admin/config/ads`.
 | Route | Notes |
 |-------|--------|
 | `GET/PUT /admin/reports`, `GET /admin/reports/:id` | Report queue + review actions |
-| `GET /admin/users`, `GET /admin/users/:id` | Search; detail includes `payoutProfile`, `socialLinks`, `premiumTier`, `verticalSeries[]`, `content[]` with `siteHref`, payout history with `method` + `payoutDetails` |
+| `GET /admin/users`, `GET /admin/users/:id` | Search; detail includes `storeCreatorStatus`, `storeCreatorApplication`, `storeProducts[]`, `payoutProfile`, `socialLinks`, `premiumTier`, `verticalSeries[]`, `content[]` with `siteHref`, payout history with `method` + `payoutDetails` |
 | `GET /admin/payouts` | `?status=` — each row includes `payoutDetails` snapshot |
 | `GET/PUT /admin/users/:id/impact` | Per-creator `creator_impact_snapshots` by `periodMonth` |
 | `PUT /admin/users/:id/ban`, `/verify`, `/partner-tier`, `/coins` | User admin actions |
 | `GET/PUT /admin/streamer-applications/:id` | Approve/reject streamer applications |
 | `GET/PUT /admin/vertical-creator-applications/:id` | Approve/reject vertical series upload access |
+| `GET/PUT /admin/store-creator-applications/:id` | Approve/reject Creator Store seller access |
+| `GET /admin/store-products` | Global product list — search by title or creator username |
 | `GET/PUT /admin/payouts/:id` | Payout queue |
 | `GET /admin/live-streams`, `GET /admin/stream-history` | Live + ended streams |
 | `POST /admin/streams/:id/kill` | Force-end live stream |
@@ -1261,6 +1345,7 @@ Returned by feed endpoints, `GET /videos/:id` (extended), shorts, movies browse.
   "isVerified": false,
   "streamerStatus": "none",
   "verticalCreatorStatus": "none",
+  "storeCreatorStatus": "none",
   "partnerTier": "standard",
   "programVerticals": [],
   "coinsBalance": 100,
@@ -1274,11 +1359,11 @@ Returned by feed endpoints, `GET /videos/:id` (extended), shorts, movies browse.
 }
 ```
 
-`streamerStatus` / `verticalCreatorStatus`: `none` \| `pending` \| `approved` \| `rejected`.
+`streamerStatus` / `verticalCreatorStatus` / `storeCreatorStatus`: `none` \| `pending` \| `approved` \| `rejected`.
 
 ### Public profile (`GET /users/:username`)
 
-Same core fields plus `isLive`, `liveStreamId`, `isFollowing`, `isChannelMember`, `liveAlertsOn` when requester is authenticated.
+Core public fields plus `hasStore` (true when `storeCreatorStatus === approved`). When the request includes a valid JWT: `isFollowing`, `isChannelMember`, `liveAlertsOn`. Also `isLive`, `liveStreamId`.
 
 ### Pagination `meta`
 

@@ -55,6 +55,8 @@ export type PublicCreatorProfile = {
   /** Paid channel membership (30-day); free follow is `isFollowing`. */
   isChannelMember?: boolean;
   liveAlertsOn?: boolean;
+  /** Creator Store approved — public store tab available */
+  hasStore?: boolean;
   socialLinks: Array<{ label: string; url: string; sortOrder: number }>;
 };
 
@@ -120,8 +122,9 @@ export async function applyVerticalCreator(
 }
 
 export async function requestCreatorAccess(body: {
-  features: Array<"vertical" | "live">;
+  features: Array<"vertical" | "live" | "store">;
   description?: string;
+  acceptedStoreTerms?: boolean;
 }) {
   return apiRequest<{
     success: boolean;

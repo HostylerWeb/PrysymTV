@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useState } from "react"
 import { X, Loader2, CheckCircle, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -14,14 +15,16 @@ import { requestCreatorAccess } from "@/lib/api/users"
 export type CreatorVerificationContext = {
   description?: string
   portfolioUrl?: string
-  features: Array<"vertical" | "live">
+  features: Array<"vertical" | "live" | "store">
 }
+
+type UnlockFeature = "vertical" | "live" | "store"
 
 interface UnlockFeaturesModalProps {
   isOpen: boolean
   onClose: () => void
   onNeedCreatorVerification: (context: CreatorVerificationContext) => void
-  preselect?: "vertical" | "live"
+  preselect?: UnlockFeature
 }
 
 export function UnlockFeaturesModal({
@@ -31,8 +34,8 @@ export function UnlockFeaturesModal({
   preselect,
 }: UnlockFeaturesModalProps) {
   const { user, refreshUser } = useAuth()
-  const [selected, setSelected] = useState<Set<"vertical" | "live">>(() => {
-    const s = new Set<"vertical" | "live">()
+  const [selected, setSelected] = useState<Set<UnlockFeature>>(() => {
+    const s = new Set<UnlockFeature>()
     if (preselect) s.add(preselect)
     return s
   })
@@ -46,7 +49,7 @@ export function UnlockFeaturesModal({
   const verified = isIdentityVerified(user)
   const caps = getCreatorCapabilities(user)
 
-  const toggle = (id: "vertical" | "live") => {
+  const toggle = (id: UnlockFeature) => {
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -55,8 +58,8 @@ export function UnlockFeaturesModal({
     })
   }
 
-  const lockedOptions: Array<{
-    id: "vertical" | "live"
+  const allOptions: Array<{
+    id: UnlockFeature
     label: string
     allowed: boolean
     pending: boolean
@@ -73,19 +76,32 @@ export function UnlockFeaturesModal({
       allowed: caps.find((c) => c.id === "live")?.allowed ?? false,
       pending: user.streamerStatus === "pending",
     },
-  ].filter((o) => !o.allowed)
+    {
+      id: "store",
+      label: "Creator Store",
+      allowed: user.storeCreatorStatus === "approved",
+      pending: user.storeCreatorStatus === "pending",
+    },
+  ]
+  const lockedOptions = allOptions.filter((o) => !o.allowed)
 
   const needsLive =
     selected.has("live") && user.streamerStatus !== "approved"
   const needsVertical =
     selected.has("vertical") && user.verticalCreatorStatus !== "approved"
-  const needsIdVerification = !verified && (needsLive || needsVertical)
+  const needsStore = selected.has("store")
+  const needsIdVerification =
+    !verified && (needsLive || needsVertical)
 
   const nextStepHint = verified
-    ? "Selected features unlock immediately."
+    ? needsStore && !needsLive && !needsVertical
+      ? "Store requests are reviewed by our team before you can list products."
+      : "Selected features unlock immediately where eligible; store access is reviewed by admin."
     : needsIdVerification
       ? "Next step: upload a government-issued ID. The same document is used for all selected permissions."
-      : null
+      : needsStore
+        ? "Store requests are submitted for admin review."
+        : null
 
   const handleSubmit = async () => {
     if (selected.size === 0) return
@@ -95,10 +111,11 @@ export function UnlockFeaturesModal({
     setBusy(true)
     setError("")
     try {
-      if (verified) {
+      if (verified || needsStore) {
         const res = await requestCreatorAccess({
           features: Array.from(selected),
           description: desc,
+          acceptedStoreTerms: selected.has("store") ? true : undefined,
         })
         await refreshUser()
         if (
@@ -109,6 +126,7 @@ export function UnlockFeaturesModal({
           onNeedCreatorVerification({
             description: desc,
             features: Array.from(selected).filter((f) => {
+              if (f === "store") return false
               if (f === "live" && user.streamerStatus === "approved") return false
               if (f === "vertical" && user.verticalCreatorStatus === "approved")
                 return false
@@ -128,6 +146,7 @@ export function UnlockFeaturesModal({
           features: [
             ...(needsVertical ? (["vertical"] as const) : []),
             ...(needsLive ? (["live"] as const) : []),
+            ...(needsStore ? (["store"] as const) : []),
           ],
         })
         return
@@ -164,7 +183,7 @@ export function UnlockFeaturesModal({
           {verified && (
             <p className="text-sm text-muted-foreground text-center mt-2 flex items-center justify-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-green-500" />
-              ID verified — selected features unlock immediately
+              ID verified — instant unlock where eligible
             </p>
           )}
         </div>
@@ -181,7 +200,9 @@ export function UnlockFeaturesModal({
               <CheckCircle className="w-14 h-14 text-green-500 mx-auto mb-3" />
               <p className="font-semibold mb-2">Request submitted</p>
               <p className="text-sm text-muted-foreground mb-6">
-                Approved features are now available on your profile.
+                {selected.has("store")
+                  ? "We will review your Creator Store request. Other approved features are available on your profile."
+                  : "Approved features are now available on your profile."}
               </p>
               <Button onClick={onClose} className="w-full rounded-full">
                 Done
@@ -226,14 +247,30 @@ export function UnlockFeaturesModal({
                         <p className="text-xs text-muted-foreground">
                           {opt.pending
                             ? "Application pending review"
-                            : verified
-                              ? "Instant unlock"
-                              : "Requires ID verification"}
+                            : opt.id === "store"
+                              ? "Admin review required"
+                              : verified
+                                ? "Instant unlock"
+                                : "Requires ID verification"}
                         </p>
                       </div>
                     </button>
                   ))}
                 </div>
+              )}
+
+              {selected.has("store") && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2.5 leading-relaxed">
+                  By requesting Creator Store access, you confirm you have read our{" "}
+                  <Link href="/terms" className="underline font-medium" target="_blank">
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/guidelines" className="underline font-medium" target="_blank">
+                    Community Guidelines
+                  </Link>
+                  . Illegal products or services will result in an immediate account ban.
+                </p>
               )}
 
               {nextStepHint && (

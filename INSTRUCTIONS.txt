@@ -1,0 +1,282 @@
+================================================================================
+PRYSYM TV — HOW TO UPDATE THE LIVE WEBSITE AFTER A GITHUB PUSH
+================================================================================
+
+This file explains how to deploy code from GitHub to the production VPS.
+Read it before every deploy. See also: guides-md-files/vps-production.md
+
+--------------------------------------------------------------------------------
+1. OVERVIEW
+--------------------------------------------------------------------------------
+
+GitHub repo:  https://github.com/HostylerWeb/PrysymTV
+Branch:       main
+
+Production server:
+  Hostname:   srv1765056.hstgr.cloud
+  IP:         2.25.210.178
+  SSH user:   root  (deploy)  /  prysym  (app runs as this user)
+  App path:   /var/www/prysymtv
+
+Live URLs:
+  Website:    https://srv1765056.hstgr.cloud/
+  API:        https://srv1765056.hstgr.cloud/api/v1
+  Health:     https://srv1765056.hstgr.cloud/api/v1/health
+
+Services on the VPS (systemd):
+  prysym-api   — NestJS backend (port 4000, proxied by nginx)
+  prysym-web   — Next.js frontend (standalone build)
+  nginx        — HTTPS reverse proxy
+  Docker       — Postgres, Redis, MediaMTX (live streaming)
+
+Normal workflow:
+  1. Develop and test locally
+  2. Commit and push to GitHub (main)
+  3. SSH into the VPS and run the deploy (see section 3)
+  4. Verify health endpoints (see section 5)
+
+Pushing to GitHub alone does NOT update the live site. You must deploy on the VPS.
+
+--------------------------------------------------------------------------------
+2. BEFORE YOU PUSH (LOCAL CHECKLIST)
+--------------------------------------------------------------------------------
+
+[ ] Changes are committed on main (or merged via PR first)
+[ ] API builds locally:     cd api && npm run build
+[ ] Frontend builds locally: pnpm build   (from repo root)
+[ ] If you changed prisma/schema.prisma, create a migration:
+      cd api && npm run db:migrate
+[ ] Never commit secrets:
+      - api/.env
+      - .env.local
+      - passwords, API keys, SSH credentials
+[ ] Never commit node_modules, .next/, api/dist/, or api/storage/
+
+--------------------------------------------------------------------------------
+3. HOW TO DEPLOY (AFTER PUSHING TO GITHUB)
+--------------------------------------------------------------------------------
+
+--- OPTION A: FULL DEPLOY (recommended for most releases) ---
+
+Use when BOTH frontend and backend changed, or you are unsure.
+
+From your laptop:
+
+  ssh root@2.25.210.178
+
+Then on the server:
+
+  bash /var/www/prysymtv/infra/vps/deploy.sh
+
+What the script does:
+  - git fetch + reset to origin/main
+  - Regenerates api/.env and .env.production
+  - Runs Prisma migrations
+  - npm ci + build (API)
+  - pnpm install + next build (frontend)
+  - Restarts prysym-api and prysym-web
+
+One-liner from your laptop (replace YOUR_ROOT_PASSWORD):
+
+  ssh root@2.25.210.178 'bash /var/www/prysymtv/infra/vps/deploy.sh'
+
+Deploy takes several minutes. Wait for "Deploy complete" at the end.
+
+
+--- OPTION B: API-ONLY DEPLOY (backend bug fixes) ---
+
+Use when ONLY files under api/ changed (e.g. NestJS routes, services, Prisma).
+
+  ssh root@2.25.210.178
+
+  su - prysym -c 'cd /var/www/prysymtv && git fetch origin && git reset --hard origin/main'
+  su - prysym -c 'cd /var/www/prysymtv/api && npm ci && npx prisma generate'
+  su - prysym -c 'cd /var/www/prysymtv/api && npx prisma migrate deploy'
+  su - prysym -c 'cd /var/www/prysymtv/api && npm run build'
+  systemctl restart prysym-api
+
+Does NOT rebuild the frontend. Faster than a full deploy.
+
+
+--- OPTION C: FRONTEND-ONLY DEPLOY ---
+
+Use when ONLY Next.js files changed (app/, components/, lib/, no api/ changes).
+
+  ssh root@2.25.210.178
+
+  su - prysym -c 'cd /var/www/prysymtv && git fetch origin && git reset --hard origin/main'
+  su - prysym -c 'cd /var/www/prysymtv && pnpm install --ignore-scripts=false'
+  su - prysym -c 'cd /var/www/prysymtv && node node_modules/next/dist/bin/next build'
+  su - prysym -c 'cd /var/www/prysymtv && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public'
+  systemctl restart prysym-web
+
+Does NOT rebuild the API.
+
+
+--- WHICH OPTION TO CHOOSE ---
+
+  Changed api/src/ or prisma/     →  Option B (or A if frontend also changed)
+  Changed app/ or components/   →  Option C (or A if API also changed)
+  Changed both                  →  Option A (full deploy)
+  Changed infra/vps/deploy.sh   →  Option A, after pulling latest script
+
+--------------------------------------------------------------------------------
+4. SERVER SECRET FILES (DO NOT DELETE)
+--------------------------------------------------------------------------------
+
+These files live ONLY on the VPS. They are NOT in GitHub.
+
+  /etc/prysym/secrets.env
+      Postgres + Redis passwords (created by provision.sh)
+
+  /etc/prysym/app-secrets.env
+      Cloudflare R2 (S3), SMTP, and Stripe keys
+      Required by deploy.sh — if missing, full deploy WILL FAIL
+
+  /etc/prysym/api.env.template
+      JWT secrets template
+
+  /var/www/prysymtv/api/.env
+      Live API configuration (regenerated by deploy.sh)
+
+  /var/www/prysymtv/.env.production
+      Live frontend configuration (regenerated by deploy.sh)
+
+If /etc/prysym/app-secrets.env is missing, create it on the server with:
+
+  S3_ENDPOINT=...
+  S3_BUCKET=...
+  S3_ACCESS_KEY_ID=...
+  S3_SECRET_ACCESS_KEY=...
+  S3_PUBLIC_BASE_URL=...
+  SMTP_HOST=...
+  SMTP_PORT=...
+  SMTP_USER=...
+  SMTP_PASS=...
+  SMTP_FROM=...
+  STRIPE_SECRET_KEY=...
+  STRIPE_WEBHOOK_SECRET=...
+
+  chmod 600 /etc/prysym/app-secrets.env
+
+Never commit these values to GitHub.
+
+--------------------------------------------------------------------------------
+5. VERIFY AFTER DEPLOY
+--------------------------------------------------------------------------------
+
+Check API health (build id should show today's date):
+
+  curl -sk https://srv1765056.hstgr.cloud/api/v1/health
+
+Expected: {"status":"ok", ... "build":"production-YYYYMMDD", ...}
+
+Check website responds:
+
+  curl -sk -o /dev/null -w "%{http_code}\n" https://srv1765056.hstgr.cloud/
+
+Expected: 200
+
+On the server:
+
+  systemctl status prysym-api prysym-web nginx
+  docker compose -f /opt/prysym/stack/docker-compose.yml ps
+
+All should be "active" / "running" / "healthy".
+
+--------------------------------------------------------------------------------
+6. MISTAKES TO AVOID
+--------------------------------------------------------------------------------
+
+1. PUSHING TO GITHUB AND FORGETTING TO DEPLOY
+   The live site runs old code until you SSH in and deploy.
+   GitHub push ≠ live update.
+
+2. RUNNING deploy.sh WITHOUT /etc/prysym/app-secrets.env
+   deploy.sh regenerates api/.env and needs S3/SMTP/Stripe variables.
+   If app-secrets.env is missing, the script fails with:
+     "S3_ENDPOINT: unbound variable"
+   and can leave api/.env empty. Always ensure app-secrets.env exists first.
+
+3. MANUALLY EDITING api/.env ON THE SERVER, THEN RUNNING deploy.sh
+   deploy.sh OVERWRITES api/.env every time.
+   Put long-lived secrets in /etc/prysym/app-secrets.env instead.
+   deploy.sh reads from there (see infra/vps/deploy.sh).
+
+4. COMMITTING .env FILES TO GITHUB
+   api/.env and .env.local contain secrets. They are gitignored for a reason.
+   Committing them exposes database passwords, JWT secrets, and API keys.
+
+5. DEPLOYING WITHOUT RUNNING MIGRATIONS
+   If you added Prisma schema changes, the API deploy must include:
+     npx prisma migrate deploy
+   Skipping this causes runtime database errors.
+
+6. RESTARTING THE API WITH AN EMPTY api/.env
+   If api/.env is 0 bytes, prysym-api will fail on next restart.
+   The old process may still run until restarted — don't assume "site works"
+   means the env file is fine. Check: wc -l /var/www/prysymtv/api/.env
+
+7. USING git pull INSTEAD OF git reset --hard origin/main ON THE SERVER
+   The deploy script uses reset --hard to match GitHub exactly.
+   Manual git pull can leave merge conflicts or local changes on the server.
+   Prefer the deploy script, or use the same reset pattern.
+
+8. EDITING CODE ONLY ON THE SERVER
+   Changes made directly in /var/www/prysymtv are wiped on the next deploy.
+   Always edit locally, push to GitHub, then deploy.
+
+9. FULL FRONTEND REBUILD FOR API-ONLY FIXES
+   Unnecessary and slow. Use Option B for backend-only changes.
+
+10. FORGETTING TO REBUILD FRONTEND AFTER UI CHANGES
+    API-only deploy does not update Next.js pages.
+    If you changed app/ or components/, use Option C or A.
+
+11. SHARING SSH OR API PASSWORDS IN CHAT, DOCS, OR COMMITS
+    Use a password manager. Rotate credentials if they were ever exposed.
+    INSTRUCTIONS.txt intentionally does not store passwords.
+
+12. RUNNING npm audit fix --force IN api/
+    This can downgrade Prisma and break the API. See security-checklist.md.
+
+--------------------------------------------------------------------------------
+7. TROUBLESHOOTING
+--------------------------------------------------------------------------------
+
+Deploy script fails immediately:
+  - Check /etc/prysym/app-secrets.env exists and has S3_* variables
+  - Check /etc/prysym/secrets.env exists (Postgres/Redis passwords)
+  - Run: bash -x /var/www/prysymtv/infra/vps/deploy.sh 2>&1 | tail -50
+
+API won't start after deploy:
+  - journalctl -u prysym-api -n 50 --no-pager
+  - Check api/.env is not empty: wc -l /var/www/prysymtv/api/.env
+  - Check Docker: docker compose -f /opt/prysym/stack/docker-compose.yml ps
+
+Website shows old UI:
+  - Frontend was not rebuilt — run Option C or full deploy
+  - Hard-refresh browser (Ctrl+Shift+R)
+
+CORS errors in browser:
+  - CORS_ORIGIN in api/.env must match https://srv1765056.hstgr.cloud exactly
+
+Database connection failed:
+  - docker compose -f /opt/prysym/stack/docker-compose.yml up -d
+  - Verify DATABASE_URL in api/.env uses 127.0.0.1:5432
+
+--------------------------------------------------------------------------------
+8. QUICK REFERENCE
+--------------------------------------------------------------------------------
+
+  Push code:     git push origin main
+  Full deploy:   ssh root@2.25.210.178 'bash /var/www/prysymtv/infra/vps/deploy.sh'
+  API health:    https://srv1765056.hstgr.cloud/api/v1/health
+  Admin panel:   https://srv1765056.hstgr.cloud/admin
+  More docs:     guides-md-files/vps-production.md
+                 guides-md-files/how-to-run.md
+                 guides-md-files/security-checklist.md
+
+================================================================================
+Last updated: 2026-07-03
+================================================================================

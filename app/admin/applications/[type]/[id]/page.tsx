@@ -6,8 +6,10 @@ import Link from "next/link"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
 import {
+  fetchAdminStoreCreatorApplication,
   fetchAdminStreamerApplication,
   fetchAdminVerticalCreatorApplication,
+  reviewAdminStoreCreatorApplication,
   reviewAdminStreamerApplication,
   reviewAdminVerticalCreatorApplication,
   type AdminApplicationType,
@@ -24,10 +26,16 @@ function ApplicationTypePill({ type }: { type: AdminApplicationType }) {
         "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide",
         type === "streamer"
           ? "bg-green-500/15 text-green-500"
-          : "bg-violet-500/15 text-violet-400",
+          : type === "vertical"
+            ? "bg-violet-500/15 text-violet-400"
+            : "bg-amber-500/15 text-amber-500",
       )}
     >
-      {type === "streamer" ? "Live streaming" : "Vertical series"}
+      {type === "streamer"
+        ? "Live streaming"
+        : type === "vertical"
+          ? "Vertical series"
+          : "Creator Store"}
     </span>
   )
 }
@@ -44,13 +52,20 @@ export default function AdminApplicationReviewPage({
   const [busy, setBusy] = useState(false)
 
   const isStreamer = type === "streamer"
+  const isStore = type === "store"
 
-  const { data: app, loading, error } = useAdminQuery(
-    () =>
-      isStreamer
-        ? fetchAdminStreamerApplication(id)
-        : fetchAdminVerticalCreatorApplication(id),
-    [id, isStreamer],
+  type ApplicationDetail =
+    | Awaited<ReturnType<typeof fetchAdminStreamerApplication>>
+    | Awaited<ReturnType<typeof fetchAdminVerticalCreatorApplication>>
+    | Awaited<ReturnType<typeof fetchAdminStoreCreatorApplication>>
+
+  const { data: app, loading, error } = useAdminQuery<ApplicationDetail>(
+    () => {
+      if (isStreamer) return fetchAdminStreamerApplication(id)
+      if (isStore) return fetchAdminStoreCreatorApplication(id)
+      return fetchAdminVerticalCreatorApplication(id)
+    },
+    [id, isStreamer, isStore],
   )
 
   const review = async (action: "approve" | "reject") => {
@@ -58,6 +73,8 @@ export default function AdminApplicationReviewPage({
     try {
       if (isStreamer) {
         await reviewAdminStreamerApplication(id, { action, notes: notes || undefined })
+      } else if (isStore) {
+        await reviewAdminStoreCreatorApplication(id, { action, notes: notes || undefined })
       } else {
         await reviewAdminVerticalCreatorApplication(id, {
           action,
@@ -70,7 +87,7 @@ export default function AdminApplicationReviewPage({
     }
   }
 
-  if (type !== "streamer" && type !== "vertical") {
+  if (type !== "streamer" && type !== "vertical" && type !== "store") {
     return (
       <p className="text-sm text-destructive py-12 text-center">Unknown application type.</p>
     )
@@ -88,120 +105,80 @@ export default function AdminApplicationReviewPage({
     )
   }
 
-  const approveLabel = isStreamer ? "Approve live streaming" : "Approve vertical series"
-  const streamerApp = isStreamer
-    ? (app as Awaited<ReturnType<typeof fetchAdminStreamerApplication>>)
-    : null
-  const verticalApp = !isStreamer
-    ? (app as Awaited<ReturnType<typeof fetchAdminVerticalCreatorApplication>>)
-    : null
+  const storeApp =
+    isStore && app && "acceptedTerms" in app
+      ? (app as Awaited<ReturnType<typeof fetchAdminStoreCreatorApplication>>)
+      : null
 
   return (
     <>
       <AdminPageHeader
-        title={app.displayName ?? app.username}
-        description={`@${app.username}`}
+        title="Review application"
         breadcrumbs={[
           { label: "Admin", href: "/admin" },
           { label: "Applications", href: "/admin/applications" },
           { label: app.username },
         ]}
-        actions={
-          <div className="flex items-center gap-2">
-            <ApplicationTypePill type={type} />
-            <Button asChild variant="outline" size="sm" className="rounded-full">
-              <Link href={`/admin/users/${app.userId}`}>User profile</Link>
-            </Button>
-          </div>
-        }
+        actions={<ApplicationTypePill type={type} />}
       />
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <div className="rounded-xl border border-border bg-card p-5">
-            <p className="text-sm font-medium mb-2">Application</p>
-            <p className="text-sm text-muted-foreground leading-relaxed">{app.description}</p>
+      <div className="max-w-2xl space-y-6">
+        <div className="rounded-xl border border-border p-5 space-y-3 text-sm">
+          <p>
+            <span className="text-muted-foreground">User:</span>{" "}
+            <Link href={`/admin/users/${app.userId}`} className="text-primary hover:underline">
+              @{app.username}
+            </Link>
+          </p>
+          {"email" in app && app.email && (
+            <p>
+              <span className="text-muted-foreground">Email:</span> {app.email}
+            </p>
+          )}
+          <p>
+            <span className="text-muted-foreground">Status:</span> {app.status}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Submitted:</span>{" "}
+            {new Date(app.submittedAt ?? (app as { createdAt?: string }).createdAt ?? "").toLocaleString()}
+          </p>
+          {storeApp?.acceptedTerms && (
+            <p className="text-amber-600 dark:text-amber-400">
+              Applicant acknowledged Terms of Service and Community Guidelines for store access.
+            </p>
+          )}
+          <div>
+            <p className="text-muted-foreground mb-1">Description</p>
+            <p className="whitespace-pre-wrap">{app.description}</p>
           </div>
-
-          {isStreamer && streamerApp && (
-            <div className="rounded-xl border border-border bg-card p-5">
-              <p className="text-sm font-medium mb-3">Government ID</p>
-              {streamerApp.idDocumentUrl ? (
-                <img
-                  src={streamerApp.idDocumentUrl}
-                  alt="ID document"
-                  className="w-full rounded-lg border border-border"
-                />
-              ) : (
-                <div className="aspect-[4/3] rounded-lg bg-muted flex items-center justify-center text-sm text-muted-foreground">
-                  No document uploaded
-                </div>
-              )}
-            </div>
-          )}
-
-          {!isStreamer && verticalApp && (
-            <>
-              <div className="rounded-xl border border-border bg-card p-5">
-                <p className="text-sm font-medium mb-3">Government ID</p>
-                {verticalApp.idDocumentUrl ? (
-                  <img
-                    src={verticalApp.idDocumentUrl}
-                    alt="ID document"
-                    className="w-full rounded-lg border border-border"
-                  />
-                ) : (
-                  <div className="aspect-[4/3] rounded-lg bg-muted flex items-center justify-center text-sm text-muted-foreground">
-                    No document uploaded
-                  </div>
-                )}
-              </div>
-              {verticalApp.portfolioUrl && (
-                <div className="rounded-xl border border-border bg-card p-5">
-                  <p className="text-sm font-medium mb-2">Portfolio</p>
-                  <a
-                    href={verticalApp.portfolioUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-primary hover:underline break-all"
-                  >
-                    {verticalApp.portfolioUrl}
-                  </a>
-                </div>
-              )}
-            </>
-          )}
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-5 space-y-4 h-fit">
-          <div>
-            <Label htmlFor="review-notes">Review notes (internal)</Label>
-            <Textarea
-              id="review-notes"
-              className="mt-1"
-              rows={4}
-              placeholder="Optional…"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Button
-              className="rounded-full"
-              disabled={busy || app.status !== "pending"}
-              onClick={() => void review("approve")}
-            >
-              {approveLabel}
-            </Button>
-            <Button
-              variant="outline"
-              className="rounded-full"
-              disabled={busy || app.status !== "pending"}
-              onClick={() => void review("reject")}
-            >
-              Reject application
-            </Button>
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="notes">Review notes (optional)</Label>
+          <Textarea
+            id="notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="min-h-24"
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <Button
+            className="rounded-full"
+            disabled={busy || app.status !== "pending"}
+            onClick={() => void review("approve")}
+          >
+            Approve
+          </Button>
+          <Button
+            variant="destructive"
+            className="rounded-full"
+            disabled={busy || app.status !== "pending"}
+            onClick={() => void review("reject")}
+          >
+            Reject
+          </Button>
         </div>
       </div>
     </>

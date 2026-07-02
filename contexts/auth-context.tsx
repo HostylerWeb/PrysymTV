@@ -33,6 +33,7 @@ export interface User {
   streamerStatus: "none" | "pending" | "approved" | "rejected"
   isVerticalCreator: boolean
   verticalCreatorStatus: "none" | "pending" | "approved" | "rejected"
+  storeCreatorStatus: "none" | "pending" | "approved" | "rejected"
   followersCount: number
   followingCount: number
   videosCount: number

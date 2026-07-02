@@ -14,6 +14,8 @@ import {
   Radio,
   ListMusic,
   Plus,
+  ShoppingBag,
+  Share2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -44,20 +46,22 @@ import { mapHistoryToSettingsItems } from "@/lib/map-history"
 import { mapLikedItemCard, mapSavedItemCard } from "@/lib/map-profile-items"
 import { CreatorPermissionsCard } from "@/components/creator-permissions-card"
 import { ProfileMyContent } from "@/components/profile-my-content"
+import { ProfileStorePanel } from "@/components/profile-store-panel"
 import { CreateFlowModals, openVerticalWizard } from "@/components/create-flow-modals"
 import { CreateHeaderButton } from "@/components/create-header-button"
+import { ShareSheet } from "@/components/share-sheet"
 import { useCreateFlow } from "@/hooks/use-create-flow"
 import {
   fetchMyPlaylists,
   type PlaylistSummary,
 } from "@/lib/api/playlists"
 
-const tabs = [
+const baseTabs = [
   { id: "content", label: "My content", icon: Grid3X3 },
   { id: "playlists", label: "Playlists", icon: ListMusic },
   { id: "saved", label: "Saved", icon: Bookmark },
   { id: "liked", label: "Liked", icon: Heart },
-]
+] as const
 
 function ProfileEmpty({ message }: { message: string }) {
   return (
@@ -107,6 +111,7 @@ function ProfilePageContent() {
     Array<"live" | "vertical">
   >(["live"])
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false)
+  const [isShareOpen, setIsShareOpen] = useState(false)
   const [darkModeEnabled, setDarkModeEnabled] = useState(true)
   const [savedItems, setSavedItems] = useState<SavedItemRecord[]>([])
   const [likedItems, setLikedItems] = useState<LikedItemRecord[]>([])
@@ -115,6 +120,13 @@ function ProfilePageContent() {
   const [tabsLoading, setTabsLoading] = useState(false)
   const createFlow = useCreateFlow()
   const { setMenuOpen: setCreateMenuOpen } = createFlow
+
+  const tabs = [
+    ...baseTabs,
+    ...(user?.storeCreatorStatus === "approved"
+      ? [{ id: "store" as const, label: "Store", icon: ShoppingBag }]
+      : []),
+  ]
 
   const openSettingsPanel = (screen: ProfileSettingsScreen = "menu") => {
     setSettingsOpenTo(screen)
@@ -397,8 +409,16 @@ function ProfilePageContent() {
               )}
               
               {/* Action Buttons */}
-              <div className="flex items-center justify-center md:justify-start gap-3 w-full max-w-xs md:max-w-none md:w-auto">
+              <div className="flex items-center justify-center md:justify-start gap-3 w-full max-w-xs md:max-w-none md:w-auto flex-wrap">
                 <Button className="flex-1 md:flex-none rounded-full px-8" onClick={() => setIsEditProfileOpen(true)}>Edit Profile</Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 md:flex-none rounded-full gap-2 px-6"
+                  onClick={() => setIsShareOpen(true)}
+                >
+                  <Share2 className="w-4 h-4" />
+                  Share profile
+                </Button>
                 {user?.streamerStatus === "approved" && (
                   <Button
                     variant="secondary"
@@ -640,6 +660,10 @@ function ProfilePageContent() {
               ))}
           </div>
         ) : null}
+
+        {activeTab === "store" && user?.storeCreatorStatus === "approved" && (
+          <ProfileStorePanel />
+        )}
       </div>
 
       {/* Bottom Navigation */}
@@ -673,15 +697,26 @@ function ProfilePageContent() {
         }}
       />
       <EditProfileModal isOpen={isEditProfileOpen} onClose={() => setIsEditProfileOpen(false)} />
+      <ShareSheet
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        title={user?.name ? `${user.name} on Prysym` : "My profile"}
+        url={
+          user?.username && typeof window !== "undefined"
+            ? `${window.location.origin}/creator/${user.username.replace(/^@/, "")}`
+            : undefined
+        }
+      />
 
       <CreateFlowModals
         flow={createFlow}
         onOpenSettings={(screen) => openSettingsPanel(screen)}
         onNeedCreatorVerification={(ctx) => {
           setStreamerModalPrefill(ctx.description)
-          setStreamerModalFeatures(
-            ctx.features.length > 0 ? ctx.features : ["live"],
+          const idFeatures = ctx.features.filter(
+            (f): f is "live" | "vertical" => f !== "store",
           )
+          setStreamerModalFeatures(idFeatures.length > 0 ? idFeatures : ["live"])
           setIsStreamerModalOpen(true)
         }}
         onUploadSuccess={() => void refreshUser()}

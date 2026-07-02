@@ -24,6 +24,7 @@ export type MeResponse = {
   isVerified: boolean;
   streamerStatus: "none" | "pending" | "approved" | "rejected";
   verticalCreatorStatus: "none" | "pending" | "approved" | "rejected";
+  storeCreatorStatus: "none" | "pending" | "approved" | "rejected";
   coinsBalance: number;
   premiumTier: string;
   premiumExpiresAt: string | null;

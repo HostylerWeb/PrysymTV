@@ -17,7 +17,9 @@ import {
   ReportStatus,
   ReportTargetType,
   StreamStatus,
+  StoreProductStatus,
   StreamerStatus,
+  StoreCreatorStatus,
   UserRole,
   VerticalCreatorStatus,
   VideoType,
@@ -38,6 +40,7 @@ import { AdminReportAction } from './dto/review-report.dto';
 import { AdminPayoutAction } from './dto/process-payout.dto';
 import { StreamerApplicationAction } from './dto/review-streamer-application.dto';
 import { VerticalCreatorApplicationAction } from './dto/review-vertical-creator-application.dto';
+import { StoreCreatorApplicationAction } from './dto/review-store-creator-application.dto';
 import { UpdateAdsConfigDto } from './dto/update-ads-config.dto';
 import { UpdateAnalyticsConfigDto } from './dto/update-analytics-config.dto';
 import { UpdateEconomyConfigDto } from './dto/update-economy-config.dto';
@@ -95,6 +98,7 @@ export class AdminService {
       pendingPayouts,
       pendingApps,
       pendingVerticalApps,
+      pendingStoreApps,
     ] = await Promise.all([
       this.prisma.analyticsEvent.findMany({
         where: { createdAt: { gte: since24h }, userId: { not: null } },
@@ -125,6 +129,9 @@ export class AdminService {
       this.prisma.verticalCreatorApplication.count({
         where: { status: ApplicationStatus.pending },
       }),
+      this.prisma.storeCreatorApplication.count({
+        where: { status: ApplicationStatus.pending },
+      }),
     ]);
 
     const pendingPayoutsUsd = pendingPayouts.reduce(
@@ -150,7 +157,8 @@ export class AdminService {
       pendingPayoutsUsd: Number(pendingPayoutsUsd),
       pendingStreamerApplications: pendingApps,
       pendingVerticalCreatorApplications: pendingVerticalApps,
-      pendingApplications: pendingApps + pendingVerticalApps,
+      pendingStoreCreatorApplications: pendingStoreApps,
+      pendingApplications: pendingApps + pendingVerticalApps + pendingStoreApps,
     };
   }
 
@@ -164,15 +172,18 @@ export class AdminService {
     const type = query.type?.toLowerCase();
     const includeStreamer = !type || type === 'all' || type === 'streamer';
     const includeVertical = !type || type === 'all' || type === 'vertical';
+    const includeStore = !type || type === 'all' || type === 'store';
 
     const streamerWhere: Prisma.StreamerApplicationWhereInput = {};
     const verticalWhere: Prisma.VerticalCreatorApplicationWhereInput = {};
+    const storeWhere: Prisma.StoreCreatorApplicationWhereInput = {};
     if (statusFilter) {
       streamerWhere.status = statusFilter;
       verticalWhere.status = statusFilter;
+      storeWhere.status = statusFilter;
     }
 
-    const [streamerItems, verticalItems] = await Promise.all([
+    const [streamerItems, verticalItems, storeItems] = await Promise.all([
       includeStreamer
         ? this.prisma.streamerApplication.findMany({
             where: streamerWhere,
@@ -191,6 +202,21 @@ export class AdminService {
       includeVertical
         ? this.prisma.verticalCreatorApplication.findMany({
             where: verticalWhere,
+            orderBy: { createdAt: 'desc' },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                },
+              },
+            },
+          })
+        : Promise.resolve([]),
+      includeStore
+        ? this.prisma.storeCreatorApplication.findMany({
+            where: storeWhere,
             orderBy: { createdAt: 'desc' },
             include: {
               user: {
@@ -229,6 +255,19 @@ export class AdminService {
         submittedAt: a.createdAt.toISOString(),
         hasIdDocument: !!a.idDocumentUrl,
         portfolioUrl: a.portfolioUrl,
+      })),
+      ...storeItems.map((a) => ({
+        id: a.id,
+        type: 'store' as const,
+        userId: a.userId,
+        username: a.user.username,
+        displayName: a.user.displayName,
+        description: a.description,
+        status: a.status,
+        submittedAt: a.createdAt.toISOString(),
+        hasIdDocument: !!a.idDocumentUrl,
+        portfolioUrl: null as string | null,
+        acceptedTerms: a.acceptedTerms,
       })),
     ].sort(
       (a, b) =>
@@ -458,6 +497,12 @@ export class AdminService {
         socialLinks: { orderBy: { sortOrder: 'asc' } },
         streamerApplication: true,
         verticalCreatorApplication: true,
+        storeCreatorApplication: true,
+        creatorStore: {
+          include: {
+            products: { orderBy: { createdAt: 'desc' } },
+          },
+        },
         payoutProfile: true,
         _count: {
           select: {
@@ -630,6 +675,7 @@ export class AdminService {
       isBanned: user.isBanned,
       streamerStatus: user.streamerStatus,
       verticalCreatorStatus: user.verticalCreatorStatus,
+      storeCreatorStatus: user.storeCreatorStatus,
       partnerTier: user.partnerTier,
       coins: user.coinsBalance,
       bio: user.bio,
@@ -708,6 +754,18 @@ export class AdminService {
       },
       streamerApplication: user.streamerApplication,
       verticalCreatorApplication: user.verticalCreatorApplication,
+      storeCreatorApplication: user.storeCreatorApplication,
+      storeProducts:
+        user.creatorStore?.products.map((p) => ({
+          id: p.id,
+          title: p.title,
+          productType: p.productType,
+          priceUsd: Number(p.priceUsd),
+          status: p.status,
+          imageUrl: p.imageUrl,
+          inventory: p.inventory,
+          createdAt: p.createdAt.toISOString(),
+        })) ?? [],
     };
   }
 
@@ -983,6 +1041,148 @@ export class AdminService {
     ]);
 
     return { success: true, status: appStatus, verticalCreatorStatus };
+  }
+
+  async listStoreProducts(query: AdminListQueryDto) {
+    const { page, limit, skip, take } = this.paginate(query.page, query.limit);
+    const where: Prisma.StoreProductWhereInput = {};
+    if (query.status && query.status !== 'all') {
+      where.status = query.status as StoreProductStatus;
+    }
+    if (query.q?.trim()) {
+      const q = query.q.trim();
+      where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { store: { creator: { username: { contains: q, mode: 'insensitive' } } } },
+        { store: { displayName: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.storeProduct.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+        include: {
+          store: {
+            include: {
+              creator: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.storeProduct.count({ where }),
+    ]);
+
+    return {
+      items: items.map((p) => ({
+        id: p.id,
+        title: p.title,
+        productType: p.productType,
+        priceUsd: Number(p.priceUsd),
+        status: p.status,
+        imageUrl: p.imageUrl,
+        inventory: p.inventory,
+        createdAt: p.createdAt.toISOString(),
+        creatorId: p.store.creator.id,
+        creatorUsername: p.store.creator.username,
+        creatorDisplayName: p.store.creator.displayName,
+        storeSlug: p.store.slug,
+      })),
+      meta: { page, limit, total },
+    };
+  }
+
+  async getStoreCreatorApplication(id: string) {
+    const app = await this.prisma.storeCreatorApplication.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            email: true,
+            storeCreatorStatus: true,
+          },
+        },
+      },
+    });
+    if (!app) throw new NotFoundException('Application not found');
+
+    return {
+      id: app.id,
+      type: 'store' as const,
+      userId: app.userId,
+      username: app.user.username,
+      displayName: app.user.displayName,
+      email: app.user.email,
+      storeCreatorStatus: app.user.storeCreatorStatus,
+      description: app.description,
+      status: app.status,
+      hasIdDocument: !!app.idDocumentUrl,
+      acceptedTerms: app.acceptedTerms,
+      reviewNotes: app.reviewNotes,
+      submittedAt: app.createdAt.toISOString(),
+      updatedAt: app.updatedAt.toISOString(),
+    };
+  }
+
+  async reviewStoreCreatorApplication(
+    id: string,
+    adminId: string,
+    action: StoreCreatorApplicationAction,
+    notes?: string,
+  ) {
+    const app = await this.prisma.storeCreatorApplication.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+    if (!app) throw new NotFoundException('Application not found');
+
+    const approved = action === StoreCreatorApplicationAction.approve;
+    const appStatus = approved ? ApplicationStatus.approved : ApplicationStatus.rejected;
+    const storeCreatorStatus = approved
+      ? StoreCreatorStatus.approved
+      : StoreCreatorStatus.rejected;
+
+    await this.prisma.$transaction([
+      this.prisma.storeCreatorApplication.update({
+        where: { id },
+        data: {
+          status: appStatus,
+          reviewedById: adminId,
+          reviewNotes: notes?.trim() || null,
+        },
+      }),
+      this.prisma.user.update({
+        where: { id: app.userId },
+        data: { storeCreatorStatus },
+      }),
+    ]);
+
+    if (approved) {
+      const baseSlug = app.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+      await this.prisma.creatorStore.upsert({
+        where: { creatorId: app.userId },
+        create: {
+          creatorId: app.userId,
+          slug: baseSlug,
+          displayName: app.user.displayName?.trim() || app.user.username,
+          isPublished: true,
+        },
+        update: { isPublished: true },
+      });
+    }
+
+    return { success: true, status: appStatus, storeCreatorStatus };
   }
 
   async listPayouts(query: AdminListQueryDto) {

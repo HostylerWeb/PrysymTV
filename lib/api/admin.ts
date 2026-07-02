@@ -24,7 +24,7 @@ export type AdminOverview = {
   pendingApplications: number;
 };
 
-export type AdminApplicationType = "streamer" | "vertical";
+export type AdminApplicationType = "streamer" | "vertical" | "store";
 
 export type AdminApplicationListItem = {
   id: string;
@@ -37,6 +37,7 @@ export type AdminApplicationListItem = {
   submittedAt: string;
   hasIdDocument: boolean;
   portfolioUrl: string | null;
+  acceptedTerms?: boolean;
 };
 
 export type PaginatedMeta = { page: number; limit: number; total: number };
@@ -146,6 +147,24 @@ export type AdminUserDetail = AdminUserListItem & {
     portfolioUrl: string | null;
     userId?: string;
   } | null;
+  storeCreatorStatus?: string;
+  storeCreatorApplication: {
+    id: string;
+    description: string;
+    status: string;
+    acceptedTerms?: boolean;
+    userId?: string;
+  } | null;
+  storeProducts: Array<{
+    id: string;
+    title: string;
+    productType: string;
+    priceUsd: number;
+    status: string;
+    imageUrl: string | null;
+    inventory: number | null;
+    createdAt: string;
+  }>;
 };
 
 export type AdminStreamerApplication = {
@@ -399,7 +418,7 @@ export function fetchAdminApplications(params?: {
   page?: number;
   limit?: number;
   status?: string;
-  type?: "all" | "streamer" | "vertical";
+  type?: "all" | "streamer" | "vertical" | "store";
 }) {
   return apiRequest<{ items: AdminApplicationListItem[]; meta: PaginatedMeta }>(
     `/admin/applications${qs(params ?? {})}`,
@@ -459,6 +478,62 @@ export function reviewAdminVerticalCreatorApplication(
   body: { action: "approve" | "reject"; notes?: string },
 ) {
   return apiRequest(`/admin/vertical-creator-applications/${id}`, { method: "PUT", body });
+}
+
+export type AdminStoreCreatorApplication = {
+  id: string;
+  type: "store";
+  userId: string;
+  username: string;
+  displayName: string | null;
+  email?: string;
+  storeCreatorStatus?: string;
+  description: string;
+  status: string;
+  hasIdDocument: boolean;
+  acceptedTerms: boolean;
+  reviewNotes?: string | null;
+  submittedAt: string;
+  updatedAt: string;
+};
+
+export type AdminStoreProductListItem = {
+  id: string;
+  title: string;
+  productType: string;
+  priceUsd: number;
+  status: string;
+  imageUrl: string | null;
+  inventory: number | null;
+  createdAt: string;
+  creatorId: string;
+  creatorUsername: string;
+  creatorDisplayName: string | null;
+  storeSlug: string;
+};
+
+export function fetchAdminStoreCreatorApplication(id: string) {
+  return apiRequest<AdminStoreCreatorApplication>(
+    `/admin/store-creator-applications/${id}`,
+  );
+}
+
+export function reviewAdminStoreCreatorApplication(
+  id: string,
+  body: { action: "approve" | "reject"; notes?: string },
+) {
+  return apiRequest(`/admin/store-creator-applications/${id}`, { method: "PUT", body });
+}
+
+export function fetchAdminStoreProducts(params?: {
+  page?: number;
+  limit?: number;
+  status?: string;
+  q?: string;
+}) {
+  return apiRequest<{ items: AdminStoreProductListItem[]; meta: PaginatedMeta }>(
+    `/admin/store-products${qs(params ?? {})}`,
+  );
 }
 
 export function fetchAdminPayouts(params?: {
