@@ -1,9 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   BarChart3,
+  Building2,
+  CheckCircle,
+  Clock,
   Film,
   LayoutGrid,
   Megaphone,
@@ -15,8 +19,16 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
+import { AdvertiserRegisterModal } from "@/components/advertiser-register-modal"
 import { Button } from "@/components/ui/button"
 import { LEGAL_CONTACT, PLATFORM_NAME } from "@/lib/legal/company"
+import { useAuth } from "@/contexts/auth-context"
+import {
+  fetchMyAdvertiserAccounts,
+  type AdvertiserAccount,
+} from "@/lib/api/advertisers"
+import { profileAuthHref } from "@/lib/safe-return-path"
+import { cn } from "@/lib/utils"
 
 const PLACEMENTS = [
   {
@@ -64,12 +76,122 @@ const STEPS = [
   {
     step: "4",
     title: "Measure results",
-    body: "Track impressions, clicks, CTR, and spend in the admin dashboard. Pay based on agreed CPM or package terms.",
+    body: "Track impressions, clicks, CTR, and spend. Pay based on agreed CPM or package terms.",
   },
 ] as const
 
+function AdvertiserAccountStatus({
+  account,
+  onOpenPortal,
+}: {
+  account: AdvertiserAccount
+  onOpenPortal: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpenPortal}
+      className={cn(
+        "w-full text-left rounded-xl border p-4 transition-colors hover:bg-secondary/40",
+        account.isVerified
+          ? "border-green-500/30 bg-green-500/5"
+          : "border-amber-500/30 bg-amber-500/5",
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-foreground truncate">{account.companyName}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">{account.contactEmail}</p>
+        </div>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide",
+            account.isVerified
+              ? "bg-green-500/15 text-green-600 dark:text-green-400"
+              : "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+          )}
+        >
+          {account.isVerified ? (
+            <>
+              <CheckCircle className="w-3 h-3" />
+              Verified
+            </>
+          ) : (
+            <>
+              <Clock className="w-3 h-3" />
+              Pending
+            </>
+          )}
+        </span>
+      </div>
+      <p className="text-xs text-muted-foreground mt-2">
+        {account.isVerified ? (
+          <>
+            {account._count?.campaigns ?? 0} active campaign
+            {(account._count?.campaigns ?? 0) === 1 ? "" : "s"} · View details
+          </>
+        ) : (
+          <>Under review · Cancel or update details</>
+        )}
+      </p>
+    </button>
+  )
+}
+
 export default function AdvertisePage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { isAuthenticated, isLoading, user } = useAuth()
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false)
+  const [accounts, setAccounts] = useState<AdvertiserAccount[]>([])
+  const [accountsLoading, setAccountsLoading] = useState(false)
+
+  const registerReturn = "/advertise?register=1"
+
+  const openRegisterModal = useCallback(() => {
+    if (!isAuthenticated) {
+      router.push(profileAuthHref(registerReturn, "register"))
+      return
+    }
+    setIsRegisterOpen(true)
+  }, [isAuthenticated, router, registerReturn])
+
+  const closeRegisterModal = useCallback(() => {
+    setIsRegisterOpen(false)
+    if (searchParams.get("register") === "1") {
+      router.replace("/advertise")
+    }
+  }, [router, searchParams])
+
+  useEffect(() => {
+    if (!isAuthenticated || isLoading) {
+      setAccounts([])
+      return
+    }
+    setAccountsLoading(true)
+    void fetchMyAdvertiserAccounts()
+      .then(setAccounts)
+      .catch(() => setAccounts([]))
+      .finally(() => setAccountsLoading(false))
+  }, [isAuthenticated, isLoading])
+
+  useEffect(() => {
+    if (isLoading || !isAuthenticated) return
+    if (searchParams.get("register") === "1") {
+      setIsRegisterOpen(true)
+    }
+  }, [isAuthenticated, isLoading, searchParams])
+
+  const pendingAccount = accounts.find((a) => !a.isVerified) ?? null
+  const hasPending = pendingAccount !== null
+  const verifiedCount = accounts.filter((a) => a.isVerified).length
+
+  const registerButtonLabel = hasPending
+    ? "View pending request"
+    : verifiedCount > 0
+      ? "Register another business"
+      : "Register advertiser account"
 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
@@ -83,16 +205,66 @@ export default function AdvertisePage() {
         <h1 className="text-3xl md:text-5xl font-black text-foreground mb-4">
           Advertise on {PLATFORM_NAME}
         </h1>
-        <p className="text-lg text-muted-foreground mb-8 max-w-2xl">
+        <p className="text-lg text-muted-foreground mb-6 max-w-2xl">
           Reach engaged viewers across video, Shorts, movies, live streams, and vertical series.
           {PLATFORM_NAME} offers brand-safe placements with transparent reporting and verified
           advertiser accounts.
         </p>
+
+        {!isLoading && isAuthenticated && (
+          <div className="rounded-xl border border-border/80 bg-card/40 p-4 md:p-5 mb-8 space-y-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Building2 className="w-4 h-4 text-primary" />
+              <span>
+                Signed in as{" "}
+                <span className="font-medium text-foreground">
+                  {user?.name || user?.username}
+                </span>
+              </span>
+            </div>
+            {accountsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading your advertiser accounts…</p>
+            ) : accounts.length > 0 ? (
+              <div className="space-y-2">
+                {accounts.map((a) => (
+                  <AdvertiserAccountStatus
+                    key={a.id}
+                    account={a}
+                    onOpenPortal={() => setIsRegisterOpen(true)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No advertiser account linked yet. Register your business to start verification.
+              </p>
+            )}
+          </div>
+        )}
+
+        {!isLoading && !isAuthenticated && (
+          <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-3 mb-8 max-w-2xl">
+            Sign in or create an account to register as an advertiser. You&apos;ll return here
+            after logging in.
+          </p>
+        )}
+
         <div className="flex flex-wrap gap-3 mb-16">
-          <Button asChild className="rounded-full">
-            <Link href="/advertisers">Register advertiser account</Link>
-          </Button>
-          <Button asChild variant="secondary" className="rounded-full">
+          {isAuthenticated ? (
+            <Button className="rounded-full" onClick={openRegisterModal}>
+              {registerButtonLabel}
+            </Button>
+          ) : (
+            <>
+              <Button asChild className="rounded-full">
+                <Link href={profileAuthHref(registerReturn, "register")}>Register advertiser account</Link>
+              </Button>
+              <Button asChild variant="secondary" className="rounded-full">
+                <Link href={profileAuthHref("/advertise", "login")}>Sign in</Link>
+              </Button>
+            </>
+          )}
+          <Button asChild variant={isAuthenticated ? "secondary" : "outline"} className="rounded-full">
             <a href={`mailto:${LEGAL_CONTACT.ads}`}>Contact sales</a>
           </Button>
         </div>
@@ -184,16 +356,26 @@ export default function AdvertisePage() {
         <section className="rounded-xl border border-primary/30 bg-primary/5 p-6">
           <h2 className="text-xl font-bold text-foreground mb-2">Ready to get started?</h2>
           <p className="text-sm text-muted-foreground mb-4">
-            Register your advertiser account to begin verification. For enterprise packages, custom
-            integrations, or media kits, email{" "}
+            {isAuthenticated
+              ? hasPending
+                ? "Your registration is under review. Open the modal to cancel and resubmit if you need to change your details."
+                : "Register a business or check your verification status."
+              : "Sign in first, then register your advertiser account to begin verification."}{" "}
+            For enterprise packages, custom integrations, or media kits, email{" "}
             <a href={`mailto:${LEGAL_CONTACT.ads}`} className="text-primary hover:underline">
               {LEGAL_CONTACT.ads}
             </a>
             .
           </p>
-          <Button asChild className="rounded-full">
-            <Link href="/advertisers">Go to advertiser portal</Link>
-          </Button>
+          {isAuthenticated ? (
+            <Button className="rounded-full" onClick={openRegisterModal}>
+              {registerButtonLabel}
+            </Button>
+          ) : (
+            <Button asChild className="rounded-full">
+              <Link href={profileAuthHref(registerReturn, "register")}>Sign in to get started</Link>
+            </Button>
+          )}
         </section>
 
         <p className="mt-10 text-xs text-muted-foreground">
@@ -212,6 +394,12 @@ export default function AdvertisePage() {
       <Footer />
       <BottomNavigation activeTab="none" onTabChange={() => {}} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      <AdvertiserRegisterModal
+        isOpen={isRegisterOpen}
+        onClose={closeRegisterModal}
+        accounts={accounts}
+        onAccountsChange={setAccounts}
+      />
     </main>
   )
 }

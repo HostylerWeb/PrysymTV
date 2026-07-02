@@ -266,9 +266,10 @@
 | `GET` | `/admin/vertical-series/:slug` | ✅ Admin series detail |
 | `GET` | `/admin/vertical-episodes/:id` | ✅ Admin episode detail |
 | `GET` | `/admin/podcast-episodes/:id` | ✅ Admin episode detail |
-| `POST` | `/advertisers/register` | ✅ Bearer — create advertiser account |
+| `POST` | `/advertisers/register` | ✅ Bearer — create advertiser account (validated email; one pending per user) |
 | `GET` | `/advertisers/me` | ✅ Bearer — list own accounts |
 | `GET` | `/advertisers/me/:id` | ✅ Bearer — account + campaigns |
+| `DELETE` | `/advertisers/me/:id` | ✅ Bearer — cancel own **pending** registration (unverified, no campaigns) |
 
 ---
 
@@ -1024,11 +1025,12 @@ So with multiple home banners: **each page load / serve call** rolls weighted ra
 
 | Route | Auth | Notes |
 |-------|------|--------|
-| `POST /advertisers/register` | Bearer | Create advertiser account |
-| `GET /advertisers/me` | Bearer | List own accounts |
+| `POST /advertisers/register` | Bearer | Create advertiser account. Body: `companyName` (1–200 chars), `contactEmail` (valid email), optional `billingEmail` (valid email if sent). **409** if user already has a pending (`isVerified: false`) account. |
+| `GET /advertisers/me` | Bearer | List own accounts (includes `_count.campaigns`) |
 | `GET /advertisers/me/:id` | Bearer | Account + campaigns |
+| `DELETE /advertisers/me/:id` | Bearer | Cancel a **pending** registration owned by the user. **400** if verified or linked to campaigns; **404** if not found. |
 
-Frontend: `/advertisers` self-serve portal. Admin: `/admin/advertisers`, `/admin/gaf`, `/admin/audit-log`.
+Frontend: `/advertise` — registration modal (company, contact/billing email). Legacy `/advertisers` redirects to `/advertise?register=1`. Admin: `/admin/advertisers`, `/admin/gaf`, `/admin/audit-log`.
 
 ### Admin ads (extended) ✅
 
@@ -1285,7 +1287,7 @@ Seeder flag `SEED_DEMO_CONTENT` (default `true` in dev, set `false` in `api/.env
 | Item | Notes |
 |------|--------|
 | CSV export | Analytics export |
-| Advertiser portal analytics | Self-serve campaign reports for `/advertisers` |
+| Advertiser portal analytics | Self-serve campaign reports on `/advertise` (post-verification) |
 
 **Seeded `revenue_split_rules` keys:** `live_event`, `viewer_support`, `insider_membership`, `ad_gaf_allocation`, `sponsorship`, `creator_subscription`, `coin_purchase`, `store_merchandise`
 
@@ -1488,4 +1490,4 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 
 ---
 
-*Last updated: 2026-06-19 — React Native integration guide, production base URL, complete endpoint index (podcast video/cover, dislikes, advertisers, admin deletes), health response fields, feed home algorithms (`newReleases` vs `movies`), shorts `isFollowing`, podcast `mediaType`/`videoUrl`, WebSocket `gift` event, creator dashboard `gifts` block, shared response types (`VideoCard`, `User`, pagination), notification deep-link metadata, mobile auth cookie guidance. Production Stripe: [`stripe-production.md`](./stripe-production.md).*
+*Last updated: 2026-07-03 — Advertiser registration modal on `/advertise`, `DELETE /advertisers/me/:id` (cancel pending), register DTO email validation, one pending registration per user. Prior: React Native integration guide, production base URL, complete endpoint index (podcast video/cover, dislikes, advertisers, admin deletes), health response fields, feed home algorithms (`newReleases` vs `movies`), shorts `isFollowing`, podcast `mediaType`/`videoUrl`, WebSocket `gift` event, creator dashboard `gifts` block, shared response types (`VideoCard`, `User`, pagination), notification deep-link metadata, mobile auth cookie guidance. Production Stripe: [`stripe-production.md`](./stripe-production.md).*

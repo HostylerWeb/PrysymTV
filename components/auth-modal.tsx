@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { X, Mail, Lock, User, Eye, EyeOff, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth, getAuthErrorMessage } from "@/contexts/auth-context"
@@ -10,11 +10,17 @@ interface AuthModalProps {
   isOpen: boolean
   onClose: () => void
   initialMode?: "login" | "register"
+  onSuccess?: () => void
 }
 
 type AuthMode = "login" | "register" | "forgot_email" | "forgot_sent"
 
-export function AuthModal({ isOpen, onClose, initialMode = "login" }: AuthModalProps) {
+export function AuthModal({
+  isOpen,
+  onClose,
+  initialMode = "login",
+  onSuccess,
+}: AuthModalProps) {
   const [mode, setMode] = useState<AuthMode>(initialMode)
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -25,6 +31,12 @@ export function AuthModal({ isOpen, onClose, initialMode = "login" }: AuthModalP
   const [password, setPassword] = useState("")
 
   const { login, register } = useAuth()
+
+  useEffect(() => {
+    if (!isOpen) return
+    setMode(initialMode)
+    setError("")
+  }, [isOpen, initialMode])
 
   if (!isOpen) return null
 
@@ -42,6 +54,7 @@ export function AuthModal({ isOpen, onClose, initialMode = "login" }: AuthModalP
         await login(email, password)
         onClose()
         resetForm()
+        onSuccess?.()
       } else if (mode === "register") {
         if (!name || !email || !password) {
           setError("Please fill in all fields")
@@ -54,6 +67,7 @@ export function AuthModal({ isOpen, onClose, initialMode = "login" }: AuthModalP
         await register(name, email, password)
         onClose()
         resetForm()
+        onSuccess?.()
       } else if (mode === "forgot_email") {
         if (!email) {
           setError("Please enter your email")
@@ -74,7 +88,7 @@ export function AuthModal({ isOpen, onClose, initialMode = "login" }: AuthModalP
     setEmail("")
     setPassword("")
     setError("")
-    setMode("login")
+    setMode(initialMode)
   }
 
   const title =

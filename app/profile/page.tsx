@@ -29,7 +29,7 @@ import { EditProfileModal } from "@/components/edit-profile-modal"
 import { ProfileSettingsSheet, type ProfileSettingsScreen } from "@/components/profile-settings-sheet"
 import { useAuth } from "@/contexts/auth-context"
 import { userAvatarUrl } from "@/lib/user-avatar"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import {
   fetchMySaved,
   fetchMyLiked,
@@ -55,6 +55,7 @@ import {
   fetchMyPlaylists,
   type PlaylistSummary,
 } from "@/lib/api/playlists"
+import { profileAuthHref, safeReturnPath } from "@/lib/safe-return-path"
 
 const baseTabs = [
   { id: "content", label: "My content", icon: Grid3X3 },
@@ -88,8 +89,11 @@ const VALID_SETTINGS_SCREENS: ProfileSettingsScreen[] = [
 
 function ProfilePageContent() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const settingsParam = searchParams.get("settings")
   const createParam = searchParams.get("create")
+  const returnTo = safeReturnPath(searchParams.get("returnTo"))
+  const authParam = searchParams.get("auth")
   const initialSettingsScreen =
     settingsParam && VALID_SETTINGS_SCREENS.includes(settingsParam as ProfileSettingsScreen)
       ? (settingsParam as ProfileSettingsScreen)
@@ -105,6 +109,7 @@ function ProfilePageContent() {
   const [coinsPurchasing, setCoinsPurchasing] = useState(false)
   const [coinsPurchaseError, setCoinsPurchaseError] = useState<string | null>(null)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const [authModalMode, setAuthModalMode] = useState<"login" | "register">("login")
   const [isStreamerModalOpen, setIsStreamerModalOpen] = useState(false)
   const [streamerModalPrefill, setStreamerModalPrefill] = useState<string | undefined>()
   const [streamerModalFeatures, setStreamerModalFeatures] = useState<
@@ -137,6 +142,23 @@ function ProfilePageContent() {
     setShowSettings(false)
     setSettingsOpenTo(undefined)
   }
+
+  useEffect(() => {
+    if (isLoading || isAuthenticated) return
+    if (authParam === "register") {
+      setAuthModalMode("register")
+      setIsAuthModalOpen(true)
+    } else if (authParam === "login") {
+      setAuthModalMode("login")
+      setIsAuthModalOpen(true)
+    }
+  }, [authParam, isAuthenticated, isLoading])
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && returnTo) {
+      router.replace(returnTo)
+    }
+  }, [isLoading, isAuthenticated, returnTo, router])
 
   useEffect(() => {
     if (initialSettingsScreen && initialSettingsScreen !== "menu" && isAuthenticated && !isLoading) {
@@ -281,12 +303,21 @@ function ProfilePageContent() {
             Sign in to access your profile, save videos, track your watch history, and more.
           </p>
           <div className="flex flex-col gap-3 w-full max-w-xs">
-            <Button onClick={() => setIsAuthModalOpen(true)} className="rounded-full h-12">
+            <Button
+              onClick={() => {
+                setAuthModalMode("login")
+                setIsAuthModalOpen(true)
+              }}
+              className="rounded-full h-12"
+            >
               Sign In
             </Button>
-            <Button 
-              variant="secondary" 
-              onClick={() => setIsAuthModalOpen(true)} 
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setAuthModalMode("register")
+                setIsAuthModalOpen(true)
+              }}
               className="rounded-full h-12"
             >
               Create Account
@@ -334,7 +365,14 @@ function ProfilePageContent() {
 
         {/* Modals */}
         <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
-        <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          initialMode={authModalMode}
+          onSuccess={() => {
+            if (returnTo) router.replace(returnTo)
+          }}
+        />
       </main>
     )
   }

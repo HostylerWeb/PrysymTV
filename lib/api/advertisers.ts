@@ -30,3 +30,9 @@ export function fetchMyAdvertiserAccount(id: string) {
     `/advertisers/me/${id}`,
   );
 }
+
+export function cancelAdvertiserRegistration(id: string) {
+  return apiRequest<{ ok: true }>(`/advertisers/me/${id}`, {
+    method: "DELETE",
+  });
+}

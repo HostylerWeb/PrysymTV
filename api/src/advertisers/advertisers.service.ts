@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -15,12 +16,29 @@ export class AdvertisersService {
     contactEmail: string;
     billingEmail?: string;
   }) {
+    const companyName = body.companyName.trim();
+    const contactEmail = body.contactEmail.trim().toLowerCase();
+    const billingEmail = body.billingEmail?.trim().toLowerCase();
+
+    if (!companyName) {
+      throw new BadRequestException('companyName is required');
+    }
+
+    const existingPending = await this.prisma.advertiserAccount.findFirst({
+      where: { ownerUserId, isVerified: false },
+    });
+    if (existingPending) {
+      throw new ConflictException(
+        'You already have a pending advertiser registration. Cancel it before submitting a new one.',
+      );
+    }
+
     return this.prisma.advertiserAccount.create({
       data: {
         ownerUserId,
-        companyName: body.companyName.trim(),
-        contactEmail: body.contactEmail.trim(),
-        billingEmail: body.billingEmail?.trim(),
+        companyName,
+        contactEmail,
+        billingEmail: billingEmail || undefined,
       },
     });
   }
@@ -31,6 +49,26 @@ export class AdvertisersService {
       include: { _count: { select: { campaigns: true } } },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async cancelPending(ownerUserId: string, id: string) {
+    const row = await this.prisma.advertiserAccount.findFirst({
+      where: { id, ownerUserId },
+      include: { _count: { select: { campaigns: true } } },
+    });
+    if (!row) {
+      throw new NotFoundException('Advertiser account not found');
+    }
+    if (row.isVerified) {
+      throw new BadRequestException('Verified advertiser accounts cannot be cancelled');
+    }
+    if (row._count.campaigns > 0) {
+      throw new BadRequestException(
+        'This registration is linked to campaigns and cannot be cancelled',
+      );
+    }
+    await this.prisma.advertiserAccount.delete({ where: { id } });
+    return { ok: true as const };
   }
 
   async getMine(ownerUserId: string, id: string) {
