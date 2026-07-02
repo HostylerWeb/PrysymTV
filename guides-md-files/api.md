@@ -1,8 +1,12 @@
 # Prysym TV — REST API Reference
 
-**Base URL:** `http://localhost:4000/api/v1` (development)  
-**Auth:** Bearer access token in `Authorization` header. Refresh token in HttpOnly cookie `prysym_refresh` (web).  
-**Content-Type:** `application/json` unless noted.
+**Base URL (development):** `http://localhost:4000/api/v1`  
+**Base URL (production):** `https://srv1765056.hstgr.cloud/api/v1`  
+**WebSocket host (no `/api/v1`):** same origin as API — e.g. `https://srv1765056.hstgr.cloud` (namespace `/streams`)  
+**Auth:** Bearer access token in `Authorization: Bearer <accessToken>`. Refresh token in HttpOnly cookie `prysym_refresh` (path `/api/v1/auth`, 7-day TTL by default).  
+**Content-Type:** `application/json` unless noted (multipart only on local-storage upload fallbacks).
+
+> **React Native:** This doc includes a dedicated [React Native integration](#react-native-integration) section. The API is usable from mobile today; refresh tokens require cookie handling (see that section). There is no `refreshToken` field in JSON responses yet.
 
 **Status legend**
 
@@ -57,7 +61,7 @@
 | `GET` | `/feed/trending` | ✅ |
 | `POST` | `/videos/upload/init` | ✅ |
 | `POST` | `/videos/upload/complete` | ✅ |
-| `GET` | `/videos/feed/shorts` | ✅ Optional JWT → per-item `liked`, `saved`, `disliked` |
+| `GET` | `/videos/feed/shorts` | ✅ `?cursor=&limit=` — optional JWT → `liked`, `saved`, `disliked`, `isFollowing` per card |
 | `GET` | `/videos/feed/movies` | ✅ |
 | `GET` | `/videos/feed/movies/featured` | ✅ |
 | `GET` | `/videos/feed/videos` | ✅ Long-form browse — `vertical`, `sort`, `mode`, `page`, `limit`, `q` |
@@ -74,7 +78,9 @@
 | `PATCH` | `/videos/:id` | ✅ Bearer — owner edits title, description, visibility, etc. |
 | `POST` | `/media/upload/:videoId` | ✅ (local `STORAGE_DRIVER` only, multipart) |
 | `POST` | `/media/profile-upload` | ✅ Local avatar/banner PUT target |
-| `POST` | `/media/podcast-upload` | ✅ Local podcast audio PUT target |
+| `POST` | `/media/podcast-upload` | ✅ Local podcast audio/video PUT target |
+| `POST` | `/media/podcast-cover-upload` | ✅ Local podcast show cover PUT target |
+| `POST` | `/media/ad-upload` | ✅ Local ad creative upload (admin) |
 | `GET` | `/history` | ✅ |
 | `POST` | `/history/progress` | ✅ |
 | `DELETE` | `/history/clear` | ✅ |
@@ -104,9 +110,12 @@
 | WS | `/streams` (Socket.IO) | ✅ `join`, `message`, `history` — Bearer in handshake |
 | `GET` | `/podcasts/shows` | ✅ |
 | `GET` | `/podcasts/shows/featured` | ✅ |
+| `GET` | `/podcasts/shows/trending` | ✅ `?limit=` — sorted by creator followers + latest episode |
 | `GET` | `/podcasts/shows/me` | ✅ Bearer — creator shows |
 | `POST` | `/podcasts/shows` | ✅ |
 | `GET` | `/podcasts/shows/:id` | ✅ |
+| `POST` | `/podcasts/shows/:id/cover/upload/init` | ✅ `{ mimeType, fileName? }` — presign or local cover |
+| `POST` | `/podcasts/shows/:id/cover/upload/complete` | ✅ `{ objectKey }` — sets show `coverUrl` |
 | `POST` | `/podcasts/shows/:showId/episodes` | ✅ |
 | `POST` | `/podcasts/episodes/:id/upload/init` | ✅ |
 | `POST` | `/podcasts/episodes/:id/upload/complete` | ✅ |
@@ -115,6 +124,7 @@
 | `POST` | `/podcasts/episodes/:id/play` | ✅ |
 | `PATCH` | `/podcasts/episodes/:id` | ✅ Bearer — owner edits episode metadata |
 | `POST` | `/podcasts/episodes/:id/like` | ✅ Toggle |
+| `POST` | `/podcasts/episodes/:id/dislike` | ✅ Toggle dislike |
 | `POST` | `/podcasts/episodes/:id/save` | ✅ Toggle favorite |
 | `GET` | `/playlists/discover` | ✅ Public playlists with items (sidebar/discover) |
 | `GET` | `/playlists/me` | ✅ |
@@ -140,6 +150,7 @@
 | `GET` | `/verticals/:slug/episodes/:episodeNumber` | ✅ Optional JWT — `liked`, `saved`, counters |
 | `POST` | `/verticals/episodes/:episodeId/view` | ✅ Increment episode views |
 | `POST` | `/verticals/episodes/:episodeId/like` | ✅ Toggle like |
+| `POST` | `/verticals/episodes/:episodeId/dislike` | ✅ Toggle dislike |
 | `POST` | `/verticals/episodes/:episodeId/save` | ✅ Toggle episode save |
 | `POST` | `/verticals/series/:seriesId/save` | ✅ Toggle series save |
 | `GET` | `/verticals/me/series` | ✅ Approved vertical creators only (Bearer) |
@@ -223,6 +234,32 @@
 | `GET` | `/admin/ads/campaigns/:id/analytics` | ✅ Delivery, CTR, placement, click locations, timeline |
 | `GET` | `/admin/config/movie-genres` | ✅ Movie genre taxonomy |
 | `PUT` | `/admin/config/movie-genres` | ✅ `{ genres: [...] }` |
+| `GET` | `/admin/config/podcast-categories` | ✅ Podcast category taxonomy |
+| `PUT` | `/admin/config/podcast-categories` | ✅ `{ categories: [...] }` |
+| `GET` | `/admin/analytics/revenue` | ✅ `?range=` revenue breakdown |
+| `GET` | `/admin/analytics/content` | ✅ Top content by range |
+| `GET` | `/admin/analytics/geography` | ✅ Viewer countries |
+| `GET` | `/admin/analytics/export` | ✅ CSV export |
+| `GET` | `/admin/audit-logs` | ✅ Admin action log |
+| `GET` | `/admin/gaf/ledger` | ✅ GAF inflow/outflow |
+| `GET` | `/admin/advertisers` | ✅ B2B advertiser accounts |
+| `PUT` | `/admin/advertisers/:id` | ✅ Edit advertiser |
+| `POST` | `/admin/advertisers/:id/verify` | ✅ Verify advertiser |
+| `DELETE` | `/admin/advertisers/:id` | ✅ |
+| `POST` | `/admin/ads/campaigns/:id/duplicate` | ✅ Clone campaign |
+| `POST` | `/admin/ads/media/upload` | ✅ Ad creative upload init |
+| `DELETE` | `/admin/ads/campaigns/:id` | ✅ |
+| `DELETE` | `/admin/reports/:id` | ✅ |
+| `DELETE` | `/admin/users/:id` | ✅ |
+| `DELETE` | `/admin/streams/:id` | ✅ |
+| `DELETE` | `/admin/podcast-shows/:id` | ✅ |
+| `DELETE` | `/admin/vertical-series/:slug` | ✅ |
+| `GET` | `/admin/vertical-series/:slug` | ✅ Admin series detail |
+| `GET` | `/admin/vertical-episodes/:id` | ✅ Admin episode detail |
+| `GET` | `/admin/podcast-episodes/:id` | ✅ Admin episode detail |
+| `POST` | `/advertisers/register` | ✅ Bearer — create advertiser account |
+| `GET` | `/advertisers/me` | ✅ Bearer — list own accounts |
+| `GET` | `/advertisers/me/:id` | ✅ Bearer — account + campaigns |
 
 ---
 
@@ -233,11 +270,222 @@
 | `/events` | Live events — tickets, schedule |
 | `/stores` | Creator Store |
 | `/support` | Tips, donations, super chats |
-| `/gaf` | GAF ledger (admin) |
+| `/gaf` | GAF ledger (admin — `GET /admin/gaf/ledger` exists) |
 | `/insider` | Platform Insider $4.99/mo |
-| `/advertisers` | B2B self-serve ads |
 | `/sponsorships` | Brand ↔ creator deals |
 | `/revenue` | Ledger queries |
+
+---
+
+## React Native integration
+
+This section documents patterns for building the PrysymTV mobile app with React Native (Expo or bare workflow).
+
+### Environment
+
+| Variable | Example | Notes |
+|----------|---------|-------|
+| `API_BASE_URL` | `https://srv1765056.hstgr.cloud/api/v1` | All REST paths below are relative to this |
+| `WS_URL` | `https://srv1765056.hstgr.cloud` | Socket.IO host — **no** `/api/v1` suffix |
+
+Use HTTPS in production. For local dev against a machine IP, ensure `CORS_ORIGIN` on the API includes your Expo dev origin if needed.
+
+### HTTP client setup
+
+Recommended libraries: `fetch` (built-in) or `axios`, plus `expo-secure-store` / `react-native-keychain` for tokens.
+
+**Every authenticated request:**
+
+```http
+Authorization: Bearer <accessToken>
+Accept: application/json
+Content-Type: application/json
+```
+
+**401 handling:** On `401`, call `POST /auth/refresh` once (singleton — avoid parallel refresh storms), then retry the original request. If refresh fails, clear session and show login.
+
+### Authentication (critical for mobile)
+
+Login and register responses:
+
+```json
+{
+  "accessToken": "eyJ…",
+  "tokenType": "Bearer",
+  "expiresIn": "15m",
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "username": "handle",
+    "role": "user"
+  }
+}
+```
+
+The **refresh token is not in the JSON body**. The API sets an HttpOnly cookie:
+
+| Cookie | Path | TTL (default) | Purpose |
+|--------|------|---------------|---------|
+| `prysym_refresh` | `/api/v1/auth` | `JWT_REFRESH_TTL` (`7d`) | Rotating refresh session |
+
+**Refresh flow:** `POST /auth/refresh` reads the cookie, revokes the old session, issues a new access token + new refresh cookie.
+
+**Logout:** `POST /auth/logout` with the refresh cookie — revokes session server-side.
+
+#### Cookie handling in React Native
+
+The API does **not** yet accept `{ refreshToken }` in the request body. Mobile clients must persist the refresh cookie:
+
+1. After `POST /auth/login` or `/auth/register`, read the `Set-Cookie` header and store `prysym_refresh` (e.g. `@react-native-cookies/cookies` `CookieManager.set`, or manual `Cookie` header on auth routes).
+2. On `POST /auth/refresh` and `POST /auth/logout`, send `Cookie: prysym_refresh=<value>`.
+3. After refresh, update stored cookie if the server rotates it (new `Set-Cookie`).
+
+Store **`accessToken`** in secure storage (`expo-secure-store`, Keychain, EncryptedSharedPreferences). Default access TTL is **15 minutes** (`JWT_ACCESS_TTL`).
+
+**Future improvement (not implemented):** return `refreshToken` in login JSON and accept it in `/auth/refresh` body for native clients. Until then, cookie persistence is required.
+
+### Pagination conventions
+
+| Pattern | Endpoints | Response shape |
+|---------|-----------|----------------|
+| **Page/limit** | Most feeds, lists, search | `{ items: [...], meta: { page, limit, total } }` |
+| **Cursor** | `GET /videos/feed/shorts` | `{ items: [...], nextCursor: string \| null }` — cursor is numeric skip offset as string |
+
+Default `limit` is typically 20–24; `GET /videos/feed/videos` max `limit` is 48.
+
+### Video playback (HLS)
+
+Movies, long-form videos, shorts, vertical episodes, and processed uploads expose **`hlsMasterUrl`** (or `playbackUrl` / `videoUrl` aliases on `VideoCard`). Use **`react-native-video`** with `source={{ uri: hlsMasterUrl, type: 'm3u8' }}`.
+
+Live streams: `GET /streams/:id` returns `hlsPlaybackUrl` (MediaMTX HLS). Poll or use WebSocket `streamEnded` to detect end.
+
+Podcasts: `mediaType: "audio"` → `audioUrl`; `mediaType: "video"` → `videoUrl` (HLS or direct URL after upload).
+
+Call `POST /videos/:id/view` (or vertical/podcast play endpoints) when playback starts for analytics.
+
+### File uploads (S3 / R2 production)
+
+Standard 3-step flow for videos, podcast media, profile images, show covers:
+
+1. **Init** — `POST …/upload/init` with `{ mimeType, fileName?, … }` → returns `UploadTarget`
+2. **Upload** — `PUT` file bytes to `uploadUrl` with `uploadHeaders` (usually `Content-Type`)
+3. **Complete** — `POST …/upload/complete` with `{ videoId \| objectKey, … }` → processing begins
+
+**`UploadTarget` shape** (all init endpoints):
+
+```json
+{
+  "objectKey": "uploads/raw/{videoId}/source.mp4",
+  "uploadUrl": "https://…",
+  "uploadMethod": "PUT",
+  "uploadHeaders": { "Content-Type": "video/mp4" },
+  "expiresIn": 3600,
+  "maxUploadBytes": 2147483648
+}
+```
+
+When `STORAGE_DRIVER=local` (dev), `uploadMethod` is `POST` to `/media/*` routes with multipart form + Bearer auth instead of presigned PUT.
+
+**React Native upload tip:** use `fetch` PUT with `blob` from `expo-document-picker` / `expo-image-picker`, or `react-native-blob-util` for large files with progress.
+
+### Live chat (Socket.IO)
+
+```typescript
+import { io } from 'socket.io-client';
+
+const socket = io(`${WS_URL}/streams`, {
+  auth: { token: accessToken },
+  // or: extraHeaders: { Authorization: `Bearer ${accessToken}` },
+  transports: ['websocket'],
+});
+
+socket.emit('join', { streamId });
+socket.on('history', (messages) => { /* last ~80 */ });
+socket.on('message', (msg) => { /* broadcast */ });
+socket.on('gift', (gift) => { /* live gift animation */ });
+socket.on('streamEnded', ({ streamId }) => { /* stop player */ });
+
+socket.emit('message', { streamId, message: 'Hello' });
+```
+
+Anonymous connections are allowed (read-only chat); sending messages requires a valid JWT in the handshake.
+
+### Push / in-app notification deep links
+
+`GET /users/me/notifications` returns rows with `type`, `referenceId`, `actor`, `message`, `metadata`. Map to mobile screens using the same rules as the web app:
+
+| `type` | Navigate when |
+|--------|----------------|
+| `follow` | Creator profile — `actor.username` → `/creator/:username` |
+| `like`, `comment` | Use `metadata.videoType` + `metadata.videoId` or vertical/podcast fields |
+| `upload` | New content from someone you follow |
+| `live` | `referenceId` = stream UUID → live player |
+| `gift` | `referenceId` = stream UUID if live gift; for video gifts, open creator profile or video context |
+| `system` | Platform announcements |
+
+**`metadata` fields:**
+
+```typescript
+type NotificationMetadata = {
+  dedupeKey?: string;
+  videoType?: 'short' | 'video' | 'movie';
+  videoId?: string;
+  commentId?: string;
+  contentType?: 'video' | 'vertical_episode' | 'podcast_episode';
+  seriesSlug?: string;
+  episodeNumber?: number;
+  podcastEpisodeId?: string;
+};
+```
+
+**Screen mapping examples:**
+
+| Web path | Mobile screen |
+|----------|---------------|
+| `/shorts?start={videoId}` | Shorts feed scrolled to video |
+| `/watch/{videoId}` | Long-form player |
+| `/movie/{videoId}` | Movie player |
+| `/podcast/{episodeId}` | Podcast episode (audio or video) |
+| `/verticals/watch/{slug}/{episodeNumber}` | Vertical episode player |
+| `/live/{streamId}` | Live stream player |
+| `/creator/{username}` | Creator profile |
+
+### Ads on mobile
+
+1. `GET /config/public` — read `ads.shortsInterstitialEveryNSwipes`, skip seconds, placement toggles
+2. `GET /ads/serve?placement=…&peek=1` — check if ad exists without burning impression
+3. Show preroll/interstitial/banner when `ad.mediaUrl` is non-empty
+4. `POST /ads/track/impression` and `POST /ads/track/click` when shown/clicked
+5. Premium users: send Bearer → `{ ad: null, adFree: true }`
+
+Placements: `home_banner`, `movie_preroll`, `shorts_interstitial`, `vertical_episode`.
+
+### Stripe checkout on mobile
+
+`POST /billing/stripe/create-checkout` returns `{ url }` — open in **WebBrowser** / **SafariViewController** / Chrome Custom Tab. On success redirect, call `POST /billing/stripe/fulfill` with `{ sessionId }` or handle the `GET /billing/stripe/fulfill?session_id=` redirect.
+
+Dev mode (no `STRIPE_SECRET_KEY`): coins/premium grant instantly without Stripe.
+
+### Rate limits
+
+Global default: `THROTTLE_LIMIT` requests per `THROTTLE_TTL_MS` per IP. Auth routes are stricter (e.g. login 10/min, register 5/min). Expect `429 Too Many Requests` — back off and retry.
+
+### Recommended screen → API map
+
+| App screen | Primary endpoints |
+|------------|-------------------|
+| Home | `GET /feed/home`, `GET /config/public`, `GET /ads/serve?placement=home_banner` |
+| Shorts | `GET /videos/feed/shorts`, engagement POSTs, `GET /ads/serve?placement=shorts_interstitial` |
+| Movies | `GET /videos/feed/movies`, `GET /videos/feed/movies/featured`, `GET /videos/:id` |
+| Watch | `GET /videos/:id`, comments, like/save, `POST /history/progress` |
+| Podcasts | `GET /podcasts/shows`, `/shows/trending`, `/episodes/feed`, `/episodes/:id` |
+| Verticals | `GET /verticals`, `GET /verticals/:slug`, episode by number |
+| Live | `GET /streams/live`, `GET /streams/:id`, Socket.IO `/streams` |
+| Search | `GET /search`, `GET /search/suggest` |
+| Profile | `GET /users/:username`, follow, gifts via `POST /billing/gifts/send` |
+| Library | `GET /users/me/saved`, `GET /history`, playlists |
+| Creator dashboard | `GET /analytics/creators/me/dashboard` |
+| Settings | `GET/PUT /users/me`, notification prefs, payout profile |
 
 ---
 
@@ -252,8 +500,21 @@ Returns a short welcome string (under global prefix `/api/v1`).
 **Auth:** None
 
 ```json
-{ "status": "ok", "timestamp": "2026-05-31T12:00:00.000Z" }
+{
+  "status": "ok",
+  "timestamp": "2026-06-19T12:00:00.000Z",
+  "build": "production-20260622",
+  "smtp": "ready",
+  "storage": "s3",
+  "videoProcessing": "ffmpeg"
+}
 ```
+
+| Field | Values | Notes |
+|-------|--------|-------|
+| `smtp` | `ready` \| `not_ready` | Password-reset email configured |
+| `storage` | `local` \| `s3` | Active storage driver |
+| `videoProcessing` | `ffmpeg` \| `skip` | Post-upload transcode mode |
 
 ---
 
@@ -270,7 +531,16 @@ Returns a short welcome string (under global prefix `/api/v1`).
 | `POST /auth/oauth/google` | 📋 Not in codebase yet |
 | `POST /auth/oauth/apple` | 📋 Not in codebase yet |
 
-Register/login response includes `accessToken`, `tokenType`, `expiresIn`, `user`. Sets HttpOnly refresh cookie on web.
+Register/login response includes `accessToken`, `tokenType`, `expiresIn`, `user`. Sets HttpOnly refresh cookie `prysym_refresh` (not returned in JSON — see [React Native integration](#react-native-integration)).
+
+**Register body:** `{ email, username, password, displayName? }`  
+**Login body:** `{ email, password }` (email field accepts username or email)  
+**Forgot password:** `{ email }` → always `{ success: true }` (no email enumeration)  
+**Reset password:** `{ token, newPassword }` — token from email link; revokes all refresh sessions
+
+**Refresh response:** same shape as login (`accessToken`, `expiresIn`, `user`) + new refresh cookie.
+
+**Auth rate limits (per IP):** register 5/min, login 10/min, refresh 30/min, forgot/reset 5/min.
 
 ---
 
@@ -280,7 +550,7 @@ All `/users/me/*` routes require Bearer auth.
 
 | Route | Status | Notes |
 |-------|--------|-------|
-| `GET /users/me` | ✅ | Includes `partnerTier`, `programVerticals` when set |
+| `GET /users/me` | ✅ | Full profile — see [User type](#user-get-usersme) |
 | `PUT /users/me` | ✅ | `displayName`, `bio`, `avatarUrl`, `bannerUrl` |
 | `POST /users/me/avatar/upload` | ✅ | `{ mimeType, fileName? }` → presigned PUT or local `POST /media/profile-upload` |
 | `POST /users/me/banner/upload` | ✅ | Same as avatar |
@@ -296,7 +566,22 @@ All `/users/me/*` routes require Bearer auth.
 | `PUT /users/me/notifications/read-all` | ✅ | |
 | `DELETE /users/me/notifications` | ✅ | Clear all |
 
-Notifications include optional `metadata` (`videoType`, `videoId`, `commentId`, `dedupeKey`) for deep links and deduplication. Like notifications use `dedupeKey` so unlike → like again does **not** re-notify.
+Notifications include optional `metadata` for deep links and deduplication:
+
+```typescript
+type NotificationMetadata = {
+  dedupeKey?: string;
+  videoType?: 'short' | 'video' | 'movie';
+  videoId?: string;
+  commentId?: string;
+  contentType?: 'video' | 'vertical_episode' | 'podcast_episode';
+  seriesSlug?: string;
+  episodeNumber?: number;
+  podcastEpisodeId?: string;
+};
+```
+
+See [React Native integration — deep links](#push--in-app-notification-deep-links) for screen routing. Like notifications use `dedupeKey` so unlike → like again does **not** re-notify.
 
 **Notification triggers** (respect `GET/PUT /users/me/notification-preferences`; default all on):
 
@@ -305,7 +590,7 @@ Notifications include optional `metadata` (`videoType`, `videoId`, `commentId`, 
 | `follow` | Someone follows you |
 | `like` | Someone likes your video or your comment |
 | `comment` | Someone comments on your video or replies to your comment |
-| `gift` | Someone sends you a gift on stream |
+| `gift` | Someone sends you a gift (live stream, video, shorts, or profile) |
 | `live` | A creator you subscribed to (live-alerts bell) goes live |
 | `upload` | Someone you follow publishes a new public video (processing → `ready`) |
 | `system` | Reserved for platform announcements (admin) |
@@ -322,7 +607,21 @@ Notifications include optional `metadata` (`videoType`, `videoId`, `commentId`, 
 
 ### `GET /feed/home` ✅
 
-Aggregates: `liveNow`, `featuredLive`, `trending`, `newReleases`, `movies`, `featuredMovie`, `continueWatching` (when `Authorization` is sent — incomplete `video`, `podcast_episode`, and `vertical_episode` rows from `watch_history`). Guests still use client `localStorage` for vertical progress on home.
+**Auth:** Optional Bearer — when sent, includes personalized `continueWatching`.
+
+Aggregates:
+
+| Key | Source / algorithm |
+|-----|-------------------|
+| `liveNow` | Up to 12 live streams by `viewerCount` desc |
+| `featuredLive` | First item from `liveNow` |
+| `trending` | Public `video` + `short` by `viewsCount` desc (16 items) |
+| `newReleases` | Public **movies** by `createdAt` desc (8 items) — **not** the same list as `movies` |
+| `movies` | Public **movies** by `viewsCount` desc (12 items) — “Top Movies” |
+| `featuredMovie` | Newest ready movie by `createdAt` |
+| `continueWatching` | Incomplete `watch_history` for authenticated user (`video`, `podcast_episode`, `vertical_episode`) |
+
+Guests: no `continueWatching` from API (web uses `localStorage` for vertical progress only).
 
 ### `GET /feed/trending` ✅
 
@@ -334,9 +633,9 @@ Aggregates: `liveNow`, `featuredLive`, `trending`, `newReleases`, `movies`, `fea
 
 | Route | Status |
 |-------|--------|
-| `POST /videos/upload/init` | ✅ `{ type, title, description?, category?, visibility?, tags?, mimeType, fileName? }` — **`type: movie` is admin-only**. |
-| `POST /videos/upload/complete` | ✅ Verifies object, enqueues BullMQ `video-processing` job |
-| `GET /videos/feed/shorts` | ✅ `?cursor=` — optional Bearer adds `liked`, `saved`, `disliked` per card |
+| `POST /videos/upload/init` | ✅ `{ type, title, description?, category?, visibility?, tags?, mimeType, fileName? }` — **`type: movie` is admin-only** |
+| `POST /videos/upload/complete` | ✅ `{ videoId, objectKey? }` — verifies object, enqueues BullMQ `video-processing` job |
+| `GET /videos/feed/shorts` | ✅ `?cursor=&limit=` — optional Bearer adds `liked`, `saved`, `disliked`, **`isFollowing`** per card |
 | `GET /videos/feed/movies` | ✅ `?page=&limit=` |
 | `GET /videos/feed/movies/featured` | ✅ |
 | `GET /videos/:id` | ✅ Optional Bearer → `liked`, `saved`, `disliked`, `isFollowing`, `dislikesCount` |
@@ -351,6 +650,21 @@ Aggregates: `liveNow`, `featuredLive`, `trending`, `newReleases`, `movies`, `fea
 | `POST /videos/:id/report` | ✅ `{ reason?, details? }` |
 | `PATCH /videos/:id` | ✅ Bearer — owner updates title, description, visibility, tags, etc. |
 
+**`POST /videos/upload/init` response:**
+
+```json
+{
+  "videoId": "uuid",
+  "status": "processing",
+  "objectKey": "uploads/raw/{videoId}/source.mp4",
+  "uploadUrl": "https://…",
+  "uploadMethod": "PUT",
+  "uploadHeaders": { "Content-Type": "video/mp4" },
+  "maxUploadBytes": 2147483648,
+  "expiresIn": 3600
+}
+```
+
 **Engagement model:** Likes and dislikes are stored in `likes` / `dislikes` tables with denormalized counters on `videos`. Comment likes use `likes` with `target_type: comment`.
 
 ---
@@ -361,7 +675,9 @@ Aggregates: `liveNow`, `featuredLive`, `trending`, `newReleases`, `movies`, `fea
 |-------|------|------|
 | `POST /media/upload/:videoId` | Bearer | `STORAGE_DRIVER=local` — multipart video after `upload/init` |
 | `POST /media/profile-upload` | Bearer | Local — avatar/banner/streamer ID after respective `POST /users/me/*/upload` |
-| `POST /media/podcast-upload` | Bearer | Local — audio after `POST /podcasts/episodes/:id/upload/init` |
+| `POST /media/podcast-upload` | Bearer | Local — podcast **audio or video** after `POST /podcasts/episodes/:id/upload/init` |
+| `POST /media/podcast-cover-upload` | Bearer | Local — show cover after `POST /podcasts/shows/:id/cover/upload/init` |
+| `POST /media/ad-upload` | Bearer (admin) | Local — ad creative after `POST /admin/ads/media/upload` |
 
 For S3/R2, clients use presigned PUT URLs from init endpoints instead of these routes.
 
@@ -450,30 +766,74 @@ Bearer required.
 | `message` | Client → Server | `{ streamId, message }` → broadcast `message` |
 | `history` | Server → Client | Last ~80 messages |
 | `message` | Server → Client | `{ id, streamId, userId, user, message, color, createdAt }` |
+| `gift` | Server → Client | Live gift animation — see payload below |
 | `streamEnded` | Server → Client | `{ streamId }` — broadcast ended; stop player and show offline |
+
+**`gift` event payload** (when `POST /billing/gifts/send` includes `streamId`):
+
+```json
+{
+  "id": "gift-uuid",
+  "streamId": "stream-uuid",
+  "userId": "sender-uuid",
+  "user": "Display Name",
+  "giftId": "heart",
+  "giftName": "Heart",
+  "giftIcon": "heart",
+  "coins": 50,
+  "color": "text-pink-400",
+  "createdAt": "2026-06-19T12:00:00.000Z"
+}
+```
+
+Gifts on videos/shorts/profile do **not** emit WebSocket events — only in-app `gift` notification to the receiver.
 
 ---
 
 ## Podcasts (`/podcasts`)
 
+Supports **audio and video** podcast episodes. Episode objects include `mediaType` (`audio` \| `video`), `audioUrl`, and `videoUrl` (one populated based on type).
+
 | Route | Auth | Status |
 |-------|------|--------|
 | `GET /podcasts/shows` | — | ✅ Paginated catalog |
 | `GET /podcasts/shows/featured` | — | ✅ Hero / featured row |
+| `GET /podcasts/shows/trending` | — | ✅ `?limit=` — by creator followers + latest episode |
 | `GET /podcasts/shows/:id` | — | ✅ Show + episodes |
 | `GET /podcasts/shows/me` | Bearer | ✅ Creator’s shows |
 | `POST /podcasts/shows` | Bearer | ✅ `{ title, description?, coverUrl?, category? }` |
+| `POST /podcasts/shows/:id/cover/upload/init` | Bearer | ✅ `{ mimeType, fileName? }` — image cover |
+| `POST /podcasts/shows/:id/cover/upload/complete` | Bearer | ✅ `{ objectKey }` |
 | `POST /podcasts/shows/:showId/episodes` | Bearer | ✅ Create episode shell |
-| `POST /podcasts/episodes/:id/upload/init` | Bearer | ✅ Audio upload (R2 or local `POST /media/podcast-upload`) |
-| `POST /podcasts/episodes/:id/upload/complete` | Bearer | ✅ ffprobe duration → `ready` |
-| `GET /podcasts/episodes/feed` | Optional JWT | ✅ Latest episodes + `liked` / `saved` when authenticated |
-| `GET /podcasts/episodes/:id` | Optional JWT | ✅ Episode + `liked` + `saved` when authenticated |
+| `POST /podcasts/episodes/:id/upload/init` | Bearer | ✅ `{ mimeType, fileName? }` — **audio** (`audio/*`) or **video** (`video/*`); R2 presign or local `POST /media/podcast-upload` |
+| `POST /podcasts/episodes/:id/upload/complete` | Bearer | ✅ ffprobe duration → `ready`; sets `mediaType`, `audioUrl` or `videoUrl` |
+| `GET /podcasts/episodes/feed` | Optional JWT | ✅ Latest episodes + `liked` / `saved` / `disliked` when authenticated |
+| `GET /podcasts/episodes/:id` | Optional JWT | ✅ Episode + engagement flags when authenticated |
 | `POST /podcasts/episodes/:id/play` | — | ✅ Increment plays |
 | `PATCH /podcasts/episodes/:id` | Bearer | ✅ Owner updates title, description, etc. |
 | `POST /podcasts/episodes/:id/like` | Bearer | ✅ Toggle like |
+| `POST /podcasts/episodes/:id/dislike` | Bearer | ✅ Toggle dislike |
 | `POST /podcasts/episodes/:id/save` | Bearer | ✅ Toggle save (favorites) |
 
-Frontend: `/podcasts` (API-only, no mocks), `/podcast/:id`, profile settings **Podcasts** for show/episode upload, `POST /history/progress` with `contentType: podcast_episode`.
+**Episode response fields (playback):**
+
+```json
+{
+  "id": "uuid",
+  "title": "Episode title",
+  "mediaType": "video",
+  "audioUrl": null,
+  "videoUrl": "https://cdn…/episode.m3u8",
+  "durationSeconds": 3600,
+  "liked": false,
+  "saved": false,
+  "disliked": false
+}
+```
+
+Mobile: use `react-native-video` for `mediaType: "video"`; use audio player (e.g. `expo-av` TrackPlayer) for `mediaType: "audio"`.
+
+Frontend reference: `/podcasts` browse, `/podcast/:id` player, `POST /history/progress` with `contentType: podcast_episode`.
 
 ---
 
@@ -611,11 +971,8 @@ Platform ads config adds `impressionRevenueCpmUsd`. `GET /config/public` include
 | `GET /admin/analytics/export` | CSV export |
 | `GET /admin/gaf/ledger` | GAF inflow/outflow |
 | `GET /admin/audit-logs` | Admin action log |
-| `GET /podcasts/shows/trending` | Trending podcast shows |
-| `POST /podcasts/episodes/:id/dislike` | Toggle dislike |
-| `POST /verticals/episodes/:id/dislike` | Toggle dislike |
 
-`POST /videos/:id/view` writes `analytics_events` (view). Trending feed uses 7-day views. Creator dashboard: `/creator/dashboard`.
+`POST /videos/:id/view` writes `analytics_events` (view). Trending feed uses 7-day views. Creator dashboard: `GET /analytics/creators/me/dashboard`.
 
 ---
 
@@ -630,6 +987,7 @@ Platform ads config adds `impressionRevenueCpmUsd`. `GET /config/public` include
 | `GET /verticals/:slug/episodes/:episodeNumber` | ✅ Optional JWT — `liked`, `saved`, `viewsCount`, `likesCount` on episode; `saved` on series |
 | `POST /verticals/episodes/:episodeId/view` | ✅ Increment episode `viewsCount` |
 | `POST /verticals/episodes/:episodeId/like` | ✅ Bearer — toggle like |
+| `POST /verticals/episodes/:episodeId/dislike` | ✅ Bearer — toggle dislike |
 | `POST /verticals/episodes/:episodeId/save` | ✅ Bearer — toggle episode save |
 | `POST /verticals/series/:seriesId/save` | ✅ Bearer — toggle series save |
 | `GET /verticals/me/series` | ✅ Bearer — **approved vertical creator** |
@@ -700,10 +1058,49 @@ Long-form video browse (`type = video`). Returns live streams when `mode` includ
 | Route | Status |
 |-------|--------|
 | `POST /analytics/track` | ✅ Batch events — optional JWT (`share`, `view`, etc.) |
-| `GET /analytics/creators/me/dashboard` | ✅ Impact dashboard |
+| `GET /analytics/creators/me/dashboard` | ✅ Impact dashboard incl. **`gifts`** block |
 | `GET /analytics/creators/me/stats` | ✅ |
 | `GET /analytics/creators/me/content` | ✅ |
 | `GET /analytics/creators/stats` | ✅ Legacy alias |
+
+### `GET /analytics/creators/me/dashboard` — key fields
+
+```json
+{
+  "partnerTier": "standard",
+  "programVerticals": ["sports"],
+  "performance": { "views24h", "views7d", "views30d", "watchHours30d", "subscribers", "engagement30d", "retentionRate" },
+  "advertising": { "adImpressionsOnYourContent30d", "ctr30d", "…" },
+  "financial": {
+    "earnings30dUsd": "123.45",
+    "giftsEarnings30dUsd": "12.30",
+    "giftsEarningsLifetimeUsd": "45.67",
+    "availableBalanceUsd": "100.00",
+    "pendingPayoutUsd": "0.00"
+  },
+  "gifts": {
+    "creatorSharePercent": 90,
+    "coinsReceived30d": 500,
+    "coinsReceivedLifetime": 2000,
+    "giftCount30d": 12,
+    "giftCountLifetime": 48,
+    "grossValue30dUsd": "5.00",
+    "earnings30dUsd": "4.50",
+    "recent": [
+      {
+        "id": "uuid",
+        "giftName": "Heart",
+        "fromUsername": "fan1",
+        "coins": 50,
+        "creatorEarningsUsd": "0.45",
+        "createdAt": "2026-06-19T12:00:00.000Z"
+      }
+    ]
+  },
+  "topContent": [],
+  "content": []
+}
+```
 
 ---
 
@@ -816,6 +1213,92 @@ Tables: `revenue_split_rules`, `revenue_ledger_*`, `gaf_*`, `viewer_support_tran
 
 ---
 
+## Shared response types
+
+Canonical shapes returned across multiple endpoints. Field names are stable — use these to define TypeScript interfaces in the React Native app.
+
+### `VideoCard`
+
+Returned by feed endpoints, `GET /videos/:id` (extended), shorts, movies browse.
+
+```json
+{
+  "id": "uuid",
+  "title": "Video title",
+  "thumbnailUrl": "https://…",
+  "durationSeconds": 120,
+  "viewsCount": 1000,
+  "likesCount": 50,
+  "commentsCount": 10,
+  "type": "short",
+  "category": "general",
+  "vertical": "general",
+  "releaseYear": null,
+  "ageRating": null,
+  "tagline": null,
+  "channel": "Creator Name",
+  "channelSlug": "creator_handle",
+  "creatorId": "uuid",
+  "playbackUrl": "https://…/master.m3u8",
+  "videoUrl": "https://…/master.m3u8"
+}
+```
+
+`type` enum: `short` \| `video` \| `movie`. When JWT sent, detail/feed items may also include `liked`, `saved`, `disliked`, `isFollowing`, `dislikesCount`.
+
+### `User` (`GET /users/me`)
+
+```json
+{
+  "id": "uuid",
+  "email": "user@example.com",
+  "username": "handle",
+  "displayName": "Display Name",
+  "avatarUrl": "https://…",
+  "bannerUrl": "https://…",
+  "bio": "…",
+  "role": "user",
+  "isVerified": false,
+  "streamerStatus": "none",
+  "verticalCreatorStatus": "none",
+  "partnerTier": "standard",
+  "programVerticals": [],
+  "coinsBalance": 100,
+  "premiumTier": "none",
+  "premiumExpiresAt": null,
+  "followersCount": 10,
+  "followingCount": 5,
+  "videosCount": 3,
+  "socialLinks": [{ "label": "Twitter", "url": "https://…", "sortOrder": 0 }],
+  "notificationPrefs": [{ "type": "like", "enabled": true }]
+}
+```
+
+`streamerStatus` / `verticalCreatorStatus`: `none` \| `pending` \| `approved` \| `rejected`.
+
+### Public profile (`GET /users/:username`)
+
+Same core fields plus `isLive`, `liveStreamId`, `isFollowing`, `isChannelMember`, `liveAlertsOn` when requester is authenticated.
+
+### Pagination `meta`
+
+```json
+{ "page": 1, "limit": 24, "total": 142 }
+```
+
+### Shorts cursor response
+
+```json
+{
+  "items": [ "…VideoCard + liked/saved/disliked/isFollowing" ],
+  "nextCursor": "20"
+}
+```
+
+`nextCursor` is `null` when no more pages.
+
+---
+
 ## Error format
 
 ```json
@@ -870,6 +1353,7 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 | `RTMP_INGEST_URL` | No | `rtmp://localhost:1935/live` | RTMP server URL returned from `POST /streams/init` |
 | `MEDIAMTX_HLS_PUBLIC_URL` | No | `http://localhost:8888` | Base URL for HLS playback (`{base}/live/{streamKey}/index.m3u8`) |
 | `AUTO_APPROVE_STREAMER` | No | `false` | `true` / `1` in **non-production** only — skip admin queue for streamer applications (off by default) |
+| `AUTO_APPROVE_VERTICAL_CREATOR` | No | `false` | `true` / `1` in **non-production** only — skip admin queue for vertical creator applications |
 | `STRIPE_SECRET_KEY` | No | — | Empty → dev-mode instant coin/premium/membership grants |
 | `STRIPE_WEBHOOK_SECRET` | No | — | Required with Stripe; see [`stripe-production.md`](./stripe-production.md) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | No | — | Password-reset email |
@@ -893,10 +1377,12 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 
 ## Security notes
 
-1. Access token in secure storage (mobile) or sessionStorage (web dev).
-2. Web refresh: HttpOnly cookie + `credentials: 'include'` on `/auth/refresh`.
-3. Rate limiting on all routes; stricter on auth.
-4. Argon2id passwords; HTTPS + secure cookies in production.
+1. **Access token:** Store in secure storage on mobile (`expo-secure-store`, Keychain). Web dev uses `sessionStorage`.
+2. **Refresh token:** HttpOnly cookie only — mobile must persist `prysym_refresh` cookie manually (see [React Native integration](#react-native-integration)). Not in JSON body.
+3. **Token rotation:** Each `/auth/refresh` revokes the previous refresh session and issues a new cookie.
+4. **HTTPS + secure cookies** required in production (`NODE_ENV=production`).
+5. **Rate limiting** on all routes; stricter on auth (429 on exceed).
+6. **Argon2id** password hashing.
 
 ---
 
@@ -908,6 +1394,13 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 |-------|------|
 | `POST /reports` | `{ targetType: video \| stream \| user \| comment \| podcast_episode \| vertical_episode, targetId, reason, details? }` — `reason`: `spam` \| `nudity` \| `violence` \| `harassment` \| `other` |
 
+### React Native env (recommended)
+
+| Variable | Example | Notes |
+|----------|---------|-------|
+| `API_BASE_URL` | `https://srv1765056.hstgr.cloud/api/v1` | Same as web `NEXT_PUBLIC_API_URL` |
+| `WS_URL` | `https://srv1765056.hstgr.cloud` | Socket.IO — no `/api/v1` |
+
 ---
 
-*Last updated: 2026-05-31 — Creator payout profile (`GET/PUT /billing/creators/payout-profile`), payout request uses saved profile, admin user detail + payout `payoutDetails`, `GET /streams/ingest/health`, MediaMTX curl image + HLS sync fallback, `PATCH /videos/:id`, `PATCH /podcasts/episodes/:id`, admin `PUT` vertical/podcast episode edits. Production Stripe: [`stripe-production.md`](./stripe-production.md).*
+*Last updated: 2026-06-19 — React Native integration guide, production base URL, complete endpoint index (podcast video/cover, dislikes, advertisers, admin deletes), health response fields, feed home algorithms (`newReleases` vs `movies`), shorts `isFollowing`, podcast `mediaType`/`videoUrl`, WebSocket `gift` event, creator dashboard `gifts` block, shared response types (`VideoCard`, `User`, pagination), notification deep-link metadata, mobile auth cookie guidance. Production Stripe: [`stripe-production.md`](./stripe-production.md).*
