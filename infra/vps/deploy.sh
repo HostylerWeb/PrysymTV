@@ -8,16 +8,193 @@ PUBLIC_IP="${PRYSYM_PUBLIC_IP:-$(curl -fsS -4 ifconfig.me 2>/dev/null || hostnam
 APP="/var/www/prysymtv"
 DEPLOY_USER="prysym"
 REPO="https://github.com/HostylerWeb/PrysymTV.git"
+INFRA_SECRETS="/etc/prysym/secrets.env"
+APP_SECRETS="/etc/prysym/app-secrets.env"
+API_ENV_TEMPLATE="/etc/prysym/api.env.template"
+API_ENV="${APP}/api/.env"
+API_ENV_BACKUP="${APP}/api/.env.bak"
+FRONTEND_ENV="${APP}/.env.production"
 
 log() { echo "[prysym-deploy] $*"; }
+die() { echo "[prysym-deploy] ERROR: $*" >&2; exit 1; }
 
-[[ "$(id -u)" -eq 0 ]] || { echo "Run as root." >&2; exit 1; }
+[[ "$(id -u)" -eq 0 ]] || die "Run as root."
 
-source /etc/prysym/secrets.env
-if [[ -f /etc/prysym/app-secrets.env ]]; then
+# Read KEY=value from an env file (first match). Empty string if missing.
+read_env_file() {
+  local file="$1" key="$2"
+  [[ -f "$file" ]] || return 0
+  grep -m1 "^${key}=" "$file" 2>/dev/null | cut -d= -f2- || true
+}
+
+# Require one or more variable names to be non-empty in the current shell.
+require_vars() {
+  local name missing=()
+  for name in "$@"; do
+    if [[ -z "${!name:-}" ]]; then
+      missing+=("$name")
+    fi
+  done
+  if ((${#missing[@]} > 0)); then
+    die "Missing required variable(s): ${missing[*]} — check ${INFRA_SECRETS} and ${APP_SECRETS}"
+  fi
+}
+
+# Merge KEY=value pairs into an env file without wiping unrelated keys.
+upsert_env_file() {
+  local file="$1"
+  shift
+  local tmp next
+  tmp="$(mktemp)"
+
+  if [[ -f "$file" ]]; then
+    cp -a "$file" "$tmp"
+  else
+    : >"$tmp"
+  fi
+
+  while [[ $# -ge 2 ]]; do
+    local key="$1" value="$2"
+    shift 2
+    grep -v "^${key}=" "$tmp" >"${tmp}.next" 2>/dev/null || true
+    printf '%s=%s\n' "$key" "$value" >>"${tmp}.next"
+    mv "${tmp}.next" "$tmp"
+  done
+
+  [[ -s "$tmp" ]] || die "Refusing to write empty env file: $file"
+  install -m 640 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$tmp" "$file"
+  rm -f "$tmp"
+}
+
+# Load infra + app secrets AFTER git pull. Fails fast before api/.env is touched.
+load_deploy_secrets() {
+  [[ -f "$INFRA_SECRETS" ]] || die "Missing ${INFRA_SECRETS} (run provision.sh first)"
   # shellcheck disable=SC1091
-  source /etc/prysym/app-secrets.env
-fi
+  source "$INFRA_SECRETS"
+  require_vars POSTGRES_PASSWORD REDIS_PASSWORD
+
+  [[ -f "$APP_SECRETS" ]] || die "Missing ${APP_SECRETS} — create it before deploying (see INSTRUCTIONS.txt)"
+  # shellcheck disable=SC1091
+  source "$APP_SECRETS"
+  require_vars \
+    S3_ENDPOINT S3_BUCKET S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_PUBLIC_BASE_URL \
+    SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM
+}
+
+# Prefer existing api/.env values for long-lived secrets; fall back to app-secrets / template.
+resolve_api_secret() {
+  local key="$1" fallback="$2"
+  local from_existing
+  from_existing="$(read_env_file "$API_ENV" "$key")"
+  if [[ -n "$from_existing" ]]; then
+    printf '%s' "$from_existing"
+  else
+    printf '%s' "$fallback"
+  fi
+}
+
+validate_api_env() {
+  local key val missing=()
+  for key in \
+    NODE_ENV API_PORT API_PUBLIC_URL DATABASE_URL REDIS_URL \
+    JWT_ACCESS_SECRET JWT_REFRESH_SECRET \
+    S3_ENDPOINT S3_BUCKET S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_PUBLIC_BASE_URL \
+    SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM; do
+    val="$(read_env_file "$API_ENV" "$key")"
+    if [[ -z "$val" ]]; then
+      missing+=("$key")
+    fi
+  done
+  if ((${#missing[@]} > 0)); then
+    die "api/.env is incomplete after update (missing: ${missing[*]}). Restore from ${API_ENV_BACKUP} if needed."
+  fi
+}
+
+write_api_env() {
+  local jwt_access jwt_refresh
+  local s3_region stripe_key stripe_wh
+
+  jwt_access="$(resolve_api_secret JWT_ACCESS_SECRET "$(grep ^JWT_ACCESS_SECRET= "$API_ENV_TEMPLATE" | cut -d= -f2-)")"
+  jwt_refresh="$(resolve_api_secret JWT_REFRESH_SECRET "$(grep ^JWT_REFRESH_SECRET= "$API_ENV_TEMPLATE" | cut -d= -f2-)")"
+  require_vars jwt_access jwt_refresh
+
+  s3_region="$(resolve_api_secret S3_REGION "${S3_REGION:-auto}")"
+  stripe_key="$(resolve_api_secret STRIPE_SECRET_KEY "${STRIPE_SECRET_KEY:-}")"
+  stripe_wh="$(resolve_api_secret STRIPE_WEBHOOK_SECRET "${STRIPE_WEBHOOK_SECRET:-}")"
+
+  if [[ -f "$API_ENV" ]] && [[ -s "$API_ENV" ]]; then
+    log "Updating api/.env in place (preserving existing secrets)..."
+    cp -a "$API_ENV" "$API_ENV_BACKUP"
+  else
+    log "Creating api/.env (first deploy or file was missing)..."
+    [[ -f "$API_ENV_BACKUP" && -s "$API_ENV_BACKUP" ]] && {
+      log "Restoring from backup ${API_ENV_BACKUP}"
+      cp -a "$API_ENV_BACKUP" "$API_ENV"
+    }
+  fi
+
+  upsert_env_file "$API_ENV" \
+    NODE_ENV production \
+    API_PORT 4000 \
+    API_PUBLIC_URL "${BASE_URL}/api/v1" \
+    API_BUILD_ID "production-$(date +%Y%m%d)" \
+    CORS_ORIGIN "${BASE_URL}" \
+    FRONTEND_URL "${BASE_URL}" \
+    DATABASE_URL "postgresql://prysym:${POSTGRES_PASSWORD}@127.0.0.1:5432/prysymtv?schema=public" \
+    REDIS_URL "redis://:${REDIS_PASSWORD}@127.0.0.1:6379" \
+    JWT_ACCESS_SECRET "$jwt_access" \
+    JWT_REFRESH_SECRET "$jwt_refresh" \
+    JWT_ACCESS_TTL 15m \
+    JWT_REFRESH_TTL 7d \
+    STORAGE_DRIVER s3 \
+    S3_ENDPOINT "$(resolve_api_secret S3_ENDPOINT "$S3_ENDPOINT")" \
+    S3_REGION "$s3_region" \
+    S3_BUCKET "$(resolve_api_secret S3_BUCKET "$S3_BUCKET")" \
+    S3_ACCESS_KEY_ID "$(resolve_api_secret S3_ACCESS_KEY_ID "$S3_ACCESS_KEY_ID")" \
+    S3_SECRET_ACCESS_KEY "$(resolve_api_secret S3_SECRET_ACCESS_KEY "$S3_SECRET_ACCESS_KEY")" \
+    S3_PUBLIC_BASE_URL "$(resolve_api_secret S3_PUBLIC_BASE_URL "$S3_PUBLIC_BASE_URL")" \
+    STORAGE_RAW_KEY_PREFIX uploads/raw \
+    STORAGE_HLS_KEY_PREFIX uploads/hls \
+    STORAGE_THUMBNAIL_KEY_PREFIX uploads/thumbnails \
+    STORAGE_RAW_KEY_PATTERN '{videoId}/source{extension}' \
+    STORAGE_PRESIGN_EXPIRES_SECONDS 3600 \
+    UPLOAD_MAX_BYTES 2147483648 \
+    UPLOAD_ALLOWED_MIME_PREFIXES 'video/,audio/' \
+    VIDEO_PROCESSING_MODE ffmpeg \
+    VIDEO_PROCESSING_MAX_RETRIES 3 \
+    FFMPEG_PATH /usr/bin/ffmpeg \
+    FFPROBE_PATH /usr/bin/ffprobe \
+    RTMP_INGEST_URL "rtmp://${HOST}:1935/live" \
+    MEDIAMTX_HLS_PUBLIC_URL "${BASE_URL}/hls" \
+    MEDIAMTX_WEBRTC_PUBLIC_URL "${BASE_URL}/webrtc" \
+    MEDIAMTX_API_URL http://127.0.0.1:9997 \
+    AUTO_APPROVE_STREAMER false \
+    BILLING_DEV_GRANTS false \
+    SEED_DEMO_CONTENT false \
+    STRIPE_SECRET_KEY "$stripe_key" \
+    STRIPE_WEBHOOK_SECRET "$stripe_wh" \
+    SMTP_HOST "$(resolve_api_secret SMTP_HOST "$SMTP_HOST")" \
+    SMTP_PORT "$(resolve_api_secret SMTP_PORT "$SMTP_PORT")" \
+    SMTP_USER "$(resolve_api_secret SMTP_USER "$SMTP_USER")" \
+    SMTP_PASS "$(resolve_api_secret SMTP_PASS "$SMTP_PASS")" \
+    SMTP_FROM "$(resolve_api_secret SMTP_FROM "$SMTP_FROM")" \
+    THROTTLE_TTL_MS 60000 \
+    THROTTLE_LIMIT 1000
+
+  validate_api_env
+  log "api/.env OK ($(wc -l <"$API_ENV") lines, backup at ${API_ENV_BACKUP})"
+}
+
+write_frontend_env() {
+  upsert_env_file "$FRONTEND_ENV" \
+    PORT 3001 \
+    NEXT_PUBLIC_API_URL "${BASE_URL}/api/v1" \
+    NEXT_PUBLIC_WS_URL "${BASE_URL}" \
+    NEXT_PUBLIC_UPLOAD_MAX_BYTES 2147483648 \
+    NEXT_PUBLIC_RTMP_INGEST_URL "rtmp://${HOST}:1935/live" \
+    NEXT_PUBLIC_ADMIN_UI_PREVIEW false
+  log ".env.production OK"
+}
 
 log "Cloning / updating repository..."
 if [[ ! -d "$APP/.git" ]]; then
@@ -27,80 +204,15 @@ else
   su - "$DEPLOY_USER" -c "cd '$APP' && git fetch origin && git reset --hard origin/main"
 fi
 
-log "Writing api/.env..."
-cat > "$APP/api/.env" <<ENVFILE
-NODE_ENV=production
-API_PORT=4000
-API_PUBLIC_URL=${BASE_URL}/api/v1
-API_BUILD_ID=production-$(date +%Y%m%d)
-CORS_ORIGIN=${BASE_URL}
-FRONTEND_URL=${BASE_URL}
+load_deploy_secrets
 
-DATABASE_URL=postgresql://prysym:${POSTGRES_PASSWORD}@127.0.0.1:5432/prysymtv?schema=public
-REDIS_URL=redis://:${REDIS_PASSWORD}@127.0.0.1:6379
+log "Syncing environment files..."
+write_api_env
+write_frontend_env
 
-JWT_ACCESS_SECRET=$(grep ^JWT_ACCESS_SECRET= /etc/prysym/api.env.template | cut -d= -f2-)
-JWT_REFRESH_SECRET=$(grep ^JWT_REFRESH_SECRET= /etc/prysym/api.env.template | cut -d= -f2-)
-JWT_ACCESS_TTL=15m
-JWT_REFRESH_TTL=7d
-
-STORAGE_DRIVER=s3
-S3_ENDPOINT=${S3_ENDPOINT}
-S3_REGION=auto
-S3_BUCKET=${S3_BUCKET}
-S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}
-S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
-S3_PUBLIC_BASE_URL=${S3_PUBLIC_BASE_URL}
-
-STORAGE_RAW_KEY_PREFIX=uploads/raw
-STORAGE_HLS_KEY_PREFIX=uploads/hls
-STORAGE_THUMBNAIL_KEY_PREFIX=uploads/thumbnails
-STORAGE_RAW_KEY_PATTERN={videoId}/source{extension}
-STORAGE_PRESIGN_EXPIRES_SECONDS=3600
-UPLOAD_MAX_BYTES=2147483648
-UPLOAD_ALLOWED_MIME_PREFIXES=video/,audio/
-
-VIDEO_PROCESSING_MODE=ffmpeg
-VIDEO_PROCESSING_MAX_RETRIES=3
-FFMPEG_PATH=/usr/bin/ffmpeg
-FFPROBE_PATH=/usr/bin/ffprobe
-
-RTMP_INGEST_URL=rtmp://${HOST}:1935/live
-MEDIAMTX_HLS_PUBLIC_URL=${BASE_URL}/hls
-MEDIAMTX_WEBRTC_PUBLIC_URL=${BASE_URL}/webrtc
-MEDIAMTX_API_URL=http://127.0.0.1:9997
-
-AUTO_APPROVE_STREAMER=false
-BILLING_DEV_GRANTS=false
-SEED_DEMO_CONTENT=false
-
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-
-SMTP_HOST=${SMTP_HOST}
-SMTP_PORT=${SMTP_PORT}
-SMTP_USER=${SMTP_USER}
-SMTP_PASS=${SMTP_PASS}
-SMTP_FROM=${SMTP_FROM}
-
-THROTTLE_TTL_MS=60000
-THROTTLE_LIMIT=1000
-ENVFILE
-
-chmod 640 "$APP/api/.env"
-chown "$DEPLOY_USER:$DEPLOY_USER" "$APP/api/.env"
-
-log "Writing frontend .env.production..."
-cat > "$APP/.env.production" <<ENVFILE
-PORT=3001
-NEXT_PUBLIC_API_URL=${BASE_URL}/api/v1
-NEXT_PUBLIC_WS_URL=${BASE_URL}
-NEXT_PUBLIC_UPLOAD_MAX_BYTES=2147483648
-NEXT_PUBLIC_RTMP_INGEST_URL=rtmp://${HOST}:1935/live
-NEXT_PUBLIC_ADMIN_UI_PREVIEW=false
-ENVFILE
-chmod 640 "$APP/.env.production"
-chown "$DEPLOY_USER:$DEPLOY_USER" "$APP/.env.production"
+# Persist app secrets for future deploys / disaster recovery (never printed).
+grep -E '^(S3_|SMTP_|STRIPE_)' "$API_ENV" >"$APP_SECRETS" || true
+chmod 600 "$APP_SECRETS"
 
 log "Updating MediaMTX for ${HOST}..."
 MTX=/opt/prysym/stack/mediamtx.yml

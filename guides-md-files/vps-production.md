@@ -33,7 +33,8 @@ Replace passwords with SSH keys when possible — **never commit passwords**.
 | `/var/www/prysymtv` | App deploy directory (empty) |
 | `/opt/prysym/stack` | `docker-compose.yml` + `mediamtx.yml` |
 | `/etc/prysym/secrets.env` | Postgres + Redis passwords (mode 600) |
-| `/etc/prysym/app-secrets.env` | R2/S3, SMTP, Stripe keys for `deploy.sh` (mode 600; create on first deploy) |
+| `/etc/prysym/app-secrets.env` | R2/S3, SMTP, Stripe bootstrap keys (mode 600; required if api/.env missing) |
+| `/var/www/prysymtv/api/.env` | Live API config — **updated in place** by `deploy.sh` (backup: `api/.env.bak`) |
 | `/etc/prysym/api.env.template` | API `.env` starter with generated JWT secrets |
 | `/etc/systemd/system/prysym-*.service` | API + web units (disabled until deploy) |
 
