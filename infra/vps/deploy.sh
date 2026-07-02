@@ -14,6 +14,10 @@ log() { echo "[prysym-deploy] $*"; }
 [[ "$(id -u)" -eq 0 ]] || { echo "Run as root." >&2; exit 1; }
 
 source /etc/prysym/secrets.env
+if [[ -f /etc/prysym/app-secrets.env ]]; then
+  # shellcheck disable=SC1091
+  source /etc/prysym/app-secrets.env
+fi
 
 log "Cloning / updating repository..."
 if [[ ! -d "$APP/.git" ]]; then
