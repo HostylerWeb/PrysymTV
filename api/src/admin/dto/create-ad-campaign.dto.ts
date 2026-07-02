@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  IsUUID,
   Min,
 } from 'class-validator';
 
@@ -43,4 +44,12 @@ export class CreateAdCampaignDto {
   @IsOptional()
   @IsEnum(AdCampaignStatus)
   status?: AdCampaignStatus;
+
+  @IsOptional()
+  @IsString()
+  revenueRuleKey?: string;
+
+  @IsOptional()
+  @IsUUID()
+  advertiserAccountId?: string;
 }

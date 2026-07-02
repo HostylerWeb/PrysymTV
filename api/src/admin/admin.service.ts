@@ -2559,6 +2559,12 @@ export class AdminService {
         status: dto.status ?? 'active',
         startsAt: new Date(dto.startsAt),
         endsAt: new Date(dto.endsAt),
+        ...(dto.revenueRuleKey !== undefined && {
+          revenueRuleKey: dto.revenueRuleKey,
+        }),
+        ...(dto.advertiserAccountId && {
+          advertiserAccount: { connect: { id: dto.advertiserAccountId } },
+        }),
       },
     });
   }
