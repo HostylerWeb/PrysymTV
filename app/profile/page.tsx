@@ -35,6 +35,7 @@ import {
   fetchMyLiked,
 } from "@/lib/api/users"
 import { fetchHistory } from "@/lib/api/history"
+import { filterContinueWatchingHistory } from "@/lib/continue-watching"
 import { createCoinCheckout, fulfillCheckout } from "@/lib/api/billing"
 import { ApiError } from "@/lib/api-client"
 import type {
@@ -85,6 +86,7 @@ const VALID_SETTINGS_SCREENS: ProfileSettingsScreen[] = [
   "podcasts",
   "playlists",
   "social",
+  "shipping",
 ]
 
 function ProfilePageContent() {
@@ -194,7 +196,7 @@ function ProfilePageContent() {
         if (cancelled) return
         setSavedItems(savedRes.items)
         setLikedItems(likedRes.items)
-        setWatchHistory(historyRes.items)
+        setWatchHistory(filterContinueWatchingHistory(historyRes.items))
         setMyPlaylists(playlistsRes.items)
       } catch {
         if (!cancelled) {

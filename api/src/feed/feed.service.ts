@@ -97,43 +97,36 @@ export class FeedService {
 
   private async continueWatching(userId: string, limit = 12) {
     const rows = await this.prisma.watchHistory.findMany({
-      where: { userId, completed: false },
+      where: {
+        userId,
+        completed: false,
+        contentType: { in: ['video', 'vertical_episode'] },
+      },
       orderBy: { updatedAt: 'desc' },
-      take: limit,
+      take: limit * 2,
     });
     if (!rows.length) return [];
 
     const videoIds = rows
       .filter((r) => r.contentType === 'video')
       .map((r) => r.contentId);
-    const podcastIds = rows
-      .filter((r) => r.contentType === 'podcast_episode')
-      .map((r) => r.contentId);
     const verticalIds = rows
       .filter((r) => r.contentType === 'vertical_episode')
       .map((r) => r.contentId);
 
-    const [videos, episodes, verticalEpisodes] = await Promise.all([
+    const [videos, verticalEpisodes] = await Promise.all([
       videoIds.length
         ? this.prisma.video.findMany({
-            where: { id: { in: videoIds } },
+            where: {
+              id: { in: videoIds },
+              type: { in: [VideoType.video, VideoType.movie, VideoType.series_episode] },
+            },
             select: {
               id: true,
               title: true,
               thumbnailUrl: true,
               durationSeconds: true,
-            },
-          })
-        : [],
-      podcastIds.length
-        ? this.prisma.podcastEpisode.findMany({
-            where: { id: { in: podcastIds } },
-            select: {
-              id: true,
-              title: true,
-              coverUrl: true,
-              durationSeconds: true,
-              show: { select: { title: true } },
+              type: true,
             },
           })
         : [],
@@ -153,10 +146,9 @@ export class FeedService {
     ]);
 
     const videoById = new Map(videos.map((v) => [v.id, v]));
-    const episodeById = new Map(episodes.map((e) => [e.id, e]));
     const verticalById = new Map(verticalEpisodes.map((e) => [e.id, e]));
 
-    return rows
+    const items = rows
       .map((r) => {
         if (r.contentType === 'video') {
           const v = videoById.get(r.contentId);
@@ -169,20 +161,7 @@ export class FeedService {
             title: v.title,
             thumbnailUrl: v.thumbnailUrl,
             durationSeconds: v.durationSeconds,
-          };
-        }
-        if (r.contentType === 'podcast_episode') {
-          const ep = episodeById.get(r.contentId);
-          if (!ep) return null;
-          return {
-            contentType: 'podcast_episode' as const,
-            contentId: r.contentId,
-            progressSeconds: r.progressSeconds,
-            completed: r.completed,
-            title: ep.title,
-            thumbnailUrl: ep.coverUrl,
-            durationSeconds: ep.durationSeconds,
-            subtitle: ep.show.title,
+            videoType: v.type,
           };
         }
         if (r.contentType === 'vertical_episode') {
@@ -204,6 +183,8 @@ export class FeedService {
         return null;
       })
       .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    return items.slice(0, limit);
   }
 
   async trending(page = 1, limit = 20) {

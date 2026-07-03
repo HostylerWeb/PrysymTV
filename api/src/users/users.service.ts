@@ -69,6 +69,30 @@ export class UsersService {
         bio: dto.bio,
         avatarUrl: dto.avatarUrl,
         bannerUrl: dto.bannerUrl,
+        ...(dto.buyerFullName !== undefined && {
+          buyerFullName: dto.buyerFullName.trim(),
+        }),
+        ...(dto.buyerPhone !== undefined && {
+          buyerPhone: dto.buyerPhone.trim(),
+        }),
+        ...(dto.buyerAddressLine1 !== undefined && {
+          buyerAddressLine1: dto.buyerAddressLine1.trim(),
+        }),
+        ...(dto.buyerAddressLine2 !== undefined && {
+          buyerAddressLine2: dto.buyerAddressLine2.trim() || null,
+        }),
+        ...(dto.buyerCity !== undefined && {
+          buyerCity: dto.buyerCity.trim(),
+        }),
+        ...(dto.buyerState !== undefined && {
+          buyerState: dto.buyerState.trim() || null,
+        }),
+        ...(dto.buyerPostalCode !== undefined && {
+          buyerPostalCode: dto.buyerPostalCode.trim(),
+        }),
+        ...(dto.buyerCountryCode !== undefined && {
+          buyerCountryCode: dto.buyerCountryCode.trim().toUpperCase(),
+        }),
       },
     });
     return this.sanitizeUser(user);
@@ -782,6 +806,14 @@ export class UsersService {
     premiumTier: string;
     premiumExpiresAt: Date | null;
     createdAt: Date;
+    buyerFullName?: string | null;
+    buyerPhone?: string | null;
+    buyerAddressLine1?: string | null;
+    buyerAddressLine2?: string | null;
+    buyerCity?: string | null;
+    buyerState?: string | null;
+    buyerPostalCode?: string | null;
+    buyerCountryCode?: string | null;
     socialLinks?: unknown[];
     notificationPrefs?: unknown[];
     _count?: { followers: number; following: number; videos: number };
@@ -806,6 +838,14 @@ export class UsersService {
       premiumTier: user.premiumTier,
       premiumExpiresAt: user.premiumExpiresAt,
       createdAt: user.createdAt,
+      buyerFullName: user.buyerFullName ?? null,
+      buyerPhone: user.buyerPhone ?? null,
+      buyerAddressLine1: user.buyerAddressLine1 ?? null,
+      buyerAddressLine2: user.buyerAddressLine2 ?? null,
+      buyerCity: user.buyerCity ?? null,
+      buyerState: user.buyerState ?? null,
+      buyerPostalCode: user.buyerPostalCode ?? null,
+      buyerCountryCode: user.buyerCountryCode ?? null,
       socialLinks: user.socialLinks,
       notificationPrefs: user.notificationPrefs,
       followersCount: user._count?.followers ?? 0,

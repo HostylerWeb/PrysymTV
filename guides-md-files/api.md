@@ -137,10 +137,13 @@
 | `PUT` | `/playlists/:id/reorder` | ✅ |
 | `GET` | `/playlists/:id` | ✅ |
 | `GET` | `/stores/me` | ✅ Bearer — creator store + products (requires `storeCreatorStatus: approved`) |
-| `PUT` | `/stores/me` | ✅ Bearer — `{ displayName?, description? }` |
-| `POST` | `/stores/me/products` | ✅ Bearer — create product |
+| `PUT` | `/stores/me` | ✅ Bearer — `{ displayName?, description?, shippingFree?, shippingFeeUsd? }` |
+| `POST` | `/stores/me/products` | ✅ Bearer — create product (`galleryUrls`, `inventoryUnlimited`) |
 | `PUT` | `/stores/me/products/:id` | ✅ Bearer — update product |
 | `DELETE` | `/stores/me/products/:id` | ✅ Bearer — delete product |
+| `POST` | `/stores/checkout` | ✅ Bearer — Stripe checkout for store purchase |
+| `GET` | `/stores/orders/:orderId` | ✅ Bearer — buyer order (digital URL when paid) |
+| `GET` | `/users/:username/store/products/:productId` | ✅ Public product detail |
 | `GET` | `/search` | ✅ |
 | `GET` | `/search/suggest` | ✅ |
 | `GET` | `/ads/serve` | ✅ `?placement=&peek=1` — optional Bearer; `peek=1` returns ad without burning an impression |
@@ -560,7 +563,7 @@ All `/users/me/*` routes require Bearer auth.
 | Route | Status | Notes |
 |-------|--------|-------|
 | `GET /users/me` | ✅ | Full profile — see [User type](#user-get-usersme) |
-| `PUT /users/me` | ✅ | `displayName`, `bio`, `avatarUrl`, `bannerUrl` |
+| `PUT /users/me` | ✅ | `displayName`, `bio`, `avatarUrl`, `bannerUrl`, buyer shipping fields (`buyerFullName`, `buyerPhone`, `buyerAddressLine1`, `buyerAddressLine2`, `buyerCity`, `buyerState`, `buyerPostalCode`, `buyerCountryCode`) |
 | `POST /users/me/avatar/upload` | ✅ | `{ mimeType, fileName? }` → presigned PUT or local `POST /media/profile-upload` |
 | `POST /users/me/banner/upload` | ✅ | Same as avatar |
 | `POST /users/me/streamer-id/upload` | ✅ | `{ mimeType, fileName? }` → presigned PUT or local `POST /media/profile-upload` with `uploads/streamer-ids/{userId}.*` key |
@@ -648,7 +651,7 @@ Aggregates:
 | `newReleases` | Public **movies** by `createdAt` desc (8 items) — **not** the same list as `movies` |
 | `movies` | Public **movies** by `viewsCount` desc (12 items) — “Top Movies” |
 | `featuredMovie` | Newest ready movie by `createdAt` |
-| `continueWatching` | Incomplete `watch_history` for authenticated user (`video`, `podcast_episode`, `vertical_episode`) |
+| `continueWatching` | Incomplete `watch_history` for authenticated user — **long-form videos** (`video`, `movie`, `series_episode`) and **vertical episodes** only. Excludes shorts and podcasts. |
 
 Guests: no `continueWatching` from API (web uses `localStorage` for vertical progress only).
 
@@ -898,10 +901,20 @@ Revenue split key for products: `store_merchandise` (configured at `GET/PUT /adm
 | Route | Body / notes |
 |-------|----------------|
 | `GET /stores/me` | `{ store, products[] }` — auto-creates `creator_stores` on first access after approval |
-| `PUT /stores/me` | `{ displayName?, description? }` |
-| `POST /stores/me/products` | `{ productType: merchandise \| digital, title, description?, priceUsd, imageUrl, digitalUrl?, inventory? }` — `digitalUrl` required for digital; `inventory` required for merchandise |
+| `PUT /stores/me` | `{ displayName?, description?, shippingFree?, shippingFeeUsd? }` — `shippingFree: true` clears fee; flat fee applies per physical order |
+| `POST /stores/me/products` | `{ productType: merchandise \| digital, title, description?, priceUsd, imageUrl, galleryUrls?, digitalUrl?, inventory?, inventoryUnlimited? }` — `digitalUrl` required for digital; merchandise needs `inventory` ≥ 1 or `inventoryUnlimited: true` |
 | `PUT /stores/me/products/:id` | Partial update; `status` can be set to `active` \| `draft` \| `archived` |
 | `DELETE /stores/me/products/:id` | Hard delete |
+| `POST /stores/checkout` | `{ productId, quantity?, shippingAddress?, saveBuyerDetails? }` — `shippingAddress` required for merchandise; returns `{ checkoutUrl, sessionId, orderId }` or dev-mode `{ redirectUrl }` |
+| `GET /stores/orders/:orderId` | Buyer order — `digitalUrl` on line items only when `status: paid` |
+
+### Buyer shipping details (`PUT /users/me`)
+
+Optional fields saved on the user profile and pre-filled at checkout:
+
+`buyerFullName`, `buyerPhone`, `buyerAddressLine1`, `buyerAddressLine2`, `buyerCity`, `buyerState`, `buyerPostalCode`, `buyerCountryCode` (ISO 3166-1 alpha-2).
+
+When `POST /stores/checkout` includes `saveBuyerDetails: true` and `shippingAddress`, the API persists the address to the buyer profile.
 
 ### Public catalog
 
@@ -917,9 +930,12 @@ No auth. Returns `404` unless the creator has `storeCreatorStatus: approved` and
     "displayName": "Shop name",
     "description": null,
     "bannerUrl": null,
+    "shippingFree": true,
+    "shippingFeeUsd": 0,
     "isPublished": true,
     "createdAt": "2026-07-02T22:39:45.767Z"
   },
+  "creatorUsername": "creator-handle",
   "products": [
     {
       "id": "uuid",
@@ -928,14 +944,28 @@ No auth. Returns `404` unless the creator has `storeCreatorStatus: approved` and
       "description": "…",
       "priceUsd": 24.99,
       "imageUrl": "https://…",
+      "galleryUrls": [],
       "inventory": 10,
+      "inventoryUnlimited": false,
+      "inStock": true,
       "createdAt": "…"
     }
   ]
 }
 ```
 
-Public product objects **omit** `digitalUrl`. Checkout / orders are not implemented yet.
+### `GET /users/:username/store/products/:productId` ✅
+
+No auth. Returns store summary, creator username, and one active product. Physical products include `shippingFree` / `shippingFeeUsd` from the seller store settings. Omits `digitalUrl`.
+
+### Checkout flow
+
+1. Buyer opens `/creator/:username/store/:productId`.
+2. For **merchandise**, buyer completes shipping form (pre-filled from `GET /users/me` when logged in).
+3. `POST /stores/checkout` creates a pending `store_orders` row, adds Stripe line items (product + optional shipping fee), returns `checkoutUrl`.
+4. Stripe redirect → `POST /billing/stripe/fulfill` or webhook → `fulfillStoreOrder` (stock decrement, revenue split `store_merchandise`, digital URL unlocked on `GET /stores/orders/:id`).
+
+Public product objects **omit** `digitalUrl`. Checkout requires Bearer auth.
 
 Frontend: profile **Store** tab (seller), `/creator/:username` **Store** tab (buyer browse).
 

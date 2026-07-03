@@ -122,16 +122,24 @@ export class StoresService {
     if (!user) throw new NotFoundException();
 
     const store = await this.ensureStore(userId, user.username, user.displayName);
+    const storeData: Prisma.CreatorStoreUpdateInput = {
+      ...(dto.displayName !== undefined && {
+        displayName: dto.displayName.trim(),
+      }),
+      ...(dto.description !== undefined && {
+        description: dto.description.trim() || null,
+      }),
+    };
+    if (dto.shippingFree !== undefined) {
+      storeData.shippingFree = dto.shippingFree;
+      if (dto.shippingFree) storeData.shippingFeeUsd = 0;
+    }
+    if (dto.shippingFeeUsd !== undefined && dto.shippingFree !== true) {
+      storeData.shippingFeeUsd = dto.shippingFeeUsd;
+    }
     const updated = await this.prisma.creatorStore.update({
       where: { id: store.id },
-      data: {
-        ...(dto.displayName !== undefined && {
-          displayName: dto.displayName.trim(),
-        }),
-        ...(dto.description !== undefined && {
-          description: dto.description.trim() || null,
-        }),
-      },
+      data: storeData,
     });
     return this.mapStore(updated);
   }
@@ -300,7 +308,11 @@ export class StoresService {
     return {
       store: data.store,
       creatorUsername: data.creatorUsername,
-      product,
+      product: {
+        ...product,
+        shippingFree: data.store.shippingFree,
+        shippingFeeUsd: data.store.shippingFeeUsd,
+      },
     };
   }
 
@@ -338,10 +350,26 @@ export class StoresService {
       throw new BadRequestException('Not enough stock available');
     }
 
+    const isPhysical = product.productType === StoreProductType.merchandise;
+    if (isPhysical && !dto.shippingAddress) {
+      throw new BadRequestException('Shipping address is required for physical products');
+    }
+
+    const shippingFeeUsd = isPhysical
+      ? product.store.shippingFree
+        ? 0
+        : Number(product.store.shippingFeeUsd)
+      : 0;
+
     const unitUsd = Number(product.priceUsd);
-    const totalUsd = unitUsd * dto.quantity;
+    const subtotalUsd = unitUsd * dto.quantity;
+    const totalUsd = subtotalUsd + shippingFeeUsd;
     const frontend = this.config.get<string>('FRONTEND_URL', 'http://localhost:3001');
     const creatorUsername = product.store.creator.username;
+
+    if (dto.saveBuyerDetails && dto.shippingAddress) {
+      await this.saveBuyerDetails(buyerId, dto.shippingAddress);
+    }
 
     const order = await this.prisma.storeOrder.create({
       data: {
@@ -349,6 +377,10 @@ export class StoresService {
         buyerId,
         status: StoreOrderStatus.pending,
         totalUsd,
+        shippingFeeUsd,
+        shippingSnapshot: dto.shippingAddress
+          ? (JSON.parse(JSON.stringify(dto.shippingAddress)) as Prisma.InputJsonValue)
+          : undefined,
         lines: {
           create: {
             productId: product.id,
@@ -374,6 +406,35 @@ export class StoresService {
       );
     }
 
+    const lineItems = [
+      {
+        quantity: dto.quantity,
+        price_data: {
+          currency: 'usd',
+          unit_amount: Math.round(unitUsd * 100),
+          product_data: {
+            name: product.title,
+            description: product.description?.slice(0, 200) ?? undefined,
+            images: product.imageUrl ? [product.imageUrl] : undefined,
+          },
+        },
+      },
+    ];
+    if (shippingFeeUsd > 0) {
+      lineItems.push({
+        quantity: 1,
+        price_data: {
+          currency: 'usd',
+          unit_amount: Math.round(shippingFeeUsd * 100),
+          product_data: {
+            name: 'Shipping',
+            description: `Shipping from ${product.store.displayName}`,
+            images: undefined,
+          },
+        },
+      });
+    }
+
     const session = await this.stripe.checkout.sessions.create({
       mode: 'payment',
       success_url: `${frontend}/creator/${creatorUsername}/store/${product.id}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
@@ -386,20 +447,7 @@ export class StoresService {
         storeId: product.storeId,
         quantity: String(dto.quantity),
       },
-      line_items: [
-        {
-          quantity: dto.quantity,
-          price_data: {
-            currency: 'usd',
-            unit_amount: Math.round(unitUsd * 100),
-            product_data: {
-              name: product.title,
-              description: product.description?.slice(0, 200) ?? undefined,
-              images: product.imageUrl ? [product.imageUrl] : undefined,
-            },
-          },
-        },
-      ],
+      line_items: lineItems,
     });
 
     await this.prisma.storeOrder.update({
@@ -503,6 +551,7 @@ export class StoresService {
       id: order.id,
       status: order.status,
       totalUsd: Number(order.totalUsd),
+      shippingFeeUsd: Number(order.shippingFeeUsd),
       createdAt: order.createdAt.toISOString(),
       store: order.store,
       lines: order.lines.map((l) => ({
@@ -550,12 +599,42 @@ export class StoresService {
     };
   }
 
+  private async saveBuyerDetails(
+    userId: string,
+    address: {
+      fullName: string;
+      phone: string;
+      line1: string;
+      line2?: string;
+      city: string;
+      state?: string;
+      postalCode: string;
+      countryCode: string;
+    },
+  ) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        buyerFullName: address.fullName.trim(),
+        buyerPhone: address.phone.trim(),
+        buyerAddressLine1: address.line1.trim(),
+        buyerAddressLine2: address.line2?.trim() || null,
+        buyerCity: address.city.trim(),
+        buyerState: address.state?.trim() || null,
+        buyerPostalCode: address.postalCode.trim(),
+        buyerCountryCode: address.countryCode.trim().toUpperCase(),
+      },
+    });
+  }
+
   private mapStore(store: {
     id: string;
     slug: string;
     displayName: string;
     description: string | null;
     bannerUrl: string | null;
+    shippingFree: boolean;
+    shippingFeeUsd: { toString(): string } | number | string;
     isPublished: boolean;
     createdAt: Date;
   }) {
@@ -565,6 +644,8 @@ export class StoresService {
       displayName: store.displayName,
       description: store.description,
       bannerUrl: store.bannerUrl,
+      shippingFree: store.shippingFree,
+      shippingFeeUsd: Number(store.shippingFeeUsd),
       isPublished: store.isPublished,
       createdAt: store.createdAt.toISOString(),
     };

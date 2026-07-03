@@ -29,6 +29,14 @@ export type MeResponse = {
   premiumTier: string;
   premiumExpiresAt: string | null;
   createdAt: string;
+  buyerFullName?: string | null;
+  buyerPhone?: string | null;
+  buyerAddressLine1?: string | null;
+  buyerAddressLine2?: string | null;
+  buyerCity?: string | null;
+  buyerState?: string | null;
+  buyerPostalCode?: string | null;
+  buyerCountryCode?: string | null;
   socialLinks?: unknown[];
   notificationPrefs?: unknown[];
   followersCount: number;
@@ -110,6 +118,7 @@ export type ContinueWatchingFeedItem = {
   title: string;
   thumbnailUrl: string | null;
   durationSeconds: number;
+  videoType?: string;
   subtitle?: string;
   seriesSlug?: string;
   episodeNumber?: number;
@@ -136,4 +145,12 @@ export type UpdateMeBody = {
   bio?: string;
   avatarUrl?: string;
   bannerUrl?: string;
+  buyerFullName?: string;
+  buyerPhone?: string;
+  buyerAddressLine1?: string;
+  buyerAddressLine2?: string;
+  buyerCity?: string;
+  buyerState?: string;
+  buyerPostalCode?: string;
+  buyerCountryCode?: string;
 };

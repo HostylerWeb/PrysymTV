@@ -412,6 +412,14 @@ model User {
   premiumTier       PremiumTier    @default(none) @map("premium_tier")
   premiumExpiresAt  DateTime?      @map("premium_expires_at")
   countryCode       String?        @map("country_code") @db.VarChar(2)
+  buyerFullName     String?        @map("buyer_full_name")
+  buyerPhone        String?        @map("buyer_phone")
+  buyerAddressLine1 String?        @map("buyer_address_line1")
+  buyerAddressLine2 String?        @map("buyer_address_line2")
+  buyerCity         String?        @map("buyer_city")
+  buyerState        String?        @map("buyer_state")
+  buyerPostalCode   String?        @map("buyer_postal_code")
+  buyerCountryCode  String?        @map("buyer_country_code") @db.VarChar(2)
   googleId          String?        @unique @map("google_id")
   appleId           String?        @unique @map("apple_id")
   createdAt         DateTime       @default(now()) @map("created_at")
@@ -1167,13 +1175,15 @@ model CreatorStore {
   slug        String   @unique
   displayName String   @map("display_name")
   description String?
-  bannerUrl   String?  @map("banner_url")
-  isPublished Boolean  @default(false) @map("is_published")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  creator     User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  products    StoreProduct[]
-  orders      StoreOrder[]
+  bannerUrl       String?  @map("banner_url")
+  shippingFree    Boolean  @default(true) @map("shipping_free")
+  shippingFeeUsd  Decimal  @default(0) @map("shipping_fee_usd") @db.Decimal(12, 2)
+  isPublished     Boolean  @default(false) @map("is_published")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  creator         User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  products        StoreProduct[]
+  orders          StoreOrder[]
 
   @@map("creator_stores")
 }
@@ -1206,8 +1216,10 @@ model StoreOrder {
   id             String          @id @default(uuid()) @db.Uuid
   storeId        String          @map("store_id") @db.Uuid
   buyerId        String          @map("buyer_id") @db.Uuid
-  status         StoreOrderStatus @default(pending)
-  totalUsd       Decimal         @map("total_usd") @db.Decimal(12, 2)
+  status            StoreOrderStatus @default(pending)
+  totalUsd            Decimal         @map("total_usd") @db.Decimal(12, 2)
+  shippingFeeUsd      Decimal         @default(0) @map("shipping_fee_usd") @db.Decimal(12, 2)
+  shippingSnapshot    Json?           @map("shipping_snapshot")
   revenueBatchId String?         @unique @map("revenue_batch_id") @db.Uuid
   providerRef    String?         @map("provider_ref")
   createdAt      DateTime        @default(now()) @map("created_at")

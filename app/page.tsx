@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Header } from "@/components/header"
 import { FeaturedLive, type FeaturedLiveStream } from "@/components/featured-live"
 import { ContinueWatchingRow } from "@/components/continue-watching-row"
+import { filterContinueWatchingFeed, filterContinueWatchingHistory } from "@/lib/continue-watching"
 import { useAuth } from "@/contexts/auth-context"
 import { fetchHistory } from "@/lib/api/history"
 import { listVerticalContinueWatching } from "@/lib/vertical-progress"
@@ -90,16 +91,14 @@ export default function Home() {
     }
     void fetchHistory(1, 8)
       .then((res) =>
-        setContinueHistory(
-          res.items.filter((i) => i.video || i.podcastEpisode || i.verticalEpisode),
-        ),
+        setContinueHistory(filterContinueWatchingHistory(res.items)),
       )
       .catch(() => setContinueHistory([]))
   }, [isAuthenticated])
 
   useEffect(() => {
     void fetchFeedHome().then((feed) => {
-      setContinueFeed(feed.continueWatching ?? [])
+      setContinueFeed(filterContinueWatchingFeed(feed.continueWatching ?? []))
       if (feed.featuredLive) {
         setFeaturedLive({
           id: feed.featuredLive.id,

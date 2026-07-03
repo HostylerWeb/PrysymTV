@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import type { CreatorStoreSummary, PublicStoreProduct } from "@/lib/api/stores"
-import { stockLabel } from "@/lib/api/stores"
+import { stockLabel, shippingLabel } from "@/lib/api/stores"
 import { Package } from "lucide-react"
 
 type CreatorStoreTabProps = {
@@ -16,6 +16,11 @@ export function CreatorStoreTab({ store, products, creatorUsername }: CreatorSto
     <div className="space-y-6">
       {store.description && (
         <p className="text-sm text-muted-foreground max-w-2xl">{store.description}</p>
+      )}
+      {products.some((p) => p.productType === "merchandise") && (
+        <p className="text-xs text-muted-foreground">
+          Physical orders: {store.shippingFree ? "free shipping" : `flat $${store.shippingFeeUsd.toFixed(2)} shipping`}
+        </p>
       )}
 
       {products.length === 0 ? (
@@ -58,6 +63,11 @@ export function CreatorStoreTab({ store, products, creatorUsername }: CreatorSto
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">{stockLabel(p)}</p>
+                {p.productType === "merchandise" && shippingLabel({ ...p, shippingFree: store.shippingFree, shippingFeeUsd: store.shippingFeeUsd }) && (
+                  <p className="text-xs text-muted-foreground">
+                    {shippingLabel({ ...p, shippingFree: store.shippingFree, shippingFeeUsd: store.shippingFeeUsd })}
+                  </p>
+                )}
               </div>
             </Link>
           ))}

@@ -22,6 +22,8 @@ export type CreatorStoreSummary = {
   displayName: string;
   description: string | null;
   bannerUrl: string | null;
+  shippingFree: boolean;
+  shippingFeeUsd: number;
   isPublished: boolean;
   createdAt: string;
 };
@@ -37,6 +39,8 @@ export type PublicStoreProduct = {
   inventory: number | null;
   inventoryUnlimited: boolean;
   inStock: boolean;
+  shippingFree?: boolean;
+  shippingFeeUsd?: number;
   createdAt: string;
 };
 
@@ -66,6 +70,18 @@ export function fetchStoreProduct(username: string, productId: string) {
   });
 }
 
+export function updateMyStore(body: {
+  displayName?: string;
+  description?: string;
+  shippingFree?: boolean;
+  shippingFeeUsd?: number;
+}) {
+  return apiRequest<CreatorStoreSummary>("/stores/me", {
+    method: "PUT",
+    body,
+  });
+}
+
 export function createMyStoreProduct(body: {
   productType: "merchandise" | "digital";
   title: string;
@@ -89,7 +105,23 @@ export function deleteMyStoreProduct(id: string) {
   });
 }
 
-export function createStoreCheckout(productId: string, quantity = 1) {
+export function createStoreCheckout(
+  productId: string,
+  quantity = 1,
+  options?: {
+    shippingAddress?: {
+      fullName: string;
+      phone: string;
+      line1: string;
+      line2?: string;
+      city: string;
+      state?: string;
+      postalCode: string;
+      countryCode: string;
+    };
+    saveBuyerDetails?: boolean;
+  },
+) {
   return apiRequest<{
     checkoutUrl?: string;
     sessionId?: string;
@@ -99,7 +131,11 @@ export function createStoreCheckout(productId: string, quantity = 1) {
     success?: boolean;
   }>("/stores/checkout", {
     method: "POST",
-    body: { productId, quantity },
+    body: {
+      productId,
+      quantity,
+      ...options,
+    },
   });
 }
 
@@ -129,4 +165,11 @@ export function stockLabel(product: Pick<PublicStoreProduct, "productType" | "in
   if (product.inventoryUnlimited) return "In stock";
   if (!product.inStock) return "Out of stock";
   return `${product.inventory} in stock`;
+}
+
+export function shippingLabel(product: Pick<PublicStoreProduct, "productType" | "shippingFree" | "shippingFeeUsd">) {
+  if (product.productType !== "merchandise") return null;
+  if (product.shippingFree !== false) return "Free shipping";
+  const fee = product.shippingFeeUsd ?? 0;
+  return fee > 0 ? `Shipping: $${fee.toFixed(2)}` : "Paid shipping";
 }

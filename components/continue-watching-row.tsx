@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { Play } from "lucide-react"
 import { historyProgressPercent, videoThumbnail } from "@/lib/format-media"
+import { isContinueWatchingHistoryItem } from "@/lib/continue-watching"
 import type { ContinueWatchingFeedItem, HistoryItemRecord } from "@/lib/api/types"
 import type { VerticalProgressEntry } from "@/lib/vertical-progress"
 
@@ -14,8 +15,10 @@ type ContinueWatchingRowProps = {
 }
 
 function feedItemHref(item: ContinueWatchingFeedItem): string {
-  if (item.contentType === "video") return `/watch/${item.contentId}`
-  if (item.contentType === "podcast_episode") return `/podcast/${item.contentId}`
+  if (item.contentType === "video") {
+    if (item.videoType === "movie") return `/movie/${item.contentId}`
+    return `/watch/${item.contentId}`
+  }
   if (item.seriesSlug != null && item.episodeNumber != null) {
     return `/verticals/watch/${item.seriesSlug}/${item.episodeNumber}`
   }
@@ -64,9 +67,8 @@ export function ContinueWatchingRow({
   verticalItems = [],
 }: ContinueWatchingRowProps) {
   const hasFeed = feedItems.length > 0
-  const hasHistory =
-    historyItems.some((i) => i.video || i.podcastEpisode || i.verticalEpisode) ||
-    verticalItems.length > 0
+  const eligibleHistory = historyItems.filter(isContinueWatchingHistoryItem)
+  const hasHistory = eligibleHistory.length > 0 || verticalItems.length > 0
 
   if (!hasFeed && !hasHistory) return null
 
@@ -139,14 +141,18 @@ export function ContinueWatchingRow({
                 </Link>
               )
             })
-          : historyItems.map((item) => {
+          : eligibleHistory.map((item) => {
               if (item.video) {
                 const pct = historyProgressPercent(
                   item.progressSeconds,
                   item.video.durationSeconds,
                 )
+                const href =
+                  item.video.type === "movie"
+                    ? `/movie/${item.contentId}`
+                    : `/watch/${item.contentId}`
                 return (
-                  <Link key={item.contentId} href={`/watch/${item.contentId}`} className="flex-shrink-0 w-56 group">
+                  <Link key={item.contentId} href={href} className="flex-shrink-0 w-56 group">
                     <div className="relative aspect-video rounded-xl overflow-hidden bg-secondary">
                       <img
                         src={videoThumbnail(item.video.thumbnailUrl)}
@@ -163,33 +169,6 @@ export function ContinueWatchingRow({
                       </div>
                     </div>
                     <p className="text-sm font-medium mt-2 line-clamp-1">{item.video.title}</p>
-                  </Link>
-                )
-              }
-              if (item.podcastEpisode) {
-                const ep = item.podcastEpisode
-                const pct = historyProgressPercent(item.progressSeconds, ep.durationSeconds)
-                return (
-                  <Link key={item.contentId} href={`/podcast/${item.contentId}`} className="flex-shrink-0 w-56 group">
-                    <div className="relative aspect-video rounded-xl overflow-hidden bg-secondary">
-                      <img
-                        src={videoThumbnail(ep.coverUrl)}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
-                        <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
-                      </div>
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
-                        <span className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-                          <Play className="w-5 h-5 text-white fill-white" />
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-sm font-medium mt-2 line-clamp-1">{ep.title}</p>
-                    {ep.show?.title && (
-                      <p className="text-xs text-muted-foreground line-clamp-1">{ep.show.title}</p>
-                    )}
                   </Link>
                 )
               }

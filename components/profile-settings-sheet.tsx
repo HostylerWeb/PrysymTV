@@ -30,6 +30,7 @@ import {
   ListMusic,
   Link2,
   Users,
+  Truck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -73,7 +74,14 @@ import {
   fetchMyCreatorSubscriptions,
   type CreatorSubscription,
 } from "@/lib/api/billing-monetization"
-import { fetchMe, replaceSocialLinks } from "@/lib/api/users"
+import { fetchMe, replaceSocialLinks, updateMe } from "@/lib/api/users"
+import { BuyerDetailsForm } from "@/components/buyer-details-form"
+import {
+  buyerDetailsFromUser,
+  buyerDetailsToUpdateMeBody,
+  EMPTY_BUYER_DETAILS,
+  type BuyerDetails,
+} from "@/lib/buyer-details"
 import { formatViewCount } from "@/lib/format-media"
 
 export type ProfileSettingsScreen =
@@ -89,6 +97,7 @@ export type ProfileSettingsScreen =
   | "podcasts"
   | "playlists"
   | "social"
+  | "shipping"
 
 const NOTIFICATION_PREFS = [
   { id: "follow", label: "New followers", description: "When someone follows you" },
@@ -145,6 +154,7 @@ const SCREEN_TITLES: Record<Exclude<ProfileSettingsScreen, "menu">, string> = {
   podcasts: "Podcasts",
   playlists: "Playlists",
   social: "Social Links",
+  shipping: "Shipping & checkout",
 }
 
 interface ProfileSettingsSheetProps {
@@ -234,6 +244,9 @@ export function ProfileSettingsSheet({
   >([])
   const [socialBusy, setSocialBusy] = useState(false)
   const [socialMessage, setSocialMessage] = useState<string | null>(null)
+  const [buyerDetails, setBuyerDetails] = useState<BuyerDetails>(EMPTY_BUYER_DETAILS)
+  const [buyerBusy, setBuyerBusy] = useState(false)
+  const [buyerMessage, setBuyerMessage] = useState<string | null>(null)
   const [mySeries, setMySeries] = useState<
     Array<{
       id: string
@@ -366,6 +379,14 @@ export function ProfileSettingsSheet({
         /* keep defaults */
       })
       .finally(() => setNotifLoading(false))
+  }, [isOpen, screen])
+
+  useEffect(() => {
+    if (!isOpen || screen !== "shipping") return
+    setBuyerMessage(null)
+    void fetchMe()
+      .then((me) => setBuyerDetails(buyerDetailsFromUser(me)))
+      .catch(() => setBuyerDetails(EMPTY_BUYER_DETAILS))
   }, [isOpen, screen])
 
   if (!isOpen) return null
@@ -775,6 +796,39 @@ export function ProfileSettingsSheet({
             />
           )}
 
+          {screen === "shipping" && (
+            <div className="pt-2 space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Saved shipping details pre-fill when you buy physical items from creator stores.
+              </p>
+              <BuyerDetailsForm value={buyerDetails} onChange={setBuyerDetails} disabled={buyerBusy} />
+              <Button
+                className="w-full rounded-full"
+                disabled={buyerBusy}
+                onClick={() => {
+                  setBuyerBusy(true)
+                  setBuyerMessage(null)
+                  void updateMe(buyerDetailsToUpdateMeBody(buyerDetails))
+                    .then(() => {
+                      setBuyerMessage("Details saved.")
+                      return onRefreshUser?.()
+                    })
+                    .catch((e) =>
+                      setBuyerMessage(
+                        e instanceof ApiError ? e.message : "Could not save details.",
+                      ),
+                    )
+                    .finally(() => setBuyerBusy(false))
+                }}
+              >
+                {buyerBusy ? "Saving…" : "Save details"}
+              </Button>
+              {buyerMessage && (
+                <p className="text-sm text-center text-muted-foreground">{buyerMessage}</p>
+              )}
+            </div>
+          )}
+
           {screen === "upload" && (
             <UploadPanel
               selected={uploadType}
@@ -907,6 +961,7 @@ function MenuPanel({
           accent: "live",
         },
     { icon: Clock, label: "Watch History", description: "Recently watched content", screen: "history" },
+    { icon: Truck, label: "Shipping & checkout", description: "Address for store purchases", screen: "shipping" },
     { icon: ListMusic, label: "Playlists", description: "Create and manage playlists", screen: "playlists" },
     { icon: Link2, label: "Social Links", description: "Links on your creator profile", screen: "social" },
     ...(showCreatorDashboard

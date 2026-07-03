@@ -8,10 +8,20 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 import { fulfillCheckout } from "@/lib/api/billing"
+import { fetchMe } from "@/lib/api/users"
+import { BuyerDetailsForm } from "@/components/buyer-details-form"
+import {
+  buyerDetailsFromUser,
+  EMPTY_BUYER_DETAILS,
+  isBuyerDetailsComplete,
+  shippingAddressFromBuyer,
+  type BuyerDetails,
+} from "@/lib/buyer-details"
 import {
   createStoreCheckout,
   fetchStoreOrder,
   fetchStoreProduct,
+  shippingLabel,
   stockLabel,
   type PublicStoreProduct,
 } from "@/lib/api/stores"
@@ -48,6 +58,8 @@ function StoreProductPageInner() {
   const [quantity, setQuantity] = useState(1)
   const [orderDigitalUrl, setOrderDigitalUrl] = useState<string | null>(null)
   const [purchaseDone, setPurchaseDone] = useState(false)
+  const [buyerDetails, setBuyerDetails] = useState<BuyerDetails>(EMPTY_BUYER_DETAILS)
+  const [saveBuyerDetails, setSaveBuyerDetails] = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -67,6 +79,16 @@ function StoreProductPageInner() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setBuyerDetails(EMPTY_BUYER_DETAILS)
+      return
+    }
+    void fetchMe()
+      .then((me) => setBuyerDetails(buyerDetailsFromUser(me)))
+      .catch(() => {})
+  }, [isAuthenticated])
 
   useEffect(() => {
     const checkout = searchParams.get("checkout")
@@ -100,16 +122,36 @@ function StoreProductPageInner() {
     ? [product.imageUrl, ...(product.galleryUrls ?? [])].filter(Boolean) as string[]
     : []
 
+  const shippingText = product ? shippingLabel(product) : null
+  const shippingFee =
+    product?.productType === "merchandise" && product.shippingFree === false
+      ? product.shippingFeeUsd ?? 0
+      : 0
+  const orderTotal = product ? product.priceUsd * quantity + shippingFee : 0
+
   const buy = async () => {
     if (!product || !product.inStock) return
     if (!isAuthenticated) {
       router.push(`/profile?auth=login&returnTo=${encodeURIComponent(`/creator/${slug}/store/${productId}`)}`)
       return
     }
+    if (product.productType === "merchandise" && !isBuyerDetailsComplete(buyerDetails)) {
+      setError("Please complete your shipping details before checkout")
+      return
+    }
     setBusy(true)
     setError(null)
     try {
-      const res = await createStoreCheckout(product.id, quantity)
+      const res = await createStoreCheckout(
+        product.id,
+        quantity,
+        product.productType === "merchandise"
+          ? {
+              shippingAddress: shippingAddressFromBuyer(buyerDetails),
+              saveBuyerDetails,
+            }
+          : undefined,
+      )
       if (res.devMode && res.redirectUrl) {
         window.location.href = res.redirectUrl
         return
@@ -217,6 +259,7 @@ function StoreProductPageInner() {
               <h2 className="text-2xl font-bold">{product.title}</h2>
               <p className="text-sm text-muted-foreground mt-1">
                 {product.productType === "merchandise" ? "Physical product" : "Digital download"} · {stockLabel(product)}
+                {shippingText ? ` · ${shippingText}` : ""}
               </p>
             </div>
             <p className="text-2xl font-bold text-primary">${product.priceUsd.toFixed(2)}</p>
@@ -251,6 +294,44 @@ function StoreProductPageInner() {
                 >
                   +
                 </Button>
+              </div>
+            </div>
+          )}
+
+          {product.productType === "merchandise" && product.inStock && (
+            <div className="rounded-xl border border-border/80 bg-card/40 p-4 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold">Shipping details</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Required for physical orders. Saved to your account when checked below.
+                </p>
+              </div>
+              <BuyerDetailsForm value={buyerDetails} onChange={setBuyerDetails} disabled={busy} />
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={saveBuyerDetails}
+                  onChange={(e) => setSaveBuyerDetails(e.target.checked)}
+                  className="rounded border-border"
+                />
+                <span className="text-sm">Save these details to my account for next time</span>
+              </label>
+            </div>
+          )}
+
+          {product.productType === "merchandise" && (
+            <div className="rounded-lg bg-secondary/40 px-4 py-3 text-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span>${(product.priceUsd * quantity).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Shipping</span>
+                <span>{shippingFee > 0 ? `$${shippingFee.toFixed(2)}` : "Free"}</span>
+              </div>
+              <div className="flex justify-between font-semibold pt-1 border-t border-border/60">
+                <span>Total</span>
+                <span className="text-primary">${orderTotal.toFixed(2)}</span>
               </div>
             </div>
           )}

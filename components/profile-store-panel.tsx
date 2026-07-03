@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { Download, Loader2, Package, Plus, Trash2 } from "lucide-react"
+import { Download, Loader2, Package, Plus, Settings2, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
   createMyStoreProduct,
   deleteMyStoreProduct,
   fetchMyStore,
+  updateMyStore,
   type StoreProduct,
 } from "@/lib/api/stores"
 
@@ -37,6 +38,13 @@ export function ProfileStorePanel() {
   const [products, setProducts] = useState<StoreProduct[]>([])
   const [storeName, setStoreName] = useState("")
   const [showForm, setShowForm] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [settings, setSettings] = useState({
+    displayName: "",
+    description: "",
+    shippingFree: true,
+    shippingFeeUsd: "",
+  })
   const [form, setForm] = useState({
     productType: "merchandise" as "merchandise" | "digital",
     title: "",
@@ -56,6 +64,13 @@ export function ProfileStorePanel() {
       const data = await fetchMyStore()
       setStoreName(data.store.displayName)
       setProducts(data.products)
+      setSettings({
+        displayName: data.store.displayName,
+        description: data.store.description ?? "",
+        shippingFree: data.store.shippingFree,
+        shippingFeeUsd:
+          data.store.shippingFree ? "" : String(data.store.shippingFeeUsd ?? ""),
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load store")
     } finally {
@@ -132,6 +147,39 @@ export function ProfileStorePanel() {
     }
   }
 
+  const saveSettings = async () => {
+    const displayName = settings.displayName.trim()
+    if (!displayName) {
+      setError("Store name is required")
+      return
+    }
+    if (!settings.shippingFree) {
+      const fee = parseFloat(settings.shippingFeeUsd)
+      if (!Number.isFinite(fee) || fee < 0) {
+        setError("Enter a valid shipping fee or enable free shipping")
+        return
+      }
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await updateMyStore({
+        displayName,
+        description: settings.description.trim() || undefined,
+        shippingFree: settings.shippingFree,
+        shippingFeeUsd: settings.shippingFree
+          ? 0
+          : parseFloat(settings.shippingFeeUsd),
+      })
+      setStoreName(updated.displayName)
+      setShowSettings(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save store settings")
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const removeProduct = async (id: string) => {
     setBusy(true)
     try {
@@ -162,21 +210,32 @@ export function ProfileStorePanel() {
               List physical merch and digital downloads. Buyers checkout via Stripe on the product page.
             </p>
           </div>
-          <Button
-            size="sm"
-            variant={showForm ? "outline" : "default"}
-            className="rounded-full gap-1.5 shrink-0"
-            onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          >
-            {showForm ? (
-              "Cancel"
-            ) : (
-              <>
-                <Plus className="w-4 h-4" />
-                Add product
-              </>
-            )}
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full gap-1.5"
+              onClick={() => setShowSettings((v) => !v)}
+            >
+              <Settings2 className="w-4 h-4" />
+              Store settings
+            </Button>
+            <Button
+              size="sm"
+              variant={showForm ? "outline" : "default"}
+              className="rounded-full gap-1.5"
+              onClick={() => (showForm ? resetForm() : setShowForm(true))}
+            >
+              {showForm ? (
+                "Cancel"
+              ) : (
+                <>
+                  <Plus className="w-4 h-4" />
+                  Add product
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -184,6 +243,88 @@ export function ProfileStorePanel() {
         <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
           {error}
         </p>
+      )}
+
+      {showSettings && (
+        <div className="rounded-xl border border-border/80 bg-card/40 p-4 md:p-5 space-y-5">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Store settings</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Shop name, description, and shipping rules for physical products.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="store-settings-name" className={labelClass}>
+              Store name <span className="text-destructive">*</span>
+            </label>
+            <input
+              id="store-settings-name"
+              className={fieldClass}
+              value={settings.displayName}
+              onChange={(e) => setSettings((s) => ({ ...s, displayName: e.target.value }))}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="store-settings-desc" className={labelClass}>
+              Description <span className="font-normal">(optional)</span>
+            </label>
+            <textarea
+              id="store-settings-desc"
+              value={settings.description}
+              onChange={(e) => setSettings((s) => ({ ...s, description: e.target.value }))}
+              className="w-full h-24 px-4 py-3 rounded-xl bg-secondary text-sm resize-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-shadow"
+            />
+          </div>
+
+          <div className="space-y-3">
+            <p className={labelClass}>Shipping for physical items</p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="shipping-mode"
+                checked={settings.shippingFree}
+                onChange={() => setSettings((s) => ({ ...s, shippingFree: true }))}
+              />
+              <span className="text-sm font-medium">Free shipping</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="shipping-mode"
+                checked={!settings.shippingFree}
+                onChange={() => setSettings((s) => ({ ...s, shippingFree: false }))}
+              />
+              <span className="text-sm font-medium">Flat-rate shipping fee</span>
+            </label>
+            {!settings.shippingFree && (
+              <div>
+                <label htmlFor="store-shipping-fee" className={labelClass}>
+                  Shipping fee (USD) <span className="text-destructive">*</span>
+                </label>
+                <input
+                  id="store-shipping-fee"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className={cn(fieldClass, "sm:max-w-[10rem]")}
+                  value={settings.shippingFeeUsd}
+                  onChange={(e) => setSettings((s) => ({ ...s, shippingFeeUsd: e.target.value }))}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col-reverse sm:flex-row gap-2">
+            <Button variant="outline" className="rounded-full sm:flex-1" onClick={() => setShowSettings(false)}>
+              Cancel
+            </Button>
+            <Button className="rounded-full sm:flex-1" disabled={busy} onClick={() => void saveSettings()}>
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save settings"}
+            </Button>
+          </div>
+        </div>
       )}
 
       {showForm && (
