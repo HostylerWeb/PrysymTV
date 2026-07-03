@@ -317,8 +317,27 @@ export class StoresService {
   }
 
   async createCheckout(buyerId: string, dto: CreateStoreCheckoutDto) {
-    const product = await this.prisma.storeProduct.findUnique({
-      where: { id: dto.productId },
+    const requestedLines = dto.items?.length
+      ? dto.items
+      : dto.productId
+        ? [{ productId: dto.productId, quantity: dto.quantity ?? 1 }]
+        : [];
+
+    if (!requestedLines.length) {
+      throw new BadRequestException('At least one product is required');
+    }
+
+    const mergedQuantities = new Map<string, number>();
+    for (const line of requestedLines) {
+      mergedQuantities.set(
+        line.productId,
+        (mergedQuantities.get(line.productId) ?? 0) + line.quantity,
+      );
+    }
+
+    const productIds = [...mergedQuantities.keys()];
+    const products = await this.prisma.storeProduct.findMany({
+      where: { id: { in: productIds } },
       include: {
         store: {
           include: {
@@ -327,45 +346,73 @@ export class StoresService {
         },
       },
     });
-    if (
-      !product ||
-      product.status !== StoreProductStatus.active ||
-      !product.store.isPublished ||
-      product.store.creator.isBanned
-    ) {
+
+    if (products.length !== productIds.length) {
       throw new NotFoundException('Product not found');
     }
-    if (product.store.creatorId === buyerId) {
-      throw new BadRequestException('You cannot buy your own product');
+
+    const storeId = products[0].storeId;
+    const store = products[0].store;
+    if (products.some((p) => p.storeId !== storeId)) {
+      throw new BadRequestException('All items must be from the same store');
     }
-    if (!this.isInStock(product)) {
-      throw new BadRequestException('Product is out of stock');
+    if (!store.isPublished || store.creator.isBanned) {
+      throw new NotFoundException('Store not found');
     }
-    if (
-      product.productType === StoreProductType.merchandise &&
-      !product.inventoryUnlimited &&
-      product.inventory != null &&
-      dto.quantity > product.inventory
-    ) {
-      throw new BadRequestException('Not enough stock available');
+    if (store.creatorId === buyerId) {
+      throw new BadRequestException('You cannot buy your own products');
     }
 
-    const isPhysical = product.productType === StoreProductType.merchandise;
-    if (isPhysical && !dto.shippingAddress) {
+    const orderLines: Array<{ product: (typeof products)[number]; quantity: number; unitUsd: number }> =
+      [];
+
+    for (const product of products) {
+      if (product.status !== StoreProductStatus.active) {
+        throw new NotFoundException('Product not found');
+      }
+      const quantity = mergedQuantities.get(product.id) ?? 0;
+      if (!this.isInStock(product)) {
+        throw new BadRequestException(`${product.title} is out of stock`);
+      }
+      if (
+        product.productType === StoreProductType.merchandise &&
+        !product.inventoryUnlimited &&
+        product.inventory != null &&
+        quantity > product.inventory
+      ) {
+        throw new BadRequestException(`Not enough stock for ${product.title}`);
+      }
+      orderLines.push({
+        product,
+        quantity,
+        unitUsd: Number(product.priceUsd),
+      });
+    }
+
+    const hasPhysical = orderLines.some(
+      (line) => line.product.productType === StoreProductType.merchandise,
+    );
+    if (hasPhysical && !dto.shippingAddress) {
       throw new BadRequestException('Shipping address is required for physical products');
     }
 
-    const shippingFeeUsd = isPhysical
-      ? product.store.shippingFree
+    const shippingFeeUsd = hasPhysical
+      ? store.shippingFree
         ? 0
-        : Number(product.store.shippingFeeUsd)
+        : Number(store.shippingFeeUsd)
       : 0;
 
-    const unitUsd = Number(product.priceUsd);
-    const subtotalUsd = unitUsd * dto.quantity;
+    const subtotalUsd = orderLines.reduce(
+      (sum, line) => sum + line.unitUsd * line.quantity,
+      0,
+    );
     const totalUsd = subtotalUsd + shippingFeeUsd;
     const frontend = this.config.get<string>('FRONTEND_URL', 'http://localhost:3001');
-    const creatorUsername = product.store.creator.username;
+    const creatorUsername = store.creator.username;
+    const isMultiItem = orderLines.length > 1 || orderLines[0].quantity > 1;
+    const checkoutBase = isMultiItem
+      ? `${frontend}/creator/${creatorUsername}/store/cart`
+      : `${frontend}/creator/${creatorUsername}/store/${orderLines[0].product.id}`;
 
     if (dto.saveBuyerDetails && dto.shippingAddress) {
       await this.saveBuyerDetails(buyerId, dto.shippingAddress);
@@ -373,7 +420,7 @@ export class StoresService {
 
     const order = await this.prisma.storeOrder.create({
       data: {
-        storeId: product.storeId,
+        storeId,
         buyerId,
         status: StoreOrderStatus.pending,
         totalUsd,
@@ -382,11 +429,11 @@ export class StoresService {
           ? (JSON.parse(JSON.stringify(dto.shippingAddress)) as Prisma.InputJsonValue)
           : undefined,
         lines: {
-          create: {
-            productId: product.id,
-            quantity: dto.quantity,
-            unitUsd,
-          },
+          create: orderLines.map((line) => ({
+            productId: line.product.id,
+            quantity: line.quantity,
+            unitUsd: line.unitUsd,
+          })),
         },
       },
     });
@@ -398,7 +445,7 @@ export class StoresService {
           success: true,
           devMode: true,
           orderId: order.id,
-          redirectUrl: `${frontend}/creator/${creatorUsername}/store/${product.id}?checkout=success&order=${order.id}`,
+          redirectUrl: `${checkoutBase}?checkout=success&order=${order.id}`,
         };
       }
       throw new ServiceUnavailableException(
@@ -406,20 +453,18 @@ export class StoresService {
       );
     }
 
-    const lineItems = [
-      {
-        quantity: dto.quantity,
-        price_data: {
-          currency: 'usd',
-          unit_amount: Math.round(unitUsd * 100),
-          product_data: {
-            name: product.title,
-            description: product.description?.slice(0, 200) ?? undefined,
-            images: product.imageUrl ? [product.imageUrl] : undefined,
-          },
+    const lineItems = orderLines.map((line) => ({
+      quantity: line.quantity,
+      price_data: {
+        currency: 'usd',
+        unit_amount: Math.round(line.unitUsd * 100),
+        product_data: {
+          name: line.product.title,
+          description: line.product.description?.slice(0, 200) ?? undefined,
+          images: line.product.imageUrl ? [line.product.imageUrl] : undefined,
         },
       },
-    ];
+    }));
     if (shippingFeeUsd > 0) {
       lineItems.push({
         quantity: 1,
@@ -428,7 +473,7 @@ export class StoresService {
           unit_amount: Math.round(shippingFeeUsd * 100),
           product_data: {
             name: 'Shipping',
-            description: `Shipping from ${product.store.displayName}`,
+            description: `Shipping from ${store.displayName}`,
             images: undefined,
           },
         },
@@ -437,15 +482,14 @@ export class StoresService {
 
     const session = await this.stripe.checkout.sessions.create({
       mode: 'payment',
-      success_url: `${frontend}/creator/${creatorUsername}/store/${product.id}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${frontend}/creator/${creatorUsername}/store/${product.id}?checkout=cancelled`,
+      success_url: `${checkoutBase}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${checkoutBase}?checkout=cancelled`,
       metadata: {
         userId: buyerId,
         productType: 'store',
         orderId: order.id,
-        productId: product.id,
-        storeId: product.storeId,
-        quantity: String(dto.quantity),
+        storeId,
+        itemCount: String(orderLines.length),
       },
       line_items: lineItems,
     });

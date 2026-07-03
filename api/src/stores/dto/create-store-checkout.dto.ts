@@ -1,4 +1,6 @@
 import {
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsInt,
   IsOptional,
@@ -55,7 +57,7 @@ export class ShippingAddressDto {
   countryCode!: string;
 }
 
-export class CreateStoreCheckoutDto {
+export class StoreCheckoutLineDto {
   @IsUUID()
   productId!: string;
 
@@ -63,6 +65,25 @@ export class CreateStoreCheckoutDto {
   @Min(1)
   @Max(99)
   quantity: number = 1;
+}
+
+export class CreateStoreCheckoutDto {
+  @ValidateIf((o: CreateStoreCheckoutDto) => !o.items?.length)
+  @IsUUID()
+  productId?: string;
+
+  @ValidateIf((o: CreateStoreCheckoutDto) => !o.items?.length)
+  @IsInt()
+  @Min(1)
+  @Max(99)
+  quantity?: number;
+
+  @ValidateIf((o: CreateStoreCheckoutDto) => !o.productId)
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => StoreCheckoutLineDto)
+  items?: StoreCheckoutLineDto[];
 
   @ValidateIf((o: CreateStoreCheckoutDto) => o.shippingAddress !== undefined)
   @ValidateNested()

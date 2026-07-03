@@ -30,6 +30,7 @@ export type FeedHomeResponse = {
   newReleases: VideoCard[];
   movies: VideoCard[];
   featuredMovie: VideoCard | null;
+  heroMovieReason: "new_release" | "trending" | null;
 };
 
 export type VideoCard = {
@@ -63,6 +64,7 @@ const EMPTY_FEED_HOME: FeedHomeResponse = {
   newReleases: [],
   movies: [],
   featuredMovie: null,
+  heroMovieReason: null,
 };
 
 export function fetchFeedHome() {

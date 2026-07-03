@@ -2,24 +2,23 @@
 
 import { useEffect, useState } from "react"
 import { Header } from "@/components/header"
-import { FeaturedLive, type FeaturedLiveStream } from "@/components/featured-live"
 import { ContinueWatchingRow } from "@/components/continue-watching-row"
 import { filterContinueWatchingFeed, filterContinueWatchingHistory } from "@/lib/continue-watching"
 import { useAuth } from "@/contexts/auth-context"
 import { fetchHistory } from "@/lib/api/history"
 import { listVerticalContinueWatching } from "@/lib/vertical-progress"
 import type { ContinueWatchingFeedItem, HistoryItemRecord } from "@/lib/api/types"
-import { CategoryTabs } from "@/components/category-tabs"
-import { ContentRow } from "@/components/content-row"
 import { MovieRow } from "@/components/movie-row"
 import { LiveRow } from "@/components/live-row"
-import { ShortsHomeRow } from "@/components/shorts-home-row"
-import { PodcastHomeRow } from "@/components/podcast-home-row"
-import { VerticalsHomeRow } from "@/components/verticals-home-row"
 import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
 import { Footer } from "@/components/footer"
 import { AdBanner } from "@/components/ad-banner"
+import { HomeHero, type HomeFeaturedMovie } from "@/components/home-hero"
+import { HomeEditorialGrid } from "@/components/home-editorial-grid"
+import { HomeDualSpotlight } from "@/components/home-dual-spotlight"
+import { HomeSectionShell } from "@/components/home-section-shell"
+import { HomeTrendingRail } from "@/components/home-trending-rail"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { fetchFeedHome } from "@/lib/api/feed"
 import { fetchShortsFeed } from "@/lib/api/videos-feed"
@@ -27,12 +26,9 @@ import { fetchPodcastEpisodesFeed } from "@/lib/api/podcasts"
 import { fetchVerticalSeriesList } from "@/lib/api/verticals"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
 
-type ContentCategory = "all" | "movies" | "live" | "videos" | "series" | "trending"
-
 export default function Home() {
   const { isAuthenticated } = useAuth()
   const { platformCreatorId } = usePublicAdsConfig()
-  const [activeCategory, setActiveCategory] = useState<ContentCategory>("all")
   const [activeTab, setActiveTab] = useState("home")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [homeShorts, setHomeShorts] = useState<
@@ -73,7 +69,8 @@ export default function Home() {
     Array<{ id: string; title: string; poster: string; year: string; rating: number; genre: string }>
   >([])
   const [newReleases, setNewReleases] = useState<typeof topMovies>([])
-  const [featuredLive, setFeaturedLive] = useState<FeaturedLiveStream | null>(null)
+  const [heroSlides, setHeroSlides] = useState<HomeFeaturedMovie[]>([])
+  const [heroLoading, setHeroLoading] = useState(true)
   const [continueFeed, setContinueFeed] = useState<ContinueWatchingFeedItem[]>([])
   const [continueHistory, setContinueHistory] = useState<HistoryItemRecord[]>([])
   const [guestVertical, setGuestVertical] = useState(
@@ -90,27 +87,44 @@ export default function Home() {
       return
     }
     void fetchHistory(1, 8)
-      .then((res) =>
-        setContinueHistory(filterContinueWatchingHistory(res.items)),
-      )
+      .then((res) => setContinueHistory(filterContinueWatchingHistory(res.items)))
       .catch(() => setContinueHistory([]))
   }, [isAuthenticated])
 
   useEffect(() => {
-    void fetchFeedHome().then((feed) => {
+    void fetchFeedHome()
+      .then((feed) => {
       setContinueFeed(filterContinueWatchingFeed(feed.continueWatching ?? []))
-      if (feed.featuredLive) {
-        setFeaturedLive({
-          id: feed.featuredLive.id,
-          slug: feed.featuredLive.slug,
-          title: feed.featuredLive.title,
-          thumbnailUrl: feed.featuredLive.thumbnailUrl,
-          hlsPlaybackUrl: feed.featuredLive.hlsPlaybackUrl,
-          streamer: feed.featuredLive.streamer,
-          streamerAvatar: feed.featuredLive.streamerAvatar,
-          viewerCount: feed.featuredLive.viewerCount,
+
+      const slides: HomeFeaturedMovie[] = []
+      const seenSlideIds = new Set<string>()
+      if (feed.featuredMovie && feed.heroMovieReason) {
+        slides.push({
+          id: feed.featuredMovie.id,
+          title: feed.featuredMovie.title,
+          poster: videoThumbnail(feed.featuredMovie.thumbnailUrl),
+          genre: feed.featuredMovie.category ?? "Movie",
+          year: String(feed.featuredMovie.releaseYear ?? new Date().getFullYear()),
+          channel: feed.featuredMovie.channel,
+          reason: feed.heroMovieReason,
+        })
+        seenSlideIds.add(feed.featuredMovie.id)
+      }
+      for (const m of feed.movies) {
+        if (slides.length >= 4) break
+        if (seenSlideIds.has(m.id)) continue
+        seenSlideIds.add(m.id)
+        slides.push({
+          id: m.id,
+          title: m.title,
+          poster: videoThumbnail(m.thumbnailUrl),
+          genre: m.category ?? "Movie",
+          year: String(m.releaseYear ?? new Date().getFullYear()),
+          channel: m.channel,
+          reason: "trending",
         })
       }
+      setHeroSlides(slides)
       setLiveStreams(
         feed.liveNow.map((s) => ({
           id: s.id,
@@ -147,6 +161,7 @@ export default function Home() {
       setTopMovies(feed.movies.map(mapMovie))
       setNewReleases(feed.newReleases.map(mapMovie))
     })
+      .finally(() => setHeroLoading(false))
   }, [])
 
   useEffect(() => {
@@ -183,70 +198,84 @@ export default function Home() {
     })
   }, [])
 
-  const showLive = activeCategory === "all" || activeCategory === "live"
-  const showMovies = activeCategory === "all" || activeCategory === "movies"
-  const showVideos = activeCategory === "all" || activeCategory === "videos" || activeCategory === "trending"
-  const showSeries = activeCategory === "all" || activeCategory === "series"
+  const hasContinue =
+    continueFeed.length > 0 || guestVertical.length > 0 || continueHistory.length > 0
+
+  const top10Items = trendingVideos.slice(0, 10)
+  const spotlightVideo =
+    trendingVideos.length > 10 ? trendingVideos[10] : (trendingVideos[0] ?? null)
 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <Header onSearchClick={() => setIsSearchOpen(true)} />
-      <FeaturedLive stream={featuredLive} />
-      <AdBanner platformCreatorId={platformCreatorId} />
 
-      <div className="relative z-10 bg-background">
-        <div className="max-w-7xl mx-auto w-full px-4 md:px-0">
-          <CategoryTabs activeCategory={activeCategory} onCategoryChange={setActiveCategory} />
+      <HomeHero slides={heroSlides} loading={heroLoading} />
 
-          {(continueFeed.length > 0 ||
-            guestVertical.length > 0 ||
-            continueHistory.length > 0) && (
-            <div className="px-4 md:px-8 pt-4">
-              <ContinueWatchingRow
-                feedItems={continueFeed}
-                historyItems={continueFeed.length > 0 ? [] : continueHistory}
-                verticalItems={isAuthenticated ? [] : guestVertical}
-              />
-            </div>
-          )}
-
-          {showLive && liveStreams.length > 0 && (
-            <LiveRow title="Live Now" streams={liveStreams} />
-          )}
-
-          {showSeries && (
-            <VerticalsHomeRow title="Micro-dramas & Series" items={homeVerticals} />
-          )}
-
-          {activeCategory === "all" && homeShorts.length > 0 && (
-            <ShortsHomeRow title="Shorts" items={homeShorts} />
-          )}
-
-          {activeCategory === "all" && homePodcasts.length > 0 && (
-            <PodcastHomeRow title="Podcasts" items={homePodcasts} />
-          )}
-
-          {showVideos && trendingVideos.length > 0 && (
-            <ContentRow
-              title="Trending Videos"
-              items={trendingVideos}
-              viewAllHref="/videos"
-            />
-          )}
-
-          {showMovies && topMovies.length > 0 && (
-            <>
-              {newReleases.length > 0 && (
-                <MovieRow title="New Releases" movies={newReleases} />
-              )}
-              <MovieRow title="Top Movies on Prysym TV" movies={topMovies} />
-            </>
-          )}
-
-          {activeCategory === "all" && trendingVideos.length > 0 && (
-            <ContentRow title="Recommended" items={trendingVideos.slice(0, 4)} />
-          )}
+      <div className="max-w-7xl mx-auto w-full">
+        <div className="px-4 md:px-8">
+          <AdBanner platformCreatorId={platformCreatorId} />
         </div>
+
+        {hasContinue && (
+          <div className="px-4 md:px-8 pt-2 pb-4 border-b border-border/40">
+            <ContinueWatchingRow
+              feedItems={continueFeed}
+              historyItems={continueFeed.length > 0 ? [] : continueHistory}
+              verticalItems={isAuthenticated ? [] : guestVertical}
+            />
+          </div>
+        )}
+
+        {top10Items.length > 0 && (
+          <HomeSectionShell eyebrow="Popular" title="Top 10 today" href="/videos">
+            <HomeTrendingRail items={top10Items} />
+          </HomeSectionShell>
+        )}
+
+        {liveStreams.length > 0 && (
+          <HomeSectionShell
+            id="live-now"
+            eyebrow="Broadcasting"
+            title="Live right now"
+            badge={
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                {liveStreams.length} live
+              </span>
+            }
+          >
+            <p className="px-4 md:px-8 text-xs text-muted-foreground -mt-2 mb-3">
+              Creators streaming now, sorted by viewers
+            </p>
+            <LiveRow title="" streams={liveStreams} showViewAll={false} hideHeader />
+          </HomeSectionShell>
+        )}
+
+        <HomeEditorialGrid
+          spotlight={spotlightVideo}
+          verticals={homeVerticals}
+        />
+
+        {(newReleases.length > 0 || topMovies.length > 0) && (
+          <HomeSectionShell eyebrow="Cinema" title="Movies" href="/movies">
+            {newReleases.length > 0 && (
+              <div className="mb-4">
+                <p className="px-4 md:px-8 text-xs font-medium text-muted-foreground mb-2">New releases</p>
+                <MovieRow title="" movies={newReleases} hideHeader showViewAll={false} />
+              </div>
+            )}
+            {topMovies.length > 0 && (
+              <div>
+                {newReleases.length > 0 && (
+                  <p className="px-4 md:px-8 text-xs font-medium text-muted-foreground mb-2">Top picks</p>
+                )}
+                <MovieRow title="" movies={topMovies} hideHeader showViewAll={false} />
+              </div>
+            )}
+          </HomeSectionShell>
+        )}
+
+        <HomeDualSpotlight shorts={homeShorts} podcasts={homePodcasts} />
       </div>
 
       <Footer />

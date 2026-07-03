@@ -14,7 +14,9 @@ export class FeedService {
   async home(userId?: string) {
     await this.streams.syncStreamsFromIngest();
 
-    const [liveStreams, movies, newReleaseMovies, videos, featuredMovie, continueWatching] =
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const [liveStreams, movies, newReleaseMovies, videos, newestMovie, topMovie, continueWatching] =
       await Promise.all([
       this.prisma.stream.findMany({
         where: { status: StreamStatus.live },
@@ -54,12 +56,29 @@ export class FeedService {
         select: VIDEO_CARD_SELECT,
       }),
       this.prisma.video.findFirst({
-        where: { type: VideoType.movie, status: ContentStatus.ready },
+        where: {
+          type: VideoType.movie,
+          status: ContentStatus.ready,
+          visibility: 'public',
+          createdAt: { gte: sevenDaysAgo },
+        },
         orderBy: { createdAt: 'desc' },
+        select: VIDEO_CARD_SELECT,
+      }),
+      this.prisma.video.findFirst({
+        where: { type: VideoType.movie, status: ContentStatus.ready, visibility: 'public' },
+        orderBy: { viewsCount: 'desc' },
         select: VIDEO_CARD_SELECT,
       }),
       userId ? this.continueWatching(userId) : Promise.resolve([]),
     ]);
+
+    const heroMovie = newestMovie ?? (topMovie && topMovie.viewsCount > 0 ? topMovie : null);
+    const heroMovieReason = newestMovie
+      ? 'new_release'
+      : topMovie && topMovie.viewsCount > 0
+        ? 'trending'
+        : null;
 
     return {
       liveNow: liveStreams.map((s) => ({
@@ -91,7 +110,8 @@ export class FeedService {
       trending: videos.map(mapVideoCard),
       newReleases: newReleaseMovies.map(mapVideoCard),
       movies: movies.map(mapVideoCard),
-      featuredMovie: featuredMovie ? mapVideoCard(featuredMovie) : null,
+      featuredMovie: heroMovie ? mapVideoCard(heroMovie) : null,
+      heroMovieReason,
     };
   }
 

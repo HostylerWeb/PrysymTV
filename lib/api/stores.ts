@@ -142,6 +142,25 @@ export function createStoreCheckout(
     saveBuyerDetails?: boolean;
   },
 ) {
+  return createStoreCartCheckout([{ productId, quantity }], options);
+}
+
+export function createStoreCartCheckout(
+  items: Array<{ productId: string; quantity: number }>,
+  options?: {
+    shippingAddress?: {
+      fullName: string;
+      phone: string;
+      line1: string;
+      line2?: string;
+      city: string;
+      state?: string;
+      postalCode: string;
+      countryCode: string;
+    };
+    saveBuyerDetails?: boolean;
+  },
+) {
   return apiRequest<{
     checkoutUrl?: string;
     sessionId?: string;
@@ -152,8 +171,7 @@ export function createStoreCheckout(
   }>("/stores/checkout", {
     method: "POST",
     body: {
-      productId,
-      quantity,
+      items,
       ...options,
     },
   });

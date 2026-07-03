@@ -39,6 +39,8 @@ import {
   stockLabel,
   type PublicStoreProduct,
 } from "@/lib/api/stores"
+import { addToStoreCart } from "@/lib/store-cart"
+import { notifyStoreCartUpdated, StoreCartLink } from "@/components/store-cart-link"
 
 export default function StoreProductPage() {
   return (
@@ -74,6 +76,11 @@ function StoreProductPageInner() {
   const [purchaseDone, setPurchaseDone] = useState(false)
   const [buyerDetails, setBuyerDetails] = useState<BuyerDetails>(EMPTY_BUYER_DETAILS)
   const [saveBuyerDetails, setSaveBuyerDetails] = useState(true)
+  const [storeMeta, setStoreMeta] = useState({
+    shippingFree: true,
+    shippingFeeUsd: 0,
+  })
+  const [cartMessage, setCartMessage] = useState<string | null>(null)
   const [navTab, setNavTab] = useState("home")
 
   const isOwner =
@@ -88,6 +95,10 @@ function StoreProductPageInner() {
       const data = await fetchStoreProduct(slug, productId)
       setProduct(data.product)
       setStoreName(data.store.displayName)
+      setStoreMeta({
+        shippingFree: data.store.shippingFree,
+        shippingFeeUsd: data.store.shippingFeeUsd,
+      })
       setCreatorUsername(data.creatorUsername)
       setActiveImage(0)
     } catch (e) {
@@ -149,6 +160,37 @@ function StoreProductPageInner() {
   const orderTotal = product ? product.priceUsd * quantity + shippingFee : 0
   const isPhysical = product?.productType === "merchandise"
   const isDigital = product?.productType === "digital"
+
+  const addToCart = () => {
+    if (!product || !product.inStock) return
+    setCartMessage(null)
+    setError(null)
+    try {
+      addToStoreCart(
+        creatorUsername,
+        {
+          displayName: storeName,
+          shippingFree: storeMeta.shippingFree,
+          shippingFeeUsd: storeMeta.shippingFeeUsd,
+        },
+        {
+          id: product.id,
+          title: product.title,
+          priceUsd: product.priceUsd,
+          imageUrl: product.imageUrl,
+          productType: product.productType,
+          inStock: product.inStock,
+          inventory: product.inventory,
+          inventoryUnlimited: product.inventoryUnlimited,
+        },
+        quantity,
+      )
+      notifyStoreCartUpdated()
+      setCartMessage(`Added ${quantity} to cart`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not add to cart")
+    }
+  }
 
   const buy = async () => {
     if (!product || !product.inStock) return
@@ -237,6 +279,7 @@ function StoreProductPageInner() {
               </Button>
             </Link>
           )}
+          {!isOwner && <StoreCartLink creatorUsername={creatorUsername} />}
         </div>
       </div>
 
@@ -462,20 +505,33 @@ function StoreProductPageInner() {
               )}
 
               {!isOwner ? (
-                <Button
-                  className="w-full rounded-full h-12 gap-2 text-base font-semibold"
-                  disabled={!product.inStock || busy}
-                  onClick={() => void buy()}
-                >
-                  {busy ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <>
-                      <ShoppingBag className="w-5 h-5" />
-                      {product.inStock ? "Buy now" : "Out of stock"}
-                    </>
+                <div className="space-y-2">
+                  {cartMessage && (
+                    <p className="text-xs text-center text-green-600">{cartMessage}</p>
                   )}
-                </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      className="rounded-full h-12 gap-2 font-semibold"
+                      disabled={!product.inStock || busy}
+                      onClick={addToCart}
+                    >
+                      <ShoppingBag className="w-4 h-4" />
+                      Add to cart
+                    </Button>
+                    <Button
+                      className="rounded-full h-12 gap-2 font-semibold"
+                      disabled={!product.inStock || busy}
+                      onClick={() => void buy()}
+                    >
+                      {busy ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        product.inStock ? "Buy now" : "Out of stock"
+                      )}
+                    </Button>
+                  </div>
+                </div>
               ) : (
                 <div className="space-y-2">
                   <p className="text-xs text-center text-muted-foreground">

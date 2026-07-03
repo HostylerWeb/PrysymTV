@@ -3,6 +3,7 @@
 import Link from "next/link"
 import type { CreatorStoreSummary, PublicStoreProduct } from "@/lib/api/stores"
 import { stockLabel, shippingLabel } from "@/lib/api/stores"
+import { StoreCartLink } from "@/components/store-cart-link"
 import { Package } from "lucide-react"
 
 type CreatorStoreTabProps = {
@@ -14,6 +15,10 @@ type CreatorStoreTabProps = {
 export function CreatorStoreTab({ store, products, creatorUsername }: CreatorStoreTabProps) {
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <div />
+        <StoreCartLink creatorUsername={creatorUsername} />
+      </div>
       {store.description && (
         <p className="text-sm text-muted-foreground max-w-2xl">{store.description}</p>
       )}
