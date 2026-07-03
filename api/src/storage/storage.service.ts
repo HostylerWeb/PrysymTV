@@ -331,6 +331,29 @@ export class StorageService implements OnModuleInit {
     this.logger.debug(`Wrote local raw upload for video ${videoId}`);
   }
 
+  async writeImageBuffer(
+    objectKey: string,
+    data: Buffer,
+    mimeType: string,
+  ): Promise<void> {
+    const key = objectKey.replace(/^\/+/, '');
+    if (this.settings.driver === 's3' && this.s3 && this.settings.s3) {
+      await this.s3.send(
+        new PutObjectCommand({
+          Bucket: this.settings.s3.bucket,
+          Key: key,
+          Body: data,
+          ContentType: mimeType,
+        }),
+      );
+      return;
+    }
+
+    const abs = this.getLocalAbsolutePath(key);
+    await mkdir(dirname(abs), { recursive: true });
+    await writeFile(abs, data);
+  }
+
   async objectExists(objectKey: string): Promise<boolean> {
     if (this.settings.driver === 's3' && this.s3 && this.settings.s3) {
       try {

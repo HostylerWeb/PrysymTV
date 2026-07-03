@@ -644,7 +644,7 @@ export function updateAdminVideo(
 ) {
   return apiRequest<AdminVideoDetail>(`/admin/videos/${id}`, {
     method: "PUT",
-    body: JSON.stringify(body),
+    body,
   });
 }
 
@@ -966,7 +966,7 @@ export function updateAdminVerticalSeries(
 ) {
   return apiRequest<AdminVerticalSeriesDetail>(`/admin/vertical-series/${slug}`, {
     method: "PUT",
-    body: JSON.stringify(body),
+    body,
   });
 }
 
@@ -985,7 +985,7 @@ export function updateAdminVerticalEpisode(
 ) {
   return apiRequest<AdminVerticalEpisodeDetail>(`/admin/vertical-episodes/${id}`, {
     method: "PUT",
-    body: JSON.stringify(body),
+    body,
   });
 }
 
@@ -1003,7 +1003,7 @@ export function updateAdminPodcastEpisode(
 ) {
   return apiRequest<AdminPodcastEpisodeDetail>(`/admin/podcast-episodes/${id}`, {
     method: "PUT",
-    body: JSON.stringify(body),
+    body,
   });
 }
 

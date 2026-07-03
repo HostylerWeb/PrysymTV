@@ -221,21 +221,15 @@ export class VideosService {
     this.assertMoviePosterAccess(user, video);
 
     const objectKey = this.storage.buildMoviePosterKey(videoId, fileName);
-    const target = await this.storage.createUploadTargetForKey(
-      objectKey,
-      mimeType,
-    );
-    if (target.uploadMethod === 'POST') {
-      const base = this.storage.getSettings().apiPublicUrl.replace(/\/$/, '');
-      target.uploadUrl = `${base}/media/movie-poster-upload`;
-    }
+    this.storage.assertImageMime(mimeType);
+    const base = this.storage.getSettings().apiPublicUrl.replace(/\/$/, '');
     return {
       videoId,
-      objectKey: target.objectKey,
-      uploadUrl: target.uploadUrl,
-      uploadMethod: target.uploadMethod,
-      uploadHeaders: target.uploadHeaders,
-      expiresIn: target.expiresIn,
+      objectKey,
+      uploadUrl: `${base}/media/movie-poster-upload`,
+      uploadMethod: 'POST' as const,
+      uploadHeaders: {},
+      expiresIn: this.storage.getSettings().presignExpiresSeconds,
       publicUrl: this.storage.getPublicUrl(objectKey),
     };
   }
@@ -263,7 +257,10 @@ export class VideosService {
     }
 
     if (video.posterUrl) {
-      await this.storage.purgePublicMediaUrl(video.posterUrl);
+      const previousKey = this.storage.objectKeyFromPublicUrl(video.posterUrl);
+      if (previousKey && previousKey !== key) {
+        await this.storage.purgePublicMediaUrl(video.posterUrl);
+      }
     }
 
     const posterUrl = this.storage.getPublicUrl(key);

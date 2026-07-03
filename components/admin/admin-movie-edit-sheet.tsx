@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { X, Film, Plus, Trash2, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
@@ -10,7 +10,7 @@ import {
   updateAdminVideo,
 } from "@/lib/api/admin"
 import { uploadMoviePoster } from "@/lib/api/videos"
-import { videoThumbnail } from "@/lib/format-media"
+import { moviePosterUrl } from "@/lib/format-media"
 
 const AGE_RATINGS = ["G", "PG", "PG-13", "R", "NC-17", "TV-MA", "NR"]
 
@@ -30,7 +30,11 @@ export function AdminMovieEditSheet({
   onSuccess,
 }: AdminMovieEditSheetProps) {
   const { data: genres } = useAdminQuery(fetchAdminMovieGenresConfig, [])
-  const activeGenres = (genres ?? []).filter((g) => g.isActive)
+  const activeGenres = useMemo(
+    () => (genres ?? []).filter((g) => g.isActive),
+    [genres],
+  )
+  const defaultGenreSlug = activeGenres[0]?.slug ?? "drama"
 
   const { data: video, loading, error, reload } = useAdminQuery(
     () => fetchAdminVideo(videoId),
@@ -53,33 +57,43 @@ export function AdminMovieEditSheet({
   const [posterFile, setPosterFile] = useState<File | null>(null)
   const [posterPreview, setPosterPreview] = useState<string | null>(null)
   const [posterBusy, setPosterBusy] = useState(false)
+  const [formVideoId, setFormVideoId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isOpen) {
       setDone(false)
       setSaveError(null)
-      return
+      setFormVideoId(null)
+      setPosterFile(null)
+      setPosterPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
     }
-    if (!video) return
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen || !video || formVideoId === videoId) return
+
     setTitle(video.title)
     setTagline(video.tagline)
     setDescription(video.description)
-    setGenre(video.category || activeGenres[0]?.slug || "drama")
+    setGenre(video.category || defaultGenreSlug)
     setDirector(video.director)
     setWriters(video.writers)
-    setCast(
-      video.cast.length ? video.cast : [{ name: "", role: "" }],
-    )
-    setReleaseYear(
-      String(video.releaseYear ?? new Date().getFullYear()),
-    )
+    setCast(video.cast.length ? video.cast : [{ name: "", role: "" }])
+    setReleaseYear(String(video.releaseYear ?? new Date().getFullYear()))
     setAgeRating(video.ageRating || "PG-13")
     setPosterUrl(video.posterUrl)
     setPosterFile(null)
-    setPosterPreview(null)
+    setPosterPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
     setSaveError(null)
     setDone(false)
-  }, [isOpen, video, activeGenres])
+    setFormVideoId(videoId)
+  }, [isOpen, video, videoId, formVideoId, defaultGenreSlug])
 
   if (!isOpen) return null
 
@@ -107,6 +121,16 @@ export function AdminMovieEditSheet({
     setBusy(true)
     setSaveError(null)
     try {
+      if (posterFile) {
+        const url = await uploadMoviePoster(videoId, posterFile)
+        setPosterUrl(url)
+        setPosterFile(null)
+        setPosterPreview((prev) => {
+          if (prev) URL.revokeObjectURL(prev)
+          return null
+        })
+      }
+
       await updateAdminVideo(videoId, {
         title: title.trim(),
         tagline: tagline.trim(),
@@ -306,7 +330,10 @@ export function AdminMovieEditSheet({
                 <p className="text-sm font-medium">Movie poster</p>
                 <div className="flex items-start gap-4">
                   <img
-                    src={posterPreview ?? videoThumbnail(posterUrl)}
+                    src={
+                      posterPreview ??
+                      moviePosterUrl({ posterUrl, thumbnailUrl: null })
+                    }
                     alt="Movie poster"
                     className="w-24 aspect-[2/3] object-cover rounded-lg border border-border shrink-0"
                   />
@@ -330,14 +357,20 @@ export function AdminMovieEditSheet({
                       </span>
                     </label>
                     {posterFile && (
+                      <p className="text-xs text-primary">
+                        New poster selected — save changes to apply.
+                      </p>
+                    )}
+                    {posterFile && (
                       <Button
                         type="button"
                         size="sm"
+                        variant="outline"
                         className="rounded-full"
-                        disabled={posterBusy}
+                        disabled={posterBusy || busy}
                         onClick={() => void handlePosterUpload()}
                       >
-                        {posterBusy ? "Uploading…" : "Upload poster"}
+                        {posterBusy ? "Uploading…" : "Upload poster now"}
                       </Button>
                     )}
                     <p className="text-xs text-muted-foreground">
@@ -355,7 +388,11 @@ export function AdminMovieEditSheet({
                 disabled={busy || !title.trim()}
                 onClick={() => void handleSave()}
               >
-                {busy ? "Saving…" : "Save changes"}
+                {busy
+                  ? posterFile
+                    ? "Saving poster & details…"
+                    : "Saving…"
+                  : "Save changes"}
               </Button>
             </>
           )}

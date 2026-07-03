@@ -107,12 +107,14 @@ export class UsersService {
     const ext = this.storage.extensionFromFileName(fileName) || '.jpg';
     const prefix = kind === 'avatar' ? 'uploads/avatars' : 'uploads/banners';
     const objectKey = `${prefix}/${userId}${ext}`;
-    const target = await this.storage.createUploadTargetForKey(
-      objectKey,
-      mimeType,
-    );
+    this.storage.assertImageMime(mimeType);
+    const base = this.storage.getSettings().apiPublicUrl.replace(/\/$/, '');
     return {
-      ...target,
+      objectKey,
+      uploadUrl: `${base}/media/profile-upload`,
+      uploadMethod: 'POST' as const,
+      uploadHeaders: {},
+      expiresIn: this.storage.getSettings().presignExpiresSeconds,
       publicUrl: this.storage.getPublicUrl(objectKey),
       kind,
     };
@@ -125,12 +127,14 @@ export class UsersService {
   ) {
     const ext = this.storage.extensionFromFileName(fileName) || '.jpg';
     const objectKey = `uploads/streamer-ids/${userId}${ext}`;
-    const target = await this.storage.createUploadTargetForKey(
-      objectKey,
-      mimeType,
-    );
+    this.storage.assertImageMime(mimeType);
+    const base = this.storage.getSettings().apiPublicUrl.replace(/\/$/, '');
     return {
-      ...target,
+      objectKey,
+      uploadUrl: `${base}/media/profile-upload`,
+      uploadMethod: 'POST' as const,
+      uploadHeaders: {},
+      expiresIn: this.storage.getSettings().presignExpiresSeconds,
       publicUrl: this.storage.getPublicUrl(objectKey),
       kind: 'streamer_id' as const,
     };

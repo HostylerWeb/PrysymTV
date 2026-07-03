@@ -85,11 +85,6 @@ export class MediaController {
     @Body('objectKey') objectKey: string,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    if (this.storage.getSettings().driver !== 'local') {
-      throw new ForbiddenException(
-        'Multipart profile upload is only available when STORAGE_DRIVER=local',
-      );
-    }
     if (!file?.buffer?.length || !objectKey?.trim()) {
       throw new ForbiddenException('Missing file or objectKey');
     }
@@ -109,8 +104,8 @@ export class MediaController {
       throw new ForbiddenException('Image exceeds 10 MB limit');
     }
 
-    const abs = this.storage.getLocalAbsolutePath(key);
-    await writeFile(abs, file.buffer);
+    const mimeType = file.mimetype?.trim() || 'image/jpeg';
+    await this.storage.writeImageBuffer(key, file.buffer, mimeType);
     return {
       success: true,
       objectKey: key,
@@ -181,11 +176,6 @@ export class MediaController {
     @Body('objectKey') objectKey: string,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    if (this.storage.getSettings().driver !== 'local') {
-      throw new ForbiddenException(
-        'Multipart movie poster upload is only available when STORAGE_DRIVER=local',
-      );
-    }
     if (!file?.buffer?.length || !objectKey?.trim()) {
       throw new ForbiddenException('Missing file or objectKey');
     }
@@ -214,8 +204,8 @@ export class MediaController {
       throw new ForbiddenException('Poster image exceeds 10 MB limit');
     }
 
-    const abs = this.storage.getLocalAbsolutePath(key);
-    await writeFile(abs, file.buffer);
+    const mimeType = file.mimetype?.trim() || 'image/jpeg';
+    await this.storage.writeImageBuffer(key, file.buffer, mimeType);
     return {
       success: true,
       objectKey: key,
