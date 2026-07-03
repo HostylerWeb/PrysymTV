@@ -73,9 +73,10 @@ export function ContinueWatchingRow({
   if (!hasFeed && !hasHistory) return null
 
   return (
-    <section className="mb-8">
+    <section className="mb-8 min-w-0 overflow-hidden">
       <h2 className="text-lg font-bold text-foreground mb-4 px-0">Continue Watching</h2>
-      <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
+      <div className="min-w-0 w-full overflow-hidden">
+        <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 overscroll-x-contain">
         {!hasFeed &&
           verticalItems.map((v) => {
             const pct =
@@ -188,6 +189,7 @@ export function ContinueWatchingRow({
               }
               return null
             })}
+        </div>
       </div>
     </section>
   )

@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Filter, Radio, Search, X } from "lucide-react"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
@@ -26,7 +26,7 @@ import { userAvatarUrl } from "@/lib/user-avatar"
 import { CreateFlowModals, triggerContextualCreate } from "@/components/create-flow-modals"
 import { useCreateFlow } from "@/hooks/use-create-flow"
 import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
+import { VideosBrowseSkeleton } from "@/components/content-skeletons"
 
 const MODE_OPTIONS: { id: VideoBrowseMode; label: string }[] = [
   { id: "all", label: "All" },
@@ -155,7 +155,7 @@ function VideosBrowseContent() {
         createLabel="Upload video"
       />
 
-      <div className="sticky top-[4.5rem] z-40 bg-background/95 backdrop-blur-md border-b border-border">
+      <div className="border-b border-border">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
             <div>
@@ -278,15 +278,7 @@ function VideosBrowseContent() {
 
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="animate-pulse space-y-2">
-                <div className="aspect-video rounded-lg bg-muted" />
-                <div className="h-4 bg-muted rounded w-3/4" />
-                <div className="h-3 bg-muted rounded w-1/2" />
-              </div>
-            ))}
-          </div>
+          <VideosBrowseSkeleton />
         ) : emptyState ? (
           <div className="text-center py-20 px-4">
             <p className="text-lg font-medium">No videos found</p>
@@ -302,7 +294,8 @@ function VideosBrowseContent() {
                   <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                   Live now
                 </h2>
-                <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                <div className="min-w-0 w-full overflow-hidden">
+                  <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide overscroll-x-contain">
                   {liveItems.map((stream) => (
                     <LiveCard
                       key={stream.id}
@@ -318,6 +311,7 @@ function VideosBrowseContent() {
                       avatar={stream.streamerAvatar}
                     />
                   ))}
+                  </div>
                 </div>
               </section>
             )}
@@ -391,8 +385,8 @@ export default function VideosBrowsePage() {
       fallback={
         <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
           <Header onSearchClick={() => {}} />
-          <div className="max-w-7xl mx-auto px-4 py-20 text-center text-muted-foreground">
-            Loading videos…
+          <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
+            <VideosBrowseSkeleton />
           </div>
         </main>
       }

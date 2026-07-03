@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 import { fulfillCheckout } from "@/lib/api/billing"
 import { fetchMe } from "@/lib/api/users"
-import { BuyerDetailsForm } from "@/components/buyer-details-form"
+import { StoreProductSkeleton } from "@/components/content-skeletons"
 import { BottomNavigation } from "@/components/bottom-navigation"
 import { Footer } from "@/components/footer"
 import {
@@ -45,11 +45,7 @@ import { notifyStoreCartUpdated, StoreCartLink } from "@/components/store-cart-l
 export default function StoreProductPage() {
   return (
     <Suspense
-      fallback={
-        <div className="min-h-screen bg-background flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-        </div>
-      }
+      fallback={<StoreProductSkeleton />}
     >
       <StoreProductPageInner />
     </Suspense>
@@ -229,11 +225,7 @@ function StoreProductPageInner() {
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <StoreProductSkeleton />
   }
 
   if (!product) {

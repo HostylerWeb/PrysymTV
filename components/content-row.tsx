@@ -36,7 +36,7 @@ export function ContentRow({
   const scrollRef = useRef<HTMLDivElement>(null)
 
   return (
-    <section className="py-2">
+    <section className="py-2 min-w-0 overflow-hidden">
       {!hideHeader && (
         <div className="flex items-center justify-between px-4 md:px-8 mb-3">
           <h2 className="text-lg font-semibold text-foreground">{title}</h2>
@@ -61,15 +61,17 @@ export function ContentRow({
         </div>
       )}
 
-      <div
-        ref={scrollRef}
-        className="flex gap-3 px-4 md:px-8 overflow-x-auto scrollbar-hide snap-x snap-mandatory"
-      >
+      <div className="min-w-0 w-full overflow-hidden">
+        <div
+          ref={scrollRef}
+          className="flex gap-3 px-4 md:px-8 overflow-x-auto scrollbar-hide snap-x snap-mandatory overscroll-x-contain"
+        >
         {items.map((item) => (
           <div key={item.id} className="snap-start">
             <VideoCard id={item.id} {...item} />
           </div>
         ))}
+        </div>
       </div>
     </section>
   )

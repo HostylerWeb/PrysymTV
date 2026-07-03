@@ -618,6 +618,7 @@ export type AdminVideoDetail = {
   releaseYear: number | null;
   ageRating: string;
   status: string;
+  posterUrl: string | null;
   cast: Array<{ name: string; role: string }>;
   creatorId: string;
   creator: string;

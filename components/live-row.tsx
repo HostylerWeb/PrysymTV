@@ -30,7 +30,7 @@ export function LiveRow({
   hideHeader = false,
 }: LiveRowProps) {
   return (
-    <section className="py-2">
+    <section className="py-2 min-w-0 overflow-hidden">
       {!hideHeader && (
         <div className="flex items-center justify-between px-4 md:px-8 mb-3">
           <div className="flex items-center gap-2">
@@ -46,12 +46,14 @@ export function LiveRow({
         </div>
       )}
 
-      <div className="flex gap-3 px-4 md:px-8 overflow-x-auto scrollbar-hide snap-x snap-mandatory">
-        {streams.map((stream) => (
-          <div key={stream.id} className="snap-start">
-            <LiveCard {...stream} />
-          </div>
-        ))}
+      <div className="min-w-0 w-full overflow-hidden">
+        <div className="flex gap-3 px-4 md:px-8 overflow-x-auto scrollbar-hide snap-x snap-mandatory overscroll-x-contain">
+          {streams.map((stream) => (
+            <div key={stream.id} className="snap-start">
+              <LiveCard {...stream} />
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   )

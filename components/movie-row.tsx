@@ -29,7 +29,7 @@ export function MovieRow({
   hideHeader = false,
 }: MovieRowProps) {
   return (
-    <section className="py-2">
+    <section className="py-2 min-w-0 overflow-hidden">
       {!hideHeader && (
         <div className="flex items-center justify-between px-4 md:px-8 mb-3">
           <h2 className="text-lg font-semibold text-foreground">{title}</h2>
@@ -44,12 +44,14 @@ export function MovieRow({
           )}
         </div>
       )}
-      <div className="flex gap-3 px-4 md:px-8 overflow-x-auto scrollbar-hide snap-x snap-mandatory">
+      <div className="min-w-0 w-full overflow-hidden">
+        <div className="flex gap-3 px-4 md:px-8 overflow-x-auto scrollbar-hide snap-x snap-mandatory overscroll-x-contain">
         {movies.map((movie) => (
           <div key={movie.id} className="snap-start">
             <MovieCard {...movie} />
           </div>
         ))}
+        </div>
       </div>
     </section>
   )

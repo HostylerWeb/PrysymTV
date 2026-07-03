@@ -37,6 +37,13 @@ export function videoThumbnail(url: string | null | undefined): string {
   return placeholderThumb();
 }
 
+export function moviePosterUrl(item: {
+  posterUrl?: string | null;
+  thumbnailUrl?: string | null;
+}): string {
+  return videoThumbnail(item.posterUrl ?? item.thumbnailUrl);
+}
+
 /** Poster for live cards: saved thumb → creator avatar → placeholder. */
 export function liveStreamPosterUrl(item: {
   thumbnailUrl?: string | null;

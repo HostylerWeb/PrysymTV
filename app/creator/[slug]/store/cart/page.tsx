@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { fulfillCheckout } from "@/lib/api/billing"
 import { fetchMe } from "@/lib/api/users"
-import { BuyerDetailsForm } from "@/components/buyer-details-form"
+import { StoreCartSkeleton } from "@/components/content-skeletons"
 import { BottomNavigation } from "@/components/bottom-navigation"
 import { Footer } from "@/components/footer"
 import {
@@ -42,11 +42,7 @@ import {
 export default function StoreCartPage() {
   return (
     <Suspense
-      fallback={
-        <div className="min-h-screen bg-background flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-        </div>
-      }
+      fallback={<StoreCartSkeleton />}
     >
       <StoreCartPageInner />
     </Suspense>

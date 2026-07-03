@@ -56,10 +56,11 @@ import {
   fetchMyPlaylists,
   type PlaylistSummary,
 } from "@/lib/api/playlists"
+import { ProfilePageSkeleton } from "@/components/content-skeletons"
 import { profileAuthHref, safeReturnPath } from "@/lib/safe-return-path"
 
 const baseTabs = [
-  { id: "content", label: "My content", icon: Grid3X3 },
+  { id: "content", label: "Content", icon: Grid3X3 },
   { id: "playlists", label: "Playlists", icon: ListMusic },
   { id: "saved", label: "Saved", icon: Bookmark },
   { id: "liked", label: "Liked", icon: Heart },
@@ -263,28 +264,7 @@ function ProfilePageContent() {
   }
 
   if (isLoading) {
-    return (
-      <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
-        <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-lg border-b border-border">
-          <div className="flex items-center justify-between px-4 py-3 max-w-5xl mx-auto w-full">
-            <div className="w-10 h-10 rounded-full bg-secondary animate-pulse" />
-            <div className="h-5 w-20 rounded bg-secondary animate-pulse" />
-            <div className="w-10" />
-          </div>
-        </div>
-        <div className="px-4 py-10 max-w-5xl mx-auto animate-pulse space-y-6">
-          <div className="flex flex-col md:flex-row items-center gap-6">
-            <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-secondary" />
-            <div className="flex-1 space-y-3 w-full">
-              <div className="h-6 w-40 rounded bg-secondary mx-auto md:mx-0" />
-              <div className="h-4 w-28 rounded bg-secondary mx-auto md:mx-0" />
-              <div className="h-10 w-48 rounded-full bg-secondary mx-auto md:mx-0" />
-            </div>
-          </div>
-        </div>
-        <BottomNavigation activeTab={navTab} onTabChange={setNavTab} />
-      </main>
-    )
+    return <ProfilePageSkeleton />
   }
 
   // Guest view
@@ -799,15 +779,7 @@ function ProfilePageContent() {
 }
 
 function ProfileLoadingFallback() {
-  return (
-    <main className="min-h-screen bg-background pb-24 md:pl-20">
-      <div className="h-14 border-b border-border animate-pulse bg-secondary/30" />
-      <div className="max-w-4xl mx-auto px-4 py-8 space-y-4">
-        <div className="h-24 rounded-xl bg-secondary/50 animate-pulse" />
-        <div className="h-40 rounded-xl bg-secondary/50 animate-pulse" />
-      </div>
-    </main>
-  )
+  return <ProfilePageSkeleton />
 }
 
 export default function ProfilePage() {

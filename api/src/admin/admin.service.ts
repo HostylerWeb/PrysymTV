@@ -1613,6 +1613,7 @@ export class AdminService {
       releaseYear: video.releaseYear,
       ageRating: video.ageRating ?? '',
       status: video.status,
+      posterUrl: video.posterUrl,
       cast: video.cast.map((c) => ({ name: c.name, role: c.role })),
       creatorId: video.creatorId,
       creator: video.creator.displayName ?? video.creator.username,

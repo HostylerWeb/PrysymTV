@@ -45,6 +45,7 @@ export type VideoDetail = {
   title: string;
   description: string | null;
   thumbnailUrl: string | null;
+  posterUrl: string | null;
   hlsMasterUrl: string | null;
   playbackUrl: string | null;
   videoUrl: string | null;
@@ -148,6 +149,91 @@ export async function uploadVideoFlow(
     fileName: body.fileName ?? file.name,
   });
   await uploadVideoFile(init, file, onProgress);
+  return completeVideoUpload({
+    videoId: init.videoId,
+    objectKey: init.objectKey,
+  });
+}
+
+type PosterUploadInit = {
+  videoId: string;
+  objectKey: string;
+  uploadUrl: string;
+  uploadMethod: "PUT" | "POST";
+  uploadHeaders: Record<string, string>;
+  expiresIn: number;
+  publicUrl: string;
+};
+
+async function uploadPosterImageFile(
+  init: PosterUploadInit,
+  file: File,
+): Promise<void> {
+  if (init.uploadMethod === "PUT") {
+    const res = await fetch(init.uploadUrl, {
+      method: "PUT",
+      headers: init.uploadHeaders,
+      body: file,
+    });
+    if (!res.ok) throw new Error(`Poster upload failed (${res.status})`);
+    return;
+  }
+
+  const form = new FormData();
+  form.append("file", file);
+  form.append("objectKey", init.objectKey);
+  const token = loadStoredAccessToken();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(init.uploadUrl, {
+    method: "POST",
+    credentials: "include",
+    headers,
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Poster upload failed (${res.status})`);
+  }
+}
+
+export async function uploadMoviePoster(
+  videoId: string,
+  file: File,
+): Promise<string> {
+  const mimeType = file.type?.trim().startsWith("image/")
+    ? file.type
+    : "image/jpeg";
+  const init = await apiRequest<PosterUploadInit>(
+    `/videos/${videoId}/poster/upload/init`,
+    {
+      method: "POST",
+      body: { mimeType, fileName: file.name },
+    },
+  );
+  await uploadPosterImageFile(init, file);
+  const done = await apiRequest<{ videoId: string; posterUrl: string }>(
+    `/videos/${videoId}/poster/upload/complete`,
+    { method: "POST", body: { objectKey: init.objectKey } },
+  );
+  return done.posterUrl;
+}
+
+/** Admin movie upload: poster is required before the video can complete processing. */
+export async function uploadAdminMovieFlow(
+  body: UploadInitBody,
+  videoFile: File,
+  posterFile: File,
+  onProgress?: (percent: number) => void,
+): Promise<UploadFlowResult> {
+  const init = await initVideoUpload({
+    ...body,
+    mimeType: body.mimeType || videoFile.type,
+    fileName: body.fileName ?? videoFile.name,
+  });
+  await uploadMoviePoster(init.videoId, posterFile);
+  await uploadVideoFile(init, videoFile, onProgress);
   return completeVideoUpload({
     videoId: init.videoId,
     objectKey: init.objectKey,

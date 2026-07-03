@@ -15,65 +15,67 @@ export function HomeDualSpotlight({ shorts, podcasts }: HomeDualSpotlightProps) 
   if (!shorts.length && !podcasts.length) return null
 
   return (
-    <section className="py-6 md:py-8 border-t border-border/40">
-      <div className="grid md:grid-cols-2 gap-8 px-4 md:px-8">
+    <section className="py-6 md:py-8 border-t border-border/40 overflow-hidden">
+      <div className="grid md:grid-cols-2 gap-8 px-4 md:px-8 min-w-0">
         {shorts.length > 0 && (
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Smartphone className="w-4 h-4 text-pink-400" />
-                <h2 className="text-base font-semibold">Shorts</h2>
+              <div className="flex items-center gap-2 min-w-0">
+                <Smartphone className="w-4 h-4 text-pink-400 shrink-0" />
+                <h2 className="text-base font-semibold truncate">Shorts</h2>
               </div>
               <Link
                 href="/shorts"
-                className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground"
+                className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground shrink-0"
               >
                 See all
                 <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>
-            <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
-              {shorts.slice(0, 6).map((item) => (
-                <Link
-                  key={item.id}
-                  href={`/shorts/${item.id}`}
-                  className="shrink-0 w-[100px] group"
-                >
-                  <div className="aspect-[9/16] rounded-xl overflow-hidden bg-secondary border border-border/40">
-                    <img
-                      src={videoThumbnail(item.thumbnail)}
-                      alt=""
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                  </div>
-                  <p className="text-[11px] font-medium mt-1.5 line-clamp-2">{item.title}</p>
-                </Link>
-              ))}
+            <div className="min-w-0 w-full overflow-hidden">
+              <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1 overscroll-x-contain">
+                {shorts.slice(0, 6).map((item) => (
+                  <Link
+                    key={item.id}
+                    href={`/shorts/${item.id}`}
+                    className="shrink-0 w-[88px] sm:w-[100px] group"
+                  >
+                    <div className="aspect-[9/16] rounded-xl overflow-hidden bg-secondary border border-border/40">
+                      <img
+                        src={videoThumbnail(item.thumbnail)}
+                        alt=""
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                    </div>
+                    <p className="text-[11px] font-medium mt-1.5 line-clamp-2">{item.title}</p>
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         )}
 
         {podcasts.length > 0 && (
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Headphones className="w-4 h-4 text-emerald-400" />
-                <h2 className="text-base font-semibold">Podcasts</h2>
+              <div className="flex items-center gap-2 min-w-0">
+                <Headphones className="w-4 h-4 text-emerald-400 shrink-0" />
+                <h2 className="text-base font-semibold truncate">Podcasts</h2>
               </div>
               <Link
                 href="/podcasts"
-                className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground"
+                className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground shrink-0"
               >
                 See all
                 <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               {podcasts.slice(0, 4).map((item) => (
                 <Link
                   key={item.id}
                   href={`/podcast/${item.id}`}
-                  className="flex items-center gap-3 p-2 rounded-xl hover:bg-secondary/50 transition-colors group"
+                  className="flex items-center gap-3 p-2 rounded-xl hover:bg-secondary/50 transition-colors group min-w-0"
                 >
                   <div className="w-14 h-14 shrink-0 rounded-lg overflow-hidden bg-secondary">
                     <img

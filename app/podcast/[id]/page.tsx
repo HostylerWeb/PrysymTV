@@ -24,7 +24,7 @@ import {
 import { AddToPlaylistSheet } from "@/components/add-to-playlist-sheet"
 import { saveWatchProgress } from "@/lib/api/history"
 import { RelativeTime } from "@/components/relative-time"
-import { userAvatarUrl } from "@/lib/user-avatar"
+import { PodcastEpisodeSkeleton } from "@/components/content-skeletons"
 
 export default function PodcastEpisodePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -110,9 +110,10 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
   }, [episode, isPlaying])
 
   if (loading || !episode) {
+    if (loading) return <PodcastEpisodeSkeleton />
     return (
       <main className="min-h-screen bg-background flex items-center justify-center md:pl-20">
-        <p className="text-muted-foreground text-sm">Loading episode…</p>
+        <p className="text-muted-foreground text-sm">Episode not found</p>
       </main>
     )
   }

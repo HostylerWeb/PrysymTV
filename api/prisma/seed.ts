@@ -343,6 +343,7 @@ async function main() {
           title: 'Neon Drift',
           description: 'Street racing under neon lights.',
           thumbnailUrl: demoThumb,
+          posterUrl: demoThumb,
           hlsMasterUrl: demoVideo,
           durationSeconds: 7200,
           status: ContentStatus.ready,

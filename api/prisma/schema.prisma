@@ -604,6 +604,7 @@ model Video {
   category        String?
   tags            String[]      @default([])
   thumbnailUrl    String?       @map("thumbnail_url")
+  posterUrl       String?       @map("poster_url")
   hlsMasterUrl    String?       @map("hls_master_url")
   rawObjectKey    String?       @map("raw_object_key")
   durationSeconds Int           @default(0) @map("duration_seconds")

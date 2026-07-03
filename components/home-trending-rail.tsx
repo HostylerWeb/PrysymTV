@@ -20,7 +20,8 @@ export function HomeTrendingRail({ items }: HomeTrendingRailProps) {
   if (items.length === 0) return null
 
   return (
-    <div className="flex gap-1 md:gap-2 px-4 md:px-8 overflow-x-auto scrollbar-hide pb-2">
+    <div className="min-w-0 w-full overflow-hidden">
+      <div className="flex gap-1 md:gap-2 overflow-x-auto scrollbar-hide pb-2 overscroll-x-contain px-4 md:px-8">
       {items.slice(0, 10).map((item, index) => (
         <Link
           key={item.id}
@@ -64,6 +65,7 @@ export function HomeTrendingRail({ items }: HomeTrendingRailProps) {
           </div>
         </Link>
       ))}
+      </div>
     </div>
   )
 }

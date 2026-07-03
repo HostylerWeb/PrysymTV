@@ -12,7 +12,7 @@ import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
 import { Footer } from "@/components/footer"
 import { AuthModal } from "@/components/auth-modal"
-import { ShareSheet } from "@/components/share-sheet"
+import { CreatorSocialLinks } from "@/components/creator-social-links"
 import { CreatorStoreTab } from "@/components/creator-store-tab"
 import { useAuth } from "@/contexts/auth-context"
 import {
@@ -182,7 +182,7 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
   const isVerified = profile.isVerified
   const isLive = profile.isLive
   const liveSlug = profile.username
-  const links = profile.socialLinks?.map((l) => ({ label: l.label, url: l.url })) ?? []
+  const links = profile.socialLinks ?? []
 
   const shortsList = videos.filter((v) => v.type === "short")
   const longVideos = videos.filter((v) => v.type !== "short")
@@ -284,11 +284,7 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
 
         <div className="px-4 md:px-8 mb-8 md:max-w-3xl">
           <p className="text-sm md:text-base text-foreground/80 mb-4">{bio}</p>
-          <div className="flex gap-2 overflow-x-auto">
-            {links.map((l) => (
-              <a key={l.label} href={l.url} className="px-4 py-1.5 rounded-full bg-secondary text-sm whitespace-nowrap">{l.label}</a>
-            ))}
-          </div>
+          <CreatorSocialLinks links={links} className="mb-1" />
         </div>
 
         <div className="border-b border-border px-4 md:px-8">

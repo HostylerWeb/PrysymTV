@@ -15,7 +15,7 @@ type HomeSectionShellProps = {
 
 export function HomeSectionShell({ eyebrow, title, href, children, id, badge }: HomeSectionShellProps) {
   return (
-    <section id={id} className="py-6 md:py-8 border-t border-border/40 first:border-t-0">
+    <section id={id} className="py-6 md:py-8 border-t border-border/40 first:border-t-0 min-w-0 overflow-hidden">
       <div className="flex items-end justify-between gap-4 px-4 md:px-8 mb-4">
         <div className="flex items-start gap-3">
           <span className="w-1 h-9 md:h-10 rounded-full bg-primary shrink-0 mt-0.5" aria-hidden="true" />

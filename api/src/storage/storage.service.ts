@@ -226,6 +226,11 @@ export class StorageService implements OnModuleInit {
     return `uploads/podcasts/shows/${showId}/cover${extension}`;
   }
 
+  buildMoviePosterKey(videoId: string, fileName?: string): string {
+    const extension = this.extensionFromFileName(fileName) || '.jpg';
+    return `uploads/movies/${videoId}/poster${extension}`;
+  }
+
   /** Podcast episode audio or video files. */
   async createPodcastMediaUploadTargetForKey(
     objectKey: string,
@@ -489,9 +494,11 @@ export class StorageService implements OnModuleInit {
     rawObjectKey?: string | null;
     hlsMasterUrl?: string | null;
     thumbnailUrl?: string | null;
+    posterUrl?: string | null;
   }): Promise<void> {
     await this.deletePrefix(this.buildHlsPrefix(video.id));
     await this.deleteObjectIfExists(this.buildThumbnailKey(video.id));
+    await this.deleteObjectIfExists(this.buildMoviePosterKey(video.id));
     if (video.rawObjectKey) {
       await this.deleteObjectIfExists(video.rawObjectKey);
     }
@@ -509,6 +516,11 @@ export class StorageService implements OnModuleInit {
     const thumbKey = this.objectKeyFromPublicUrl(video.thumbnailUrl);
     if (thumbKey && thumbKey !== this.buildThumbnailKey(video.id)) {
       await this.deleteObjectIfExists(thumbKey);
+    }
+
+    const posterKey = this.objectKeyFromPublicUrl(video.posterUrl);
+    if (posterKey && !posterKey.startsWith(`uploads/movies/${video.id}/poster`)) {
+      await this.deleteObjectIfExists(posterKey);
     }
   }
 

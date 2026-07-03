@@ -9,6 +9,8 @@ import {
   fetchAdminVideo,
   updateAdminVideo,
 } from "@/lib/api/admin"
+import { uploadMoviePoster } from "@/lib/api/videos"
+import { videoThumbnail } from "@/lib/format-media"
 
 const AGE_RATINGS = ["G", "PG", "PG-13", "R", "NC-17", "TV-MA", "NR"]
 
@@ -47,6 +49,10 @@ export function AdminMovieEditSheet({
   const [saveError, setSaveError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
+  const [posterUrl, setPosterUrl] = useState<string | null>(null)
+  const [posterFile, setPosterFile] = useState<File | null>(null)
+  const [posterPreview, setPosterPreview] = useState<string | null>(null)
+  const [posterBusy, setPosterBusy] = useState(false)
 
   useEffect(() => {
     if (!isOpen) {
@@ -68,6 +74,9 @@ export function AdminMovieEditSheet({
       String(video.releaseYear ?? new Date().getFullYear()),
     )
     setAgeRating(video.ageRating || "PG-13")
+    setPosterUrl(video.posterUrl)
+    setPosterFile(null)
+    setPosterPreview(null)
     setSaveError(null)
     setDone(false)
   }, [isOpen, video, activeGenres])
@@ -116,6 +125,27 @@ export function AdminMovieEditSheet({
       setSaveError(e instanceof Error ? e.message : "Save failed")
     } finally {
       setBusy(false)
+    }
+  }
+
+  const handlePosterUpload = async () => {
+    if (!posterFile || !videoId) return
+    setPosterBusy(true)
+    setSaveError(null)
+    try {
+      const url = await uploadMoviePoster(videoId, posterFile)
+      setPosterUrl(url)
+      setPosterFile(null)
+      setPosterPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+      onSuccess?.()
+      void reload()
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Poster upload failed")
+    } finally {
+      setPosterBusy(false)
     }
   }
 
@@ -271,6 +301,50 @@ export function AdminMovieEditSheet({
                     )}
                   </div>
                 ))}
+              </div>
+              <div className="space-y-3">
+                <p className="text-sm font-medium">Movie poster</p>
+                <div className="flex items-start gap-4">
+                  <img
+                    src={posterPreview ?? videoThumbnail(posterUrl)}
+                    alt="Movie poster"
+                    className="w-24 aspect-[2/3] object-cover rounded-lg border border-border shrink-0"
+                  />
+                  <div className="flex-1 space-y-2">
+                    <label className="block">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const next = e.target.files?.[0] ?? null
+                          setPosterFile(next)
+                          setPosterPreview((prev) => {
+                            if (prev) URL.revokeObjectURL(prev)
+                            return next ? URL.createObjectURL(next) : null
+                          })
+                        }}
+                      />
+                      <span className="inline-flex h-9 items-center px-3 rounded-full bg-secondary text-xs font-medium cursor-pointer">
+                        Choose new poster
+                      </span>
+                    </label>
+                    {posterFile && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="rounded-full"
+                        disabled={posterBusy}
+                        onClick={() => void handlePosterUpload()}
+                      >
+                        {posterBusy ? "Uploading…" : "Upload poster"}
+                      </Button>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Portrait 2:3 recommended. Shown on homepage and movies page.
+                    </p>
+                  </div>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 Video file cannot be changed here. Delete and re-upload to replace the file.

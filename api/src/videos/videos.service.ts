@@ -177,6 +177,12 @@ export class VideosService {
       throw new BadRequestException('File exceeds maximum upload size');
     }
 
+    if (video.type === VideoType.movie && !video.posterUrl?.trim()) {
+      throw new BadRequestException(
+        'Upload a movie poster image before completing the video upload',
+      );
+    }
+
     const jobData: VideoProcessingJobData = {
       videoId: dto.videoId,
       objectKey,
@@ -190,6 +196,82 @@ export class VideosService {
       status: ContentStatus.processing,
       message: 'Upload received; processing started',
     };
+  }
+
+  private assertMoviePosterAccess(
+    user: AuthUserPayload,
+    video: { creatorId: string; type: VideoType },
+  ) {
+    if (video.type !== VideoType.movie) {
+      throw new BadRequestException('Poster upload is only for movies');
+    }
+    if (video.creatorId !== user.id && user.role !== 'admin') {
+      throw new ForbiddenException('Not allowed to update this movie poster');
+    }
+  }
+
+  async initMoviePosterUpload(
+    user: AuthUserPayload,
+    videoId: string,
+    mimeType: string,
+    fileName?: string,
+  ) {
+    const video = await this.prisma.video.findUnique({ where: { id: videoId } });
+    if (!video) throw new NotFoundException('Video not found');
+    this.assertMoviePosterAccess(user, video);
+
+    const objectKey = this.storage.buildMoviePosterKey(videoId, fileName);
+    const target = await this.storage.createUploadTargetForKey(
+      objectKey,
+      mimeType,
+    );
+    if (target.uploadMethod === 'POST') {
+      const base = this.storage.getSettings().apiPublicUrl.replace(/\/$/, '');
+      target.uploadUrl = `${base}/media/movie-poster-upload`;
+    }
+    return {
+      videoId,
+      objectKey: target.objectKey,
+      uploadUrl: target.uploadUrl,
+      uploadMethod: target.uploadMethod,
+      uploadHeaders: target.uploadHeaders,
+      expiresIn: target.expiresIn,
+      publicUrl: this.storage.getPublicUrl(objectKey),
+    };
+  }
+
+  async completeMoviePosterUpload(
+    user: AuthUserPayload,
+    videoId: string,
+    objectKey: string,
+  ) {
+    const video = await this.prisma.video.findUnique({ where: { id: videoId } });
+    if (!video) throw new NotFoundException('Video not found');
+    this.assertMoviePosterAccess(user, video);
+
+    const key = objectKey.replace(/^\/+/, '');
+    const expectedPrefix = `uploads/movies/${videoId}/poster`;
+    if (!key.startsWith(expectedPrefix)) {
+      throw new BadRequestException('Invalid poster object key');
+    }
+
+    const exists = await this.storage.objectExists(key);
+    if (!exists) {
+      throw new BadRequestException(
+        'Poster image not found. Finish uploading the image first.',
+      );
+    }
+
+    if (video.posterUrl) {
+      await this.storage.purgePublicMediaUrl(video.posterUrl);
+    }
+
+    const posterUrl = this.storage.getPublicUrl(key);
+    await this.prisma.video.update({
+      where: { id: videoId },
+      data: { posterUrl },
+    });
+    return { videoId, posterUrl };
   }
 
   async updateOwned(
@@ -280,6 +362,7 @@ export class VideosService {
       title: string;
       description: string | null;
       thumbnailUrl: string | null;
+      posterUrl: string | null;
       hlsMasterUrl: string | null;
       durationSeconds: number;
       viewsCount: number;

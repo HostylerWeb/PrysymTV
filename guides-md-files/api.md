@@ -61,7 +61,9 @@
 | `GET` | `/feed/home` | ✅ |
 | `GET` | `/feed/trending` | ✅ |
 | `POST` | `/videos/upload/init` | ✅ |
-| `POST` | `/videos/upload/complete` | ✅ |
+| `POST` | `/videos/upload/complete` | ✅ Movies require `posterUrl` before complete |
+| `POST` | `/videos/:id/poster/upload/init` | ✅ Bearer — movie poster image (`image/*`) |
+| `POST` | `/videos/:id/poster/upload/complete` | ✅ Bearer — `{ objectKey }` sets movie `posterUrl` |
 | `GET` | `/videos/feed/shorts` | ✅ `?cursor=&limit=` — optional JWT → `liked`, `saved`, `disliked`, `isFollowing` per card |
 | `GET` | `/videos/feed/movies` | ✅ |
 | `GET` | `/videos/feed/movies/featured` | ✅ |
@@ -81,6 +83,7 @@
 | `POST` | `/media/profile-upload` | ✅ Local avatar/banner PUT target |
 | `POST` | `/media/podcast-upload` | ✅ Local podcast audio/video PUT target |
 | `POST` | `/media/podcast-cover-upload` | ✅ Local podcast show cover PUT target |
+| `POST` | `/media/movie-poster-upload` | ✅ Local movie poster PUT target |
 | `POST` | `/media/ad-upload` | ✅ Local ad creative upload (admin) |
 | `GET` | `/history` | ✅ |
 | `POST` | `/history/progress` | ✅ |
@@ -665,8 +668,10 @@ Guests: no `continueWatching` from API (web uses `localStorage` for vertical pro
 
 | Route | Status |
 |-------|--------|
-| `POST /videos/upload/init` | ✅ `{ type, title, description?, category?, visibility?, tags?, mimeType, fileName? }` — **`type: movie` is admin-only** |
-| `POST /videos/upload/complete` | ✅ `{ videoId, objectKey? }` — verifies object, enqueues BullMQ `video-processing` job |
+| `POST /videos/upload/init` | ✅ `{ type, title, description?, category?, visibility?, tags?, mimeType, fileName?, releaseYear?, ageRating?, tagline?, director?, writers?, cast? }` — **`type: movie` is admin-only** |
+| `POST /videos/upload/complete` | ✅ `{ videoId, objectKey? }` — verifies object, enqueues BullMQ `video-processing` job. **For `type: movie`, `posterUrl` must already be set** (upload poster first). |
+| `POST /videos/:id/poster/upload/init` | ✅ Bearer — `{ mimeType, fileName? }` — presign or local poster upload for **movies only** |
+| `POST /videos/:id/poster/upload/complete` | ✅ Bearer — `{ objectKey }` — sets `posterUrl` on the movie |
 | `GET /videos/feed/shorts` | ✅ `?cursor=&limit=` — optional Bearer adds `liked`, `saved`, `disliked`, **`isFollowing`** per card |
 | `GET /videos/feed/movies` | ✅ `?page=&limit=` |
 | `GET /videos/feed/movies/featured` | ✅ |
@@ -697,6 +702,15 @@ Guests: no `continueWatching` from API (web uses `localStorage` for vertical pro
 }
 ```
 
+**Admin movie upload flow (poster required):**
+
+1. `POST /videos/upload/init` with `type: "movie"` and catalog metadata → `videoId`
+2. `POST /videos/{videoId}/poster/upload/init` + upload image bytes + `POST …/complete` → sets `posterUrl`
+3. Upload video file to `uploadUrl` from step 1
+4. `POST /videos/upload/complete` — rejected if `posterUrl` is missing
+
+The homepage and `/movies` catalog display **`posterUrl`** (portrait art). `thumbnailUrl` may still be auto-generated from the video file during transcoding but is not used as the movie poster in the UI.
+
 **Engagement model:** Likes and dislikes are stored in `likes` / `dislikes` tables with denormalized counters on `videos`. Comment likes use `likes` with `target_type: comment`.
 
 ---
@@ -709,6 +723,7 @@ Guests: no `continueWatching` from API (web uses `localStorage` for vertical pro
 | `POST /media/profile-upload` | Bearer | Local — avatar/banner/streamer ID after respective `POST /users/me/*/upload` |
 | `POST /media/podcast-upload` | Bearer | Local — podcast **audio or video** after `POST /podcasts/episodes/:id/upload/init` |
 | `POST /media/podcast-cover-upload` | Bearer | Local — show cover after `POST /podcasts/shows/:id/cover/upload/init` |
+| `POST /media/movie-poster-upload` | Bearer | Local — movie poster after `POST /videos/:id/poster/upload/init` |
 | `POST /media/ad-upload` | Bearer (admin) | Local — ad creative after `POST /admin/ads/media/upload` |
 
 For S3/R2, clients use presigned PUT URLs from init endpoints instead of these routes.
@@ -1344,6 +1359,7 @@ Returned by feed endpoints, `GET /videos/:id` (extended), shorts, movies browse.
   "id": "uuid",
   "title": "Video title",
   "thumbnailUrl": "https://…",
+  "posterUrl": "https://…",
   "durationSeconds": 120,
   "viewsCount": 1000,
   "likesCount": 50,
@@ -1362,7 +1378,7 @@ Returned by feed endpoints, `GET /videos/:id` (extended), shorts, movies browse.
 }
 ```
 
-`type` enum: `short` \| `video` \| `movie`. When JWT sent, detail/feed items may also include `liked`, `saved`, `disliked`, `isFollowing`, `dislikesCount`.
+`type` enum: `short` \| `video` \| `movie`. For **movies**, `posterUrl` is the catalog poster (admin-uploaded, required before publish). UI should prefer `posterUrl` over `thumbnailUrl` for movie cards. When JWT sent, detail/feed items may also include `liked`, `saved`, `disliked`, `isFollowing`, `dislikesCount`.
 
 ### `User` (`GET /users/me`)
 
@@ -1522,4 +1538,4 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 
 ---
 
-*Last updated: 2026-07-03 — Advertiser registration modal on `/advertise`, `DELETE /advertisers/me/:id` (cancel pending), register DTO email validation, one pending registration per user. Prior: React Native integration guide, production base URL, complete endpoint index (podcast video/cover, dislikes, advertisers, admin deletes), health response fields, feed home algorithms (`newReleases` vs `movies`), shorts `isFollowing`, podcast `mediaType`/`videoUrl`, WebSocket `gift` event, creator dashboard `gifts` block, shared response types (`VideoCard`, `User`, pagination), notification deep-link metadata, mobile auth cookie guidance. Production Stripe: [`stripe-production.md`](./stripe-production.md).*
+*Last updated: 2026-07-03 — Movie poster upload: `posterUrl` on videos, `POST /videos/:id/poster/upload/*`, required before `upload/complete` for movies; homepage and `/movies` use poster art. Prior: Advertiser registration modal on `/advertise`, `DELETE /advertisers/me/:id` (cancel pending), register DTO email validation, one pending registration per user. Prior: React Native integration guide, production base URL, complete endpoint index (podcast video/cover, dislikes, advertisers, admin deletes), health response fields, feed home algorithms (`newReleases` vs `movies`), shorts `isFollowing`, podcast `mediaType`/`videoUrl`, WebSocket `gift` event, creator dashboard `gifts` block, shared response types (`VideoCard`, `User`, pagination), notification deep-link metadata, mobile auth cookie guidance. Production Stripe: [`stripe-production.md`](./stripe-production.md).*

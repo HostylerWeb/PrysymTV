@@ -9,18 +9,20 @@ import { SearchModal } from "@/components/search-modal"
 import { Button } from "@/components/ui/button"
 import { fetchVerticalSeries, type VerticalSeriesDetail } from "@/lib/api/verticals"
 import { formatDuration, historyProgressPercent } from "@/lib/format-media"
-import { getVerticalProgressForSeries } from "@/lib/vertical-progress"
+import { VerticalSeriesDetailSkeleton } from "@/components/content-skeletons"
 
 export default function VerticalSeriesPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
   const [activeTab, setActiveTab] = useState("verticals")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [series, setSeries] = useState<VerticalSeriesDetail | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [resumeEpisode, setResumeEpisode] = useState<number | null>(null)
   const [resumePercent, setResumePercent] = useState(0)
 
   useEffect(() => {
+    setLoading(true)
     void fetchVerticalSeries(slug)
       .then((s) => {
         setSeries(s)
@@ -33,7 +35,12 @@ export default function VerticalSeriesPage({ params }: { params: Promise<{ slug:
         }
       })
       .catch(() => setError("Series not found."))
+      .finally(() => setLoading(false))
   }, [slug])
+
+  if (loading) {
+    return <VerticalSeriesDetailSkeleton />
+  }
 
   if (error) {
     return (
@@ -46,7 +53,7 @@ export default function VerticalSeriesPage({ params }: { params: Promise<{ slug:
   if (!series) {
     return (
       <main className="min-h-screen flex items-center justify-center md:pl-20">
-        <p className="text-muted-foreground">Loading…</p>
+        <p className="text-muted-foreground">Series not found</p>
       </main>
     )
   }

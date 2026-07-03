@@ -28,7 +28,7 @@ export function HomeEditorialGrid({ spotlight, verticals }: HomeEditorialGridPro
   if (!spotlight && verticals.length === 0) return null
 
   return (
-    <section className="py-6 md:py-8">
+    <section className="py-6 md:py-8 min-w-0 overflow-hidden">
       <div className="flex items-start gap-3 px-4 md:px-8 mb-4">
         <span className="w-1 h-9 md:h-10 rounded-full bg-primary shrink-0 mt-0.5" aria-hidden="true" />
         <div>

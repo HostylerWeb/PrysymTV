@@ -17,7 +17,7 @@ import {
   Gift,
 } from "lucide-react"
 import { GiftSheet } from "@/components/gift-sheet"
-import { PageLoadingSkeleton } from "@/components/content-skeletons"
+import { ShortsPageSkeleton } from "@/components/content-skeletons"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -843,6 +843,10 @@ function ShortsPageContent() {
     }
   }
 
+  if (!feedLoaded || authLoading) {
+    return <ShortsPageSkeleton />
+  }
+
   if (feedLoaded && shortsData.length === 0) {
     return (
       <main className="h-screen bg-black overflow-hidden md:pl-20 flex flex-col items-center justify-center gap-3 px-6">
@@ -1183,11 +1187,7 @@ function ShortsPageContent() {
 export default function ShortsPage() {
   return (
     <Suspense
-      fallback={
-        <main className="h-screen bg-black flex items-center justify-center">
-          <p className="text-white/60 text-sm">Loading shorts…</p>
-        </main>
-      }
+      fallback={<ShortsPageSkeleton />}
     >
       <ShortsPageContent />
     </Suspense>

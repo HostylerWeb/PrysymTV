@@ -21,11 +21,11 @@ import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 import { saveWatchProgress } from "@/lib/api/history"
 import { fetchServedAd, type ServedAd } from "@/lib/api/ads"
-import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
+import { formatDuration, formatViewCount, moviePosterUrl } from "@/lib/format-media"
 import { bumpLikeCount } from "@/lib/engagement-count"
 import type { ApiVideoDetail } from "@/lib/api/videos-feed"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { useImmersivePlayer } from "@/lib/hooks/use-immersive-player"
+import { MovieDetailSkeleton } from "@/components/content-skeletons"
 
 type MovieDisplay = {
   id: string
@@ -61,8 +61,8 @@ function mapApiToMovie(
     id: v.id,
     creatorId: v.creator.id,
     title: v.title,
-    poster: videoThumbnail(v.thumbnailUrl),
-    banner: videoThumbnail(v.thumbnailUrl),
+    poster: moviePosterUrl(v),
+    banner: moviePosterUrl(v),
     year: String(v.releaseYear ?? new Date().getFullYear()),
     rating: v.likesCount > 0 ? formatViewCount(v.likesCount) : "—",
     genre: label,
@@ -211,9 +211,10 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   if (loading || !movie) {
+    if (loading) return <MovieDetailSkeleton />
     return (
       <main className="min-h-screen flex items-center justify-center bg-background md:pl-20">
-        <p className="text-muted-foreground">{loading ? "Loading…" : "Movie not found"}</p>
+        <p className="text-muted-foreground">Movie not found</p>
       </main>
     )
   }

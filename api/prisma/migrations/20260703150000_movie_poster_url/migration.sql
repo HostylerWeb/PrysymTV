@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "videos" ADD COLUMN "poster_url" TEXT;

@@ -75,6 +75,14 @@ import {
   type CreatorSubscription,
 } from "@/lib/api/billing-monetization"
 import { fetchMe, replaceSocialLinks, updateMe } from "@/lib/api/users"
+import {
+  defaultSocialLinkFields,
+  mergeSocialLinks,
+  socialLinksPayload,
+  SOCIAL_PLATFORMS,
+  type SocialPlatformKey,
+} from "@/lib/social-platforms"
+import { SocialPlatformIcon, socialPlatformStyles } from "@/components/social-platform-icon"
 import { BuyerDetailsForm } from "@/components/buyer-details-form"
 import {
   buyerDetailsFromUser,
@@ -240,8 +248,8 @@ export function ProfileSettingsSheet({
   const [newPlaylistTitle, setNewPlaylistTitle] = useState("")
   const [playlistBusy, setPlaylistBusy] = useState(false)
   const [socialLinks, setSocialLinks] = useState<
-    Array<{ label: string; url: string; sortOrder: number }>
-  >([])
+    Array<{ key: SocialPlatformKey; label: string; url: string; sortOrder: number }>
+  >(() => defaultSocialLinkFields())
   const [socialBusy, setSocialBusy] = useState(false)
   const [socialMessage, setSocialMessage] = useState<string | null>(null)
   const [buyerDetails, setBuyerDetails] = useState<BuyerDetails>(EMPTY_BUYER_DETAILS)
@@ -334,13 +342,9 @@ export function ProfileSettingsSheet({
           url: string
           sortOrder: number
         }>
-        setSocialLinks(
-          links.length
-            ? links
-            : [{ label: "Website", url: "", sortOrder: 0 }],
-        )
+        setSocialLinks(mergeSocialLinks(links))
       })
-      .catch(() => setSocialLinks([{ label: "Website", url: "", sortOrder: 0 }]))
+      .catch(() => setSocialLinks(defaultSocialLinkFields()))
   }, [isOpen, screen])
 
   useEffect(() => {
@@ -776,13 +780,7 @@ export function ProfileSettingsSheet({
                 setSocialBusy(true)
                 setSocialMessage(null)
                 try {
-                  const payload = socialLinks
-                    .filter((l) => l.label.trim() && l.url.trim())
-                    .map((l, i) => ({
-                      label: l.label.trim(),
-                      url: l.url.trim(),
-                      sortOrder: i,
-                    }))
+                  const payload = socialLinksPayload(socialLinks)
                   await replaceSocialLinks(payload)
                   setSocialMessage("Links saved.")
                 } catch (e) {
@@ -1271,46 +1269,54 @@ function SocialLinksPanel({
   onChange,
   onSave,
 }: {
-  links: Array<{ label: string; url: string; sortOrder: number }>
+  links: Array<{ key: SocialPlatformKey; label: string; url: string; sortOrder: number }>
   busy: boolean
   message: string | null
-  onChange: (links: Array<{ label: string; url: string; sortOrder: number }>) => void
+  onChange: (
+    links: Array<{ key: SocialPlatformKey; label: string; url: string; sortOrder: number }>,
+  ) => void
   onSave: () => void | Promise<void>
 }) {
-  const updateLink = (index: number, field: "label" | "url", value: string) => {
-    onChange(links.map((l, i) => (i === index ? { ...l, [field]: value } : l)))
+  const updateUrl = (key: SocialPlatformKey, url: string) => {
+    onChange(links.map((l) => (l.key === key ? { ...l, url } : l)))
   }
 
   return (
     <div className="pt-2 space-y-4">
       <p className="text-sm text-muted-foreground">
-        These links appear on your public creator profile.
+        Add your public profile links. Filled platforms appear as icons on your creator page.
       </p>
-      {links.map((link, i) => (
-        <div key={i} className="space-y-2 p-3 rounded-xl bg-secondary/30">
-          <input
-            value={link.label}
-            onChange={(e) => updateLink(i, "label", e.target.value)}
-            placeholder="Label (e.g. Twitter)"
-            className="w-full h-10 px-3 rounded-lg bg-secondary text-sm"
-          />
-          <input
-            value={link.url}
-            onChange={(e) => updateLink(i, "url", e.target.value)}
-            placeholder="https://"
-            className="w-full h-10 px-3 rounded-lg bg-secondary text-sm"
-          />
-        </div>
-      ))}
-      <Button
-        variant="secondary"
-        className="w-full rounded-full"
-        onClick={() =>
-          onChange([...links, { label: "", url: "", sortOrder: links.length }])
-        }
-      >
-        Add link
-      </Button>
+      <div className="space-y-3">
+        {SOCIAL_PLATFORMS.map((platform) => {
+          const field = links.find((l) => l.key === platform.key)
+          const url = field?.url ?? ""
+          const styles = socialPlatformStyles(platform.key)
+          return (
+            <div
+              key={platform.key}
+              className="flex items-center gap-3 p-3 rounded-xl bg-secondary/30 border border-border/40"
+            >
+              <div
+                className={`w-10 h-10 rounded-full bg-background border border-border/60 flex items-center justify-center shrink-0 ${styles.ring}`}
+              >
+                <SocialPlatformIcon platform={platform.key} className={`w-4 h-4 ${styles.icon}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">{platform.label}</p>
+                <input
+                  value={url}
+                  onChange={(e) => updateUrl(platform.key, e.target.value)}
+                  placeholder={platform.placeholder}
+                  className="w-full h-9 px-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
       <Button className="w-full rounded-full" disabled={busy} onClick={() => void onSave()}>
         {busy ? "Saving…" : "Save links"}
       </Button>

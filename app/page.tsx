@@ -2,12 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { Header } from "@/components/header"
-import { ContinueWatchingRow } from "@/components/continue-watching-row"
-import { filterContinueWatchingFeed, filterContinueWatchingHistory } from "@/lib/continue-watching"
-import { useAuth } from "@/contexts/auth-context"
-import { fetchHistory } from "@/lib/api/history"
-import { listVerticalContinueWatching } from "@/lib/vertical-progress"
-import type { ContinueWatchingFeedItem, HistoryItemRecord } from "@/lib/api/types"
 import { MovieRow } from "@/components/movie-row"
 import { LiveRow } from "@/components/live-row"
 import { BottomNavigation } from "@/components/bottom-navigation"
@@ -19,15 +13,15 @@ import { HomeEditorialGrid } from "@/components/home-editorial-grid"
 import { HomeDualSpotlight } from "@/components/home-dual-spotlight"
 import { HomeSectionShell } from "@/components/home-section-shell"
 import { HomeTrendingRail } from "@/components/home-trending-rail"
+import { HomeFeedSkeleton, HomeDualSpotlightSkeleton } from "@/components/content-skeletons"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { fetchFeedHome } from "@/lib/api/feed"
 import { fetchShortsFeed } from "@/lib/api/videos-feed"
 import { fetchPodcastEpisodesFeed } from "@/lib/api/podcasts"
 import { fetchVerticalSeriesList } from "@/lib/api/verticals"
-import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
+import { formatDuration, formatViewCount, moviePosterUrl } from "@/lib/format-media"
 
 export default function Home() {
-  const { isAuthenticated } = useAuth()
   const { platformCreatorId } = usePublicAdsConfig()
   const [activeTab, setActiveTab] = useState("home")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -70,39 +64,19 @@ export default function Home() {
   >([])
   const [newReleases, setNewReleases] = useState<typeof topMovies>([])
   const [heroSlides, setHeroSlides] = useState<HomeFeaturedMovie[]>([])
-  const [heroLoading, setHeroLoading] = useState(true)
-  const [continueFeed, setContinueFeed] = useState<ContinueWatchingFeedItem[]>([])
-  const [continueHistory, setContinueHistory] = useState<HistoryItemRecord[]>([])
-  const [guestVertical, setGuestVertical] = useState(
-    () => (typeof window !== "undefined" ? listVerticalContinueWatching() : []),
-  )
-
-  useEffect(() => {
-    if (!isAuthenticated) setGuestVertical(listVerticalContinueWatching())
-  }, [isAuthenticated])
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setContinueHistory([])
-      return
-    }
-    void fetchHistory(1, 8)
-      .then((res) => setContinueHistory(filterContinueWatchingHistory(res.items)))
-      .catch(() => setContinueHistory([]))
-  }, [isAuthenticated])
+  const [feedReady, setFeedReady] = useState(false)
+  const [extrasReady, setExtrasReady] = useState(false)
 
   useEffect(() => {
     void fetchFeedHome()
       .then((feed) => {
-      setContinueFeed(filterContinueWatchingFeed(feed.continueWatching ?? []))
-
       const slides: HomeFeaturedMovie[] = []
       const seenSlideIds = new Set<string>()
       if (feed.featuredMovie && feed.heroMovieReason) {
         slides.push({
           id: feed.featuredMovie.id,
           title: feed.featuredMovie.title,
-          poster: videoThumbnail(feed.featuredMovie.thumbnailUrl),
+          poster: moviePosterUrl(feed.featuredMovie),
           genre: feed.featuredMovie.category ?? "Movie",
           year: String(feed.featuredMovie.releaseYear ?? new Date().getFullYear()),
           channel: feed.featuredMovie.channel,
@@ -117,7 +91,7 @@ export default function Home() {
         slides.push({
           id: m.id,
           title: m.title,
-          poster: videoThumbnail(m.thumbnailUrl),
+          poster: moviePosterUrl(m),
           genre: m.category ?? "Movie",
           year: String(m.releaseYear ?? new Date().getFullYear()),
           channel: m.channel,
@@ -153,7 +127,7 @@ export default function Home() {
       const mapMovie = (m: (typeof feed.movies)[number]) => ({
         id: m.id,
         title: m.title,
-        poster: videoThumbnail(m.thumbnailUrl),
+        poster: moviePosterUrl(m),
         year: String(m.releaseYear ?? new Date().getFullYear()),
         rating: m.likesCount ?? 0,
         genre: m.category ?? "Movie",
@@ -161,121 +135,120 @@ export default function Home() {
       setTopMovies(feed.movies.map(mapMovie))
       setNewReleases(feed.newReleases.map(mapMovie))
     })
-      .finally(() => setHeroLoading(false))
+      .finally(() => setFeedReady(true))
   }, [])
 
   useEffect(() => {
-    void fetchShortsFeed().then((res) => {
-      setHomeShorts(
-        res.items.slice(0, 10).map((s) => ({
-          id: s.id,
-          title: s.title,
-          thumbnail: videoThumbnail(s.thumbnailUrl),
-          channel: s.channel,
-        })),
-      )
-    })
-    void fetchPodcastEpisodesFeed(1, 10).then((res) => {
-      setHomePodcasts(
-        res.items.map((ep) => ({
-          id: ep.id,
-          title: ep.title,
-          podcast: ep.podcast,
-          cover: ep.cover,
-          duration: ep.duration,
-        })),
-      )
-    })
-    void fetchVerticalSeriesList().then((res) => {
-      setHomeVerticals(
-        res.items.slice(0, 10).map((s) => ({
-          slug: s.slug,
-          title: s.title,
-          posterUrl: s.posterUrl,
-          genre: s.genre,
-        })),
-      )
-    })
+    void Promise.all([
+      fetchShortsFeed().then((res) => {
+        setHomeShorts(
+          res.items.slice(0, 10).map((s) => ({
+            id: s.id,
+            title: s.title,
+            thumbnail: videoThumbnail(s.thumbnailUrl),
+            channel: s.channel,
+          })),
+        )
+      }),
+      fetchPodcastEpisodesFeed(1, 10).then((res) => {
+        setHomePodcasts(
+          res.items.map((ep) => ({
+            id: ep.id,
+            title: ep.title,
+            podcast: ep.podcast,
+            cover: ep.cover,
+            duration: ep.duration,
+          })),
+        )
+      }),
+      fetchVerticalSeriesList().then((res) => {
+        setHomeVerticals(
+          res.items.slice(0, 10).map((s) => ({
+            slug: s.slug,
+            title: s.title,
+            posterUrl: s.posterUrl,
+            genre: s.genre,
+          })),
+        )
+      }),
+    ]).finally(() => setExtrasReady(true))
   }, [])
-
-  const hasContinue =
-    continueFeed.length > 0 || guestVertical.length > 0 || continueHistory.length > 0
 
   const top10Items = trendingVideos.slice(0, 10)
   const spotlightVideo =
     trendingVideos.length > 10 ? trendingVideos[10] : (trendingVideos[0] ?? null)
 
   return (
-    <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
+    <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20 overflow-x-hidden">
       <Header onSearchClick={() => setIsSearchOpen(true)} />
 
-      <HomeHero slides={heroSlides} loading={heroLoading} />
+      <HomeHero slides={heroSlides} loading={!feedReady} />
 
-      <div className="max-w-7xl mx-auto w-full">
+      <div className="max-w-7xl mx-auto w-full min-w-0 overflow-x-hidden">
         <div className="px-4 md:px-8">
           <AdBanner platformCreatorId={platformCreatorId} />
         </div>
 
-        {hasContinue && (
-          <div className="px-4 md:px-8 pt-2 pb-4 border-b border-border/40">
-            <ContinueWatchingRow
-              feedItems={continueFeed}
-              historyItems={continueFeed.length > 0 ? [] : continueHistory}
-              verticalItems={isAuthenticated ? [] : guestVertical}
+        {!feedReady ? (
+          <HomeFeedSkeleton />
+        ) : (
+          <>
+            {top10Items.length > 0 && (
+              <HomeSectionShell eyebrow="Popular" title="Top 10 today" href="/videos">
+                <HomeTrendingRail items={top10Items} />
+              </HomeSectionShell>
+            )}
+
+            {liveStreams.length > 0 && (
+              <HomeSectionShell
+                id="live-now"
+                eyebrow="Broadcasting"
+                title="Live right now"
+                badge={
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                    {liveStreams.length} live
+                  </span>
+                }
+              >
+                <p className="px-4 md:px-8 text-xs text-muted-foreground -mt-2 mb-3">
+                  Creators streaming now, sorted by viewers
+                </p>
+                <LiveRow title="" streams={liveStreams} showViewAll={false} hideHeader />
+              </HomeSectionShell>
+            )}
+
+            <HomeEditorialGrid
+              spotlight={spotlightVideo}
+              verticals={homeVerticals}
             />
-          </div>
-        )}
 
-        {top10Items.length > 0 && (
-          <HomeSectionShell eyebrow="Popular" title="Top 10 today" href="/videos">
-            <HomeTrendingRail items={top10Items} />
-          </HomeSectionShell>
-        )}
-
-        {liveStreams.length > 0 && (
-          <HomeSectionShell
-            id="live-now"
-            eyebrow="Broadcasting"
-            title="Live right now"
-            badge={
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                {liveStreams.length} live
-              </span>
-            }
-          >
-            <p className="px-4 md:px-8 text-xs text-muted-foreground -mt-2 mb-3">
-              Creators streaming now, sorted by viewers
-            </p>
-            <LiveRow title="" streams={liveStreams} showViewAll={false} hideHeader />
-          </HomeSectionShell>
-        )}
-
-        <HomeEditorialGrid
-          spotlight={spotlightVideo}
-          verticals={homeVerticals}
-        />
-
-        {(newReleases.length > 0 || topMovies.length > 0) && (
-          <HomeSectionShell eyebrow="Cinema" title="Movies" href="/movies">
-            {newReleases.length > 0 && (
-              <div className="mb-4">
-                <p className="px-4 md:px-8 text-xs font-medium text-muted-foreground mb-2">New releases</p>
-                <MovieRow title="" movies={newReleases} hideHeader showViewAll={false} />
-              </div>
-            )}
-            {topMovies.length > 0 && (
-              <div>
+            {(newReleases.length > 0 || topMovies.length > 0) && (
+              <HomeSectionShell eyebrow="Cinema" title="Movies" href="/movies">
                 {newReleases.length > 0 && (
-                  <p className="px-4 md:px-8 text-xs font-medium text-muted-foreground mb-2">Top picks</p>
+                  <div className="mb-4">
+                    <p className="px-4 md:px-8 text-xs font-medium text-muted-foreground mb-2">New releases</p>
+                    <MovieRow title="" movies={newReleases} hideHeader showViewAll={false} />
+                  </div>
                 )}
-                <MovieRow title="" movies={topMovies} hideHeader showViewAll={false} />
-              </div>
+                {topMovies.length > 0 && (
+                  <div>
+                    {newReleases.length > 0 && (
+                      <p className="px-4 md:px-8 text-xs font-medium text-muted-foreground mb-2">Top picks</p>
+                    )}
+                    <MovieRow title="" movies={topMovies} hideHeader showViewAll={false} />
+                  </div>
+                )}
+              </HomeSectionShell>
             )}
-          </HomeSectionShell>
+          </>
         )}
 
-        <HomeDualSpotlight shorts={homeShorts} podcasts={homePodcasts} />
+        {!extrasReady ? (
+          <HomeDualSpotlightSkeleton />
+        ) : (
+          <HomeDualSpotlight shorts={homeShorts} podcasts={homePodcasts} />
+        )}
       </div>
 
       <Footer />

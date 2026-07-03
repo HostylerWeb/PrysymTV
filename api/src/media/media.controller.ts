@@ -169,6 +169,60 @@ export class MediaController {
     };
   }
 
+  @Post('movie-poster-upload')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+    }),
+  )
+  async moviePosterUpload(
+    @CurrentUser() user: AuthUserPayload,
+    @Body('objectKey') objectKey: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (this.storage.getSettings().driver !== 'local') {
+      throw new ForbiddenException(
+        'Multipart movie poster upload is only available when STORAGE_DRIVER=local',
+      );
+    }
+    if (!file?.buffer?.length || !objectKey?.trim()) {
+      throw new ForbiddenException('Missing file or objectKey');
+    }
+
+    const key = objectKey.replace(/^\/+/, '');
+    const videoId = key.match(
+      /^uploads\/movies\/([0-9a-f-]{36})\/poster\./i,
+    )?.[1];
+    if (!videoId) {
+      throw new ForbiddenException('Invalid movie poster object key');
+    }
+
+    const video = await this.prisma.video.findUnique({
+      where: { id: videoId },
+    });
+    if (!video) throw new NotFoundException('Video not found');
+    if (video.creatorId !== user.id && user.role !== 'admin') {
+      throw new ForbiddenException('Not allowed');
+    }
+    if (video.type !== 'movie') {
+      throw new ForbiddenException('Poster upload is only for movies');
+    }
+
+    const max = 10 * 1024 * 1024;
+    if (file.size > max) {
+      throw new ForbiddenException('Poster image exceeds 10 MB limit');
+    }
+
+    const abs = this.storage.getLocalAbsolutePath(key);
+    await writeFile(abs, file.buffer);
+    return {
+      success: true,
+      objectKey: key,
+      publicUrl: this.storage.getPublicUrl(key),
+    };
+  }
+
   @Post('podcast-upload')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(

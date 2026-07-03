@@ -8,7 +8,8 @@ import { fetchAdminMovieGenresConfig } from "@/lib/api/admin"
 import {
   getVideoUploadMaxBytes,
   pollVideoUntilReady,
-  uploadVideoFlow,
+  uploadAdminMovieFlow,
+  uploadMoviePoster,
 } from "@/lib/api/videos"
 
 const AGE_RATINGS = ["G", "PG", "PG-13", "R", "NC-17", "TV-MA", "NR"]
@@ -40,6 +41,8 @@ export function AdminMovieUploadSheet({
   const [releaseYear, setReleaseYear] = useState(String(new Date().getFullYear()))
   const [ageRating, setAgeRating] = useState("PG-13")
   const [file, setFile] = useState<File | null>(null)
+  const [posterFile, setPosterFile] = useState<File | null>(null)
+  const [posterPreview, setPosterPreview] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -58,6 +61,8 @@ export function AdminMovieUploadSheet({
     setReleaseYear(String(new Date().getFullYear()))
     setAgeRating("PG-13")
     setFile(null)
+    setPosterFile(null)
+    setPosterPreview(null)
     setProgress(0)
     setError(null)
     setBusy(false)
@@ -76,7 +81,7 @@ export function AdminMovieUploadSheet({
   }
 
   const handleUpload = async () => {
-    if (!title.trim() || !file) return
+    if (!title.trim() || !file || !posterFile) return
 
     const maxBytes = getVideoUploadMaxBytes()
     if (maxBytes && file.size > maxBytes) {
@@ -99,7 +104,7 @@ export function AdminMovieUploadSheet({
     setProgress(0)
 
     try {
-      const queued = await uploadVideoFlow(
+      const queued = await uploadAdminMovieFlow(
         {
           type: "movie",
           title: title.trim(),
@@ -115,6 +120,7 @@ export function AdminMovieUploadSheet({
           fileName: file.name,
         },
         file,
+        posterFile,
         setProgress,
       )
       setBusy(false)
@@ -283,6 +289,36 @@ export function AdminMovieUploadSheet({
                   </div>
                 ))}
               </div>
+              <label className="block p-6 rounded-xl border-2 border-dashed border-border text-center cursor-pointer hover:border-primary/50">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const next = e.target.files?.[0] ?? null
+                    setPosterFile(next)
+                    setPosterPreview((prev) => {
+                      if (prev) URL.revokeObjectURL(prev)
+                      return next ? URL.createObjectURL(next) : null
+                    })
+                  }}
+                />
+                {posterPreview ? (
+                  <img
+                    src={posterPreview}
+                    alt="Poster preview"
+                    className="mx-auto mb-3 w-32 aspect-[2/3] object-cover rounded-lg border border-border"
+                  />
+                ) : (
+                  <Film className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                )}
+                <p className="text-sm font-medium">
+                  {posterFile ? posterFile.name : "Choose poster image *"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Portrait 2:3 recommended (JPG, PNG, or WebP)
+                </p>
+              </label>
               <label className="block p-8 rounded-xl border-2 border-dashed border-border text-center cursor-pointer hover:border-primary/50">
                 <input
                   type="file"
@@ -306,7 +342,7 @@ export function AdminMovieUploadSheet({
               {error && <p className="text-sm text-destructive">{error}</p>}
               <Button
                 className="w-full rounded-full"
-                disabled={busy || !title.trim() || !file}
+                disabled={busy || !title.trim() || !file || !posterFile}
                 onClick={() => void handleUpload()}
               >
                 {busy ? `Uploading ${progress}%` : "Upload movie"}

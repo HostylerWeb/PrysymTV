@@ -11,7 +11,8 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { fetchMovieGenres, genreLabel, type CategoryItem } from "@/lib/api/categories"
 import { fetchFeaturedMovie, fetchMoviesFeed } from "@/lib/api/videos-feed"
-import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
+import { MoviesPageSkeleton } from "@/components/content-skeletons"
+import { formatDuration, formatViewCount, moviePosterUrl } from "@/lib/format-media"
 
 type MovieCard = {
   id: string
@@ -56,7 +57,7 @@ export default function MoviesPage() {
           return {
             id: m.id,
             title: m.title,
-            poster: videoThumbnail(m.thumbnailUrl),
+            poster: moviePosterUrl(m),
             year: String(m.releaseYear ?? new Date().getFullYear()),
             genreSlug,
             genre: genreLabel(genreSlug, genreOptions),
@@ -103,7 +104,7 @@ export default function MoviesPage() {
       <Header onSearchClick={() => setIsSearchOpen(true)} />
       <div className="max-w-7xl mx-auto w-full">
       {loading ? (
-        <div className="py-24 text-center text-muted-foreground">Loading movies…</div>
+        <MoviesPageSkeleton />
       ) : !featuredMovie && movies.length === 0 ? (
         <div className="py-24 text-center text-muted-foreground px-4">
           No movies published yet. Upload a movie from your profile settings.

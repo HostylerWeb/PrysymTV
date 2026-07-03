@@ -37,6 +37,7 @@ export type VideoCard = {
   id: string;
   title: string;
   thumbnailUrl: string | null;
+  posterUrl?: string | null;
   durationSeconds: number;
   viewsCount: number;
   likesCount?: number;
