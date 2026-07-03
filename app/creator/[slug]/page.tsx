@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, use, useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { ChevronLeft, Share2, Play, Users, Video, Bell, BellOff, Check, Gift, ShoppingBag } from "lucide-react"
 import { GiftSheet } from "@/components/gift-sheet"
 import { PageLoadingSkeleton } from "@/components/content-skeletons"
@@ -49,6 +50,7 @@ export default function CreatorProfilePage(props: { params: Promise<{ slug: stri
 
 function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
+  const searchParams = useSearchParams()
   const { isAuthenticated } = useAuth()
   const [profile, setProfile] = useState<PublicCreatorProfile | null>(null)
   const [videos, setVideos] = useState<CreatorVideo[]>([])
@@ -141,6 +143,14 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
       cancelled = true
     }
   }, [slug])
+
+  useEffect(() => {
+    const tab = searchParams.get("tab")
+    if (tab === "store" && profile?.hasStore) setActiveTab("store")
+    else if (tab && ["videos", "shorts", "live", "podcasts", "playlists", "store"].includes(tab)) {
+      setActiveTab(tab)
+    }
+  }, [searchParams, profile?.hasStore])
 
   if (loading) {
     return (

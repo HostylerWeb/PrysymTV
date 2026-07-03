@@ -139,7 +139,7 @@
 | `GET` | `/stores/me` | ✅ Bearer — creator store + products (requires `storeCreatorStatus: approved`) |
 | `PUT` | `/stores/me` | ✅ Bearer — `{ displayName?, description?, shippingFree?, shippingFeeUsd? }` |
 | `POST` | `/stores/me/products` | ✅ Bearer — create product (`galleryUrls`, `inventoryUnlimited`) |
-| `PUT` | `/stores/me/products/:id` | ✅ Bearer — update product |
+| `PUT` | `/stores/me/products/:id` | ✅ Bearer — partial update (title, images, stock, status, etc.) |
 | `DELETE` | `/stores/me/products/:id` | ✅ Bearer — delete product |
 | `POST` | `/stores/checkout` | ✅ Bearer — Stripe checkout for store purchase |
 | `GET` | `/stores/orders/:orderId` | ✅ Bearer — buyer order (digital URL when paid) |
@@ -903,10 +903,12 @@ Revenue split key for products: `store_merchandise` (configured at `GET/PUT /adm
 | `GET /stores/me` | `{ store, products[] }` — auto-creates `creator_stores` on first access after approval |
 | `PUT /stores/me` | `{ displayName?, description?, shippingFree?, shippingFeeUsd? }` — `shippingFree: true` clears fee; flat fee applies per physical order |
 | `POST /stores/me/products` | `{ productType: merchandise \| digital, title, description?, priceUsd, imageUrl, galleryUrls?, digitalUrl?, inventory?, inventoryUnlimited? }` — `digitalUrl` required for digital; merchandise needs `inventory` ≥ 1 or `inventoryUnlimited: true` |
-| `PUT /stores/me/products/:id` | Partial update; `status` can be set to `active` \| `draft` \| `archived` |
+| `PUT /stores/me/products/:id` | Partial update; `status` can be `active` \| `draft` \| `archived`; seller edits images, stock, pricing |
 | `DELETE /stores/me/products/:id` | Hard delete |
 | `POST /stores/checkout` | `{ productId, quantity?, shippingAddress?, saveBuyerDetails? }` — `shippingAddress` required for merchandise; returns `{ checkoutUrl, sessionId, orderId }` or dev-mode `{ redirectUrl }` |
 | `GET /stores/orders/:orderId` | Buyer order — `digitalUrl` on line items only when `status: paid` |
+
+Frontend: profile **Store** tab (seller CRUD + edit), `/creator/:username/store/:productId` (buyer product page with gallery + checkout).
 
 ### Buyer shipping details (`PUT /users/me`)
 

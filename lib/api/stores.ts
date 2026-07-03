@@ -105,6 +105,26 @@ export function deleteMyStoreProduct(id: string) {
   });
 }
 
+export function updateMyStoreProduct(
+  id: string,
+  body: {
+    title?: string;
+    description?: string;
+    priceUsd?: number;
+    imageUrl?: string;
+    galleryUrls?: string[];
+    digitalUrl?: string | null;
+    inventory?: number | null;
+    inventoryUnlimited?: boolean;
+    status?: "active" | "draft" | "archived";
+  },
+) {
+  return apiRequest<StoreProduct>(`/stores/me/products/${id}`, {
+    method: "PUT",
+    body,
+  });
+}
+
 export function createStoreCheckout(
   productId: string,
   quantity = 1,

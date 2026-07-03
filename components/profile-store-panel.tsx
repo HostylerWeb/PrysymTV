@@ -2,59 +2,64 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { Download, Loader2, Package, Plus, Settings2, Trash2 } from "lucide-react"
+import { useSearchParams } from "next/navigation"
+import {
+  ExternalLink,
+  Loader2,
+  Package,
+  Pencil,
+  Plus,
+  Settings2,
+  Trash2,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import {
+  StoreProductForm,
+  EMPTY_PRODUCT_FORM,
+  productFormToApiBody,
+  productToFormValues,
+  validateProductForm,
+  type StoreProductFormValues,
+} from "@/components/store-product-form"
 import {
   createMyStoreProduct,
   deleteMyStoreProduct,
   fetchMyStore,
   updateMyStore,
+  updateMyStoreProduct,
   type StoreProduct,
 } from "@/lib/api/stores"
-
-const PRODUCT_TYPES = [
-  { id: "merchandise" as const, label: "Physical", icon: Package },
-  { id: "digital" as const, label: "Digital", icon: Download },
-]
+import { useAuth } from "@/contexts/auth-context"
 
 const fieldClass =
   "w-full h-11 px-4 rounded-xl bg-secondary text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-shadow"
 
 const labelClass = "text-xs font-medium text-muted-foreground mb-1.5 block"
 
-function parseGalleryUrls(raw: string): string[] {
-  return raw
-    .split(/\n|,/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
-    .slice(0, 10)
+function statusBadgeClass(status: string) {
+  if (status === "active") return "bg-green-500/15 text-green-600"
+  if (status === "draft") return "bg-amber-500/15 text-amber-600"
+  return "bg-muted text-muted-foreground"
 }
 
 export function ProfileStorePanel() {
+  const { user } = useAuth()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [products, setProducts] = useState<StoreProduct[]>([])
   const [storeName, setStoreName] = useState("")
-  const [showForm, setShowForm] = useState(false)
+  const [formMode, setFormMode] = useState<"hidden" | "create" | "edit">("hidden")
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [form, setForm] = useState<StoreProductFormValues>(EMPTY_PRODUCT_FORM)
   const [settings, setSettings] = useState({
     displayName: "",
     description: "",
     shippingFree: true,
     shippingFeeUsd: "",
-  })
-  const [form, setForm] = useState({
-    productType: "merchandise" as "merchandise" | "digital",
-    title: "",
-    description: "",
-    priceUsd: "",
-    imageUrl: "",
-    galleryUrls: "",
-    digitalUrl: "",
-    inventory: "1",
-    inventoryUnlimited: false,
   })
 
   const load = useCallback(async () => {
@@ -82,66 +87,58 @@ export function ProfileStorePanel() {
     void load()
   }, [load])
 
-  const resetForm = () => {
-    setForm({
-      productType: "merchandise",
-      title: "",
-      description: "",
-      priceUsd: "",
-      imageUrl: "",
-      galleryUrls: "",
-      digitalUrl: "",
-      inventory: "1",
-      inventoryUnlimited: false,
-    })
-    setShowForm(false)
+  const closeForm = () => {
+    setFormMode("hidden")
+    setEditingId(null)
+    setForm(EMPTY_PRODUCT_FORM)
   }
 
+  const openCreate = () => {
+    setForm(EMPTY_PRODUCT_FORM)
+    setEditingId(null)
+    setFormMode("create")
+    setShowSettings(false)
+  }
+
+  const openEdit = (product: StoreProduct) => {
+    setForm(productToFormValues(product))
+    setEditingId(product.id)
+    setFormMode("edit")
+    setShowSettings(false)
+  }
+
+  useEffect(() => {
+    const editId = searchParams.get("edit")
+    if (!editId || products.length === 0) return
+    const product = products.find((p) => p.id === editId)
+    if (product) openEdit(product)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open once when products load
+  }, [searchParams, products])
+
   const submitProduct = async () => {
-    const title = form.title.trim()
-    const imageUrl = form.imageUrl.trim()
-    const price = parseFloat(form.priceUsd)
-    if (!title || !imageUrl || !Number.isFinite(price) || price < 0.01) {
-      setError("Title, cover image URL, and a valid price are required")
-      return
-    }
-    if (form.productType === "digital" && !form.digitalUrl.trim()) {
-      setError("Download URL is required for digital products")
-      return
-    }
-    if (
-      form.productType === "merchandise" &&
-      !form.inventoryUnlimited &&
-      (parseInt(form.inventory, 10) < 1 || !Number.isFinite(parseInt(form.inventory, 10)))
-    ) {
-      setError("Stock must be at least 1, or enable unlimited stock")
+    const validationError = validateProductForm(form)
+    if (validationError) {
+      setError(validationError)
       return
     }
 
     setBusy(true)
     setError(null)
     try {
-      const galleryUrls = parseGalleryUrls(form.galleryUrls)
-      const created = await createMyStoreProduct({
-        productType: form.productType,
-        title,
-        description: form.description.trim() || undefined,
-        priceUsd: price,
-        imageUrl,
-        galleryUrls: galleryUrls.length > 0 ? galleryUrls : undefined,
-        digitalUrl:
-          form.productType === "digital" ? form.digitalUrl.trim() : undefined,
-        inventory:
-          form.productType === "merchandise" && !form.inventoryUnlimited
-            ? parseInt(form.inventory, 10)
-            : undefined,
-        inventoryUnlimited:
-          form.productType === "merchandise" ? form.inventoryUnlimited : undefined,
-      })
-      setProducts((prev) => [created, ...prev])
-      resetForm()
+      if (formMode === "create") {
+        const body = productFormToApiBody(form, "create") as Parameters<
+          typeof createMyStoreProduct
+        >[0]
+        const created = await createMyStoreProduct(body)
+        setProducts((prev) => [created, ...prev])
+      } else if (editingId) {
+        const body = productFormToApiBody(form, "edit")
+        const updated = await updateMyStoreProduct(editingId, body)
+        setProducts((prev) => prev.map((p) => (p.id === editingId ? updated : p)))
+      }
+      closeForm()
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to add product")
+      setError(e instanceof Error ? e.message : "Failed to save product")
     } finally {
       setBusy(false)
     }
@@ -167,9 +164,7 @@ export function ProfileStorePanel() {
         displayName,
         description: settings.description.trim() || undefined,
         shippingFree: settings.shippingFree,
-        shippingFeeUsd: settings.shippingFree
-          ? 0
-          : parseFloat(settings.shippingFeeUsd),
+        shippingFeeUsd: settings.shippingFree ? 0 : parseFloat(settings.shippingFeeUsd),
       })
       setStoreName(updated.displayName)
       setShowSettings(false)
@@ -181,10 +176,12 @@ export function ProfileStorePanel() {
   }
 
   const removeProduct = async (id: string) => {
+    if (!confirm("Delete this product? This cannot be undone.")) return
     setBusy(true)
     try {
       await deleteMyStoreProduct(id)
       setProducts((prev) => prev.filter((p) => p.id !== id))
+      if (editingId === id) closeForm()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to delete product")
     } finally {
@@ -200,33 +197,49 @@ export function ProfileStorePanel() {
     )
   }
 
+  const publicStoreUrl = user?.username
+    ? `/creator/${user.username}?tab=store`
+    : null
+
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-border/80 bg-card/40 p-4 md:p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
+      <div className="rounded-2xl border border-border/80 bg-gradient-to-br from-card/80 to-card/40 p-4 md:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div className="min-w-0">
             <h2 className="text-lg font-semibold">{storeName || "Your store"}</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              List physical merch and digital downloads. Buyers checkout via Stripe on the product page.
+            <p className="text-sm text-muted-foreground mt-1 max-w-xl">
+              Manage products, shipping, and pricing. Buyers checkout on your public product pages.
             </p>
+            {publicStoreUrl && (
+              <Link
+                href={publicStoreUrl}
+                className="inline-flex items-center gap-1.5 text-xs text-primary font-medium mt-2 hover:underline"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                View public store
+              </Link>
+            )}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             <Button
               size="sm"
               variant="outline"
               className="rounded-full gap-1.5"
-              onClick={() => setShowSettings((v) => !v)}
+              onClick={() => {
+                setShowSettings((v) => !v)
+                if (!showSettings) closeForm()
+              }}
             >
               <Settings2 className="w-4 h-4" />
               Store settings
             </Button>
             <Button
               size="sm"
-              variant={showForm ? "outline" : "default"}
+              variant={formMode === "create" ? "outline" : "default"}
               className="rounded-full gap-1.5"
-              onClick={() => (showForm ? resetForm() : setShowForm(true))}
+              onClick={() => (formMode === "create" ? closeForm() : openCreate())}
             >
-              {showForm ? (
+              {formMode === "create" ? (
                 "Cancel"
               ) : (
                 <>
@@ -240,13 +253,13 @@ export function ProfileStorePanel() {
       </div>
 
       {error && (
-        <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+        <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
           {error}
         </p>
       )}
 
       {showSettings && (
-        <div className="rounded-xl border border-border/80 bg-card/40 p-4 md:p-5 space-y-5">
+        <div className="rounded-2xl border border-border/80 bg-card/40 p-4 md:p-6 space-y-5">
           <div>
             <h3 className="text-sm font-semibold text-foreground">Store settings</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -327,175 +340,21 @@ export function ProfileStorePanel() {
         </div>
       )}
 
-      {showForm && (
-        <div className="rounded-xl border border-border/80 bg-card/40 p-4 md:p-5 space-y-5">
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">New product</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Physical items need stock (min 1) or unlimited. Digital items deliver a download link after purchase.
-            </p>
-          </div>
-
-          <div>
-            <p className={labelClass}>Product type</p>
-            <div className="flex p-1 rounded-full bg-secondary/40 border border-border/60">
-              {PRODUCT_TYPES.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setForm((f) => ({ ...f, productType: id }))}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-1.5 rounded-full py-2.5 text-xs font-semibold transition-all",
-                    form.productType === id
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="store-title" className={labelClass}>
-                Title <span className="text-destructive">*</span>
-              </label>
-              <input
-                id="store-title"
-                className={fieldClass}
-                value={form.title}
-                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="Product name"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="store-price" className={labelClass}>
-                Price (USD) <span className="text-destructive">*</span>
-              </label>
-              <input
-                id="store-price"
-                type="number"
-                min="0.01"
-                step="0.01"
-                className={fieldClass}
-                value={form.priceUsd}
-                onChange={(e) => setForm((f) => ({ ...f, priceUsd: e.target.value }))}
-                placeholder="0.00"
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="store-image" className={labelClass}>
-              Cover image URL <span className="text-destructive">*</span>
-            </label>
-            <input
-              id="store-image"
-              type="url"
-              className={fieldClass}
-              placeholder="https://..."
-              value={form.imageUrl}
-              onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
-              required
-            />
-          </div>
-
-          <div>
-            <label htmlFor="store-gallery" className={labelClass}>
-              Gallery image URLs <span className="font-normal">(optional, one per line, max 10)</span>
-            </label>
-            <textarea
-              id="store-gallery"
-              value={form.galleryUrls}
-              onChange={(e) => setForm((f) => ({ ...f, galleryUrls: e.target.value }))}
-              placeholder={"https://example.com/photo-1.jpg\nhttps://example.com/photo-2.jpg"}
-              className="w-full h-24 px-4 py-3 rounded-xl bg-secondary text-sm resize-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-shadow"
-            />
-          </div>
-
-          {form.productType === "digital" ? (
-            <div>
-              <label htmlFor="store-digital" className={labelClass}>
-                Download URL <span className="text-destructive">*</span>
-              </label>
-              <input
-                id="store-digital"
-                type="url"
-                className={fieldClass}
-                placeholder="https://..."
-                value={form.digitalUrl}
-                onChange={(e) => setForm((f) => ({ ...f, digitalUrl: e.target.value }))}
-                required
-              />
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.inventoryUnlimited}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, inventoryUnlimited: e.target.checked }))
-                  }
-                  className="rounded border-border"
-                />
-                <span className="text-sm font-medium">Unlimited stock</span>
-              </label>
-              {!form.inventoryUnlimited && (
-                <div>
-                  <label htmlFor="store-inventory" className={labelClass}>
-                    Stock quantity <span className="text-destructive">*</span>
-                  </label>
-                  <input
-                    id="store-inventory"
-                    type="number"
-                    min="1"
-                    className={cn(fieldClass, "sm:max-w-[10rem]")}
-                    value={form.inventory}
-                    onChange={(e) => setForm((f) => ({ ...f, inventory: e.target.value }))}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">Minimum 1 — zero stock is not allowed.</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div>
-            <label htmlFor="store-description" className={labelClass}>
-              Description <span className="font-normal">(optional)</span>
-            </label>
-            <textarea
-              id="store-description"
-              value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="Tell buyers what they are getting…"
-              className="w-full h-24 px-4 py-3 rounded-xl bg-secondary text-sm resize-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-shadow"
-            />
-          </div>
-
-          <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
-            <Button variant="outline" className="rounded-full sm:flex-1" onClick={resetForm}>
-              Cancel
-            </Button>
-            <Button
-              className="rounded-full sm:flex-1"
-              disabled={busy}
-              onClick={() => void submitProduct()}
-            >
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Publish product"}
-            </Button>
-          </div>
+      {formMode !== "hidden" && (
+        <div className="rounded-2xl border border-border/80 bg-card/40 p-4 md:p-6">
+          <StoreProductForm
+            mode={formMode}
+            values={form}
+            onChange={setForm}
+            busy={busy}
+            onSubmit={() => void submitProduct()}
+            onCancel={closeForm}
+          />
         </div>
       )}
 
       {products.length === 0 ? (
-        <div className="text-center py-12 rounded-xl border border-dashed border-border">
+        <div className="text-center py-16 rounded-2xl border border-dashed border-border/80 bg-card/20">
           <Package className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
           <p className="text-sm text-muted-foreground">No products yet. Add your first item above.</p>
         </div>
@@ -504,34 +363,61 @@ export function ProfileStorePanel() {
           {products.map((p) => (
             <article
               key={p.id}
-              className="rounded-xl border border-border/80 overflow-hidden bg-card/40"
+              className="group rounded-2xl border border-border/80 overflow-hidden bg-card/40 hover:border-primary/30 hover:shadow-md transition-all"
             >
-              {p.imageUrl ? (
-                <div className="aspect-[4/3] bg-muted">
-                  <img src={p.imageUrl} alt={p.title} className="w-full h-full object-cover" />
-                </div>
-              ) : (
-                <div className="aspect-[4/3] bg-muted flex items-center justify-center">
-                  <Package className="w-8 h-8 text-muted-foreground" />
-                </div>
-              )}
-              <div className="p-3 space-y-2">
+              <Link
+                href={user?.username ? `/creator/${user.username}/store/${p.id}` : "#"}
+                className="block"
+              >
+                {p.imageUrl ? (
+                  <div className="aspect-[4/3] bg-muted overflow-hidden">
+                    <img
+                      src={p.imageUrl}
+                      alt={p.title}
+                      className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+                    />
+                  </div>
+                ) : (
+                  <div className="aspect-[4/3] bg-muted flex items-center justify-center">
+                    <Package className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                )}
+              </Link>
+              <div className="p-4 space-y-2">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm line-clamp-2">{p.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5 capitalize">
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={user?.username ? `/creator/${user.username}/store/${p.id}` : "#"}
+                      className="font-medium text-sm line-clamp-2 hover:text-primary transition-colors"
+                    >
+                      {p.title}
+                    </Link>
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       {p.productType === "merchandise" ? "Physical" : "Digital"} · ${p.priceUsd.toFixed(2)}
                     </p>
                   </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="shrink-0 h-8 w-8 text-destructive"
-                    disabled={busy}
-                    onClick={() => void removeProduct(p.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      disabled={busy}
+                      title="Edit product"
+                      onClick={() => openEdit(p)}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-destructive"
+                      disabled={busy}
+                      title="Delete product"
+                      onClick={() => void removeProduct(p.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
                 {p.productType === "merchandise" && (
                   <p className="text-xs text-muted-foreground">
@@ -541,7 +427,12 @@ export function ProfileStorePanel() {
                 {p.galleryUrls?.length > 0 && (
                   <p className="text-xs text-muted-foreground">{p.galleryUrls.length} gallery image(s)</p>
                 )}
-                <span className="inline-flex text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full bg-green-500/15 text-green-600">
+                <span
+                  className={cn(
+                    "inline-flex text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full",
+                    statusBadgeClass(p.status),
+                  )}
+                >
                   {p.status}
                 </span>
               </div>

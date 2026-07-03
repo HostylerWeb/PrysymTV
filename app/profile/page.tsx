@@ -93,6 +93,7 @@ function ProfilePageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const settingsParam = searchParams.get("settings")
+  const tabParam = searchParams.get("tab")
   const createParam = searchParams.get("create")
   const returnTo = safeReturnPath(searchParams.get("returnTo"))
   const authParam = searchParams.get("auth")
@@ -172,6 +173,13 @@ function ProfilePageContent() {
     if (!createParam || !isAuthenticated || isLoading) return
     setCreateMenuOpen(true)
   }, [createParam, isAuthenticated, isLoading, setCreateMenuOpen])
+
+  useEffect(() => {
+    if (!tabParam || isLoading) return
+    if (tabParam === "store" && user?.storeCreatorStatus === "approved") {
+      setActiveTab("store")
+    }
+  }, [tabParam, isLoading, user?.storeCreatorStatus])
 
   useEffect(() => {
     if (!isAuthenticated || isLoading || !user) {
