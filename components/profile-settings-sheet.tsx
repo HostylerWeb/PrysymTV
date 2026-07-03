@@ -782,7 +782,7 @@ export function ProfileSettingsSheet({
                 try {
                   const payload = socialLinksPayload(socialLinks)
                   await replaceSocialLinks(payload)
-                  setSocialMessage("Links saved.")
+                  handleClose()
                 } catch (e) {
                   setSocialMessage(
                     e instanceof ApiError ? e.message : "Could not save links.",

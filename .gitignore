@@ -12,6 +12,7 @@ __v0_jsx-dev-runtime.ts
 !.env.example
 api/.env
 api/.env.*
+infra/vps/.deploy.env
 *.pem
 *.key
 credentials.json

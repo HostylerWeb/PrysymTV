@@ -13,6 +13,7 @@ import { SearchModal } from "@/components/search-modal"
 import { Footer } from "@/components/footer"
 import { AuthModal } from "@/components/auth-modal"
 import { CreatorSocialLinks } from "@/components/creator-social-links"
+import { ShareSheet } from "@/components/share-sheet"
 import { CreatorStoreTab } from "@/components/creator-store-tab"
 import { useAuth } from "@/contexts/auth-context"
 import {
