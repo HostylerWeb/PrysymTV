@@ -18,7 +18,9 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { RevenueSplitService } from '../revenue/revenue-split.service';
 import { AdminService } from './admin.service';
+import { AdjustUserCoinsDto } from './dto/adjust-user-coins.dto';
 import { AdminListQueryDto } from './dto/admin-list-query.dto';
+import { SetUserVerifiedDto } from './dto/set-user-verified.dto';
 import { BanUserDto } from './dto/ban-user.dto';
 import { AdCampaignQueryDto } from './dto/ad-campaign-query.dto';
 import { CreateAdCampaignDto } from './dto/create-ad-campaign.dto';
@@ -127,7 +129,7 @@ export class AdminController {
   @Post('advertisers/:id/verify')
   verifyAdvertiser(
     @Param('id') id: string,
-    @Body() body: { isVerified: boolean },
+    @Body() body: SetUserVerifiedDto,
     @CurrentUser() admin: AuthUserPayload,
   ) {
     return this.admin.verifyAdvertiser(id, body.isVerified, admin.id);
@@ -201,7 +203,7 @@ export class AdminController {
   @Put('users/:id/coins')
   adjustCoins(
     @Param('id') id: string,
-    @Body() body: { delta: number },
+    @Body() body: AdjustUserCoinsDto,
   ) {
     return this.admin.adjustUserCoins(id, body.delta);
   }

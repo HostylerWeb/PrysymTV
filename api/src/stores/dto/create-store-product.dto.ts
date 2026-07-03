@@ -1,5 +1,8 @@
 import {
-  IsEnum,
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -12,8 +15,13 @@ import {
 } from 'class-validator';
 import { StoreProductType } from '@prisma/client';
 
+const SELLER_PRODUCT_TYPES = [
+  StoreProductType.merchandise,
+  StoreProductType.digital,
+] as const;
+
 export class CreateStoreProductDto {
-  @IsEnum(StoreProductType)
+  @IsIn(SELLER_PRODUCT_TYPES)
   productType!: StoreProductType;
 
   @IsString()
@@ -33,12 +41,26 @@ export class CreateStoreProductDto {
   @IsUrl()
   imageUrl!: string;
 
-  @ValidateIf((o: CreateStoreProductDto) => o.productType === 'digital')
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsUrl({}, { each: true })
+  galleryUrls?: string[];
+
+  @ValidateIf((o: CreateStoreProductDto) => o.productType === StoreProductType.digital)
   @IsUrl()
   digitalUrl?: string;
 
-  @ValidateIf((o: CreateStoreProductDto) => o.productType === 'merchandise')
+  @ValidateIf(
+    (o: CreateStoreProductDto) =>
+      o.productType === StoreProductType.merchandise && !o.inventoryUnlimited,
+  )
   @IsInt()
-  @Min(0)
+  @Min(1, { message: 'inventory must be at least 1, or enable unlimited stock' })
   inventory?: number;
+
+  @ValidateIf((o: CreateStoreProductDto) => o.productType === StoreProductType.merchandise)
+  @IsOptional()
+  @IsBoolean()
+  inventoryUnlimited?: boolean;
 }

@@ -1,14 +1,17 @@
 "use client"
 
-import { Package } from "lucide-react"
+import Link from "next/link"
 import type { CreatorStoreSummary, PublicStoreProduct } from "@/lib/api/stores"
+import { stockLabel } from "@/lib/api/stores"
+import { Package } from "lucide-react"
 
 type CreatorStoreTabProps = {
   store: CreatorStoreSummary
   products: PublicStoreProduct[]
+  creatorUsername: string
 }
 
-export function CreatorStoreTab({ store, products }: CreatorStoreTabProps) {
+export function CreatorStoreTab({ store, products, creatorUsername }: CreatorStoreTabProps) {
   return (
     <div className="space-y-6">
       {store.description && (
@@ -23,16 +26,17 @@ export function CreatorStoreTab({ store, products }: CreatorStoreTabProps) {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {products.map((p) => (
-            <article
+            <Link
               key={p.id}
-              className="rounded-xl border border-border/80 overflow-hidden bg-card/40"
+              href={`/creator/${creatorUsername}/store/${p.id}`}
+              className="rounded-xl border border-border/80 overflow-hidden bg-card/40 hover:border-primary/40 transition-colors group"
             >
               {p.imageUrl ? (
-                <div className="aspect-[4/3] bg-muted">
+                <div className="aspect-[4/3] bg-muted overflow-hidden">
                   <img
                     src={p.imageUrl}
                     alt={p.title}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 </div>
               ) : (
@@ -41,7 +45,9 @@ export function CreatorStoreTab({ store, products }: CreatorStoreTabProps) {
                 </div>
               )}
               <div className="p-4 space-y-2">
-                <h3 className="font-semibold text-sm line-clamp-2">{p.title}</h3>
+                <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-primary transition-colors">
+                  {p.title}
+                </h3>
                 {p.description && (
                   <p className="text-xs text-muted-foreground line-clamp-2">{p.description}</p>
                 )}
@@ -51,13 +57,9 @@ export function CreatorStoreTab({ store, products }: CreatorStoreTabProps) {
                     {p.productType === "merchandise" ? "Physical" : "Digital"}
                   </span>
                 </div>
-                {p.productType === "merchandise" && p.inventory != null && (
-                  <p className="text-xs text-muted-foreground">
-                    {p.inventory > 0 ? `${p.inventory} in stock` : "Out of stock"}
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground">{stockLabel(p)}</p>
               </div>
-            </article>
+            </Link>
           ))}
         </div>
       )}

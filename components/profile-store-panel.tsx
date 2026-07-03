@@ -22,6 +22,14 @@ const fieldClass =
 
 const labelClass = "text-xs font-medium text-muted-foreground mb-1.5 block"
 
+function parseGalleryUrls(raw: string): string[] {
+  return raw
+    .split(/\n|,/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .slice(0, 10)
+}
+
 export function ProfileStorePanel() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -35,8 +43,10 @@ export function ProfileStorePanel() {
     description: "",
     priceUsd: "",
     imageUrl: "",
+    galleryUrls: "",
     digitalUrl: "",
     inventory: "1",
+    inventoryUnlimited: false,
   })
 
   const load = useCallback(async () => {
@@ -64,29 +74,54 @@ export function ProfileStorePanel() {
       description: "",
       priceUsd: "",
       imageUrl: "",
+      galleryUrls: "",
       digitalUrl: "",
       inventory: "1",
+      inventoryUnlimited: false,
     })
     setShowForm(false)
   }
 
   const submitProduct = async () => {
-    if (!form.title.trim() || !form.imageUrl.trim() || !form.priceUsd.trim()) return
+    const title = form.title.trim()
+    const imageUrl = form.imageUrl.trim()
+    const price = parseFloat(form.priceUsd)
+    if (!title || !imageUrl || !Number.isFinite(price) || price < 0.01) {
+      setError("Title, cover image URL, and a valid price are required")
+      return
+    }
+    if (form.productType === "digital" && !form.digitalUrl.trim()) {
+      setError("Download URL is required for digital products")
+      return
+    }
+    if (
+      form.productType === "merchandise" &&
+      !form.inventoryUnlimited &&
+      (parseInt(form.inventory, 10) < 1 || !Number.isFinite(parseInt(form.inventory, 10)))
+    ) {
+      setError("Stock must be at least 1, or enable unlimited stock")
+      return
+    }
+
     setBusy(true)
     setError(null)
     try {
+      const galleryUrls = parseGalleryUrls(form.galleryUrls)
       const created = await createMyStoreProduct({
         productType: form.productType,
-        title: form.title.trim(),
+        title,
         description: form.description.trim() || undefined,
-        priceUsd: parseFloat(form.priceUsd),
-        imageUrl: form.imageUrl.trim(),
+        priceUsd: price,
+        imageUrl,
+        galleryUrls: galleryUrls.length > 0 ? galleryUrls : undefined,
         digitalUrl:
           form.productType === "digital" ? form.digitalUrl.trim() : undefined,
         inventory:
-          form.productType === "merchandise"
+          form.productType === "merchandise" && !form.inventoryUnlimited
             ? parseInt(form.inventory, 10)
             : undefined,
+        inventoryUnlimited:
+          form.productType === "merchandise" ? form.inventoryUnlimited : undefined,
       })
       setProducts((prev) => [created, ...prev])
       resetForm()
@@ -124,7 +159,7 @@ export function ProfileStorePanel() {
           <div>
             <h2 className="text-lg font-semibold">{storeName || "Your store"}</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              List physical merch and digital downloads for your audience.
+              List physical merch and digital downloads. Buyers checkout via Stripe on the product page.
             </p>
           </div>
           <Button
@@ -156,7 +191,7 @@ export function ProfileStorePanel() {
           <div>
             <h3 className="text-sm font-semibold text-foreground">New product</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              List a physical item or a digital download for your audience.
+              Physical items need stock (min 1) or unlimited. Digital items deliver a download link after purchase.
             </p>
           </div>
 
@@ -185,7 +220,7 @@ export function ProfileStorePanel() {
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="store-title" className={labelClass}>
-                Title
+                Title <span className="text-destructive">*</span>
               </label>
               <input
                 id="store-title"
@@ -193,11 +228,12 @@ export function ProfileStorePanel() {
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                 placeholder="Product name"
+                required
               />
             </div>
             <div>
               <label htmlFor="store-price" className={labelClass}>
-                Price (USD)
+                Price (USD) <span className="text-destructive">*</span>
               </label>
               <input
                 id="store-price"
@@ -208,13 +244,14 @@ export function ProfileStorePanel() {
                 value={form.priceUsd}
                 onChange={(e) => setForm((f) => ({ ...f, priceUsd: e.target.value }))}
                 placeholder="0.00"
+                required
               />
             </div>
           </div>
 
           <div>
             <label htmlFor="store-image" className={labelClass}>
-              Image URL
+              Cover image URL <span className="text-destructive">*</span>
             </label>
             <input
               id="store-image"
@@ -223,13 +260,27 @@ export function ProfileStorePanel() {
               placeholder="https://..."
               value={form.imageUrl}
               onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
+              required
+            />
+          </div>
+
+          <div>
+            <label htmlFor="store-gallery" className={labelClass}>
+              Gallery image URLs <span className="font-normal">(optional, one per line, max 10)</span>
+            </label>
+            <textarea
+              id="store-gallery"
+              value={form.galleryUrls}
+              onChange={(e) => setForm((f) => ({ ...f, galleryUrls: e.target.value }))}
+              placeholder={"https://example.com/photo-1.jpg\nhttps://example.com/photo-2.jpg"}
+              className="w-full h-24 px-4 py-3 rounded-xl bg-secondary text-sm resize-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-shadow"
             />
           </div>
 
           {form.productType === "digital" ? (
             <div>
               <label htmlFor="store-digital" className={labelClass}>
-                Download URL
+                Download URL <span className="text-destructive">*</span>
               </label>
               <input
                 id="store-digital"
@@ -238,21 +289,39 @@ export function ProfileStorePanel() {
                 placeholder="https://..."
                 value={form.digitalUrl}
                 onChange={(e) => setForm((f) => ({ ...f, digitalUrl: e.target.value }))}
+                required
               />
             </div>
           ) : (
-            <div>
-              <label htmlFor="store-inventory" className={labelClass}>
-                Inventory
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.inventoryUnlimited}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, inventoryUnlimited: e.target.checked }))
+                  }
+                  className="rounded border-border"
+                />
+                <span className="text-sm font-medium">Unlimited stock</span>
               </label>
-              <input
-                id="store-inventory"
-                type="number"
-                min="0"
-                className={cn(fieldClass, "sm:max-w-[10rem]")}
-                value={form.inventory}
-                onChange={(e) => setForm((f) => ({ ...f, inventory: e.target.value }))}
-              />
+              {!form.inventoryUnlimited && (
+                <div>
+                  <label htmlFor="store-inventory" className={labelClass}>
+                    Stock quantity <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    id="store-inventory"
+                    type="number"
+                    min="1"
+                    className={cn(fieldClass, "sm:max-w-[10rem]")}
+                    value={form.inventory}
+                    onChange={(e) => setForm((f) => ({ ...f, inventory: e.target.value }))}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Minimum 1 — zero stock is not allowed.</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -270,11 +339,7 @@ export function ProfileStorePanel() {
           </div>
 
           <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
-            <Button
-              variant="outline"
-              className="rounded-full sm:flex-1"
-              onClick={resetForm}
-            >
+            <Button variant="outline" className="rounded-full sm:flex-1" onClick={resetForm}>
               Cancel
             </Button>
             <Button
@@ -302,11 +367,7 @@ export function ProfileStorePanel() {
             >
               {p.imageUrl ? (
                 <div className="aspect-[4/3] bg-muted">
-                  <img
-                    src={p.imageUrl}
-                    alt={p.title}
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={p.imageUrl} alt={p.title} className="w-full h-full object-cover" />
                 </div>
               ) : (
                 <div className="aspect-[4/3] bg-muted flex items-center justify-center">
@@ -331,8 +392,13 @@ export function ProfileStorePanel() {
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
-                {p.productType === "merchandise" && p.inventory != null && (
-                  <p className="text-xs text-muted-foreground">Stock: {p.inventory}</p>
+                {p.productType === "merchandise" && (
+                  <p className="text-xs text-muted-foreground">
+                    {p.inventoryUnlimited ? "Unlimited stock" : `Stock: ${p.inventory}`}
+                  </p>
+                )}
+                {p.galleryUrls?.length > 0 && (
+                  <p className="text-xs text-muted-foreground">{p.galleryUrls.length} gallery image(s)</p>
                 )}
                 <span className="inline-flex text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full bg-green-500/15 text-green-600">
                   {p.status}

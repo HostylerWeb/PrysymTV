@@ -7,8 +7,10 @@ export type StoreProduct = {
   description: string | null;
   priceUsd: number;
   imageUrl: string | null;
+  galleryUrls: string[];
   digitalUrl: string | null;
   inventory: number | null;
+  inventoryUnlimited: boolean;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -24,12 +26,6 @@ export type CreatorStoreSummary = {
   createdAt: string;
 };
 
-export function fetchMyStore() {
-  return apiRequest<{ store: CreatorStoreSummary; products: StoreProduct[] }>(
-    "/stores/me",
-  );
-}
-
 export type PublicStoreProduct = {
   id: string;
   productType: "merchandise" | "digital" | "ticket" | "course";
@@ -37,16 +33,37 @@ export type PublicStoreProduct = {
   description: string | null;
   priceUsd: number;
   imageUrl: string | null;
+  galleryUrls: string[];
   inventory: number | null;
+  inventoryUnlimited: boolean;
+  inStock: boolean;
   createdAt: string;
 };
 
+export function fetchMyStore() {
+  return apiRequest<{ store: CreatorStoreSummary; products: StoreProduct[] }>(
+    "/stores/me",
+  );
+}
+
 export function fetchCreatorStore(username: string) {
   const slug = username.replace(/^@/, "");
-  return apiRequest<{ store: CreatorStoreSummary; products: PublicStoreProduct[] }>(
-    `/users/${encodeURIComponent(slug)}/store`,
-    { auth: false },
-  );
+  return apiRequest<{
+    store: CreatorStoreSummary;
+    creatorUsername: string;
+    products: PublicStoreProduct[];
+  }>(`/users/${encodeURIComponent(slug)}/store`, { auth: false });
+}
+
+export function fetchStoreProduct(username: string, productId: string) {
+  const slug = username.replace(/^@/, "");
+  return apiRequest<{
+    store: CreatorStoreSummary;
+    creatorUsername: string;
+    product: PublicStoreProduct;
+  }>(`/users/${encodeURIComponent(slug)}/store/products/${productId}`, {
+    auth: false,
+  });
 }
 
 export function createMyStoreProduct(body: {
@@ -55,8 +72,10 @@ export function createMyStoreProduct(body: {
   description?: string;
   priceUsd: number;
   imageUrl: string;
+  galleryUrls?: string[];
   digitalUrl?: string;
   inventory?: number;
+  inventoryUnlimited?: boolean;
 }) {
   return apiRequest<StoreProduct>("/stores/me/products", {
     method: "POST",
@@ -68,4 +87,46 @@ export function deleteMyStoreProduct(id: string) {
   return apiRequest<{ success: boolean }>(`/stores/me/products/${id}`, {
     method: "DELETE",
   });
+}
+
+export function createStoreCheckout(productId: string, quantity = 1) {
+  return apiRequest<{
+    checkoutUrl?: string;
+    sessionId?: string;
+    orderId: string;
+    devMode?: boolean;
+    redirectUrl?: string;
+    success?: boolean;
+  }>("/stores/checkout", {
+    method: "POST",
+    body: { productId, quantity },
+  });
+}
+
+export function fetchStoreOrder(orderId: string) {
+  return apiRequest<{
+    id: string;
+    status: string;
+    totalUsd: number;
+    createdAt: string;
+    store: { displayName: string; slug: string };
+    lines: Array<{
+      quantity: number;
+      unitUsd: number;
+      product: {
+        id: string;
+        title: string;
+        productType: string;
+        imageUrl: string | null;
+        digitalUrl: string | null;
+      };
+    }>;
+  }>(`/stores/orders/${orderId}`);
+}
+
+export function stockLabel(product: Pick<PublicStoreProduct, "productType" | "inventory" | "inventoryUnlimited" | "inStock">) {
+  if (product.productType === "digital") return "Digital download";
+  if (product.inventoryUnlimited) return "In stock";
+  if (!product.inStock) return "Out of stock";
+  return `${product.inventory} in stock`;
 }

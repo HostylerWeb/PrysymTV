@@ -1186,8 +1186,10 @@ model StoreProduct {
   description  String?
   priceUsd     Decimal           @map("price_usd") @db.Decimal(12, 2)
   imageUrl     String?           @map("image_url")
+  galleryUrls  String[]          @default([]) @map("gallery_urls")
   digitalUrl   String?           @map("digital_url")
   inventory    Int?
+  inventoryUnlimited Boolean     @default(false) @map("inventory_unlimited")
   status       StoreProductStatus @default(draft)
   revenueRuleKey String          @default("store_merchandise") @map("revenue_rule_key")
   createdAt    DateTime          @default(now()) @map("created_at")

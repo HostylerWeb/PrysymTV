@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useCallback, useEffect, useState } from "react"
+import { Suspense, useCallback, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   BarChart3,
@@ -139,6 +139,14 @@ function AdvertiserAccountStatus({
 }
 
 export default function AdvertisePage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-background" />}>
+      <AdvertisePageInner />
+    </Suspense>
+  )
+}
+
+function AdvertisePageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { isAuthenticated, isLoading, user } = useAuth()

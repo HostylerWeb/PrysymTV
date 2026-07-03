@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStoreProductDto } from './dto/create-store-product.dto';
+import { CreateStoreCheckoutDto } from './dto/create-store-checkout.dto';
 import { UpdateCreatorStoreDto } from './dto/update-creator-store.dto';
 import { UpdateStoreProductDto } from './dto/update-store-product.dto';
 import { StoresService } from './stores.service';
@@ -75,5 +76,21 @@ export class StoresController {
   ) {
     const status = await this.storeStatus(user.id);
     return this.stores.deleteProduct(user.id, status, id);
+  }
+
+  @Post('checkout')
+  async checkout(
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: CreateStoreCheckoutDto,
+  ) {
+    return this.stores.createCheckout(user.id, body);
+  }
+
+  @Get('orders/:orderId')
+  async getOrder(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('orderId') orderId: string,
+  ) {
+    return this.stores.getBuyerOrder(user.id, orderId);
   }
 }

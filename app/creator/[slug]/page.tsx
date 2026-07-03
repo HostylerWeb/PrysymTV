@@ -70,6 +70,7 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
   const [storeData, setStoreData] = useState<{
     store: CreatorStoreSummary
     products: PublicStoreProduct[]
+    creatorUsername?: string
   } | null>(null)
   const [storeLoading, setStoreLoading] = useState(false)
   useEffect(() => {
@@ -394,7 +395,11 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
             storeLoading && !storeData ? (
               <p className="text-center py-20 text-muted-foreground text-sm">Loading store…</p>
             ) : storeData ? (
-              <CreatorStoreTab store={storeData.store} products={storeData.products} />
+              <CreatorStoreTab
+                store={storeData.store}
+                products={storeData.products}
+                creatorUsername={storeData.creatorUsername ?? slug}
+              />
             ) : (
               <p className="text-center py-20 text-muted-foreground text-sm">
                 Store is not available right now.

@@ -20,6 +20,7 @@ import { ApplyStreamerDto } from './dto/apply-streamer.dto';
 import { ApplyVerticalCreatorDto } from './dto/apply-vertical-creator.dto';
 import { RequestCreatorAccessDto } from './dto/request-creator-access.dto';
 import { ReplaceSocialLinksDto } from './dto/social-links.dto';
+import { UploadMimeInitDto } from '../common/dto/upload-mime-init.dto';
 import { StoresService } from '../stores/stores.service';
 
 @Controller('users')
@@ -45,7 +46,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   initAvatarUpload(
     @CurrentUser() user: AuthUserPayload,
-    @Body() body: { mimeType: string; fileName?: string },
+    @Body() body: UploadMimeInitDto,
   ) {
     return this.users.initProfileImageUpload(
       user.id,
@@ -59,7 +60,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   initBannerUpload(
     @CurrentUser() user: AuthUserPayload,
-    @Body() body: { mimeType: string; fileName?: string },
+    @Body() body: UploadMimeInitDto,
   ) {
     return this.users.initProfileImageUpload(
       user.id,
@@ -73,7 +74,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   initStreamerIdUpload(
     @CurrentUser() user: AuthUserPayload,
-    @Body() body: { mimeType: string; fileName?: string },
+    @Body() body: UploadMimeInitDto,
   ) {
     return this.users.initStreamerIdUpload(
       user.id,
@@ -223,6 +224,14 @@ export class UsersController {
   @Get(':username/playlists')
   getPublicPlaylists(@Param('username') username: string) {
     return this.users.getPublicPlaylists(username);
+  }
+
+  @Get(':username/store/products/:productId')
+  getPublicStoreProduct(
+    @Param('username') username: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.stores.getPublicProduct(username, productId);
   }
 
   @Get(':username/store')

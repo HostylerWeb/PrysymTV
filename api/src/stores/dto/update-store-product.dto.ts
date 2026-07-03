@@ -1,4 +1,7 @@
 import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNumber,
@@ -8,6 +11,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 import { StoreProductStatus, StoreProductType } from '@prisma/client';
 
@@ -37,12 +41,22 @@ export class UpdateStoreProductDto {
   imageUrl?: string;
 
   @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsUrl({}, { each: true })
+  galleryUrls?: string[];
+
+  @IsOptional()
   @IsUrl()
   digitalUrl?: string | null;
 
   @IsOptional()
+  @IsBoolean()
+  inventoryUnlimited?: boolean;
+
+  @ValidateIf((o: UpdateStoreProductDto) => o.inventory !== undefined && o.inventory !== null)
   @IsInt()
-  @Min(0)
+  @Min(1, { message: 'inventory must be at least 1, or enable unlimited stock' })
   inventory?: number | null;
 
   @IsOptional()

@@ -20,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BillingService } from './billing.service';
 import { CreatorsBalanceService } from './creators-balance.service';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
+import { FulfillCheckoutDto } from './dto/fulfill-checkout.dto';
 import { CreateCreatorSubscriptionDto } from './dto/create-creator-subscription.dto';
 import { RequestPayoutDto } from './dto/request-payout.dto';
 import { SendGiftDto } from './dto/send-gift.dto';
@@ -67,7 +68,7 @@ export class BillingController {
   @UseGuards(JwtAuthGuard)
   fulfill(
     @CurrentUser() user: AuthUserPayload,
-    @Body() body: { sessionId: string },
+    @Body() body: FulfillCheckoutDto,
   ) {
     return this.billing.fulfillCheckoutSession(body.sessionId, user.id);
   }

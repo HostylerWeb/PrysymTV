@@ -21,6 +21,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RevenueSplitService } from '../revenue/revenue-split.service';
 import { StreamsGateway } from '../streams/streams.gateway';
+import { StoresService } from '../stores/stores.service';
 import { CREATOR_SUB_PLANS } from './creator-sub-plans';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { SendGiftDto } from './dto/send-gift.dto';
@@ -50,6 +51,7 @@ export class BillingService {
     private readonly config: ConfigService,
     private readonly notifications: NotificationsService,
     private readonly streamsGateway: StreamsGateway,
+    private readonly storesService: StoresService,
   ) {
     const key = this.config.get<string>('STRIPE_SECRET_KEY');
     if (key) {
@@ -449,6 +451,10 @@ export class BillingService {
         plan?.priceUsd ?? prices.premium,
         sessionId,
       );
+    } else if (productType === 'store') {
+      const orderId = session.metadata?.orderId;
+      if (!orderId) throw new BadRequestException('Invalid store metadata');
+      return this.storesService.fulfillStoreOrder(orderId, session.id);
     } else if (productType === 'creator_subscription') {
       const creatorId = session.metadata?.creatorId;
       const tier = session.metadata?.tier as SubscriptionTier | undefined;
