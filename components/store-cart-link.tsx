@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ShoppingBag } from "lucide-react"
 import { getStoreCart, getStoreCartCount } from "@/lib/store-cart"
 import { cn } from "@/lib/utils"
+import { creatorStoreCartPath, usernamesMatch } from "@/lib/username-slug"
 
 type StoreCartLinkProps = {
   creatorUsername: string
@@ -17,7 +18,7 @@ export function StoreCartLink({ creatorUsername, className }: StoreCartLinkProps
   useEffect(() => {
     const refresh = () => {
       const cart = getStoreCart()
-      setCount(cart?.creatorUsername === creatorUsername ? getStoreCartCount() : 0)
+      setCount(cart && usernamesMatch(cart.creatorUsername, creatorUsername) ? getStoreCartCount() : 0)
     }
     refresh()
     window.addEventListener("storage", refresh)
@@ -32,7 +33,7 @@ export function StoreCartLink({ creatorUsername, className }: StoreCartLinkProps
 
   return (
     <Link
-      href={`/creator/${creatorUsername}/store/cart`}
+      href={creatorStoreCartPath(creatorUsername)}
       className={cn(
         "relative inline-flex items-center gap-1.5 rounded-full border border-border/80 px-3 py-1.5 text-xs font-medium hover:border-primary/40 hover:text-primary transition-colors",
         className,

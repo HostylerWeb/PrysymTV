@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, use, useState, useEffect } from "react"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { ChevronLeft, Share2, Play, Users, Video, Bell, BellOff, Check, Gift, ShoppingBag } from "lucide-react"
 import { GiftSheet } from "@/components/gift-sheet"
 import { PageLoadingSkeleton } from "@/components/content-skeletons"
@@ -29,6 +29,7 @@ import { fetchCreatorPlaylists } from "@/lib/api/playlists"
 import { fetchCreatorStore, type CreatorStoreSummary, type PublicStoreProduct } from "@/lib/api/stores"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
 import { userAvatarUrl } from "@/lib/user-avatar"
+import { normalizeUsernameSlug } from "@/lib/username-slug"
 
 type CreatorVideo = {
   id: string
@@ -50,7 +51,9 @@ export default function CreatorProfilePage(props: { params: Promise<{ slug: stri
 }
 
 function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = use(params)
+  const { slug: rawSlug } = use(params)
+  const slug = normalizeUsernameSlug(rawSlug)
+  const router = useRouter()
   const searchParams = useSearchParams()
   const { isAuthenticated } = useAuth()
   const [profile, setProfile] = useState<PublicCreatorProfile | null>(null)
@@ -76,6 +79,13 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
     creatorUsername?: string
   } | null>(null)
   const [storeLoading, setStoreLoading] = useState(false)
+
+  useEffect(() => {
+    if (rawSlug === slug) return
+    const qs = searchParams.toString()
+    router.replace(`/creator/${slug}${qs ? `?${qs}` : ""}`)
+  }, [rawSlug, slug, router, searchParams])
+
   useEffect(() => {
     let cancelled = false
     async function load() {

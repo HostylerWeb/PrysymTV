@@ -19,6 +19,7 @@ import {
 } from '@prisma/client';
 import Stripe from 'stripe';
 import { PrismaService } from '../prisma/prisma.service';
+import { normalizeUsername } from '../common/utils/username.util';
 import { RevenueSplitService } from '../revenue/revenue-split.service';
 import { CreateStoreCheckoutDto } from './dto/create-store-checkout.dto';
 import { CreateStoreProductDto } from './dto/create-store-product.dto';
@@ -77,7 +78,7 @@ export class StoresService {
     });
     if (existing) return existing;
 
-    const baseSlug = username.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    const baseSlug = normalizeUsername(username).replace(/[^a-z0-9-]/g, '-');
     let slug = baseSlug;
     let n = 0;
     while (await this.prisma.creatorStore.findUnique({ where: { slug } })) {
@@ -271,7 +272,7 @@ export class StoresService {
 
   async getPublicStoreByUsername(username: string) {
     const user = await this.prisma.user.findFirst({
-      where: { username: username.toLowerCase(), isBanned: false },
+      where: { username: normalizeUsername(username), isBanned: false },
       select: {
         username: true,
         storeCreatorStatus: true,

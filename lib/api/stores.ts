@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api-client";
+import { normalizeUsernameSlug } from "@/lib/username-slug";
 
 export type StoreProduct = {
   id: string;
@@ -51,7 +52,7 @@ export function fetchMyStore() {
 }
 
 export function fetchCreatorStore(username: string) {
-  const slug = username.replace(/^@/, "");
+  const slug = normalizeUsernameSlug(username);
   return apiRequest<{
     store: CreatorStoreSummary;
     creatorUsername: string;
@@ -60,7 +61,7 @@ export function fetchCreatorStore(username: string) {
 }
 
 export function fetchStoreProduct(username: string, productId: string) {
-  const slug = username.replace(/^@/, "");
+  const slug = normalizeUsernameSlug(username);
   return apiRequest<{
     store: CreatorStoreSummary;
     creatorUsername: string;

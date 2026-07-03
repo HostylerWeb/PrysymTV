@@ -4,6 +4,7 @@ import Link from "next/link"
 import type { CreatorStoreSummary, PublicStoreProduct } from "@/lib/api/stores"
 import { stockLabel, shippingLabel } from "@/lib/api/stores"
 import { StoreCartLink } from "@/components/store-cart-link"
+import { creatorStoreProductPath } from "@/lib/username-slug"
 import { Package } from "lucide-react"
 
 type CreatorStoreTabProps = {
@@ -38,7 +39,7 @@ export function CreatorStoreTab({ store, products, creatorUsername }: CreatorSto
           {products.map((p) => (
             <Link
               key={p.id}
-              href={`/creator/${creatorUsername}/store/${p.id}`}
+              href={creatorStoreProductPath(creatorUsername, p.id)}
               className="rounded-xl border border-border/80 overflow-hidden bg-card/40 hover:border-primary/40 transition-colors group"
             >
               {p.imageUrl ? (

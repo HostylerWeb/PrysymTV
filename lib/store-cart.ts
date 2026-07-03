@@ -1,3 +1,5 @@
+import { normalizeUsernameSlug } from "@/lib/username-slug"
+
 export type StoreCartItem = {
   productId: string
   title: string
@@ -70,7 +72,8 @@ export function addToStoreCart(
   quantity = 1,
 ): StoreCart {
   const existing = readRaw()
-  if (existing && existing.creatorUsername !== creatorUsername) {
+  const creatorSlug = normalizeUsernameSlug(creatorUsername)
+  if (existing && normalizeUsernameSlug(existing.creatorUsername) !== creatorSlug) {
     throw new Error("Your cart has items from another store. Clear it first to shop here.")
   }
 
@@ -103,7 +106,7 @@ export function addToStoreCart(
       : [...items, nextItem]
 
   const cart: StoreCart = {
-    creatorUsername,
+    creatorUsername: creatorSlug,
     storeName: store.displayName,
     shippingFree: store.shippingFree,
     shippingFeeUsd: store.shippingFeeUsd,

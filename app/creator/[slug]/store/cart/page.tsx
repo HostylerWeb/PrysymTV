@@ -19,6 +19,7 @@ import { fetchMe } from "@/lib/api/users"
 import { StoreCartSkeleton } from "@/components/content-skeletons"
 import { BottomNavigation } from "@/components/bottom-navigation"
 import { Footer } from "@/components/footer"
+import { BuyerDetailsForm } from "@/components/buyer-details-form"
 import {
   buyerDetailsFromUser,
   EMPTY_BUYER_DETAILS,
@@ -38,6 +39,13 @@ import {
   updateStoreCartQuantity,
   type StoreCart,
 } from "@/lib/store-cart"
+import {
+  creatorPath,
+  creatorStorePath,
+  creatorStoreProductPath,
+  normalizeUsernameSlug,
+  usernamesMatch,
+} from "@/lib/username-slug"
 
 export default function StoreCartPage() {
   return (
@@ -54,7 +62,8 @@ function StoreCartPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { isAuthenticated } = useAuth()
-  const slug = String(params.slug ?? "")
+  const rawSlug = String(params.slug ?? "")
+  const slug = normalizeUsernameSlug(rawSlug)
 
   const [cart, setCart] = useState<StoreCart | null>(null)
   const [busy, setBusy] = useState(false)
@@ -66,13 +75,18 @@ function StoreCartPageInner() {
 
   const refreshCart = useCallback(() => {
     const next = getStoreCart()
-    if (!next || next.creatorUsername !== slug) {
-      setCart(next?.creatorUsername === slug ? next : null)
-      if (next && next.creatorUsername !== slug) setCart(null)
+    if (!next || !usernamesMatch(next.creatorUsername, slug)) {
+      setCart(null)
       return
     }
     setCart(next)
   }, [slug])
+
+  useEffect(() => {
+    if (rawSlug === slug) return
+    const qs = searchParams.toString()
+    router.replace(`/creator/${slug}/store/cart${qs ? `?${qs}` : ""}`)
+  }, [rawSlug, slug, router, searchParams])
 
   useEffect(() => {
     refreshCart()
@@ -119,7 +133,7 @@ function StoreCartPageInner() {
   const checkout = async () => {
     if (!cart?.items.length) return
     if (!isAuthenticated) {
-      router.push(`/profile?auth=login&returnTo=${encodeURIComponent(`/creator/${slug}/store/cart`)}`)
+      router.push(`/profile?auth=login&returnTo=${encodeURIComponent(`${creatorStorePath(slug)}/cart`)}`)
       return
     }
     if (needsShipping && !isBuyerDetailsComplete(buyerDetails)) {
@@ -162,7 +176,7 @@ function StoreCartPageInner() {
           <p className="text-muted-foreground text-sm">
             Thank you for your purchase from {cart?.storeName ?? "this store"}.
           </p>
-          <Link href={`/creator/${slug}?tab=store`}>
+          <Link href={`${creatorPath(slug)}?tab=store`}>
             <Button className="rounded-full mt-4">Back to store</Button>
           </Link>
         </div>
@@ -176,7 +190,7 @@ function StoreCartPageInner() {
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <div className="max-w-3xl mx-auto px-4 py-6 md:py-10">
         <Link
-          href={`/creator/${slug}?tab=store`}
+          href={`${creatorPath(slug)}?tab=store`}
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
         >
           <ChevronLeft className="w-4 h-4" />
@@ -194,7 +208,7 @@ function StoreCartPageInner() {
           <div className="text-center py-16 rounded-2xl border border-dashed border-border/80">
             <Package className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
             <p className="text-sm text-muted-foreground mb-4">Your cart is empty.</p>
-            <Link href={`/creator/${slug}?tab=store`}>
+            <Link href={`${creatorPath(slug)}?tab=store`}>
               <Button variant="outline" className="rounded-full">Browse products</Button>
             </Link>
           </div>
@@ -207,7 +221,7 @@ function StoreCartPageInner() {
                   className="flex gap-4 p-4 rounded-2xl border border-border/60 bg-card/40"
                 >
                   <Link
-                    href={`/creator/${slug}/store/${item.productId}`}
+                    href={creatorStoreProductPath(slug, item.productId)}
                     className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-muted"
                   >
                     {item.imageUrl ? (
@@ -220,7 +234,7 @@ function StoreCartPageInner() {
                   </Link>
                   <div className="flex-1 min-w-0">
                     <Link
-                      href={`/creator/${slug}/store/${item.productId}`}
+                      href={creatorStoreProductPath(slug, item.productId)}
                       className="font-semibold text-sm line-clamp-2 hover:text-primary"
                     >
                       {item.title}

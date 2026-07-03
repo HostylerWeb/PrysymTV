@@ -24,6 +24,7 @@ import { fetchMe } from "@/lib/api/users"
 import { StoreProductSkeleton } from "@/components/content-skeletons"
 import { BottomNavigation } from "@/components/bottom-navigation"
 import { Footer } from "@/components/footer"
+import { BuyerDetailsForm } from "@/components/buyer-details-form"
 import {
   buyerDetailsFromUser,
   EMPTY_BUYER_DETAILS,
@@ -41,6 +42,12 @@ import {
 } from "@/lib/api/stores"
 import { addToStoreCart } from "@/lib/store-cart"
 import { notifyStoreCartUpdated, StoreCartLink } from "@/components/store-cart-link"
+import {
+  creatorPath,
+  creatorStorePath,
+  normalizeUsernameSlug,
+  usernamesMatch,
+} from "@/lib/username-slug"
 
 export default function StoreProductPage() {
   return (
@@ -57,7 +64,8 @@ function StoreProductPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { isAuthenticated, user } = useAuth()
-  const slug = String(params.slug ?? "")
+  const rawSlug = String(params.slug ?? "")
+  const slug = normalizeUsernameSlug(rawSlug)
   const productId = String(params.productId ?? "")
 
   const [loading, setLoading] = useState(true)
@@ -81,8 +89,14 @@ function StoreProductPageInner() {
 
   const isOwner =
     isAuthenticated &&
-    user?.username === creatorUsername &&
+    usernamesMatch(user?.username, creatorUsername) &&
     user?.storeCreatorStatus === "approved"
+
+  useEffect(() => {
+    if (rawSlug === slug) return
+    const qs = searchParams.toString()
+    router.replace(`/creator/${slug}/store/${productId}${qs ? `?${qs}` : ""}`)
+  }, [rawSlug, slug, productId, router, searchParams])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -149,11 +163,12 @@ function StoreProductPageInner() {
     : []
 
   const shippingText = product ? shippingLabel(product) : null
+  const unitPrice = Number(product?.priceUsd ?? 0)
   const shippingFee =
     product?.productType === "merchandise" && product.shippingFree === false
-      ? product.shippingFeeUsd ?? 0
+      ? Number(product.shippingFeeUsd ?? 0)
       : 0
-  const orderTotal = product ? product.priceUsd * quantity + shippingFee : 0
+  const orderTotal = product ? unitPrice * quantity + shippingFee : 0
   const isPhysical = product?.productType === "merchandise"
   const isDigital = product?.productType === "digital"
 
@@ -191,7 +206,7 @@ function StoreProductPageInner() {
   const buy = async () => {
     if (!product || !product.inStock) return
     if (!isAuthenticated) {
-      router.push(`/profile?auth=login&returnTo=${encodeURIComponent(`/creator/${slug}/store/${productId}`)}`)
+      router.push(`/profile?auth=login&returnTo=${encodeURIComponent(`${creatorPath(slug)}/store/${productId}`)}`)
       return
     }
     if (isPhysical && !isBuyerDetailsComplete(buyerDetails)) {
@@ -233,7 +248,7 @@ function StoreProductPageInner() {
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 px-4">
         <Package className="w-12 h-12 text-muted-foreground" />
         <p className="text-muted-foreground">{error ?? "Product not found"}</p>
-        <Link href={`/creator/${slug}`}>
+        <Link href={creatorPath(slug)}>
           <Button variant="outline" className="rounded-full">Back to creator</Button>
         </Link>
       </div>
@@ -246,18 +261,18 @@ function StoreProductPageInner() {
       <div className="sticky top-0 z-50 border-b border-border/80 bg-background/90 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto flex items-center gap-2 px-4 py-3 md:px-8">
           <Link
-            href={`/creator/${slug}?tab=store`}
+            href={`${creatorStorePath(slug)}?tab=store`}
             className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors shrink-0"
             aria-label="Back to store"
           >
             <ChevronLeft className="w-5 h-5" />
           </Link>
           <nav className="min-w-0 flex-1 text-xs text-muted-foreground truncate">
-            <Link href={`/creator/${slug}`} className="hover:text-foreground transition-colors">
+            <Link href={creatorPath(slug)} className="hover:text-foreground transition-colors">
               @{creatorUsername}
             </Link>
             <span className="mx-1.5">/</span>
-            <Link href={`/creator/${slug}?tab=store`} className="hover:text-foreground transition-colors">
+            <Link href={`${creatorStorePath(slug)}?tab=store`} className="hover:text-foreground transition-colors">
               Store
             </Link>
             <span className="mx-1.5">/</span>
@@ -422,7 +437,7 @@ function StoreProductPageInner() {
               </div>
             </div>
 
-            <p className="text-3xl font-bold text-primary">${product.priceUsd.toFixed(2)}</p>
+            <p className="text-3xl font-bold text-primary">${unitPrice.toFixed(2)}</p>
 
             {product.description && (
               <p className="lg:hidden text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap line-clamp-4">
@@ -483,7 +498,7 @@ function StoreProductPageInner() {
                 <div className="space-y-2 text-sm border-t border-border/60 pt-4">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span>${(product.priceUsd * quantity).toFixed(2)}</span>
+                    <span>${(unitPrice * quantity).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Shipping</span>
@@ -546,7 +561,7 @@ function StoreProductPageInner() {
             </div>
 
             <Link
-              href={`/creator/${slug}?tab=store`}
+              href={`${creatorStorePath(slug)}?tab=store`}
               className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
             >
               <ExternalLink className="w-3.5 h-3.5" />

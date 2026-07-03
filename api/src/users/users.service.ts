@@ -15,6 +15,7 @@ import {
   mapVideoCard,
   VIDEO_CARD_SELECT,
 } from '../common/mappers/content.mapper';
+import { normalizeUsername } from '../common/utils/username.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlaylistsService } from '../playlists/playlists.service';
@@ -398,7 +399,7 @@ export class UsersService {
 
   async getPublicVideos(username: string, page = 1, limit = 24) {
     const user = await this.prisma.user.findFirst({
-      where: { username: username.toLowerCase() },
+      where: { username: normalizeUsername(username) },
     });
     if (!user || user.isBanned) throw new NotFoundException('Creator not found');
 
@@ -428,7 +429,7 @@ export class UsersService {
 
   async getPublicProfile(username: string, viewerId?: string) {
     const user = await this.prisma.user.findFirst({
-      where: { username: username.toLowerCase() },
+      where: { username: normalizeUsername(username) },
       include: {
         socialLinks: { orderBy: { sortOrder: 'asc' } },
         streams: {
@@ -495,7 +496,7 @@ export class UsersService {
 
   async toggleLiveAlert(subscriberId: string, username: string) {
     const creator = await this.prisma.user.findFirst({
-      where: { username: username.toLowerCase() },
+      where: { username: normalizeUsername(username) },
     });
     if (!creator || creator.isBanned) {
       throw new NotFoundException('Creator not found');
@@ -533,7 +534,7 @@ export class UsersService {
 
   async getPublicPlaylists(username: string) {
     const user = await this.prisma.user.findFirst({
-      where: { username: username.toLowerCase() },
+      where: { username: normalizeUsername(username) },
       select: { id: true },
     });
     if (!user) throw new NotFoundException('Creator not found');
@@ -542,7 +543,7 @@ export class UsersService {
 
   async follow(followerId: string, username: string) {
     const target = await this.prisma.user.findFirst({
-      where: { username: username.toLowerCase() },
+      where: { username: normalizeUsername(username) },
     });
     if (!target) throw new NotFoundException('User not found');
     if (target.id === followerId)
@@ -562,7 +563,7 @@ export class UsersService {
 
   async unfollow(followerId: string, username: string) {
     const target = await this.prisma.user.findFirst({
-      where: { username: username.toLowerCase() },
+      where: { username: normalizeUsername(username) },
     });
     if (!target) throw new NotFoundException('User not found');
     await this.prisma.follow.deleteMany({

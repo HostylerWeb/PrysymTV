@@ -31,6 +31,10 @@ import {
   type StoreProduct,
 } from "@/lib/api/stores"
 import { useAuth } from "@/contexts/auth-context"
+import {
+  creatorPath,
+  creatorStoreProductPath,
+} from "@/lib/username-slug"
 
 const fieldClass =
   "w-full h-11 px-4 rounded-xl bg-secondary text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-shadow"
@@ -198,7 +202,7 @@ export function ProfileStorePanel() {
   }
 
   const publicStoreUrl = user?.username
-    ? `/creator/${user.username}?tab=store`
+    ? `${creatorPath(user.username)}?tab=store`
     : null
 
   return (
@@ -366,7 +370,7 @@ export function ProfileStorePanel() {
               className="group rounded-2xl border border-border/80 overflow-hidden bg-card/40 hover:border-primary/30 hover:shadow-md transition-all"
             >
               <Link
-                href={user?.username ? `/creator/${user.username}/store/${p.id}` : "#"}
+                href={user?.username ? creatorStoreProductPath(user.username, p.id) : "#"}
                 className="block"
               >
                 {p.imageUrl ? (
@@ -387,7 +391,7 @@ export function ProfileStorePanel() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <Link
-                      href={user?.username ? `/creator/${user.username}/store/${p.id}` : "#"}
+                      href={user?.username ? creatorStoreProductPath(user.username, p.id) : "#"}
                       className="font-medium text-sm line-clamp-2 hover:text-primary transition-colors"
                     >
                       {p.title}

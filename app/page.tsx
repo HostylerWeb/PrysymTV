@@ -19,7 +19,7 @@ import { fetchFeedHome } from "@/lib/api/feed"
 import { fetchShortsFeed } from "@/lib/api/videos-feed"
 import { fetchPodcastEpisodesFeed } from "@/lib/api/podcasts"
 import { fetchVerticalSeriesList } from "@/lib/api/verticals"
-import { formatDuration, formatViewCount, moviePosterUrl } from "@/lib/format-media"
+import { formatDuration, formatViewCount, moviePosterUrl, videoThumbnail } from "@/lib/format-media"
 
 export default function Home() {
   const { platformCreatorId } = usePublicAdsConfig()

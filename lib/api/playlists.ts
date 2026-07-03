@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api-client";
+import { normalizeUsernameSlug } from "@/lib/username-slug";
 
 export type PlaylistItem = {
   playlistItemId?: string;
@@ -47,7 +48,7 @@ export function fetchPlaylist(id: string) {
 
 export function fetchCreatorPlaylists(username: string) {
   return apiRequest<{ items: PlaylistSummary[] }>(
-    `/users/${encodeURIComponent(username)}/playlists`,
+    `/users/${encodeURIComponent(normalizeUsernameSlug(username))}/playlists`,
     { auth: false },
   );
 }

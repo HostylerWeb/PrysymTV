@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api-client";
+import { normalizeUsernameSlug } from "@/lib/username-slug";
 import type {
   LikedItemRecord,
   MeResponse,
@@ -60,8 +61,12 @@ export type PublicCreatorProfile = {
   socialLinks: Array<{ label: string; url: string; sortOrder: number }>;
 };
 
+function userPath(username: string): string {
+  return encodeURIComponent(normalizeUsernameSlug(username));
+}
+
 export function fetchPublicProfile(username: string) {
-  return apiRequest<PublicCreatorProfile>(`/users/${encodeURIComponent(username)}`, {
+  return apiRequest<PublicCreatorProfile>(`/users/${userPath(username)}`, {
     auth: true,
   });
 }
@@ -80,20 +85,20 @@ export function fetchCreatorVideos(username: string, page = 1, limit = 24) {
     }>;
     meta: { page: number; limit: number; total: number };
   }>(
-    `/users/${encodeURIComponent(username)}/videos?page=${page}&limit=${limit}`,
+    `/users/${userPath(username)}/videos?page=${page}&limit=${limit}`,
     { auth: false },
   );
 }
 
 export function followUser(username: string) {
-  return apiRequest<{ following: boolean }>(`/users/${encodeURIComponent(username)}/follow`, {
+  return apiRequest<{ following: boolean }>(`/users/${userPath(username)}/follow`, {
     method: "POST",
   });
 }
 
 export function unfollowUser(username: string) {
   return apiRequest<{ following: boolean }>(
-    `/users/${encodeURIComponent(username)}/follow`,
+    `/users/${userPath(username)}/follow`,
     { method: "DELETE" },
   );
 }
@@ -138,7 +143,7 @@ export async function requestCreatorAccess(body: {
 
 export function toggleCreatorLiveAlerts(username: string) {
   return apiRequest<{ enabled: boolean }>(
-    `/users/${encodeURIComponent(username)}/live-alerts`,
+    `/users/${userPath(username)}/live-alerts`,
     { method: "POST" },
   );
 }
