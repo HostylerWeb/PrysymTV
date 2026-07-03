@@ -21,6 +21,7 @@ import Stripe from 'stripe';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizeUsername } from '../common/utils/username.util';
 import { RevenueSplitService } from '../revenue/revenue-split.service';
+import { StorageService } from '../storage/storage.service';
 import { CreateStoreCheckoutDto } from './dto/create-store-checkout.dto';
 import { CreateStoreProductDto } from './dto/create-store-product.dto';
 import { UpdateCreatorStoreDto } from './dto/update-creator-store.dto';
@@ -34,6 +35,7 @@ export class StoresService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly revenueSplit: RevenueSplitService,
+    private readonly storage: StorageService,
   ) {
     const key = this.config.get<string>('STRIPE_SECRET_KEY');
     if (key) this.stripe = new Stripe(key);
@@ -187,6 +189,66 @@ export class StoresService {
       },
     });
     return this.mapProduct(product);
+  }
+
+  async initProductImageUpload(
+    userId: string,
+    storeCreatorStatus: StoreCreatorStatus,
+    mimeType: string,
+    fileName?: string,
+  ) {
+    this.assertStoreApproved(userId, storeCreatorStatus);
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException();
+
+    const store = await this.ensureStore(
+      userId,
+      user.username,
+      user.displayName,
+    );
+    this.storage.assertImageMime(mimeType);
+    const objectKey = this.storage.buildStoreProductImageKey(
+      store.id,
+      fileName,
+    );
+    const base = this.storage.getSettings().apiPublicUrl.replace(/\/$/, '');
+    return {
+      storeId: store.id,
+      objectKey,
+      uploadUrl: `${base}/media/store-product-image-upload`,
+      uploadMethod: 'POST' as const,
+      uploadHeaders: {},
+      expiresIn: this.storage.getSettings().presignExpiresSeconds,
+      publicUrl: this.storage.getPublicUrl(objectKey),
+    };
+  }
+
+  async completeProductImageUpload(
+    userId: string,
+    storeCreatorStatus: StoreCreatorStatus,
+    objectKey: string,
+  ) {
+    this.assertStoreApproved(userId, storeCreatorStatus);
+    const store = await this.prisma.creatorStore.findUnique({
+      where: { creatorId: userId },
+    });
+    if (!store) throw new NotFoundException('Store not found');
+
+    const key = objectKey.replace(/^\/+/, '');
+    const expectedPrefix = `uploads/stores/${store.id}/images/`;
+    if (!key.startsWith(expectedPrefix)) {
+      throw new BadRequestException('Invalid store product image key');
+    }
+
+    const exists = await this.storage.objectExists(key);
+    if (!exists) {
+      throw new BadRequestException(
+        'Image not found. Finish uploading the file first.',
+      );
+    }
+
+    const imageUrl = this.storage.getPublicUrl(key);
+    return { storeId: store.id, objectKey: key, imageUrl };
   }
 
   async updateProduct(

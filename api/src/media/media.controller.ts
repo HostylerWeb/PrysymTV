@@ -213,6 +213,52 @@ export class MediaController {
     };
   }
 
+  @Post('store-product-image-upload')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+    }),
+  )
+  async storeProductImageUpload(
+    @CurrentUser() user: AuthUserPayload,
+    @Body('objectKey') objectKey: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!file?.buffer?.length || !objectKey?.trim()) {
+      throw new ForbiddenException('Missing file or objectKey');
+    }
+
+    const key = objectKey.replace(/^\/+/, '');
+    const storeId = key.match(
+      /^uploads\/stores\/([0-9a-f-]{36})\/images\//i,
+    )?.[1];
+    if (!storeId) {
+      throw new ForbiddenException('Invalid store product image key');
+    }
+
+    const store = await this.prisma.creatorStore.findUnique({
+      where: { id: storeId },
+    });
+    if (!store) throw new NotFoundException('Store not found');
+    if (store.creatorId !== user.id && user.role !== 'admin') {
+      throw new ForbiddenException('Not allowed');
+    }
+
+    const max = 10 * 1024 * 1024;
+    if (file.size > max) {
+      throw new ForbiddenException('Image exceeds 10 MB limit');
+    }
+
+    const mimeType = file.mimetype?.trim() || 'image/jpeg';
+    await this.storage.writeImageBuffer(key, file.buffer, mimeType);
+    return {
+      success: true,
+      objectKey: key,
+      publicUrl: this.storage.getPublicUrl(key),
+    };
+  }
+
   @Post('podcast-upload')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(

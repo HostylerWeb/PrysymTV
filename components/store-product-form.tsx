@@ -1,8 +1,10 @@
 "use client"
 
-import { Download, Package } from "lucide-react"
+import { useRef, useState } from "react"
+import { Download, Loader2, Package, Upload, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { uploadStoreProductImage } from "@/lib/api/stores"
 
 export const PRODUCT_TYPES = [
   { id: "merchandise" as const, label: "Physical", icon: Package },
@@ -15,7 +17,7 @@ export type StoreProductFormValues = {
   description: string
   priceUsd: string
   imageUrl: string
-  galleryUrls: string
+  galleryUrls: string[]
   digitalUrl: string
   inventory: string
   inventoryUnlimited: boolean
@@ -28,7 +30,7 @@ export const EMPTY_PRODUCT_FORM: StoreProductFormValues = {
   description: "",
   priceUsd: "",
   imageUrl: "",
-  galleryUrls: "",
+  galleryUrls: [],
   digitalUrl: "",
   inventory: "1",
   inventoryUnlimited: false,
@@ -39,6 +41,8 @@ const fieldClass =
   "w-full h-11 px-4 rounded-xl bg-secondary text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-shadow"
 
 const labelClass = "text-xs font-medium text-muted-foreground mb-1.5 block"
+
+const MAX_GALLERY = 10
 
 export function productToFormValues(product: {
   productType: "merchandise" | "digital" | string
@@ -58,7 +62,7 @@ export function productToFormValues(product: {
     description: product.description ?? "",
     priceUsd: String(product.priceUsd),
     imageUrl: product.imageUrl ?? "",
-    galleryUrls: (product.galleryUrls ?? []).join("\n"),
+    galleryUrls: [...(product.galleryUrls ?? [])],
     digitalUrl: product.digitalUrl ?? "",
     inventory: product.inventory != null ? String(product.inventory) : "1",
     inventoryUnlimited: product.inventoryUnlimited,
@@ -87,6 +91,60 @@ export function StoreProductForm({
 }: StoreProductFormProps) {
   const set = (patch: Partial<StoreProductFormValues>) =>
     onChange({ ...values, ...patch })
+
+  const coverInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
+  const [coverUploading, setCoverUploading] = useState(false)
+  const [galleryUploading, setGalleryUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
+  const uploadCover = async (file: File) => {
+    setUploadError(null)
+    setCoverUploading(true)
+    try {
+      const url = await uploadStoreProductImage(file)
+      set({ imageUrl: url })
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : "Cover upload failed")
+    } finally {
+      setCoverUploading(false)
+    }
+  }
+
+  const uploadGalleryFiles = async (files: FileList | File[]) => {
+    setUploadError(null)
+    const list = Array.from(files)
+    const slotsLeft = MAX_GALLERY - values.galleryUrls.length
+    if (slotsLeft <= 0) {
+      setUploadError(`Gallery is limited to ${MAX_GALLERY} images`)
+      return
+    }
+
+    setGalleryUploading(true)
+    const nextUrls = [...values.galleryUrls]
+    try {
+      for (const file of list.slice(0, slotsLeft)) {
+        const url = await uploadStoreProductImage(file)
+        nextUrls.push(url)
+      }
+      set({ galleryUrls: nextUrls })
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : "Gallery upload failed")
+      if (nextUrls.length !== values.galleryUrls.length) {
+        set({ galleryUrls: nextUrls })
+      }
+    } finally {
+      setGalleryUploading(false)
+    }
+  }
+
+  const removeGalleryImage = (index: number) => {
+    set({
+      galleryUrls: values.galleryUrls.filter((_, i) => i !== index),
+    })
+  }
+
+  const imageBusy = coverUploading || galleryUploading
 
   return (
     <div className="space-y-5">
@@ -178,37 +236,126 @@ export function StoreProductForm({
       </div>
 
       <div>
-        <label htmlFor="store-image" className={labelClass}>
-          Cover image URL <span className="text-destructive">*</span>
-        </label>
+        <p className={labelClass}>
+          Cover image <span className="text-destructive">*</span>
+        </p>
         <input
-          id="store-image"
-          type="url"
-          className={fieldClass}
-          placeholder="https://..."
-          value={values.imageUrl}
-          onChange={(e) => set({ imageUrl: e.target.value })}
-          required
+          ref={coverInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) void uploadCover(file)
+            e.target.value = ""
+          }}
         />
-        {values.imageUrl.trim() && (
-          <div className="mt-2 rounded-lg overflow-hidden border border-border/60 bg-muted aspect-[4/3] max-w-[200px]">
-            <img src={values.imageUrl.trim()} alt="" className="w-full h-full object-cover" />
+        <div className="flex flex-wrap items-start gap-3">
+          {values.imageUrl ? (
+            <div className="relative rounded-lg overflow-hidden border border-border/60 bg-muted aspect-[4/3] w-[200px]">
+              <img
+                src={values.imageUrl}
+                alt="Cover preview"
+                className="w-full h-full object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => set({ imageUrl: "" })}
+                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-background/90 border border-border flex items-center justify-center text-muted-foreground hover:text-foreground"
+                aria-label="Remove cover image"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-border/80 bg-muted/40 aspect-[4/3] w-[200px] flex items-center justify-center">
+              <Package className="w-8 h-8 text-muted-foreground/50" />
+            </div>
+          )}
+          <div className="space-y-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-full gap-1.5"
+              disabled={busy || imageBusy}
+              onClick={() => coverInputRef.current?.click()}
+            >
+              {coverUploading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Upload className="w-4 h-4" />
+              )}
+              {values.imageUrl ? "Replace cover" : "Upload cover"}
+            </Button>
+            <p className="text-xs text-muted-foreground max-w-[220px]">
+              JPEG, PNG, or WebP. Shown as the main product image in your store.
+            </p>
           </div>
-        )}
+        </div>
       </div>
 
       <div>
-        <label htmlFor="store-gallery" className={labelClass}>
-          Gallery image URLs <span className="font-normal">(optional, one per line, max 10)</span>
-        </label>
-        <textarea
-          id="store-gallery"
-          value={values.galleryUrls}
-          onChange={(e) => set({ galleryUrls: e.target.value })}
-          placeholder={"https://example.com/photo-1.jpg\nhttps://example.com/photo-2.jpg"}
-          className="w-full h-24 px-4 py-3 rounded-xl bg-secondary text-sm resize-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-shadow"
+        <p className={labelClass}>
+          Gallery images{" "}
+          <span className="font-normal">(optional, max {MAX_GALLERY})</span>
+        </p>
+        <input
+          ref={galleryInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            const files = e.target.files
+            if (files?.length) void uploadGalleryFiles(files)
+            e.target.value = ""
+          }}
         />
+        {values.galleryUrls.length > 0 && (
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-3">
+            {values.galleryUrls.map((url, index) => (
+              <div
+                key={`${url}-${index}`}
+                className="relative aspect-square rounded-lg overflow-hidden border border-border/60 bg-muted"
+              >
+                <img src={url} alt="" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removeGalleryImage(index)}
+                  className="absolute top-1 right-1 w-6 h-6 rounded-full bg-background/90 border border-border flex items-center justify-center text-muted-foreground hover:text-foreground"
+                  aria-label="Remove gallery image"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="rounded-full gap-1.5"
+          disabled={
+            busy || imageBusy || values.galleryUrls.length >= MAX_GALLERY
+          }
+          onClick={() => galleryInputRef.current?.click()}
+        >
+          {galleryUploading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Upload className="w-4 h-4" />
+          )}
+          Add gallery images
+        </Button>
       </div>
+
+      {uploadError && (
+        <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
+          {uploadError}
+        </p>
+      )}
 
       {values.productType === "digital" ? (
         <div>
@@ -250,7 +397,9 @@ export function StoreProductForm({
                 onChange={(e) => set({ inventory: e.target.value })}
                 required
               />
-              <p className="text-xs text-muted-foreground mt-1">Minimum 1 — zero stock is not allowed.</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Minimum 1 — zero stock is not allowed.
+              </p>
             </div>
           )}
         </div>
@@ -275,7 +424,7 @@ export function StoreProductForm({
         </Button>
         <Button
           className="rounded-full sm:flex-1"
-          disabled={busy}
+          disabled={busy || imageBusy}
           onClick={() => void onSubmit()}
         >
           {busy ? "Saving…" : submitLabel ?? (mode === "create" ? "Publish product" : "Save changes")}
@@ -285,20 +434,12 @@ export function StoreProductForm({
   )
 }
 
-export function parseGalleryUrls(raw: string): string[] {
-  return raw
-    .split(/\n|,/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
-    .slice(0, 10)
-}
-
 export function validateProductForm(values: StoreProductFormValues): string | null {
   const title = values.title.trim()
   const imageUrl = values.imageUrl.trim()
   const price = parseFloat(values.priceUsd)
   if (!title || !imageUrl || !Number.isFinite(price) || price < 0.01) {
-    return "Title, cover image URL, and a valid price are required"
+    return "Title, cover image, and a valid price are required"
   }
   if (values.productType === "digital" && !values.digitalUrl.trim()) {
     return "Download URL is required for digital products"
@@ -314,7 +455,7 @@ export function validateProductForm(values: StoreProductFormValues): string | nu
 }
 
 export function productFormToApiBody(values: StoreProductFormValues, mode: "create" | "edit") {
-  const galleryUrls = parseGalleryUrls(values.galleryUrls)
+  const galleryUrls = values.galleryUrls.map((url) => url.trim()).filter(Boolean).slice(0, MAX_GALLERY)
   const base = {
     title: values.title.trim(),
     description: values.description.trim() || undefined,

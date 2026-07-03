@@ -50,6 +50,33 @@ export class StoresController {
     return this.stores.updateMyStore(user.id, status, body);
   }
 
+  @Post('me/products/images/upload/init')
+  async initProductImageUpload(
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: { mimeType: string; fileName?: string },
+  ) {
+    const status = await this.storeStatus(user.id);
+    return this.stores.initProductImageUpload(
+      user.id,
+      status,
+      body.mimeType,
+      body.fileName,
+    );
+  }
+
+  @Post('me/products/images/upload/complete')
+  async completeProductImageUpload(
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: { objectKey: string },
+  ) {
+    const status = await this.storeStatus(user.id);
+    return this.stores.completeProductImageUpload(
+      user.id,
+      status,
+      body.objectKey,
+    );
+  }
+
   @Post('me/products')
   async createProduct(
     @CurrentUser() user: AuthUserPayload,

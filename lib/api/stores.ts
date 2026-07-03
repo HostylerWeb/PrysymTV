@@ -1,5 +1,68 @@
-import { apiRequest } from "@/lib/api-client";
+import { apiRequest, loadStoredAccessToken } from "@/lib/api-client";
 import { normalizeUsernameSlug } from "@/lib/username-slug";
+
+type StoreImageUploadInit = {
+  storeId: string;
+  objectKey: string;
+  uploadUrl: string;
+  uploadMethod: "PUT" | "POST";
+  uploadHeaders: Record<string, string>;
+  expiresIn: number;
+  publicUrl: string;
+};
+
+async function uploadStoreImageFile(
+  init: StoreImageUploadInit,
+  file: File,
+): Promise<void> {
+  if (init.uploadMethod === "PUT") {
+    const res = await fetch(init.uploadUrl, {
+      method: "PUT",
+      headers: init.uploadHeaders,
+      body: file,
+    });
+    if (!res.ok) throw new Error(`Image upload failed (${res.status})`);
+    return;
+  }
+
+  const form = new FormData();
+  form.append("file", file);
+  form.append("objectKey", init.objectKey);
+  const token = loadStoredAccessToken();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(init.uploadUrl, {
+    method: "POST",
+    credentials: "include",
+    headers,
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Image upload failed (${res.status})`);
+  }
+}
+
+/** Upload a store product cover or gallery image to R2/local storage. */
+export async function uploadStoreProductImage(file: File): Promise<string> {
+  const mimeType = file.type?.trim().startsWith("image/")
+    ? file.type
+    : "image/jpeg";
+  const init = await apiRequest<StoreImageUploadInit>(
+    "/stores/me/products/images/upload/init",
+    {
+      method: "POST",
+      body: { mimeType, fileName: file.name },
+    },
+  );
+  await uploadStoreImageFile(init, file);
+  const done = await apiRequest<{ imageUrl: string }>(
+    "/stores/me/products/images/upload/complete",
+    { method: "POST", body: { objectKey: init.objectKey } },
+  );
+  return done.imageUrl;
+}
 
 export type StoreProduct = {
   id: string;

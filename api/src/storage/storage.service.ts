@@ -231,6 +231,11 @@ export class StorageService implements OnModuleInit {
     return `uploads/movies/${videoId}/poster${extension}`;
   }
 
+  buildStoreProductImageKey(storeId: string, fileName?: string): string {
+    const extension = this.extensionFromFileName(fileName) || '.jpg';
+    return `uploads/stores/${storeId}/images/${randomUUID()}${extension}`;
+  }
+
   /** Podcast episode audio or video files. */
   async createPodcastMediaUploadTargetForKey(
     objectKey: string,
