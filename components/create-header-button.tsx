@@ -25,14 +25,14 @@ export function CreateHeaderButton({
       aria-label={label}
       title={label}
       className={cn(
-        "w-10 h-10 rounded-full flex items-center justify-center transition-all shrink-0",
+        "w-10 h-10 rounded-full flex items-center justify-center transition-colors shrink-0",
         variant === "on-dark"
-          ? "bg-white text-black hover:bg-white/90 shadow-lg"
-          : "bg-primary text-primary-foreground hover:opacity-90 shadow-md shadow-primary/20",
+          ? "text-white hover:bg-white/20"
+          : "text-foreground hover:bg-secondary",
         className,
       )}
     >
-      <Plus className="w-5 h-5" strokeWidth={2.5} />
+      <Plus className="w-5 h-5" />
     </button>
   )
 }

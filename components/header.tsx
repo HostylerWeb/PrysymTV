@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, Cast, Search, User } from "lucide-react"
+import { Bell, Search, User } from "lucide-react"
 import { CreateHeaderButton } from "@/components/create-header-button"
 import Link from "next/link"
 import { userAvatarUrl } from "@/lib/user-avatar"
@@ -61,13 +61,6 @@ export function Header({
             {onCreateClick && (
               <CreateHeaderButton onClick={onCreateClick} label={createLabel} />
             )}
-            <button
-              type="button"
-              className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors"
-              title="Cast (coming soon)"
-            >
-              <Cast className="w-5 h-5 text-foreground" />
-            </button>
             <Link
               href="/profile"
               className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors overflow-hidden border border-border/60"

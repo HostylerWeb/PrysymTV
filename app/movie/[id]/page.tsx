@@ -27,6 +27,7 @@ import type { ApiVideoDetail } from "@/lib/api/videos-feed"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useImmersivePlayer } from "@/lib/hooks/use-immersive-player"
 import { MovieDetailSkeleton } from "@/components/content-skeletons"
+import { CastMediaButton } from "@/components/cast-media-button"
 
 type MovieDisplay = {
   id: string
@@ -286,6 +287,9 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
                   )}
                 </button>
               )}
+              <div className="absolute top-4 right-4 z-[110]">
+                <CastMediaButton variant="on-video" />
+              </div>
             </>
           ) : (
             <>
@@ -294,6 +298,7 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
               <div className="absolute top-4 left-4 right-4 flex justify-between z-10">
                 <Link href="/movies"><button className="w-10 h-10 rounded-full bg-background/30 backdrop-blur-md flex items-center justify-center"><ChevronLeft className="w-6 h-6 text-white" /></button></Link>
                 <div className="flex gap-2">
+                  <CastMediaButton variant="on-video" className="bg-background/30 backdrop-blur-md" />
                   <button onClick={() => setIsShareOpen(true)} className="w-10 h-10 rounded-full bg-background/30 backdrop-blur-md flex items-center justify-center"><Share2 className="w-5 h-5 text-white" /></button>
                   <button onClick={() => setIsReportOpen(true)} className="w-10 h-10 rounded-full bg-background/30 backdrop-blur-md flex items-center justify-center"><Flag className="w-5 h-5 text-white" /></button>
                 </div>

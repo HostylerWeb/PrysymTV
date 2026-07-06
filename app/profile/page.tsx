@@ -380,18 +380,15 @@ function ProfilePageContent() {
           <h1 className="text-lg font-semibold text-foreground">Profile</h1>
           <div className="flex items-center gap-2">
             <CreateHeaderButton onClick={() => createFlow.setMenuOpen(true)} />
-          <button
-            type="button"
-            onClick={() => (showSettings ? closeSettingsPanel() : openSettingsPanel("menu"))}
-            className="flex items-center gap-2 rounded-full hover:bg-secondary transition-colors pl-1 pr-1 py-1"
-            aria-label="Settings"
-            aria-expanded={showSettings}
-          >
-            <span className="text-sm font-semibold text-foreground">Settings</span>
-            <span className="w-10 h-10 rounded-full flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => (showSettings ? closeSettingsPanel() : openSettingsPanel("menu"))}
+              className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors"
+              aria-label="Settings"
+              aria-expanded={showSettings}
+            >
               <Settings className="w-5 h-5 text-foreground" />
-            </span>
-          </button>
+            </button>
           </div>
         </div>
       </div>
@@ -569,14 +566,14 @@ function ProfilePageContent() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-2 py-3 border-b-2 transition-colors",
+                  "flex-1 flex flex-col items-center justify-center gap-0.5 py-2 border-b-2 transition-colors min-w-0",
                   activeTab === tab.id 
                     ? "border-primary text-primary" 
                     : "border-transparent text-muted-foreground"
                 )}
               >
-                <Icon className="w-5 h-5" />
-                <span className="text-sm font-medium">{tab.label}</span>
+                <Icon className="w-4 h-4 shrink-0" />
+                <span className="text-[10px] sm:text-xs font-medium leading-tight text-center truncate max-w-full px-0.5">{tab.label}</span>
               </button>
             )
           })}

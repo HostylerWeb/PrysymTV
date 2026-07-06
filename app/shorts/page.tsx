@@ -8,6 +8,7 @@ import {
   Bookmark,
   Music2,
   MoreVertical,
+  Plus,
   Play,
   Pause,
   Volume2,
@@ -138,6 +139,7 @@ interface ShortVideoProps {
   isSelf: boolean
   isAuthenticated: boolean
   onAuthRequired: () => void
+  onUpload?: () => void
 }
 
 function ShortVideo({
@@ -156,7 +158,8 @@ function ShortVideo({
   isFollowing,
   isSelf,
   isAuthenticated,
-  onAuthRequired
+  onAuthRequired,
+  onUpload,
 }: ShortVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -246,7 +249,21 @@ function ShortVideo({
       {/* Top Bar */}
       <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-20 pointer-events-none">
         <h1 className="text-lg font-bold text-white">Shorts</h1>
-        <div className="flex items-center gap-2 pointer-events-auto">
+        <div className="flex items-center gap-1 pointer-events-auto">
+          {onUpload && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onUpload()
+              }}
+              className="p-2 relative z-20"
+              aria-label="Upload short"
+              title="Upload short"
+            >
+              <Plus className="w-5 h-5 md:w-6 md:h-6 text-white" />
+            </button>
+          )}
           <button
             type="button"
             onClick={toggleMute}
@@ -869,18 +886,6 @@ function ShortsPageContent() {
 
   return (
     <main className="h-screen bg-black overflow-hidden md:pl-20">
-      <div className="fixed top-0 left-0 right-0 z-[55] md:left-20 pointer-events-none">
-        <div className="flex items-center justify-end gap-2 px-4 py-4 bg-gradient-to-b from-black/70 to-transparent">
-          <div className="pointer-events-auto">
-            <CreateHeaderButton
-              variant="on-dark"
-              label="Upload short"
-              onClick={uploadShort}
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Shorts Container */}
       <div
         ref={containerRef}
@@ -917,6 +922,7 @@ function ShortsPageContent() {
               isSelf={!!user && short.creatorId === user.id}
               isAuthenticated={isAuthenticated}
               onAuthRequired={() => setIsAuthModalOpen(true)}
+              onUpload={uploadShort}
             />
           </div>
         ))}

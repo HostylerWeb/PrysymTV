@@ -951,17 +951,15 @@ function MenuPanel({
     danger?: boolean
     accent?: "premium" | "live"
   }[] = [
-    ...(!premiumActive
-      ? [
-          {
-            icon: Crown,
-            label: "Upgrade to Premium",
-            description: "Ad-free viewing & exclusive perks",
-            screen: "premium" as const,
-            accent: "premium" as const,
-          },
-        ]
-      : []),
+    {
+      icon: Crown,
+      label: premiumActive ? "Premium Member" : "Upgrade to Premium",
+      description: premiumActive
+        ? "Ad-free viewing and exclusive perks active"
+        : "Ad-free viewing & exclusive perks",
+      screen: "premium" as const,
+      accent: "premium" as const,
+    },
     isStreamer
       ? { icon: Radio, label: "Go Live", description: "Live Studio — camera or OBS", screen: "go-live", accent: "live" }
       : {

@@ -70,6 +70,7 @@ export function ProfileMyContent({
 
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<VideoRecord | null>(null)
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -160,12 +161,11 @@ export function ProfileMyContent({
   }
 
   const deleteVideo = async (video: VideoRecord) => {
-    const label = video.type === "short" ? "short" : video.type === "movie" ? "movie" : "video"
-    if (!window.confirm(`Delete this ${label}? This cannot be undone.`)) return
     setBusy(true)
     setMessage(null)
     try {
       await deleteMyVideo(video.id)
+      setPendingDelete(null)
       await reload()
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Could not delete.")
@@ -222,7 +222,7 @@ export function ProfileMyContent({
               </button>
               <button
                 type="button"
-                onClick={() => void deleteVideo(video)}
+                onClick={() => setPendingDelete(video)}
                 disabled={busy}
                 className="p-1.5 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive disabled:opacity-50"
                 aria-label={`Delete ${video.title}`}
@@ -397,6 +397,38 @@ export function ProfileMyContent({
           )}
         </div>
       )}
+
+      <Dialog
+        open={pendingDelete != null}
+        onOpenChange={(open) => !open && !busy && setPendingDelete(null)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete this content?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-1">
+            {pendingDelete && (
+              <>
+                <span className="font-medium text-foreground">{pendingDelete.title}</span> will be
+                permanently removed from Prysym TV and deleted from storage. This cannot be undone.
+              </>
+            )}
+          </p>
+          {message && <p className="text-xs text-destructive">{message}</p>}
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setPendingDelete(null)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => pendingDelete && void deleteVideo(pendingDelete)}
+              disabled={busy || !pendingDelete}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={editingVideo != null}

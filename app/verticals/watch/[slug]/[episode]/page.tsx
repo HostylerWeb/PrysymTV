@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronUp, Heart, Bookmark, Flag, Gift } from "lucide-reac
 import { GiftSheet } from "@/components/gift-sheet"
 import { cn } from "@/lib/utils"
 import { VerticalEpisodeAdGate } from "@/components/vertical-episode-ad-gate"
+import { CastMediaButton } from "@/components/cast-media-button"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
 import {
   fetchVerticalEpisode,
@@ -239,6 +240,7 @@ export default function VerticalWatchPage({
               >
                 <Flag className="w-4 h-4 text-white" />
               </button>
+              <CastMediaButton variant="on-video" className="w-9 h-9 !bg-black/50" />
             </div>
           )}
         </div>

@@ -310,6 +310,7 @@ export function WatchCommentsPanel({
 
       {open && (part === "panel" || part === "both") && (
         <>
+          {/* Mobile: bottom sheet (YouTube-style) */}
           <div
             className="fixed inset-0 z-40 bg-black/40 md:hidden"
             onClick={() => onOpenChange(false)}
@@ -317,9 +318,8 @@ export function WatchCommentsPanel({
           />
           <aside
             className={cn(
-              "z-50 flex flex-col bg-background border-border",
-              "fixed bottom-0 left-0 right-0 max-h-[58vh] rounded-t-2xl border-t shadow-2xl md:shadow-none",
-              "md:sticky md:top-0 md:max-h-[100dvh] md:h-[calc(100dvh-0px)] md:w-[380px] md:shrink-0 md:border-l md:rounded-none",
+              "z-50 flex flex-col bg-background border-border md:hidden",
+              "fixed bottom-0 left-0 right-0 max-h-[75vh] rounded-t-2xl border-t shadow-2xl",
             )}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
@@ -329,7 +329,7 @@ export function WatchCommentsPanel({
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
-                className="w-8 h-8 rounded-full hover:bg-secondary flex items-center justify-center md:hidden"
+                className="w-8 h-8 rounded-full hover:bg-secondary flex items-center justify-center"
                 aria-label="Close comments"
               >
                 <X className="w-4 h-4" />
@@ -344,6 +344,30 @@ export function WatchCommentsPanel({
               {renderCommentList()}
             </div>
           </aside>
+
+          {/* Desktop: expand inline below video (YouTube-style) */}
+          <div className="hidden md:block border-t border-border py-3">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold">
+                Comments{commentsTotal > 0 ? ` · ${commentsTotal}` : ""}
+              </h2>
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Hide
+              </button>
+            </div>
+            <div
+              ref={scrollRef}
+              onScroll={handleScroll}
+              className="max-h-[min(60vh,520px)] overflow-y-auto"
+            >
+              {renderCommentInput()}
+              {renderCommentList()}
+            </div>
+          </div>
         </>
       )}
     </>

@@ -1,11 +1,10 @@
 "use client"
 
-import { use, useState, useEffect, useRef, useCallback } from "react"
-import { ChevronLeft, Play, Pause, Heart, Share2, Plus, Bookmark, Flag, Gift } from "lucide-react"
+import { use, useState, useEffect, useRef } from "react"
+import { ChevronLeft, Plus, Bookmark, Flag, Gift } from "lucide-react"
 import { GiftSheet } from "@/components/gift-sheet"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
-import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { BottomNavigation } from "@/components/bottom-navigation"
@@ -13,6 +12,7 @@ import { SearchModal } from "@/components/search-modal"
 import { ShareSheet } from "@/components/share-sheet"
 import { ReportModal } from "@/components/report-modal"
 import { AuthModal } from "@/components/auth-modal"
+import { PodcastPlayerBar } from "@/components/podcast-player-bar"
 import { useAuth } from "@/contexts/auth-context"
 import {
   fetchPodcastEpisode,
@@ -20,23 +20,42 @@ import {
   recordPodcastPlay,
   togglePodcastLike,
   togglePodcastSave,
+  type PodcastEpisodeCard,
 } from "@/lib/api/podcasts"
 import { AddToPlaylistSheet } from "@/components/add-to-playlist-sheet"
-import { saveWatchProgress } from "@/lib/api/history"
 import { RelativeTime } from "@/components/relative-time"
 import { userAvatarUrl } from "@/lib/user-avatar"
 import { PodcastEpisodeSkeleton } from "@/components/content-skeletons"
 
+function toPlayerCard(
+  ep: ReturnType<typeof mapPodcastEpisodeDetail>,
+): PodcastEpisodeCard {
+  return {
+    id: ep.id,
+    showId: ep.showId,
+    podcast: ep.show?.title ?? ep.podcast,
+    title: ep.title,
+    duration: ep.duration,
+    durationSeconds: ep.durationSeconds,
+    date: ep.date,
+    cover: ep.cover,
+    plays: ep.plays,
+    audioUrl: ep.audioUrl,
+    videoUrl: ep.videoUrl,
+    mediaType: ep.mediaType,
+    description: ep.description,
+    liked: ep.liked,
+    saved: ep.saved,
+  }
+}
+
 export default function PodcastEpisodePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const { isAuthenticated, isLoading: authLoading } = useAuth()
-  const audioRef = useRef<HTMLAudioElement>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const progressSent = useRef(0)
+  const playRecorded = useRef(false)
 
   const [loading, setLoading] = useState(true)
   const [episode, setEpisode] = useState<ReturnType<typeof mapPodcastEpisodeDetail> | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [isPlaylistOpen, setIsPlaylistOpen] = useState(false)
@@ -46,7 +65,6 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
   const [liked, setLiked] = useState(false)
   const [saved, setSaved] = useState(false)
   const [navTab, setNavTab] = useState("podcasts")
-  const playRecorded = useRef(false)
 
   useEffect(() => {
     if (authLoading) return
@@ -77,39 +95,6 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
     void recordPodcastPlay(episode.id).catch(() => {})
   }, [episode])
 
-  const persistProgress = useCallback(
-    (seconds: number, completed = false) => {
-      if (!isAuthenticated || !episode) return
-      const bucket = Math.floor(seconds / 15)
-      if (!completed && bucket === progressSent.current) return
-      progressSent.current = bucket
-      void saveWatchProgress({
-        contentType: "podcast_episode",
-        contentId: episode.id,
-        progressSeconds: Math.floor(seconds),
-        completed,
-      }).catch(() => {})
-    },
-    [isAuthenticated, episode],
-  )
-
-  useEffect(() => {
-    if (!episode) return
-    const isVideo = episode.mediaType === "video" || !!episode.videoUrl
-    if (isVideo) {
-      const video = videoRef.current
-      if (!video || !episode.videoUrl) return
-      if (isPlaying) void video.play().catch(() => setIsPlaying(false))
-      else video.pause()
-      return
-    }
-    const audio = audioRef.current
-    if (!audio || !episode.audioUrl) return
-    audio.src = episode.audioUrl
-    if (isPlaying) void audio.play().catch(() => setIsPlaying(false))
-    else audio.pause()
-  }, [episode, isPlaying])
-
   if (loading || !episode) {
     if (loading) return <PodcastEpisodeSkeleton />
     return (
@@ -121,9 +106,10 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
 
   const hostSlug = episode.hostSlug
   const isVideoEpisode = episode.mediaType === "video" || !!episode.videoUrl
+  const playerCard = toPlayerCard({ ...episode, liked, saved })
 
   return (
-    <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
+    <main className="min-h-screen bg-background pb-36 md:pb-28 md:pl-20">
       <Header onSearchClick={() => setIsSearchOpen(true)} />
       <div className="max-w-3xl mx-auto px-4 py-8">
         <Link
@@ -132,28 +118,21 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
         >
           <ChevronLeft className="w-4 h-4" /> Back to Podcasts
         </Link>
-        {isVideoEpisode && episode.videoUrl ? (
-          <div className="w-full max-w-2xl mx-auto mb-6 rounded-2xl overflow-hidden bg-black aspect-video shadow-xl">
-            <HlsVideoPlayer
-              src={episode.videoUrl}
-              className="w-full h-full object-contain"
-              controls
-              playsInline
-              videoRef={videoRef}
-              onTimeUpdate={(currentTime) => persistProgress(currentTime)}
-              onEnded={() => {
-                persistProgress(episode.durationSeconds, true)
-                setIsPlaying(false)
-              }}
-            />
-          </div>
-        ) : (
+
+        {!isVideoEpisode && (
           <img
             src={episode.cover}
             alt=""
             className="w-full max-w-sm aspect-square rounded-2xl object-cover mx-auto mb-6 shadow-xl"
           />
         )}
+
+        {isVideoEpisode && (
+          <p className="text-center text-sm text-muted-foreground mb-4">
+            Video episode — use the player at the bottom of the screen.
+          </p>
+        )}
+
         <p className="text-sm text-primary font-medium text-center mb-1">
           {episode.show?.title ?? episode.podcast}
         </p>
@@ -165,51 +144,8 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
         {episode.description && (
           <p className="text-sm text-foreground/80 mb-8">{episode.description}</p>
         )}
-        {episode.audioUrl && !isVideoEpisode ? (
-          <audio
-            ref={audioRef}
-            className="hidden"
-            onTimeUpdate={() => {
-              const audio = audioRef.current
-              if (!audio) return
-              persistProgress(audio.currentTime)
-            }}
-            onEnded={() => {
-              persistProgress(episode.durationSeconds, true)
-              setIsPlaying(false)
-            }}
-          />
-        ) : null}
-        {!isVideoEpisode && (
-          <div className="flex justify-center mb-4">
-            <button
-              type="button"
-              onClick={() => setIsPlaying(!isPlaying)}
-              className="w-16 h-16 rounded-full bg-primary text-white flex items-center justify-center"
-            >
-              {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8 ml-1" />}
-            </button>
-          </div>
-        )}
+
         <div className="flex justify-center gap-4 mb-8">
-          <button
-            type="button"
-            onClick={() => {
-              if (!isAuthenticated) {
-                setIsAuthModalOpen(true)
-                return
-              }
-              void togglePodcastLike(episode.id)
-                .then((r) => setLiked(r.liked))
-                .catch(() => {})
-            }}
-            className={cn(
-              "w-12 h-12 rounded-full flex items-center justify-center",
-              liked ? "bg-primary text-primary-foreground" : "bg-secondary",
-            )}
-          >
-            <Heart className={cn("w-5 h-5", liked && "fill-current")} />
-          </button>
           <button
             type="button"
             onClick={() => {
@@ -227,13 +163,6 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
             )}
           >
             <Bookmark className={cn("w-5 h-5", saved && "fill-current")} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsShareOpen(true)}
-            className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center"
-          >
-            <Share2 className="w-5 h-5" />
           </button>
           <button
             type="button"
@@ -270,6 +199,7 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
             <Flag className="w-5 h-5" />
           </button>
         </div>
+
         {hostSlug ? (
           <Link
             href={`/creator/${hostSlug}`}
@@ -286,6 +216,22 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
           <p className="text-sm text-muted-foreground text-center">Hosted by {episode.hostName}</p>
         )}
       </div>
+
+      <PodcastPlayerBar
+        episodes={[playerCard]}
+        currentIndex={0}
+        onIndexChange={() => {}}
+        onShare={() => setIsShareOpen(true)}
+        onToggleLike={(episodeId) => {
+          void togglePodcastLike(episodeId)
+            .then((r) => setLiked(r.liked))
+            .catch(() => {})
+        }}
+        isAuthenticated={isAuthenticated}
+        onAuthRequired={() => setIsAuthModalOpen(true)}
+        singleEpisode
+      />
+
       <Footer />
       <BottomNavigation activeTab={navTab} onTabChange={setNavTab} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />

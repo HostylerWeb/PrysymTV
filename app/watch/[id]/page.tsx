@@ -46,6 +46,7 @@ import { followUser, unfollowUser } from "@/lib/api/users"
 import { useWatchAnalytics } from "@/lib/hooks/use-watch-analytics"
 import { useImmersivePlayer } from "@/lib/hooks/use-immersive-player"
 import { WatchCommentsPanel } from "@/components/watch-comments-panel"
+import { CastMediaButton } from "@/components/cast-media-button"
 
 type WatchVideo = {
   id: string
@@ -413,8 +414,7 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
-      <div className="max-w-6xl mx-auto w-full md:flex md:items-start">
-        <div className={cn("min-w-0 flex-1", commentsOpen && "md:max-w-[calc(100%-380px)]")}>
+      <div className="max-w-6xl mx-auto w-full">
         <div
           ref={playerContainerRef}
           className={cn(
@@ -464,6 +464,7 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
             <div className="absolute top-0 left-0 right-0 flex justify-between p-3 bg-gradient-to-b from-black/70 to-transparent pointer-events-auto">
               <Link href="/"><button type="button" className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><ChevronLeft className="w-6 h-6 text-white" /></button></Link>
               <div className="flex gap-2">
+                <CastMediaButton variant="on-video" />
                 <button type="button" onClick={() => setIsShareOpen(true)} className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><Share2 className="w-5 h-5 text-white" /></button>
                 <button type="button" onClick={() => setIsReportOpen(true)} className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><Flag className="w-5 h-5 text-white" /></button>
               </div>
@@ -585,7 +586,6 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
               videoId={id}
               open={commentsOpen}
               onOpenChange={setCommentsOpen}
-              part="preview"
               comments={comments}
               commentsTotal={commentsTotal}
               onCommentsChange={setComments}
@@ -625,32 +625,6 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
             </div>
           </div>
         </div>
-        </div>
-
-        <WatchCommentsPanel
-          videoId={id}
-          open={commentsOpen}
-          onOpenChange={setCommentsOpen}
-          part="panel"
-          comments={comments}
-          commentsTotal={commentsTotal}
-          onCommentsChange={setComments}
-          onTotalChange={setCommentsTotal}
-          isAuthenticated={isAuthenticated}
-          currentUserId={user?.id}
-          commentText={commentText}
-          onCommentTextChange={setCommentText}
-          commentError={commentError}
-          onCommentErrorChange={setCommentError}
-          commentPosting={commentPosting}
-          onSubmitComment={() => void submitComment()}
-          replyingTo={replyingTo}
-          onReplyingToChange={setReplyingTo}
-          onRequireAuth={() => setIsAuthModalOpen(true)}
-          onCommentLike={handleCommentLike}
-          onRemoveComment={removeComment}
-          highlightCommentId={highlightCommentId}
-        />
       </div>
 
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />

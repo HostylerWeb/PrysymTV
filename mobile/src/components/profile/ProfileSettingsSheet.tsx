@@ -89,17 +89,15 @@ export function ProfileSettingsSheet({
   };
 
   const items: MenuItem[] = [
-    ...(!premiumActive
-      ? [
-          {
-            icon: 'diamond-outline' as const,
-            label: 'Upgrade to Premium',
-            description: 'Ad-free viewing & exclusive perks',
-            route: '/premium',
-            accent: 'premium' as const,
-          },
-        ]
-      : []),
+    {
+      icon: 'diamond-outline',
+      label: premiumActive ? 'Premium Member' : 'Upgrade to Premium',
+      description: premiumActive
+        ? 'Ad-free viewing and exclusive perks active'
+        : 'Ad-free viewing & exclusive perks',
+      route: '/premium',
+      accent: 'premium',
+    },
     isStreamer
       ? {
           icon: 'radio-outline',
