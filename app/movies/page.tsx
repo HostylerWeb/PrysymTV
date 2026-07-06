@@ -1,10 +1,16 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Play, Star, ChevronDown, Filter, Grid3X3, List, Info, Plus, Search, X } from "lucide-react"
+import { Play, Star, ChevronDown, Filter, Grid3X3, List, Info, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
 import { Header } from "@/components/header"
@@ -44,6 +50,7 @@ export default function MoviesPage() {
   const [movies, setMovies] = useState<MovieCard[]>([])
   const [trendingFromApi, setTrendingFromApi] = useState<MovieCard[]>([])
   const [newReleasesFromApi, setNewReleasesFromApi] = useState<MovieCard[]>([])
+  const [infoMovie, setInfoMovie] = useState<FeaturedMovie | null>(null)
 
   useEffect(() => {
     void fetchMovieGenres().then((res) => setGenreOptions(res.items))
@@ -140,11 +147,13 @@ export default function MoviesPage() {
                 Play Now
               </Button>
             </Link>
-            <Button variant="secondary" className="rounded-full gap-2">
-              <Plus className="w-5 h-5" />
-              My List
-            </Button>
-            <Button variant="secondary" size="icon" className="rounded-full">
+            <Button
+              variant="secondary"
+              size="icon"
+              className="rounded-full"
+              aria-label="Movie details"
+              onClick={() => setInfoMovie(featuredMovie)}
+            >
               <Info className="w-5 h-5" />
             </Button>
           </div>
@@ -420,6 +429,41 @@ export default function MoviesPage() {
 
       {/* Search Modal */}
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+
+      <Dialog open={infoMovie != null} onOpenChange={(open) => !open && setInfoMovie(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{infoMovie?.title}</DialogTitle>
+          </DialogHeader>
+          {infoMovie && (
+            <div className="space-y-3">
+              <img
+                src={infoMovie.poster}
+                alt={infoMovie.title}
+                className="w-full aspect-video rounded-lg object-cover"
+              />
+              <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+                <span>{infoMovie.genre}</span>
+                <span>·</span>
+                <span>{infoMovie.year}</span>
+                <span>·</span>
+                <span>{infoMovie.duration}</span>
+              </div>
+              <p className="text-sm text-muted-foreground">{infoMovie.description}</p>
+              <div className="flex gap-2 text-xs text-muted-foreground">
+                <span>{infoMovie.views} views</span>
+                <span>{infoMovie.likes} likes</span>
+              </div>
+              <Link href={`/movie/${infoMovie.id}`}>
+                <Button className="w-full rounded-full gap-2">
+                  <Play className="w-4 h-4 fill-current" />
+                  Play Now
+                </Button>
+              </Link>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }

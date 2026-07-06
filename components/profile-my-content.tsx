@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { Mic, Pencil, Play, Smartphone } from "lucide-react"
+import { Mic, Pencil, Play, Smartphone, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils"
 import { fetchMyVideos } from "@/lib/api/users"
 import type { VideoRecord } from "@/lib/api/types"
-import { fetchVideoDetail, updateMyVideo } from "@/lib/api/videos"
+import { fetchVideoDetail, updateMyVideo, deleteMyVideo } from "@/lib/api/videos"
 import { fetchMyVerticalSeries } from "@/lib/api/verticals-admin"
 import { VerticalSeriesEpisodesPanel } from "@/components/vertical-series-episodes-panel"
 import {
@@ -159,6 +159,21 @@ export function ProfileMyContent({
     }
   }
 
+  const deleteVideo = async (video: VideoRecord) => {
+    const label = video.type === "short" ? "short" : video.type === "movie" ? "movie" : "video"
+    if (!window.confirm(`Delete this ${label}? This cannot be undone.`)) return
+    setBusy(true)
+    setMessage(null)
+    try {
+      await deleteMyVideo(video.id)
+      await reload()
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not delete.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const renderVideoGrid = (items: VideoRecord[], emptyMessage: string) => {
     if (loading && items.length === 0) {
       return <p className="text-sm text-muted-foreground py-12 text-center">Loading…</p>
@@ -196,10 +211,7 @@ export function ProfileMyContent({
                 </div>
               </div>
             </Link>
-            <div className="mt-1 flex items-center justify-between gap-2">
-              <p className="text-[11px] text-muted-foreground truncate">
-                {formatViewCount(video.viewsCount ?? 0)} views
-              </p>
+            <div className="mt-1 flex items-center justify-end gap-1">
               <button
                 type="button"
                 onClick={() => openVideoEdit(video)}
@@ -207,6 +219,15 @@ export function ProfileMyContent({
                 aria-label={`Edit ${video.title}`}
               >
                 <Pencil className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => void deleteVideo(video)}
+                disabled={busy}
+                className="p-1.5 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive disabled:opacity-50"
+                aria-label={`Delete ${video.title}`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -234,6 +255,8 @@ export function ProfileMyContent({
           </button>
         ))}
       </div>
+
+      {message && <p className="text-xs text-destructive">{message}</p>}
 
       {activeTab === "videos" &&
         renderVideoGrid(

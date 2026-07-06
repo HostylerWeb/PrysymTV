@@ -206,4 +206,13 @@ export class VideosController {
   ) {
     return this.videos.updateOwned(user.id, id, body);
   }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  deleteOwned(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUserPayload,
+  ) {
+    return this.videos.deleteOwned(user.id, id);
+  }
 }

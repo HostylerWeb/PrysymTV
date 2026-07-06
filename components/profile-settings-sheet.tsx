@@ -464,6 +464,7 @@ export function ProfileSettingsSheet({
             <MenuPanel
               user={user}
               isStreamer={isStreamer}
+              premiumActive={premiumActive}
               showCreatorDashboard={canAccessCreatorDashboard(user)}
               darkModeEnabled={darkModeEnabled}
               onDarkModeToggle={onDarkModeToggle}
@@ -919,6 +920,7 @@ export function ProfileSettingsSheet({
 function MenuPanel({
   user,
   isStreamer,
+  premiumActive,
   showCreatorDashboard,
   darkModeEnabled,
   onDarkModeToggle,
@@ -929,6 +931,7 @@ function MenuPanel({
 }: {
   user: User | null
   isStreamer: boolean
+  premiumActive: boolean
   showCreatorDashboard: boolean
   darkModeEnabled: boolean
   onDarkModeToggle: () => void
@@ -948,7 +951,17 @@ function MenuPanel({
     danger?: boolean
     accent?: "premium" | "live"
   }[] = [
-    { icon: Crown, label: "Upgrade to Premium", description: "Ad-free viewing & exclusive perks", screen: "premium", accent: "premium" },
+    ...(!premiumActive
+      ? [
+          {
+            icon: Crown,
+            label: "Upgrade to Premium",
+            description: "Ad-free viewing & exclusive perks",
+            screen: "premium" as const,
+            accent: "premium" as const,
+          },
+        ]
+      : []),
     isStreamer
       ? { icon: Radio, label: "Go Live", description: "Live Studio — camera or OBS", screen: "go-live", accent: "live" }
       : {

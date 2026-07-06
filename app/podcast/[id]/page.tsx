@@ -24,6 +24,7 @@ import {
 import { AddToPlaylistSheet } from "@/components/add-to-playlist-sheet"
 import { saveWatchProgress } from "@/lib/api/history"
 import { RelativeTime } from "@/components/relative-time"
+import { userAvatarUrl } from "@/lib/user-avatar"
 import { PodcastEpisodeSkeleton } from "@/components/content-skeletons"
 
 export default function PodcastEpisodePage({ params }: { params: Promise<{ id: string }> }) {

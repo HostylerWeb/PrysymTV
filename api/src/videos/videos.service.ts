@@ -28,6 +28,7 @@ import {
 import { Queue } from 'bullmq';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PlaylistsService } from '../playlists/playlists.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { StreamsService } from '../streams/streams.service';
@@ -47,6 +48,7 @@ export class VideosService {
     private readonly analytics: AnalyticsService,
     private readonly notifications: NotificationsService,
     private readonly streams: StreamsService,
+    private readonly playlists: PlaylistsService,
     @InjectQueue(VIDEO_PROCESSING_QUEUE) private readonly videoQueue: Queue,
   ) {}
 
@@ -298,6 +300,19 @@ export class VideosService {
         status: true,
       },
     });
+  }
+
+  async deleteOwned(userId: string, id: string) {
+    const video = await this.prisma.video.findUnique({ where: { id } });
+    if (!video) throw new NotFoundException('Video not found');
+    if (video.creatorId !== userId) {
+      throw new ForbiddenException('You can only delete your own uploads');
+    }
+
+    await this.playlists.removeContentReferences('video', id);
+    await this.storage.purgeVideoAssets(video);
+    await this.prisma.video.delete({ where: { id } });
+    return { success: true };
   }
 
   async getOne(id: string, viewerId?: string) {

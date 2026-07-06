@@ -283,6 +283,12 @@ export function updateMyVideo(
   }>(`/videos/${videoId}`, { method: "PATCH", body });
 }
 
+export function deleteMyVideo(videoId: string) {
+  return apiRequest<{ success: boolean }>(`/videos/${videoId}`, {
+    method: "DELETE",
+  });
+}
+
 export function getVideoUploadMaxBytes(): number | undefined {
   const raw = process.env.NEXT_PUBLIC_UPLOAD_MAX_BYTES;
   if (!raw) return undefined;

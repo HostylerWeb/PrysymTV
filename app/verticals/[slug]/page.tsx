@@ -8,6 +8,7 @@ import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
 import { Button } from "@/components/ui/button"
 import { fetchVerticalSeries, type VerticalSeriesDetail } from "@/lib/api/verticals"
+import { getVerticalProgressForSeries } from "@/lib/vertical-progress"
 import { formatDuration, historyProgressPercent } from "@/lib/format-media"
 import { VerticalSeriesDetailSkeleton } from "@/components/content-skeletons"
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ChevronLeft, ChevronRight, Info, Play, Sparkles } from "lucide-react"
+import { ChevronLeft, ChevronRight, Play, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -161,16 +161,6 @@ export function HomeHero({ slides, loading = false }: HomeHeroProps) {
                 <Button size="lg" className="rounded-full gap-2 px-8 h-12 text-base font-semibold">
                   <Play className="w-5 h-5 fill-current" />
                   Watch now
-                </Button>
-              </Link>
-              <Link href={`/movie/${active.id}`}>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="rounded-full gap-2 px-6 h-12 text-base font-semibold bg-background/40 backdrop-blur-sm border-white/30 hover:bg-background/60"
-                >
-                  <Info className="w-5 h-5" />
-                  More info
                 </Button>
               </Link>
             </div>

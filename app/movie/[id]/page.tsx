@@ -25,6 +25,7 @@ import { formatDuration, formatViewCount, moviePosterUrl } from "@/lib/format-me
 import { bumpLikeCount } from "@/lib/engagement-count"
 import type { ApiVideoDetail } from "@/lib/api/videos-feed"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useImmersivePlayer } from "@/lib/hooks/use-immersive-player"
 import { MovieDetailSkeleton } from "@/components/content-skeletons"
 
 type MovieDisplay = {

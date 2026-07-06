@@ -45,6 +45,7 @@ import { userAvatarUrl } from "@/lib/user-avatar"
 import { followUser, unfollowUser } from "@/lib/api/users"
 import { useWatchAnalytics } from "@/lib/hooks/use-watch-analytics"
 import { useImmersivePlayer } from "@/lib/hooks/use-immersive-player"
+import { WatchCommentsPanel } from "@/components/watch-comments-panel"
 
 type WatchVideo = {
   id: string
@@ -109,9 +110,10 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
   const [isSaved, setIsSaved] = useState(false)
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [replyingTo, setReplyingTo] = useState<{ id: string; user: string } | null>(null)
-  const [showComments, setShowComments] = useState(true)
+  const [commentsOpen, setCommentsOpen] = useState(false)
   const [commentText, setCommentText] = useState("")
   const [comments, setComments] = useState<VideoComment[]>([])
+  const [commentsTotal, setCommentsTotal] = useState(0)
   const [commentError, setCommentError] = useState<string | null>(null)
   const [commentPosting, setCommentPosting] = useState(false)
   const [activeTab, setActiveTab] = useState("home")
@@ -188,9 +190,12 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
         /* no suggestions */
       }
       try {
-        const c = await fetchVideoComments(id)
+        const c = await fetchVideoComments(id, 1)
         if (!cancelled) {
-          setComments(c.items.map((item) => normalizeVideoComment(item as unknown as Record<string, unknown>)))
+          setComments(
+            c.items.map((item) => normalizeVideoComment(item as unknown as Record<string, unknown>)),
+          )
+          setCommentsTotal(c.meta.total)
         }
       } catch {
         /* keep empty */
@@ -205,7 +210,7 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
 
   useEffect(() => {
     if (!highlightCommentId && !openCommentsFromUrl) return
-    setShowComments(true)
+    setCommentsOpen(true)
   }, [highlightCommentId, openCommentsFromUrl])
 
   useEffect(() => {
@@ -324,6 +329,7 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
               replies: (c.replies ?? []).filter((r) => !removed.has(r.id)),
             })),
         )
+        setCommentsTotal((t) => Math.max(0, t - res.deletedIds.length))
       })
       .catch(() => {})
   }
@@ -377,6 +383,7 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
         )
       } else {
         setComments((prev) => [normalized, ...prev.filter((c) => c.id !== normalized.id)])
+        setCommentsTotal((t) => t + 1)
       }
       setCommentText("")
       setReplyingTo(null)
@@ -406,7 +413,8 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
-      <div className="max-w-6xl mx-auto w-full">
+      <div className="max-w-6xl mx-auto w-full md:flex md:items-start">
+        <div className={cn("min-w-0 flex-1", commentsOpen && "md:max-w-[calc(100%-380px)]")}>
         <div
           ref={playerContainerRef}
           className={cn(
@@ -572,152 +580,31 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
 
           <p className="py-3 text-sm text-muted-foreground">{video.description}</p>
 
-          <div className="py-3 border-t border-border">
-            <button type="button" onClick={() => setShowComments(!showComments)} className="flex items-center gap-2 mb-4">
-              <MessageCircle className="w-5 h-5" /> Comments ({comments.length})
-              {showComments ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-            {showComments && (
-              <>
-                {isAuthenticated ? (
-                  <div className="mb-4 space-y-2">
-                    {replyingTo && (
-                      <div className="flex items-center justify-between text-xs text-muted-foreground px-2">
-                        <span>Replying to <span className="font-semibold">{replyingTo.user}</span></span>
-                        <button type="button" onClick={() => setReplyingTo(null)}>Cancel</button>
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <input
-                        value={commentText}
-                        onChange={(e) => {
-                          setCommentText(e.target.value)
-                          if (commentError) setCommentError(null)
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault()
-                            void submitComment()
-                          }
-                        }}
-                        placeholder={replyingTo ? "Add a reply..." : "Add a comment..."}
-                        disabled={commentPosting}
-                        className="flex-1 bg-secondary/50 rounded-full px-4 py-2 text-sm disabled:opacity-60"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void submitComment()}
-                        disabled={commentPosting || !commentText.trim()}
-                        className="w-8 h-8 rounded-full bg-primary flex items-center justify-center disabled:opacity-50"
-                      >
-                        <Send className="w-4 h-4 text-primary-foreground" />
-                      </button>
-                    </div>
-                    {commentError && (
-                      <p className="text-xs text-destructive px-2">{commentError}</p>
-                    )}
-                  </div>
-                ) : (
-                  <button type="button" onClick={() => setIsAuthModalOpen(true)} className="w-full py-3 rounded-xl bg-secondary/50 border border-dashed flex items-center justify-center gap-2 text-sm text-muted-foreground mb-4">
-                    <Lock className="w-4 h-4" /> Sign in to comment
-                  </button>
-                )}
-                <div className="space-y-3">
-                  {comments.length === 0 && (
-                    <p className="text-sm text-muted-foreground px-2">No comments yet. Be the first.</p>
-                  )}
-                  {comments.map((c) => (
-                    <div key={c.id} id={`comment-${c.id}`} className="space-y-2 scroll-mt-4">
-                      <div className="flex gap-2">
-                        <img
-                          src={userAvatarUrl(c.user.avatarUrl, c.user.username)}
-                          alt=""
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium">
-                            {c.user.displayName ?? c.user.username}
-                            <RelativeTime
-                              date={c.createdAt}
-                              className="ml-2 text-xs font-normal text-muted-foreground"
-                            />
-                          </p>
-                          <p className="text-sm text-muted-foreground">{c.body}</p>
-                          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                            <button
-                              type="button"
-                              className={cn(c.liked && "text-primary")}
-                              onClick={() => handleCommentLike(c.id)}
-                            >
-                              Like{c.likesCount > 0 ? ` · ${c.likesCount}` : ""}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                requireAuth(() =>
-                                  setReplyingTo({
-                                    id: c.id,
-                                    user: c.user.displayName ?? c.user.username,
-                                  }),
-                                )
-                              }
-                            >
-                              Reply
-                            </button>
-                            {user?.id === c.user.id && (
-                              <button
-                                type="button"
-                                className="text-destructive"
-                                onClick={() => removeComment(c.id)}
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      {(c.replies ?? []).map((reply) => (
-                        <div key={reply.id} id={`comment-${reply.id}`} className="flex gap-2 ml-10 scroll-mt-4">
-                          <img
-                            src={userAvatarUrl(reply.user.avatarUrl, reply.user.username)}
-                            alt=""
-                            className="w-7 h-7 rounded-full object-cover"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium">
-                              {reply.user.displayName ?? reply.user.username}
-                              <RelativeTime
-                                date={reply.createdAt}
-                                className="ml-2 text-xs font-normal text-muted-foreground"
-                              />
-                            </p>
-                            <p className="text-sm text-muted-foreground">{reply.body}</p>
-                            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                              <button
-                                type="button"
-                                className={cn(reply.liked && "text-primary")}
-                                onClick={() => handleCommentLike(reply.id)}
-                              >
-                                Like{reply.likesCount > 0 ? ` · ${reply.likesCount}` : ""}
-                              </button>
-                              {user?.id === reply.user.id && (
-                                <button
-                                  type="button"
-                                  className="text-destructive"
-                                  onClick={() => removeComment(reply.id)}
-                                >
-                                  Delete
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+          <div className="px-4">
+            <WatchCommentsPanel
+              videoId={id}
+              open={commentsOpen}
+              onOpenChange={setCommentsOpen}
+              part="preview"
+              comments={comments}
+              commentsTotal={commentsTotal}
+              onCommentsChange={setComments}
+              onTotalChange={setCommentsTotal}
+              isAuthenticated={isAuthenticated}
+              currentUserId={user?.id}
+              commentText={commentText}
+              onCommentTextChange={setCommentText}
+              commentError={commentError}
+              onCommentErrorChange={setCommentError}
+              commentPosting={commentPosting}
+              onSubmitComment={() => void submitComment()}
+              replyingTo={replyingTo}
+              onReplyingToChange={setReplyingTo}
+              onRequireAuth={() => setIsAuthModalOpen(true)}
+              onCommentLike={handleCommentLike}
+              onRemoveComment={removeComment}
+              highlightCommentId={highlightCommentId}
+            />
           </div>
 
           <div className="py-4 border-t border-border">
@@ -738,6 +625,32 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
             </div>
           </div>
         </div>
+        </div>
+
+        <WatchCommentsPanel
+          videoId={id}
+          open={commentsOpen}
+          onOpenChange={setCommentsOpen}
+          part="panel"
+          comments={comments}
+          commentsTotal={commentsTotal}
+          onCommentsChange={setComments}
+          onTotalChange={setCommentsTotal}
+          isAuthenticated={isAuthenticated}
+          currentUserId={user?.id}
+          commentText={commentText}
+          onCommentTextChange={setCommentText}
+          commentError={commentError}
+          onCommentErrorChange={setCommentError}
+          commentPosting={commentPosting}
+          onSubmitComment={() => void submitComment()}
+          replyingTo={replyingTo}
+          onReplyingToChange={setReplyingTo}
+          onRequireAuth={() => setIsAuthModalOpen(true)}
+          onCommentLike={handleCommentLike}
+          onRemoveComment={removeComment}
+          highlightCommentId={highlightCommentId}
+        />
       </div>
 
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
