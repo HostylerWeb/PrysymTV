@@ -368,7 +368,7 @@ function VideosBrowseContent() {
 
       <Footer />
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
-      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} scope="video" />
 
       <CreateFlowModals
         flow={createFlow}

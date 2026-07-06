@@ -1,0 +1,339 @@
+import React, { useState } from 'react';
+import {
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useMockAuth } from '@/context/MockAuthContext';
+import { mockComments } from '@/mocks';
+import { colors, radius, spacing, withAlpha } from '@/theme/tokens';
+import { formatViewCount } from '@/utils/format-media';
+
+const MINI_PLAYER_VH = 32;
+
+type Comment = {
+  id: string;
+  author: string;
+  body: string;
+  likes: number;
+  liked: boolean;
+};
+
+type Props = {
+  count?: number;
+  videoTitle?: string;
+  thumbnailUrl?: string | null;
+};
+
+export function WatchCommentsPanel({ count, videoTitle, thumbnailUrl }: Props) {
+  const insets = useSafeAreaInsets();
+  const { isAuthenticated, requireAuth, user } = useMockAuth();
+  const [open, setOpen] = useState(false);
+  const [comments, setComments] = useState<Comment[]>(mockComments);
+  const [liked, setLiked] = useState<Record<string, boolean>>({});
+  const [text, setText] = useState('');
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const total = count ?? comments.length;
+  const topComment = comments[0];
+
+  const submit = () => {
+    if (!requireAuth()) return;
+    const body = text.trim();
+    if (!body) return;
+    setComments((prev) => [
+      { id: `new-${Date.now()}`, author: user?.username ?? 'you', body, likes: 0, liked: false },
+      ...prev,
+    ]);
+    setText('');
+    setReplyingTo(null);
+  };
+
+  const countLabel = total > 0 ? formatViewCount(total) : null;
+
+  return (
+    <>
+      {!open && (
+        <Pressable style={styles.preview} onPress={() => setOpen(true)}>
+          <View style={styles.previewHeader}>
+            <Text style={styles.previewTitle}>Comments</Text>
+            <View style={styles.previewRight}>
+              {countLabel ? <Text style={styles.previewCount}>{countLabel}</Text> : null}
+              <Ionicons name="chevron-down" size={18} color={colors.mutedForeground} />
+            </View>
+          </View>
+          {topComment ? (
+            <View style={styles.previewRow}>
+              <View style={styles.previewAvatar}>
+                <Text style={styles.previewAvatarLetter}>{topComment.author[0]?.toUpperCase()}</Text>
+              </View>
+              <Text style={styles.previewSnippet} numberOfLines={2}>
+                <Text style={styles.previewAuthor}>@{topComment.author}</Text>
+                <Text style={styles.previewBody}> {topComment.body}</Text>
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.previewEmpty}>Add a comment…</Text>
+          )}
+        </Pressable>
+      )}
+
+      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
+        <View style={styles.modalRoot}>
+          {thumbnailUrl ? (
+            <View style={[styles.miniPlayer, { paddingTop: insets.top }]}>
+              <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+              <View style={styles.miniOverlay}>
+                <Ionicons name="play-circle" size={48} color={withAlpha(colors.onVideo, 0.9)} />
+                {videoTitle ? (
+                  <Text style={styles.miniTitle} numberOfLines={1}>{videoTitle}</Text>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+
+          <View style={[styles.sheet, thumbnailUrl ? styles.sheetBelowMini : null]}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Comments</Text>
+              <View style={styles.sheetHeaderRight}>
+                {countLabel ? <Text style={styles.sheetCount}>{countLabel}</Text> : null}
+                <Pressable onPress={() => setOpen(false)} hitSlop={12} style={styles.closeBtn}>
+                  <Ionicons name="close" size={22} color={colors.foreground} />
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.addCommentRow}>
+              {isAuthenticated ? (
+                <>
+                  {replyingTo ? (
+                    <View style={styles.replyBar}>
+                      <Text style={styles.replyText}>Replying to @{replyingTo}</Text>
+                      <Pressable onPress={() => setReplyingTo(null)}>
+                        <Text style={styles.replyCancel}>Cancel</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                  <View style={styles.composerRow}>
+                    <View style={styles.composerAvatar}>
+                      <Text style={styles.composerAvatarLetter}>
+                        {(user?.username ?? 'Y')[0]?.toUpperCase()}
+                      </Text>
+                    </View>
+                    <TextInput
+                      style={styles.composerInput}
+                      placeholder={replyingTo ? 'Add a reply…' : 'Add a comment…'}
+                      placeholderTextColor={colors.mutedForeground}
+                      value={text}
+                      onChangeText={setText}
+                    />
+                    <Pressable
+                      style={[styles.sendBtn, !text.trim() && styles.sendBtnOff]}
+                      onPress={submit}
+                      disabled={!text.trim()}
+                    >
+                      <Ionicons name="send" size={16} color={colors.primaryForeground} />
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <Pressable style={styles.signInRow} onPress={() => requireAuth()}>
+                  <View style={styles.composerAvatar} />
+                  <Text style={styles.signInText}>Add a comment…</Text>
+                </Pressable>
+              )}
+            </View>
+
+            <ScrollView
+              style={styles.list}
+              contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {comments.map((c) => (
+                <View key={c.id} style={styles.comment}>
+                  <View style={styles.commentAvatar}>
+                    <Text style={styles.commentAvatarLetter}>{c.author[0]?.toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.commentBody}>
+                    <View style={styles.commentMeta}>
+                      <Text style={styles.commentAuthor}>@{c.author}</Text>
+                      <Text style={styles.commentTime}>2w ago</Text>
+                    </View>
+                    <Text style={styles.commentText}>{c.body}</Text>
+                    <View style={styles.commentActions}>
+                      <Pressable
+                        style={styles.actionBtn}
+                        onPress={() => requireAuth(() => setLiked((p) => ({ ...p, [c.id]: !p[c.id] })))}
+                      >
+                        <Ionicons
+                          name={liked[c.id] || c.liked ? 'thumbs-up' : 'thumbs-up-outline'}
+                          size={16}
+                          color={liked[c.id] || c.liked ? colors.primary : colors.mutedForeground}
+                        />
+                        {(c.likes > 0 || liked[c.id]) && (
+                          <Text style={[styles.actionLabel, (liked[c.id] || c.liked) && styles.actionOn]}>
+                            {formatViewCount(c.likes + (liked[c.id] ? 1 : 0))}
+                          </Text>
+                        )}
+                      </Pressable>
+                      <Pressable
+                        style={styles.actionBtn}
+                        onPress={() => requireAuth(() => setReplyingTo(c.author))}
+                      >
+                        <Text style={styles.actionLabel}>Reply</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
+const MINI_HEIGHT = 220;
+
+const styles = StyleSheet.create({
+  preview: {
+    marginHorizontal: spacing.page,
+    marginTop: spacing.md,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  previewTitle: { color: colors.foreground, fontSize: 16, fontWeight: '700' },
+  previewRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  previewCount: { color: colors.mutedForeground, fontSize: 14 },
+  previewRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  previewAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewAvatarLetter: { color: colors.foreground, fontWeight: '700' },
+  previewSnippet: { flex: 1, fontSize: 14, lineHeight: 20 },
+  previewAuthor: { fontWeight: '700', color: colors.foreground },
+  previewBody: { color: colors.mutedForeground },
+  previewEmpty: { color: colors.mutedForeground, fontSize: 14 },
+  modalRoot: { flex: 1, backgroundColor: colors.background },
+  miniPlayer: {
+    height: MINI_HEIGHT,
+    backgroundColor: colors.videoBackground,
+    zIndex: 2,
+  },
+  miniOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: withAlpha('#000', 0.35),
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  miniTitle: { color: colors.onVideo, fontSize: 13, fontWeight: '600', maxWidth: '90%' },
+  sheet: { flex: 1, backgroundColor: colors.background },
+  sheetBelowMini: {
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    marginTop: -12,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  sheetTitle: { fontSize: 16, fontWeight: '700', color: colors.foreground },
+  sheetHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  sheetCount: { color: colors.mutedForeground, fontSize: 14 },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addCommentRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  signInRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  signInText: { color: colors.mutedForeground, fontSize: 14 },
+  replyBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  replyText: { color: colors.mutedForeground, fontSize: 12 },
+  replyCancel: { color: colors.primary, fontSize: 12, fontWeight: '600' },
+  composerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  composerAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: withAlpha(colors.primary, 0.2),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  composerAvatarLetter: { color: colors.primary, fontWeight: '800' },
+  composerInput: {
+    flex: 1,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingVertical: 8,
+    color: colors.foreground,
+    fontSize: 14,
+  },
+  sendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendBtnOff: { opacity: 0.4 },
+  list: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
+  comment: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  commentAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commentAvatarLetter: { color: colors.foreground, fontWeight: '700' },
+  commentBody: { flex: 1 },
+  commentMeta: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 4 },
+  commentAuthor: { color: colors.foreground, fontWeight: '700', fontSize: 14 },
+  commentTime: { color: colors.mutedForeground, fontSize: 12 },
+  commentText: { color: colors.foreground, fontSize: 14, lineHeight: 20 },
+  commentActions: { flexDirection: 'row', gap: 16, marginTop: 8 },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  actionLabel: { color: colors.mutedForeground, fontSize: 12, fontWeight: '600' },
+  actionOn: { color: colors.primary },
+});

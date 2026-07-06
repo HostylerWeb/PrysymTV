@@ -1,10 +1,12 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ChevronDown, Lock, MessageCircle, Send, X } from "lucide-react"
+import { createPortal } from "react-dom"
+import { ChevronDown, Lock, Send, ThumbsUp, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { RelativeTime } from "@/components/relative-time"
 import { userAvatarUrl } from "@/lib/user-avatar"
+import { formatViewCount } from "@/lib/format-media"
 import {
   fetchVideoComments,
   normalizeVideoComment,
@@ -22,6 +24,8 @@ type WatchCommentsPanelProps = {
   onTotalChange: (total: number) => void
   isAuthenticated: boolean
   currentUserId?: string
+  currentUserAvatar?: string | null
+  currentUserLabel?: string
   commentText: string
   onCommentTextChange: (text: string) => void
   commentError: string | null
@@ -37,6 +41,11 @@ type WatchCommentsPanelProps = {
 }
 
 const COMMENTS_PAGE_SIZE = 15
+const MOBILE_MINI_PLAYER_VH = 32
+
+function commentAuthorLabel(c: VideoComment) {
+  return c.user.displayName ?? c.user.username
+}
 
 export function WatchCommentsPanel({
   videoId,
@@ -48,6 +57,8 @@ export function WatchCommentsPanel({
   onTotalChange,
   isAuthenticated,
   currentUserId,
+  currentUserAvatar,
+  currentUserLabel = "user",
   commentText,
   onCommentTextChange,
   commentError,
@@ -65,13 +76,31 @@ export function WatchCommentsPanel({
   const [page, setPage] = useState(1)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const [mounted, setMounted] = useState(false)
+  const mobileScrollRef = useRef<HTMLDivElement>(null)
+  const desktopScrollRef = useRef<HTMLDivElement>(null)
   const topComment = comments[0]
+  const countLabel = commentsTotal > 0 ? formatViewCount(commentsTotal) : null
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     setPage(1)
     setHasMore(commentsTotal > comments.length)
   }, [videoId, commentsTotal, comments.length])
+
+  useEffect(() => {
+    if (!open) return
+    const mq = window.matchMedia("(max-width: 767px)")
+    if (!mq.matches) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [open])
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return
@@ -101,13 +130,15 @@ export function WatchCommentsPanel({
     onTotalChange,
   ])
 
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current
-    if (!el || loadingMore || !hasMore) return
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) {
-      void loadMore()
-    }
-  }, [loadingMore, hasMore, loadMore])
+  const handleScroll = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (!el || loadingMore || !hasMore) return
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 160) {
+        void loadMore()
+      }
+    },
+    [loadingMore, hasMore, loadMore],
+  )
 
   useEffect(() => {
     if (!highlightCommentId || !open) return
@@ -122,20 +153,124 @@ export function WatchCommentsPanel({
     return () => window.clearTimeout(t)
   }, [highlightCommentId, open, comments])
 
-  const renderCommentInput = () =>
-    isAuthenticated ? (
-      <div className="mb-4 space-y-2 shrink-0">
+  const renderCommentRow = (c: VideoComment, isReply = false) => (
+    <div
+      key={c.id}
+      id={`comment-${c.id}`}
+      className={cn("flex gap-3 scroll-mt-4", isReply && "ml-11")}
+    >
+      <img
+        src={userAvatarUrl(c.user.avatarUrl, c.user.username)}
+        alt=""
+        className={cn(
+          "rounded-full object-cover shrink-0",
+          isReply ? "w-7 h-7" : "w-9 h-9",
+        )}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="text-sm font-semibold text-foreground">
+            @{c.user.username}
+          </span>
+          <RelativeTime date={c.createdAt} className="text-xs text-muted-foreground" />
+        </div>
+        <p className="text-sm text-foreground mt-0.5 leading-snug break-words">{c.body}</p>
+        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+          <button
+            type="button"
+            className={cn(
+              "inline-flex items-center gap-1 hover:text-foreground",
+              c.liked && "text-primary",
+            )}
+            onClick={() => onCommentLike(c.id)}
+          >
+            <ThumbsUp className={cn("w-4 h-4", c.liked && "fill-primary")} />
+            {c.likesCount > 0 ? formatViewCount(c.likesCount) : null}
+          </button>
+          {!isReply && (
+            <button
+              type="button"
+              className="hover:text-foreground"
+              onClick={() =>
+                isAuthenticated
+                  ? onReplyingToChange({
+                      id: c.id,
+                      user: commentAuthorLabel(c),
+                    })
+                  : onRequireAuth()
+              }
+            >
+              Reply
+            </button>
+          )}
+          {currentUserId === c.user.id && (
+            <button
+              type="button"
+              className="text-destructive hover:text-destructive/80"
+              onClick={() => onRemoveComment(c.id)}
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderCommentList = () => (
+    <div className="space-y-5 pb-2">
+      {comments.length === 0 && (
+        <p className="text-sm text-muted-foreground py-6 text-center">
+          No comments yet. Be the first.
+        </p>
+      )}
+      {comments.map((c) => (
+        <div key={c.id} className="space-y-4">
+          {renderCommentRow(c)}
+          {(c.replies ?? []).map((reply) => renderCommentRow(reply, true))}
+        </div>
+      ))}
+      {loadingMore && (
+        <p className="text-xs text-muted-foreground text-center py-3">Loading more comments…</p>
+      )}
+    </div>
+  )
+
+  const renderAddCommentRow = (compact = false) => {
+    if (!isAuthenticated) {
+      return (
+        <button
+          type="button"
+          onClick={onRequireAuth}
+          className={cn(
+            "w-full flex items-center gap-3 text-left text-sm text-muted-foreground",
+            compact ? "py-3" : "py-4",
+          )}
+        >
+          <div className="w-9 h-9 rounded-full bg-secondary shrink-0" />
+          <span>Add a comment…</span>
+        </button>
+      )
+    }
+
+    return (
+      <div className={cn("space-y-2", compact ? "py-3" : "py-4")}>
         {replyingTo && (
-          <div className="flex items-center justify-between text-xs text-muted-foreground px-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>
-              Replying to <span className="font-semibold">{replyingTo.user}</span>
+              Replying to <span className="font-semibold text-foreground">{replyingTo.user}</span>
             </span>
-            <button type="button" onClick={() => onReplyingToChange(null)}>
+            <button type="button" onClick={() => onReplyingToChange(null)} className="hover:text-foreground">
               Cancel
             </button>
           </div>
         )}
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
+          <img
+            src={userAvatarUrl(currentUserAvatar, currentUserLabel)}
+            alt=""
+            className="w-9 h-9 rounded-full object-cover shrink-0"
+          />
           <input
             value={commentText}
             onChange={(e) => {
@@ -148,130 +283,63 @@ export function WatchCommentsPanel({
                 onSubmitComment()
               }
             }}
-            placeholder={replyingTo ? "Add a reply..." : "Add a comment..."}
+            placeholder={replyingTo ? "Add a reply…" : "Add a comment…"}
             disabled={commentPosting}
-            className="flex-1 bg-secondary/50 rounded-full px-4 py-2 text-sm disabled:opacity-60"
+            className="flex-1 bg-transparent border-b border-border pb-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
           />
           <button
             type="button"
             onClick={onSubmitComment}
             disabled={commentPosting || !commentText.trim()}
-            className="w-8 h-8 rounded-full bg-primary flex items-center justify-center disabled:opacity-50"
+            className="w-9 h-9 rounded-full bg-primary flex items-center justify-center disabled:opacity-40 shrink-0"
+            aria-label="Post comment"
           >
             <Send className="w-4 h-4 text-primary-foreground" />
           </button>
         </div>
-        {commentError && <p className="text-xs text-destructive px-2">{commentError}</p>}
+        {commentError && <p className="text-xs text-destructive pl-12">{commentError}</p>}
       </div>
-    ) : (
-      <button
-        type="button"
-        onClick={onRequireAuth}
-        className="w-full py-3 rounded-xl bg-secondary/50 border border-dashed flex items-center justify-center gap-2 text-sm text-muted-foreground mb-4 shrink-0"
-      >
-        <Lock className="w-4 h-4" /> Sign in to comment
-      </button>
     )
+  }
 
-  const renderCommentList = () => (
-    <div className="space-y-3">
-      {comments.length === 0 && (
-        <p className="text-sm text-muted-foreground px-2">No comments yet. Be the first.</p>
-      )}
-      {comments.map((c) => (
-        <div key={c.id} id={`comment-${c.id}`} className="space-y-2 scroll-mt-4">
-          <div className="flex gap-2">
-            <img
-              src={userAvatarUrl(c.user.avatarUrl, c.user.username)}
-              alt=""
-              className="w-8 h-8 rounded-full object-cover"
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">
-                {c.user.displayName ?? c.user.username}
-                <RelativeTime
-                  date={c.createdAt}
-                  className="ml-2 text-xs font-normal text-muted-foreground"
-                />
-              </p>
-              <p className="text-sm text-muted-foreground">{c.body}</p>
-              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                <button
-                  type="button"
-                  className={cn(c.liked && "text-primary")}
-                  onClick={() => onCommentLike(c.id)}
-                >
-                  Like{c.likesCount > 0 ? ` · ${c.likesCount}` : ""}
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    isAuthenticated
-                      ? onReplyingToChange({
-                          id: c.id,
-                          user: c.user.displayName ?? c.user.username,
-                        })
-                      : onRequireAuth()
-                  }
-                >
-                  Reply
-                </button>
-                {currentUserId === c.user.id && (
-                  <button
-                    type="button"
-                    className="text-destructive"
-                    onClick={() => onRemoveComment(c.id)}
-                  >
-                    Delete
-                  </button>
+  const mobileSheet =
+    open && mounted
+      ? createPortal(
+          <aside
+            className="fixed inset-x-0 bottom-0 z-[55] flex flex-col bg-background md:hidden animate-in slide-in-from-bottom duration-300"
+            style={{ top: `${MOBILE_MINI_PLAYER_VH}vh` }}
+            aria-label="Comments"
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+              <h2 className="text-base font-semibold text-foreground">Comments</h2>
+              <div className="flex items-center gap-3">
+                {countLabel && (
+                  <span className="text-sm text-muted-foreground">{countLabel}</span>
                 )}
+                <button
+                  type="button"
+                  onClick={() => onOpenChange(false)}
+                  className="w-9 h-9 rounded-full hover:bg-secondary flex items-center justify-center"
+                  aria-label="Close comments"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
             </div>
-          </div>
-          {(c.replies ?? []).map((reply) => (
-            <div key={reply.id} id={`comment-${reply.id}`} className="flex gap-2 ml-10 scroll-mt-4">
-              <img
-                src={userAvatarUrl(reply.user.avatarUrl, reply.user.username)}
-                alt=""
-                className="w-7 h-7 rounded-full object-cover"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">
-                  {reply.user.displayName ?? reply.user.username}
-                  <RelativeTime
-                    date={reply.createdAt}
-                    className="ml-2 text-xs font-normal text-muted-foreground"
-                  />
-                </p>
-                <p className="text-sm text-muted-foreground">{reply.body}</p>
-                <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                  <button
-                    type="button"
-                    className={cn(reply.liked && "text-primary")}
-                    onClick={() => onCommentLike(reply.id)}
-                  >
-                    Like{reply.likesCount > 0 ? ` · ${reply.likesCount}` : ""}
-                  </button>
-                  {currentUserId === reply.user.id && (
-                    <button
-                      type="button"
-                      className="text-destructive"
-                      onClick={() => onRemoveComment(reply.id)}
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </div>
+
+            <div className="px-4 border-b border-border shrink-0">{renderAddCommentRow(true)}</div>
+
+            <div
+              ref={mobileScrollRef}
+              onScroll={() => handleScroll(mobileScrollRef.current)}
+              className="flex-1 overflow-y-auto px-4 pt-4 min-h-0 overscroll-contain"
+            >
+              {renderCommentList()}
             </div>
-          ))}
-        </div>
-      ))}
-      {loadingMore && (
-        <p className="text-xs text-muted-foreground text-center py-2">Loading more comments…</p>
-      )}
-    </div>
-  )
+          </aside>,
+          document.body,
+        )
+      : null
 
   return (
     <>
@@ -279,27 +347,29 @@ export function WatchCommentsPanel({
         <button
           type="button"
           onClick={() => onOpenChange(true)}
-          className="w-full text-left py-3 border-t border-border"
+          className="w-full text-left py-4 border-t border-border active:bg-secondary/30 transition-colors"
         >
-          <div className="flex items-center gap-2 mb-2">
-            <MessageCircle className="w-5 h-5" />
-            <span className="text-sm font-medium">
-              Comments{commentsTotal > 0 ? ` (${commentsTotal})` : ""}
-            </span>
-            <ChevronDown className="w-4 h-4 text-muted-foreground ml-auto" />
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-base font-semibold text-foreground">Comments</h3>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              {countLabel && <span className="text-sm">{countLabel}</span>}
+              <ChevronDown className="w-4 h-4" />
+            </div>
           </div>
           {topComment ? (
-            <div className="flex gap-2 pointer-events-none">
+            <div className="flex gap-3 pointer-events-none">
               <img
                 src={userAvatarUrl(topComment.user.avatarUrl, topComment.user.username)}
                 alt=""
-                className="w-8 h-8 rounded-full object-cover shrink-0"
+                className="w-9 h-9 rounded-full object-cover shrink-0"
               />
-              <div className="min-w-0">
-                <p className="text-sm font-medium line-clamp-1">
-                  {topComment.user.displayName ?? topComment.user.username}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm leading-snug">
+                  <span className="font-semibold text-foreground">
+                    @{topComment.user.username}
+                  </span>
+                  <span className="text-muted-foreground ml-2">{topComment.body}</span>
                 </p>
-                <p className="text-sm text-muted-foreground line-clamp-2">{topComment.body}</p>
               </div>
             </div>
           ) : (
@@ -308,68 +378,34 @@ export function WatchCommentsPanel({
         </button>
       )}
 
-      {open && (part === "panel" || part === "both") && (
-        <>
-          {/* Mobile: bottom sheet (YouTube-style) */}
-          <div
-            className="fixed inset-0 z-40 bg-black/40 md:hidden"
-            onClick={() => onOpenChange(false)}
-            aria-hidden
-          />
-          <aside
-            className={cn(
-              "z-50 flex flex-col bg-background border-border md:hidden",
-              "fixed bottom-0 left-0 right-0 max-h-[75vh] rounded-t-2xl border-t shadow-2xl",
-            )}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-              <h2 className="text-sm font-semibold">
-                Comments{commentsTotal > 0 ? ` · ${commentsTotal}` : ""}
-              </h2>
-              <button
-                type="button"
-                onClick={() => onOpenChange(false)}
-                className="w-8 h-8 rounded-full hover:bg-secondary flex items-center justify-center"
-                aria-label="Close comments"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div
-              ref={scrollRef}
-              onScroll={handleScroll}
-              className="flex-1 overflow-y-auto px-4 py-3 min-h-0"
-            >
-              {renderCommentInput()}
-              {renderCommentList()}
-            </div>
-          </aside>
+      {mobileSheet}
 
-          {/* Desktop: expand inline below video (YouTube-style) */}
-          <div className="hidden md:block border-t border-border py-3">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold">
-                Comments{commentsTotal > 0 ? ` · ${commentsTotal}` : ""}
-              </h2>
-              <button
-                type="button"
-                onClick={() => onOpenChange(false)}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                Hide
-              </button>
-            </div>
-            <div
-              ref={scrollRef}
-              onScroll={handleScroll}
-              className="max-h-[min(60vh,520px)] overflow-y-auto"
+      {open && (part === "panel" || part === "both") && (
+        <div className="hidden md:block border-t border-border py-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-foreground">
+              Comments{countLabel ? ` · ${countLabel}` : ""}
+            </h2>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="text-sm text-muted-foreground hover:text-foreground"
             >
-              {renderCommentInput()}
-              {renderCommentList()}
-            </div>
+              Hide
+            </button>
           </div>
-        </>
+          {renderAddCommentRow()}
+          <div
+            ref={desktopScrollRef}
+            onScroll={() => handleScroll(desktopScrollRef.current)}
+            className="max-h-[min(60vh,520px)] overflow-y-auto pr-1"
+          >
+            {renderCommentList()}
+          </div>
+        </div>
       )}
     </>
   )
 }
+
+export const WATCH_COMMENTS_MOBILE_PLAYER_VH = MOBILE_MINI_PLAYER_VH

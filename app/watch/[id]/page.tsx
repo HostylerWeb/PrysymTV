@@ -45,7 +45,10 @@ import { userAvatarUrl } from "@/lib/user-avatar"
 import { followUser, unfollowUser } from "@/lib/api/users"
 import { useWatchAnalytics } from "@/lib/hooks/use-watch-analytics"
 import { useImmersivePlayer } from "@/lib/hooks/use-immersive-player"
-import { WatchCommentsPanel } from "@/components/watch-comments-panel"
+import {
+  WatchCommentsPanel,
+  WATCH_COMMENTS_MOBILE_PLAYER_VH,
+} from "@/components/watch-comments-panel"
 import { CastMediaButton } from "@/components/cast-media-button"
 
 type WatchVideo = {
@@ -415,11 +418,20 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <div className="max-w-6xl mx-auto w-full">
+        {commentsOpen && (
+          <div
+            className="md:hidden w-full shrink-0"
+            style={{ height: `${WATCH_COMMENTS_MOBILE_PLAYER_VH}vh` }}
+            aria-hidden
+          />
+        )}
         <div
           ref={playerContainerRef}
           className={cn(
             "relative w-full aspect-video bg-black group",
-            isImmersive && immersiveClassName,
+            commentsOpen &&
+              "md:relative fixed top-0 left-0 right-0 z-[60] w-full max-md:h-[32vh] max-md:max-h-[32vh] max-md:aspect-auto md:max-h-none md:h-auto md:aspect-video",
+            isImmersive && !commentsOpen && immersiveClassName,
           )}
           onClick={() => {
             setShowControls(true)
@@ -581,8 +593,7 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
 
           <p className="py-3 text-sm text-muted-foreground">{video.description}</p>
 
-          <div className="px-4">
-            <WatchCommentsPanel
+          <WatchCommentsPanel
               videoId={id}
               open={commentsOpen}
               onOpenChange={setCommentsOpen}
@@ -592,6 +603,8 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
               onTotalChange={setCommentsTotal}
               isAuthenticated={isAuthenticated}
               currentUserId={user?.id}
+              currentUserAvatar={user?.avatar}
+              currentUserLabel={user?.username ?? user?.email ?? "user"}
               commentText={commentText}
               onCommentTextChange={setCommentText}
               commentError={commentError}
@@ -605,7 +618,6 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
               onRemoveComment={removeComment}
               highlightCommentId={highlightCommentId}
             />
-          </div>
 
           <div className="py-4 border-t border-border">
             <h3 className="text-sm font-semibold mb-4">Up Next</h3>

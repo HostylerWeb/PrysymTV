@@ -1,26 +1,42 @@
 import { Injectable } from '@nestjs/common';
-import { ContentStatus, StreamStatus } from '@prisma/client';
+import { ContentStatus, StreamStatus, VideoType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class SearchService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private videoTypeForScope(type?: string): VideoType | null | undefined {
+    if (!type || type === 'all') return undefined;
+    if (type === 'short') return VideoType.short;
+    if (type === 'video') return VideoType.video;
+    if (type === 'movie') return VideoType.movie;
+    if (type === 'series_episode') return VideoType.series_episode;
+    return null;
+  }
+
+  private includesVideos(type?: string): boolean {
+    if (!type) return true;
+    return ['short', 'video', 'movie', 'series_episode'].includes(type);
+  }
+
   async search(q: string, type?: string, page = 1, limit = 20) {
     const query = q.trim();
     if (!query) {
-      return { query: '', videos: [], creators: [], podcasts: [], streams: [] };
+      return { query: '', videos: [], creators: [], podcasts: [], streams: [], verticals: [] };
     }
 
     const skip = (page - 1) * limit;
     const contains = { contains: query, mode: 'insensitive' as const };
+    const videoType = this.videoTypeForScope(type);
 
-    const [videos, creators, podcasts, streams] = await Promise.all([
-      type && type !== 'video'
+    const [videos, creators, podcasts, streams, verticals] = await Promise.all([
+      !this.includesVideos(type) || videoType === null
         ? []
         : this.prisma.video.findMany({
             where: {
               status: ContentStatus.ready,
+              ...(videoType ? { type: videoType } : {}),
               OR: [{ title: contains }, { description: contains }],
             },
             take: limit,
@@ -64,16 +80,92 @@ export class SearchService {
             take: limit,
             include: { creator: { select: { username: true, displayName: true } } },
           }),
+      type && type !== 'vertical'
+        ? []
+        : this.prisma.verticalSeries.findMany({
+            where: {
+              OR: [{ title: contains }, { tagline: contains }, { description: contains }],
+            },
+            take: limit,
+            skip,
+            select: {
+              id: true,
+              slug: true,
+              title: true,
+              posterUrl: true,
+              tagline: true,
+              totalEpisodes: true,
+            },
+          }),
     ]);
 
-    return { query, videos, creators, podcasts, streams };
+    return { query, videos, creators, podcasts, streams, verticals };
   }
 
-  async suggest(q: string) {
+  async suggest(q: string, type?: string) {
     const query = q.trim();
     if (!query) return { query: '', suggestions: [] };
 
     const contains = { contains: query, mode: 'insensitive' as const };
+    const videoType = this.videoTypeForScope(type);
+
+    if (type === 'vertical') {
+      const series = await this.prisma.verticalSeries.findMany({
+        where: { title: contains },
+        take: 5,
+        select: { slug: true, title: true },
+      });
+      return {
+        query,
+        suggestions: series.map((s) => ({
+          type: 'vertical' as const,
+          label: s.title,
+          href: `/verticals/${s.slug}`,
+        })),
+      };
+    }
+
+    if (type === 'podcast') {
+      const shows = await this.prisma.podcastShow.findMany({
+        where: { title: contains },
+        take: 5,
+        select: { id: true, title: true },
+      });
+      return {
+        query,
+        suggestions: shows.map((p) => ({
+          type: 'podcast' as const,
+          label: p.title,
+          href: '/podcasts',
+        })),
+      };
+    }
+
+    if (type === 'short' || type === 'video' || type === 'movie') {
+      const videos = await this.prisma.video.findMany({
+        where: {
+          title: contains,
+          status: ContentStatus.ready,
+          ...(videoType ? { type: videoType } : {}),
+        },
+        take: 5,
+        select: { id: true, title: true, type: true },
+      });
+      return {
+        query,
+        suggestions: videos.map((v) => ({
+          type: v.type,
+          label: v.title,
+          href:
+            v.type === 'short'
+              ? '/shorts'
+              : v.type === 'movie'
+                ? `/movie/${v.id}`
+                : `/watch/${v.id}`,
+        })),
+      };
+    }
+
     const [users, videos] = await Promise.all([
       this.prisma.user.findMany({
         where: { username: contains },
@@ -83,13 +175,26 @@ export class SearchService {
       this.prisma.video.findMany({
         where: { title: contains, status: ContentStatus.ready },
         take: 5,
-        select: { id: true, title: true },
+        select: { id: true, title: true, type: true },
       }),
     ]);
 
     const suggestions = [
-      ...users.map((u) => ({ type: 'creator' as const, label: u.displayName ?? u.username, href: `/creator/${u.username}` })),
-      ...videos.map((v) => ({ type: 'video' as const, label: v.title, href: `/watch/${v.id}` })),
+      ...users.map((u) => ({
+        type: 'creator' as const,
+        label: u.displayName ?? u.username,
+        href: `/creator/${u.username}`,
+      })),
+      ...videos.map((v) => ({
+        type: v.type,
+        label: v.title,
+        href:
+          v.type === 'short'
+            ? '/shorts'
+            : v.type === 'movie'
+              ? `/movie/${v.id}`
+              : `/watch/${v.id}`,
+      })),
     ];
 
     return { query, suggestions };

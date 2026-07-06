@@ -16,6 +16,7 @@ import {
   ChevronUp,
   ChevronDown,
   Gift,
+  Search,
 } from "lucide-react"
 import { GiftSheet } from "@/components/gift-sheet"
 import { ShortsPageSkeleton } from "@/components/content-skeletons"
@@ -140,6 +141,7 @@ interface ShortVideoProps {
   isAuthenticated: boolean
   onAuthRequired: () => void
   onUpload?: () => void
+  onSearch?: () => void
 }
 
 function ShortVideo({
@@ -160,6 +162,7 @@ function ShortVideo({
   isAuthenticated,
   onAuthRequired,
   onUpload,
+  onSearch,
 }: ShortVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -276,9 +279,27 @@ function ShortVideo({
               <Volume2 className="w-5 h-5 md:w-6 md:h-6 text-white" />
             )}
           </button>
-          <button type="button" className="p-2 relative z-20" onClick={onReport}>
+          <button
+            type="button"
+            onClick={onReport}
+            className="p-2 relative z-20"
+            aria-label="More options"
+          >
             <MoreVertical className="w-5 h-5 md:w-6 md:h-6 text-white" />
           </button>
+          {onSearch && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onSearch()
+              }}
+              className="p-2 relative z-20"
+              aria-label="Search"
+            >
+              <Search className="w-5 h-5 md:w-6 md:h-6 text-white" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -874,7 +895,7 @@ function ShortsPageContent() {
           onClick={uploadShort}
         />
         <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
-        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} scope="short" />
         <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
         <CreateFlowModals
           flow={createFlow}
@@ -923,6 +944,7 @@ function ShortsPageContent() {
               isAuthenticated={isAuthenticated}
               onAuthRequired={() => setIsAuthModalOpen(true)}
               onUpload={uploadShort}
+              onSearch={() => setIsSearchOpen(true)}
             />
           </div>
         ))}
@@ -1122,7 +1144,7 @@ function ShortsPageContent() {
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Search Modal */}
-      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} scope="short" />
 
       {/* Auth Modal */}
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />

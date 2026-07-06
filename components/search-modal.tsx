@@ -18,10 +18,16 @@ import {
   saveRecentSearch,
   clearRecentSearches,
 } from "@/lib/search-recent"
+import {
+  SEARCH_SCOPE_CONFIG,
+  type SearchScope,
+} from "@/lib/search-scope"
 
 interface SearchModalProps {
   isOpen: boolean
   onClose: () => void
+  /** When set, search is limited to this content type only. */
+  scope?: SearchScope
 }
 
 const quickCategories = [
@@ -31,8 +37,10 @@ const quickCategories = [
   { label: "Creators", color: "bg-green-500/20 text-green-400", type: "creator" as const },
 ]
 
-export function SearchModal({ isOpen, onClose }: SearchModalProps) {
+export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
   const router = useRouter()
+  const scopeConfig = scope ? SEARCH_SCOPE_CONFIG[scope] : null
+  const apiType = scopeConfig?.apiType
   const [searchQuery, setSearchQuery] = useState("")
   const [isListening, setIsListening] = useState(false)
   const [recentSearches, setRecentSearches] = useState<string[]>([])
@@ -70,7 +78,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
   }, [isOpen, onClose])
 
   const runSearch = useCallback(
-    async (query: string, type?: string) => {
+    async (query: string, typeOverride?: string) => {
       const q = query.trim()
       if (!q) {
         setResults(null)
@@ -79,7 +87,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
       setLoading(true)
       setError(null)
       try {
-        const data = await searchApi(q, type)
+        const data = await searchApi(q, typeOverride ?? apiType)
         setResults(data)
         saveRecentSearch(q)
         setRecentSearches(loadRecentSearches())
@@ -90,7 +98,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
         setLoading(false)
       }
     },
-    [],
+    [apiType],
   )
 
   useEffect(() => {
@@ -106,7 +114,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
     }
 
     debounceRef.current = setTimeout(() => {
-      void searchSuggest(q)
+      void searchSuggest(q, apiType)
         .then((res) => setSuggestions(res.suggestions))
         .catch(() => setSuggestions([]))
     }, 300)
@@ -114,7 +122,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [searchQuery, isOpen])
+  }, [searchQuery, isOpen, apiType])
 
   const navigateTo = (href: string, query?: string) => {
     if (query?.trim()) saveRecentSearch(query.trim())
@@ -124,7 +132,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
 
   const handleSubmitSearch = (query: string, type?: string) => {
     setSearchQuery(query)
-    void runSearch(query, type)
+    void runSearch(query, scope ? apiType : type)
   }
 
   const handleVoiceSearch = () => {
@@ -144,7 +152,8 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
     (results.videos.length > 0 ||
       results.creators.length > 0 ||
       results.podcasts.length > 0 ||
-      results.streams.length > 0)
+      results.streams.length > 0 ||
+      (results.verticals?.length ?? 0) > 0)
 
   if (!isOpen) return null
 
@@ -164,7 +173,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
               className="flex-1 relative"
               onSubmit={(e) => {
                 e.preventDefault()
-                void runSearch(searchQuery)
+                void runSearch(searchQuery, apiType)
               }}
             >
               <div className="absolute left-3 top-1/2 -translate-y-1/2">
@@ -175,7 +184,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search videos, movies, channels..."
+                placeholder={scopeConfig?.placeholder ?? "Search videos, movies, channels..."}
                 className="w-full bg-secondary/50 rounded-full pl-11 pr-12 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
               {searchQuery && (
@@ -224,24 +233,35 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
             <div className="px-4 py-4">
               {!searchQuery.trim() && (
                 <>
-                  <div className="mb-6">
-                    <h3 className="text-sm font-semibold text-foreground mb-3">Quick Categories</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {quickCategories.map((category) => (
-                        <button
-                          key={category.label}
-                          type="button"
-                          onClick={() => handleSubmitSearch(category.label, category.type)}
-                          className={cn(
-                            "px-4 py-2 rounded-full text-sm font-medium transition-transform active:scale-95",
-                            category.color,
-                          )}
-                        >
-                          {category.label}
-                        </button>
-                      ))}
+                  {!scope && (
+                    <div className="mb-6">
+                      <h3 className="text-sm font-semibold text-foreground mb-3">Quick Categories</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {quickCategories.map((category) => (
+                          <button
+                            key={category.label}
+                            type="button"
+                            onClick={() => handleSubmitSearch(category.label, category.type)}
+                            className={cn(
+                              "px-4 py-2 rounded-full text-sm font-medium transition-transform active:scale-95",
+                              category.color,
+                            )}
+                          >
+                            {category.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {scopeConfig && (
+                    <div className="mb-6">
+                      <h3 className="text-sm font-semibold text-foreground mb-2">
+                        Search {scopeConfig.resultsLabel}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">{scopeConfig.emptyHint}</p>
+                    </div>
+                  )}
 
                   {recentSearches.length > 0 && (
                     <div className="mb-6">
@@ -275,15 +295,17 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                     </div>
                   )}
 
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-primary" />
-                      Try searching
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      Find videos, movies, live streams, podcasts, and creators.
-                    </p>
-                  </div>
+                  {!scope && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-primary" />
+                        Try searching
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Find videos, movies, live streams, podcasts, and creators.
+                      </p>
+                    </div>
+                  )}
                 </>
               )}
 
@@ -324,7 +346,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                     </p>
                   )}
 
-                  {results.streams.length > 0 && (
+                  {!scope && results.streams.length > 0 && (
                     <section>
                       <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
                         <Radio className="w-4 h-4 text-red-400" /> Live
@@ -356,7 +378,12 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                   {results.videos.length > 0 && (
                     <section>
                       <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                        <Film className="w-4 h-4 text-blue-400" /> Videos
+                        <Film className="w-4 h-4 text-blue-400" />{" "}
+                        {scope === "short"
+                          ? "Shorts"
+                          : scope === "movie"
+                            ? "Movies"
+                            : scopeConfig?.resultsLabel ?? "Videos"}
                       </h3>
                       <div className="space-y-1">
                         {results.videos.map((v) => (
@@ -383,7 +410,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                     </section>
                   )}
 
-                  {results.creators.length > 0 && (
+                  {!scope && results.creators.length > 0 && (
                     <section>
                       <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
                         <Users className="w-4 h-4 text-green-400" /> Creators
@@ -423,7 +450,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                           <button
                             key={p.id}
                             type="button"
-                            onClick={() => navigateTo("/podcasts", results.query)}
+                            onClick={() => navigateTo(`/podcast/${p.id}`, results.query)}
                             className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-secondary/50 text-left"
                           >
                             <img
@@ -436,6 +463,37 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                               {p.category && (
                                 <p className="text-xs text-muted-foreground">{p.category}</p>
                               )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {(results.verticals?.length ?? 0) > 0 && (
+                    <section>
+                      <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                        <Film className="w-4 h-4 text-primary" /> Verticals
+                      </h3>
+                      <div className="space-y-1">
+                        {results.verticals!.map((v) => (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => navigateTo(`/verticals/${v.slug}`, results.query)}
+                            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-secondary/50 text-left"
+                          >
+                            <img
+                              src={videoThumbnail(v.posterUrl)}
+                              alt=""
+                              className="w-10 h-14 rounded object-cover shrink-0 bg-secondary"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{v.title}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {v.totalEpisodes} episodes
+                                {v.tagline ? ` · ${v.tagline}` : ""}
+                              </p>
                             </div>
                           </button>
                         ))}

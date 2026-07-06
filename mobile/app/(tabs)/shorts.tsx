@@ -104,18 +104,16 @@ export default function ShortsScreen() {
                     <Pressable hitSlop={8}>
                       <Ionicons name="ellipsis-vertical" size={22} color={colors.onVideo} />
                     </Pressable>
-                    <Pressable onPress={() => router.push('/search')} hitSlop={8}>
+                    <Pressable onPress={() => requireAuth(() => trigger('short'))} hitSlop={8}>
+                      <Ionicons name="add" size={24} color={colors.onVideo} />
+                    </Pressable>
+                    <Pressable onPress={() => router.push('/search?scope=short')} hitSlop={8}>
                       <Ionicons name="search" size={22} color={colors.onVideo} />
                     </Pressable>
                   </View>
                 </View>
 
                 <View style={[styles.sideActions, { bottom: tabInset + 12 }]}>
-                  <Action
-                    icon="add-circle-outline"
-                    label="Create"
-                    onPress={() => requireAuth(() => trigger('short'))}
-                  />
                   <Action
                     icon={liked[item.id] ? 'heart' : 'heart-outline'}
                     label={formatViewCount(item.likesCount ?? 0)}
@@ -149,7 +147,7 @@ export default function ShortsScreen() {
         )}
       </View>
       <AdInterstitial visible={adOpen} onClose={() => setAdOpen(false)} />
-      <CommentsSheet visible={commentsOpen} onClose={() => setCommentsOpen(false)} />
+      <CommentsSheet visible={commentsOpen} onClose={() => setCommentsOpen(false)} videoTitle={current?.title} />
       <ShareModal visible={shareOpen} onClose={() => setShareOpen(false)} title={current?.title ?? 'Short'} />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} />
       <GiftModal visible={giftOpen} onClose={() => setGiftOpen(false)} />

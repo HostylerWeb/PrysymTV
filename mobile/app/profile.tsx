@@ -17,9 +17,8 @@ import { ProfileStorePanel } from '@/components/profile/ProfileStorePanel';
 import { VideoCardTile } from '@/components/feed/VideoCardTile';
 import { CoinsModal } from '@/components/modals/CoinsModal';
 import { EditProfileModal } from '@/components/modals/EditProfileModal';
-import { UnlockFeaturesModal } from '@/components/modals/UnlockFeaturesModal';
+import { UnlockFeaturesModal, type CreatorVerificationContext } from '@/components/modals/UnlockFeaturesModal';
 import { StreamerApplicationModal } from '@/components/modals/StreamerApplicationModal';
-import { VerticalCreatorApplicationModal } from '@/components/modals/VerticalCreatorApplicationModal';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
 import { ShareModal } from '@/components/modals/ShareModal';
 import { useMockAuth } from '@/context/MockAuthContext';
@@ -51,7 +50,7 @@ export default function ProfileScreen() {
   const [editOpen, setEditOpen] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [streamerOpen, setStreamerOpen] = useState(false);
-  const [verticalApplyOpen, setVerticalApplyOpen] = useState(false);
+  const [verifyContext, setVerifyContext] = useState<CreatorVerificationContext | null>(null);
   const { trigger, flowHost } = useCreateFlow();
   const [shareOpen, setShareOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
@@ -136,7 +135,7 @@ export default function ProfileScreen() {
             <Button label="Edit Profile" onPress={() => setEditOpen(true)} style={styles.actionBtn} />
             <Button label="Share" variant="outline" onPress={() => setShareOpen(true)} style={styles.actionBtn} />
             {profile.streamerStatus === 'approved' && (
-              <Button label="Go Live" onPress={() => router.push('/go-live')} style={styles.actionBtn} />
+              <Button label="Go Live" onPress={() => router.push('/go-live')} style={styles.goLiveBtn} />
             )}
           </View>
 
@@ -144,8 +143,14 @@ export default function ProfileScreen() {
             <CreatorPermissionsCard
             user={profile}
             onUnlock={() => setUnlockOpen(true)}
-            onApplyLive={() => setStreamerOpen(true)}
-            onApplyVertical={() => setVerticalApplyOpen(true)}
+            onApplyLive={() => {
+              setVerifyContext({ features: ['live'] });
+              setStreamerOpen(true);
+            }}
+            onApplyVertical={() => {
+              setVerifyContext({ features: ['vertical'] });
+              setStreamerOpen(true);
+            }}
             />
           </View>
 
@@ -200,15 +205,14 @@ export default function ProfileScreen() {
           </ScrollView>
         </View>
 
-        {/* Underline tabs */}
-        <View style={styles.tabBar}>
+        {/* Column tabs — matches web profile */}
+        <View style={styles.tabBarColumn}>
           {visibleTabs.map((t) => {
             const active = tab === t.id;
             return (
-              <Pressable key={t.id} style={styles.tabItem} onPress={() => setTab(t.id)}>
-                <Ionicons name={t.icon} size={15} color={active ? colors.primary : colors.mutedForeground} />
-                <Text style={[styles.tabLabel, active && styles.tabLabelOn]}>{t.label}</Text>
-                {active && <View style={styles.tabUnderline} />}
+              <Pressable key={t.id} style={[styles.tabColItem, active && styles.tabColItemOn]} onPress={() => setTab(t.id)}>
+                <Ionicons name={t.icon} size={18} color={active ? colors.primary : colors.mutedForeground} />
+                <Text style={[styles.tabColLabel, active && styles.tabColLabelOn]}>{t.label}</Text>
               </Pressable>
             );
           })}
@@ -264,6 +268,7 @@ export default function ProfileScreen() {
           onDarkMode={setDarkMode}
           onCoins={() => { setSettingsOpen(false); setCoinsOpen(true); }}
           onStreamerApply={() => { setSettingsOpen(false); setStreamerOpen(true); }}
+          onUnlockFeatures={() => { setSettingsOpen(false); setUnlockOpen(true); }}
           onLogout={() => { setSettingsOpen(false); logout(); }}
         />
       )}
@@ -273,10 +278,30 @@ export default function ProfileScreen() {
         visible={unlockOpen}
         user={profile}
         onClose={() => setUnlockOpen(false)}
-        onNeedVerification={() => setStreamerOpen(true)}
+        onNeedVerification={(ctx) => {
+          setVerifyContext(ctx);
+          setUnlockOpen(false);
+          setStreamerOpen(true);
+        }}
       />
-      <StreamerApplicationModal visible={streamerOpen} onClose={() => setStreamerOpen(false)} features={['live', 'vertical']} />
-      <VerticalCreatorApplicationModal visible={verticalApplyOpen} onClose={() => setVerticalApplyOpen(false)} />
+      <StreamerApplicationModal
+        visible={streamerOpen}
+        user={profile}
+        onClose={() => {
+          setStreamerOpen(false);
+          setVerifyContext(null);
+        }}
+        features={
+          verifyContext?.features.includes('live') && verifyContext?.features.includes('vertical')
+            ? ['live', 'vertical']
+            : verifyContext?.features.includes('vertical')
+              ? ['vertical']
+              : verifyContext?.features.includes('live')
+                ? ['live']
+                : ['live', 'vertical']
+        }
+        initialDescription={verifyContext?.description}
+      />
       <ShareModal
         visible={shareOpen}
         onClose={() => setShareOpen(false)}
@@ -365,6 +390,7 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16, justifyContent: 'center' },
   creatorAccessWrap: { marginTop: 20 },
   actionBtn: { minWidth: 110 },
+  goLiveBtn: { minWidth: 110, backgroundColor: colors.primary },
   coinsPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -396,24 +422,27 @@ const styles = StyleSheet.create({
   progressFill: { height: '100%', backgroundColor: colors.primary },
   continueVidTitle: { color: colors.foreground, fontSize: 12, fontWeight: '600' },
   continueMeta: { color: colors.mutedForeground, fontSize: 11 },
-  tabBar: {
+  tabBarColumn: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 16,
     marginTop: 8,
   },
-  tabItem: { flex: 1, alignItems: 'center', paddingVertical: 10, gap: 2, position: 'relative' },
-  tabLabel: { fontSize: 10, fontWeight: '600', color: colors.mutedForeground },
-  tabLabelOn: { color: colors.primary },
-  tabUnderline: {
-    position: 'absolute',
-    bottom: 0,
-    left: 8,
-    right: 8,
-    height: 2,
-    backgroundColor: colors.primary,
-    borderRadius: 1,
+  tabColItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
   },
+  tabColItemOn: { borderColor: colors.primary, backgroundColor: colors.primary + '12' },
+  tabColLabel: { fontSize: 11, fontWeight: '600', color: colors.mutedForeground },
+  tabColLabelOn: { color: colors.primary },
   tabContent: { paddingHorizontal: 16, paddingTop: 16 },
   contentGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   gridHalf: { width: '48%' },

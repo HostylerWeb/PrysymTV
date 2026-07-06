@@ -24,6 +24,7 @@ type Props = {
   onDarkMode: (v: boolean) => void;
   onCoins: () => void;
   onStreamerApply: () => void;
+  onUnlockFeatures?: () => void;
   onLogout: () => void;
 };
 
@@ -56,6 +57,7 @@ export function ProfileSettingsSheet({
   onDarkMode,
   onCoins,
   onStreamerApply,
+  onUnlockFeatures,
   onLogout,
 }: Props) {
   const router = useRouter();
@@ -117,7 +119,25 @@ export function ProfileSettingsSheet({
           },
           accent: 'live',
         },
-    { icon: 'time-outline', label: 'Watch History', description: 'Recently watched content', route: '/history' },
+    user.verticalCreatorStatus === 'approved'
+      ? {
+          icon: 'grid-outline',
+          label: 'Micro-dramas',
+          description: 'Manage vertical series & episodes',
+          route: '/settings/verticals',
+        }
+      : {
+          icon: 'grid-outline',
+          label: 'Micro-dramas',
+          description:
+            user.verticalCreatorStatus === 'pending'
+              ? 'Application pending...'
+              : 'Apply to publish vertical series',
+          action: () => {
+            onClose();
+            onUnlockFeatures?.();
+          },
+        },
     { icon: 'cube-outline', label: 'Shipping & checkout', description: 'Address for store purchases', screen: 'shipping' },
     { icon: 'list-outline', label: 'Playlists', description: 'Create and manage playlists', screen: 'playlists' },
     { icon: 'link-outline', label: 'Social Links', description: 'Links on your creator profile', screen: 'social' },

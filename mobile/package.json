@@ -1,0 +1,49 @@
+{
+  "name": "mobile",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@expo-google-fonts/inter": "^0.4.2",
+    "@expo/vector-icons": "^15.0.3",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "^54.0.0",
+    "expo-constants": "~18.0.13",
+    "expo-document-picker": "~14.0.8",
+    "expo-font": "~14.0.12",
+    "expo-image": "~3.0.11",
+    "expo-image-picker": "~17.0.11",
+    "expo-linear-gradient": "~15.0.8",
+    "expo-linking": "~8.0.12",
+    "expo-router": "~6.0.24",
+    "expo-splash-screen": "~31.0.13",
+    "expo-status-bar": "~3.0.9",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-gesture-handler": "~2.28.0",
+    "react-native-reanimated": "~4.1.1",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-worklets": "0.5.1"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "babel-preset-expo": "~54.0.10",
+    "typescript": "~5.9.2"
+  },
+  "scripts": {
+    "start": "expo start",
+    "start:dev-client": "expo start --dev-client",
+    "android": "expo run:android",
+    "android:release": "expo run:android --variant release",
+    "prebuild": "expo prebuild --platform android",
+    "prebuild:clean": "expo prebuild --platform android --clean",
+    "build:apk:debug": "bash scripts/build-android.sh assembleDebug",
+    "build:apk:release": "bash scripts/build-android.sh assembleRelease",
+    "install:apk:release": "adb install -r android/app/build/outputs/apk/release/app-release.apk",
+    "dev:android": "adb reverse tcp:8081 tcp:8081 && expo start",
+    "log:android": "bash scripts/log-android.sh",
+    "ios": "expo run:ios",
+    "web": "expo start --web"
+  },
+  "private": true
+}

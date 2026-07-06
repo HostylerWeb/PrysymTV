@@ -91,7 +91,7 @@ export default function VerticalsPage() {
         )}
       </div>
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
-      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} scope="vertical" />
       <CreateFlowModals
         flow={createFlow}
         onUploadSuccess={() => void refreshUser()}

@@ -15,7 +15,7 @@ export class SearchController {
   }
 
   @Get('suggest')
-  suggest(@Query('q') q?: string) {
-    return this.searchService.suggest(q ?? '');
+  suggest(@Query('q') q?: string, @Query('type') type?: string) {
+    return this.searchService.suggest(q ?? '', type);
   }
 }

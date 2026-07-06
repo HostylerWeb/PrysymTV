@@ -18,6 +18,7 @@ import {
   TrendingMovieCard,
   VideoCardTile,
 } from '@/components/feed/VideoCardTile';
+import { AppHeader } from '@/components/layout/AppHeader';
 import { PageFooter } from '@/components/layout/PageFooter';
 import { SectionHeader } from '@/components/home/SectionHeader';
 import { FilterChip } from '@/components/ui/FilterChip';
@@ -96,7 +97,10 @@ export default function MoviesScreen() {
       contentContainerStyle={{ paddingBottom: tabInset + 24 }}
       showsVerticalScrollIndicator={false}
     >
-      <View style={[styles.hero, { paddingTop: insets.top }]}>
+      <View style={[styles.headerPad, { paddingTop: insets.top }]}>
+        <AppHeader title="Movies" searchScope="movie" showNotifications={false} edgeToEdge />
+      </View>
+      <View style={styles.hero}>
         <Image source={{ uri: featured.thumbnailUrl ?? '' }} style={StyleSheet.absoluteFill} contentFit="cover" />
         <View style={styles.heroGradBottom} />
         <View style={styles.heroGradLeft} />
@@ -248,6 +252,7 @@ export default function MoviesScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
+  headerPad: { paddingHorizontal: 16 },
   hero: { aspectRatio: 16 / 10, backgroundColor: colors.muted },
   heroGradBottom: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.heroScrim },
   heroGradLeft: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.heroScrimLight },

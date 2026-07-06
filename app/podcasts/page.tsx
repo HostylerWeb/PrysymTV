@@ -218,7 +218,7 @@ export default function PodcastsPage() {
         />
         <PodcastPageSkeleton />
         <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
-        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} scope="podcast" />
       </main>
     )
   }
@@ -497,7 +497,7 @@ export default function PodcastsPage() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
-      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} scope="podcast" />
 
       <CreateFlowModals
         flow={createFlow}

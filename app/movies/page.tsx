@@ -428,7 +428,7 @@ export default function MoviesPage() {
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Search Modal */}
-      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} scope="movie" />
 
       <Dialog open={infoMovie != null} onOpenChange={(open) => !open && setInfoMovie(null)}>
         <DialogContent className="max-w-md">

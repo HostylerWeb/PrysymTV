@@ -30,12 +30,22 @@ export type SearchStreamHit = {
   creator: { username: string; displayName: string | null };
 };
 
+export type SearchVerticalHit = {
+  id: string;
+  slug: string;
+  title: string;
+  posterUrl: string | null;
+  tagline: string | null;
+  totalEpisodes: number;
+};
+
 export type SearchResponse = {
   query: string;
   videos: SearchVideoHit[];
   creators: SearchCreatorHit[];
   podcasts: SearchPodcastHit[];
   streams: SearchStreamHit[];
+  verticals: SearchVerticalHit[];
 };
 
 export type SearchSuggestion = {
@@ -50,9 +60,11 @@ export function searchApi(q: string, type?: string, page = 1) {
   return apiRequest<SearchResponse>(`/search?${params}`, { auth: false });
 }
 
-export function searchSuggest(q: string) {
+export function searchSuggest(q: string, type?: string) {
+  const params = new URLSearchParams({ q });
+  if (type) params.set("type", type);
   return apiRequest<{ query: string; suggestions: SearchSuggestion[] }>(
-    `/search/suggest?q=${encodeURIComponent(q)}`,
+    `/search/suggest?${params}`,
     { auth: false },
   );
 }
