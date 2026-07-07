@@ -1,102 +1,121 @@
-let facebookScriptPromise: Promise<void> | null = null
-let facebookInitialized = false
-let facebookAppId: string | null = null
+const FACEBOOK_OAUTH_VERSION = "v21.0"
+const FACEBOOK_SCOPES = "public_profile,email"
+const POPUP_NAME = "prysym_facebook_oauth"
 
-declare global {
-  interface Window {
-    FB?: {
-      init: (config: {
-        appId: string
-        cookie?: boolean
-        xfbml?: boolean
-        version: string
-      }) => void
-      login: (
-        callback: (response: {
-          authResponse?: { accessToken?: string }
-          status?: string
-        }) => void,
-        options?: { scope?: string },
-      ) => void
-    }
-    fbAsyncInit?: () => void
+export function getFacebookRedirectUri(): string {
+  if (typeof window === "undefined") return ""
+  return `${window.location.origin}/auth/facebook-callback`
+}
+
+function buildFacebookOAuthUrl(appId: string): string {
+  const url = new URL(
+    `https://www.facebook.com/${FACEBOOK_OAUTH_VERSION}/dialog/oauth`,
+  )
+  url.searchParams.set("client_id", appId)
+  url.searchParams.set("redirect_uri", getFacebookRedirectUri())
+  url.searchParams.set("response_type", "token")
+  url.searchParams.set("scope", FACEBOOK_SCOPES)
+  url.searchParams.set("display", "popup")
+  return url.toString()
+}
+
+/** No SDK to load — redirect flow only needs the public app ID. */
+export async function prepareFacebookSignIn(appId: string): Promise<void> {
+  if (!appId?.trim()) {
+    throw new Error("Facebook sign-in is not configured")
   }
 }
 
-function loadFacebookSdk(): Promise<void> {
-  if (facebookScriptPromise) return facebookScriptPromise
-  if (typeof window !== "undefined" && window.FB) {
-    facebookScriptPromise = Promise.resolve()
-    return facebookScriptPromise
+export async function signInWithFacebook(appId: string): Promise<string> {
+  if (!appId?.trim()) {
+    throw new Error("Facebook sign-in is not configured")
   }
-  if (typeof document === "undefined") return Promise.resolve()
 
-  facebookScriptPromise = new Promise((resolve, reject) => {
-    window.fbAsyncInit = () => resolve()
+  if (typeof window === "undefined") {
+    throw new Error("Facebook Sign-In is not available")
+  }
 
-    const existing = document.getElementById("prysym-facebook-jssdk")
-    if (existing) {
-      if (window.FB) {
-        resolve()
-        return
-      }
-      existing.addEventListener("load", () => resolve(), { once: true })
-      existing.addEventListener("error", () => reject(), { once: true })
+  if (window.location.protocol !== "https:") {
+    throw new Error(
+      "Facebook sign-in requires HTTPS. Open the site over https:// or test on the live deployment.",
+    )
+  }
+
+  const popupUrl = buildFacebookOAuthUrl(appId)
+  const width = 560
+  const height = 720
+  const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2)
+  const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2)
+  const features = [
+    `width=${width}`,
+    `height=${height}`,
+    `left=${left}`,
+    `top=${top}`,
+    "menubar=no",
+    "toolbar=no",
+    "location=no",
+    "status=no",
+    "resizable=yes",
+    "scrollbars=yes",
+  ].join(",")
+
+  return new Promise((resolve, reject) => {
+    const popup = window.open(popupUrl, POPUP_NAME, features)
+    if (!popup) {
+      reject(
+        new Error(
+          "Popup blocked. Allow popups for this site and try Facebook sign-in again.",
+        ),
+      )
       return
     }
 
-    const script = document.createElement("script")
-    script.id = "prysym-facebook-jssdk"
-    script.src = "https://connect.facebook.net/en_US/sdk.js"
-    script.async = true
-    script.defer = true
-    script.onerror = () => reject(new Error("Failed to load Facebook SDK"))
-    document.head.appendChild(script)
-  })
+    let settled = false
 
-  return facebookScriptPromise
-}
+    const cleanup = () => {
+      window.removeEventListener("message", onMessage)
+      window.clearInterval(closePoll)
+    }
 
-function ensureFacebookInitialized(appId: string): void {
-  if (!window.FB) {
-    throw new Error("Facebook Sign-In is not available")
-  }
-  if (facebookInitialized && facebookAppId === appId) return
+    const finish = (handler: () => void) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      handler()
+    }
 
-  window.FB.init({
-    appId,
-    cookie: true,
-    xfbml: false,
-    version: "v21.0",
-  })
-  facebookAppId = appId
-  facebookInitialized = true
-}
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return
+      const data = event.data as {
+        type?: string
+        accessToken?: string
+        error?: string
+      }
+      if (data.type !== "facebook-oauth-token") return
 
-export async function prepareFacebookSignIn(appId: string): Promise<void> {
-  await loadFacebookSdk()
-  if (!appId) return
-  if (facebookAppId && facebookAppId !== appId) return
-  ensureFacebookInitialized(appId)
-}
+      try {
+        popup.close()
+      } catch {
+        /* ignore */
+      }
 
-export async function signInWithFacebook(): Promise<string> {
-  await loadFacebookSdk()
-  if (!window.FB) {
-    throw new Error("Facebook Sign-In is not available")
-  }
+      if (data.accessToken) {
+        finish(() => resolve(data.accessToken))
+        return
+      }
 
-  return new Promise((resolve, reject) => {
-    window.FB!.login(
-      (response) => {
-        const accessToken = response.authResponse?.accessToken
-        if (accessToken) {
-          resolve(accessToken)
-          return
-        }
-        reject(new Error("Facebook sign-in was cancelled"))
-      },
-      { scope: "public_profile,email" },
-    )
+      finish(() =>
+        reject(
+          new Error(data.error ?? "Facebook sign-in was cancelled"),
+        ),
+      )
+    }
+
+    const closePoll = window.setInterval(() => {
+      if (!popup.closed) return
+      finish(() => reject(new Error("Facebook sign-in was cancelled")))
+    }, 400)
+
+    window.addEventListener("message", onMessage)
   })
 }

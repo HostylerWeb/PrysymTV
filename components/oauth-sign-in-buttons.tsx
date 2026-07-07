@@ -15,6 +15,10 @@ import {
   prepareFacebookSignIn,
   signInWithFacebook,
 } from "@/lib/facebook-oauth"
+import {
+  canUseFacebookWebLogin,
+  isPlaceholderFacebookAppId,
+} from "@/lib/oauth-mock"
 
 const envGoogleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim()
 const envAppleClientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID?.trim()
@@ -277,6 +281,10 @@ function FacebookSignInButton({
 
   useEffect(() => {
     if (!appId) return
+    if (isPlaceholderFacebookAppId(appId)) {
+      setReady(true)
+      return
+    }
 
     let cancelled = false
     void prepareFacebookSignIn(appId)
@@ -284,7 +292,7 @@ function FacebookSignInButton({
         if (!cancelled) setReady(true)
       })
       .catch(() => {
-        if (!cancelled) onError?.("Failed to load Facebook Sign In")
+        if (!cancelled) onError?.("Failed to prepare Facebook Sign In")
       })
 
     return () => {
@@ -293,9 +301,25 @@ function FacebookSignInButton({
   }, [appId, onError])
 
   const handleFacebookSignIn = useCallback(async () => {
+    if (!appId) return
+
+    if (isPlaceholderFacebookAppId(appId)) {
+      onError?.(
+        "Facebook sign-in is not configured yet. Add FACEBOOK_APP_ID and FACEBOOK_APP_SECRET to api/.env.",
+      )
+      return
+    }
+
+    if (!canUseFacebookWebLogin()) {
+      onError?.(
+        "Facebook sign-in requires HTTPS. Use the live site or run the web app over https://localhost.",
+      )
+      return
+    }
+
     setBusy(true)
     try {
-      const accessToken = await signInWithFacebook()
+      const accessToken = await signInWithFacebook(appId)
       await onFacebookCredential(accessToken)
     } catch (err) {
       const message =
@@ -306,7 +330,7 @@ function FacebookSignInButton({
     } finally {
       setBusy(false)
     }
-  }, [onFacebookCredential, onError])
+  }, [appId, onFacebookCredential, onError])
 
   if (!appId) return null
 
