@@ -39,6 +39,7 @@ import { ReportModal } from "@/components/report-modal"
 import { ShareSheet } from "@/components/share-sheet"
 import { useAuth } from "@/contexts/auth-context"
 import { LiveBroadcastPlayer } from "@/components/live-broadcast-player"
+import { CastMediaButton } from "@/components/cast-media-button"
 import { LiveStudioPanel } from "@/components/live-studio-panel"
 import { fetchGiftCatalog, sendGift } from "@/lib/api/billing"
 import { endStream, fetchStream, type StreamDetail } from "@/lib/api/streams"
@@ -436,6 +437,26 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
                 </span>
               </div>
               <div className="flex gap-1.5 md:gap-2">
+                <CastMediaButton
+                  variant="on-video"
+                  className="w-9 h-9 md:w-10 md:h-10 !bg-black/40 backdrop-blur"
+                  media={
+                    stream.hlsPlaybackUrl
+                      ? {
+                          title: stream.title,
+                          subtitle: stream.streamer,
+                          streamUrl: stream.hlsPlaybackUrl,
+                          posterUrl: stream.thumbnail ?? undefined,
+                          isLive: isLive,
+                        }
+                      : null
+                  }
+                  getCurrentTime={() => liveVideoRef.current?.currentTime ?? 0}
+                  onCastStarted={() => {
+                    const el = liveVideoRef.current
+                    if (el && !el.paused) el.pause()
+                  }}
+                />
                 <button
                   type="button"
                   onClick={() => setIsMuted(!isMuted)}

@@ -7,6 +7,7 @@ export type AuthUserResponse = {
 
 export type AuthSessionResponse = {
   accessToken: string;
+  refreshToken?: string;
   tokenType: string;
   expiresIn: string;
   user: AuthUserResponse;

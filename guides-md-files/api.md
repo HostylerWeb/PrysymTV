@@ -4,7 +4,7 @@
 **Base URL (production):** `https://srv1765056.hstgr.cloud/api/v1`  
 **WebSocket host (no `/api/v1`):** same origin as API — e.g. `https://srv1765056.hstgr.cloud` (namespace `/streams`)  
 **Auth:** Bearer access token in `Authorization: Bearer <accessToken>`. Refresh token in HttpOnly cookie `prysym_refresh` (path `/api/v1/auth`, 7-day TTL by default).  
-**Content-Type:** `application/json` unless noted (multipart only on local-storage upload fallbacks).
+**Content-Type:** `application/json` unless noted (multipart for `/media/*` image uploads and local-storage upload fallbacks).
 
 > **React Native:** This doc includes a dedicated [React Native integration](#react-native-integration) section. The API is usable from mobile today; refresh tokens require cookie handling (see that section). There is no `refreshToken` field in JSON responses yet.
 
@@ -62,7 +62,7 @@
 | `GET` | `/feed/trending` | ✅ |
 | `POST` | `/videos/upload/init` | ✅ |
 | `POST` | `/videos/upload/complete` | ✅ Movies require `posterUrl` before complete |
-| `POST` | `/videos/:id/poster/upload/init` | ✅ Bearer — movie poster image (`image/*`) |
+| `POST` | `/videos/:id/poster/upload/init` | ✅ Bearer — movie poster image (`image/*`) → `POST /media/movie-poster-upload` |
 | `POST` | `/videos/:id/poster/upload/complete` | ✅ Bearer — `{ objectKey }` sets movie `posterUrl` |
 | `GET` | `/videos/feed/shorts` | ✅ `?cursor=&limit=` — optional JWT → `liked`, `saved`, `disliked`, `isFollowing` per card |
 | `GET` | `/videos/feed/movies` | ✅ |
@@ -80,10 +80,11 @@
 | `POST` | `/videos/:id/report` | ✅ |
 | `PATCH` | `/videos/:id` | ✅ Bearer — owner edits title, description, visibility, etc. |
 | `POST` | `/media/upload/:videoId` | ✅ (local `STORAGE_DRIVER` only, multipart) |
-| `POST` | `/media/profile-upload` | ✅ Local avatar/banner PUT target |
+| `POST` | `/media/profile-upload` | ✅ Avatar/banner/streamer ID after profile upload init |
 | `POST` | `/media/podcast-upload` | ✅ Local podcast audio/video PUT target |
 | `POST` | `/media/podcast-cover-upload` | ✅ Local podcast show cover PUT target |
-| `POST` | `/media/movie-poster-upload` | ✅ Local movie poster PUT target |
+| `POST` | `/media/movie-poster-upload` | ✅ Movie poster after `POST /videos/:id/poster/upload/init` |
+| `POST` | `/media/store-product-image-upload` | ✅ Store product image after `POST /stores/me/products/images/upload/init` |
 | `POST` | `/media/ad-upload` | ✅ Local ad creative upload (admin) |
 | `GET` | `/history` | ✅ |
 | `POST` | `/history/progress` | ✅ |
@@ -144,6 +145,8 @@
 | `POST` | `/stores/me/products` | ✅ Bearer — create product (`galleryUrls`, `inventoryUnlimited`) |
 | `PUT` | `/stores/me/products/:id` | ✅ Bearer — partial update (title, images, stock, status, etc.) |
 | `DELETE` | `/stores/me/products/:id` | ✅ Bearer — delete product |
+| `POST` | `/stores/me/products/images/upload/init` | ✅ Bearer — product cover/gallery image (`image/*`) |
+| `POST` | `/stores/me/products/images/upload/complete` | ✅ Bearer — `{ objectKey }` → `{ imageUrl }` |
 | `POST` | `/stores/checkout` | ✅ Bearer — Stripe checkout for store purchase |
 | `GET` | `/stores/orders/:orderId` | ✅ Bearer — buyer order (digital URL when paid) |
 | `GET` | `/users/:username/store/products/:productId` | ✅ Public product detail |
@@ -378,15 +381,17 @@ Podcasts: `mediaType: "audio"` → `audioUrl`; `mediaType: "video"` → `videoUr
 
 Call `POST /videos/:id/view` (or vertical/podcast play endpoints) when playback starts for analytics.
 
-### File uploads (S3 / R2 production)
+### File uploads
 
-Standard 3-step flow for videos, podcast media, profile images, show covers:
+All uploads use a 3-step flow: **init** → **upload bytes** → **complete**.
+
+**Large media** (videos, podcast audio/video) with `STORAGE_DRIVER=s3` (R2):
 
 1. **Init** — `POST …/upload/init` with `{ mimeType, fileName?, … }` → returns `UploadTarget`
 2. **Upload** — `PUT` file bytes to `uploadUrl` with `uploadHeaders` (usually `Content-Type`)
 3. **Complete** — `POST …/upload/complete` with `{ videoId \| objectKey, … }` → processing begins
 
-**`UploadTarget` shape** (all init endpoints):
+**`UploadTarget` shape** (video / podcast init):
 
 ```json
 {
@@ -399,9 +404,17 @@ Standard 3-step flow for videos, podcast media, profile images, show covers:
 }
 ```
 
-When `STORAGE_DRIVER=local` (dev), `uploadMethod` is `POST` to `/media/*` routes with multipart form + Bearer auth instead of presigned PUT.
+**Images via API proxy** (profile avatar/banner, streamer ID, movie posters, store product images) — **local and R2**:
 
-**React Native upload tip:** use `fetch` PUT with `blob` from `expo-document-picker` / `expo-image-picker`, or `react-native-blob-util` for large files with progress.
+1. **Init** — returns `uploadMethod: "POST"` and `uploadUrl` pointing at `/media/profile-upload`, `/media/movie-poster-upload`, or `/media/store-product-image-upload`
+2. **Upload** — multipart `POST` with fields `file` + `objectKey` and `Authorization: Bearer …` (10 MB max per image)
+3. **Complete** — `POST …/upload/complete` with `{ objectKey }` → returns public URL (and sets `posterUrl` for movies)
+
+Podcast **show covers** still use presigned `PUT` on R2; local dev uses `POST /media/podcast-cover-upload`.
+
+When `STORAGE_DRIVER=local` (dev), large video/podcast uploads also use `POST` to `/media/*` instead of presigned PUT.
+
+**React Native upload tip:** use `fetch` PUT with `blob` for large files, or multipart `FormData` for image proxy routes; `react-native-blob-util` helps with upload progress.
 
 ### Live chat (Socket.IO)
 
@@ -567,9 +580,9 @@ All `/users/me/*` routes require Bearer auth.
 |-------|--------|-------|
 | `GET /users/me` | ✅ | Full profile — see [User type](#user-get-usersme) |
 | `PUT /users/me` | ✅ | `displayName`, `bio`, `avatarUrl`, `bannerUrl`, buyer shipping fields (`buyerFullName`, `buyerPhone`, `buyerAddressLine1`, `buyerAddressLine2`, `buyerCity`, `buyerState`, `buyerPostalCode`, `buyerCountryCode`) |
-| `POST /users/me/avatar/upload` | ✅ | `{ mimeType, fileName? }` → presigned PUT or local `POST /media/profile-upload` |
+| `POST /users/me/avatar/upload` | ✅ | `{ mimeType, fileName? }` → `POST /media/profile-upload` (local + R2) |
 | `POST /users/me/banner/upload` | ✅ | Same as avatar |
-| `POST /users/me/streamer-id/upload` | ✅ | `{ mimeType, fileName? }` → presigned PUT or local `POST /media/profile-upload` with `uploads/streamer-ids/{userId}.*` key |
+| `POST /users/me/streamer-id/upload` | ✅ | `{ mimeType, fileName? }` → `POST /media/profile-upload` with `uploads/streamer-ids/{userId}.*` key |
 | `GET/PUT /users/me/notification-preferences` | ✅ | |
 | `PUT /users/me/social-links` | ✅ | `{ links: [{ label, url, sortOrder }] }` |
 | `POST /users/apply-streamer` | ✅ | |
@@ -670,7 +683,7 @@ Guests: no `continueWatching` from API (web uses `localStorage` for vertical pro
 |-------|--------|
 | `POST /videos/upload/init` | ✅ `{ type, title, description?, category?, visibility?, tags?, mimeType, fileName?, releaseYear?, ageRating?, tagline?, director?, writers?, cast? }` — **`type: movie` is admin-only** |
 | `POST /videos/upload/complete` | ✅ `{ videoId, objectKey? }` — verifies object, enqueues BullMQ `video-processing` job. **For `type: movie`, `posterUrl` must already be set** (upload poster first). |
-| `POST /videos/:id/poster/upload/init` | ✅ Bearer — `{ mimeType, fileName? }` — presign or local poster upload for **movies only** |
+| `POST /videos/:id/poster/upload/init` | ✅ Bearer — `{ mimeType, fileName? }` — `POST /media/movie-poster-upload` for **movies only** (local + R2) |
 | `POST /videos/:id/poster/upload/complete` | ✅ Bearer — `{ objectKey }` — sets `posterUrl` on the movie |
 | `GET /videos/feed/shorts` | ✅ `?cursor=&limit=` — optional Bearer adds `liked`, `saved`, `disliked`, **`isFollowing`** per card |
 | `GET /videos/feed/movies` | ✅ `?page=&limit=` |
@@ -705,7 +718,7 @@ Guests: no `continueWatching` from API (web uses `localStorage` for vertical pro
 **Admin movie upload flow (poster required):**
 
 1. `POST /videos/upload/init` with `type: "movie"` and catalog metadata → `videoId`
-2. `POST /videos/{videoId}/poster/upload/init` + upload image bytes + `POST …/complete` → sets `posterUrl`
+2. `POST /videos/{videoId}/poster/upload/init` → multipart `POST /media/movie-poster-upload` (`file`, `objectKey`) → `POST …/complete` → sets `posterUrl`
 3. Upload video file to `uploadUrl` from step 1
 4. `POST /videos/upload/complete` — rejected if `posterUrl` is missing
 
@@ -720,13 +733,14 @@ The homepage and `/movies` catalog display **`posterUrl`** (portrait art). `thum
 | Route | Auth | When |
 |-------|------|------|
 | `POST /media/upload/:videoId` | Bearer | `STORAGE_DRIVER=local` — multipart video after `upload/init` |
-| `POST /media/profile-upload` | Bearer | Local — avatar/banner/streamer ID after respective `POST /users/me/*/upload` |
-| `POST /media/podcast-upload` | Bearer | Local — podcast **audio or video** after `POST /podcasts/episodes/:id/upload/init` |
-| `POST /media/podcast-cover-upload` | Bearer | Local — show cover after `POST /podcasts/shows/:id/cover/upload/init` |
-| `POST /media/movie-poster-upload` | Bearer | Local — movie poster after `POST /videos/:id/poster/upload/init` |
-| `POST /media/ad-upload` | Bearer (admin) | Local — ad creative after `POST /admin/ads/media/upload` |
+| `POST /media/profile-upload` | Bearer | Avatar/banner/streamer ID — multipart `file` + `objectKey` (local + R2) |
+| `POST /media/podcast-upload` | Bearer | `STORAGE_DRIVER=local` — podcast **audio or video** after episode `upload/init` |
+| `POST /media/podcast-cover-upload` | Bearer | `STORAGE_DRIVER=local` — show cover after `POST /podcasts/shows/:id/cover/upload/init` |
+| `POST /media/movie-poster-upload` | Bearer | Movie poster — multipart `file` + `objectKey` (local + R2) |
+| `POST /media/store-product-image-upload` | Bearer | Store product cover/gallery — multipart `file` + `objectKey` (local + R2) |
+| `POST /media/ad-upload` | Bearer (admin) | `STORAGE_DRIVER=local` — ad creative after `POST /admin/ads/media/upload` |
 
-For S3/R2, clients use presigned PUT URLs from init endpoints instead of these routes.
+For S3/R2, **large** video/podcast uploads use presigned PUT from init endpoints. **Image** routes above proxy through the API to R2 (avoids browser CORS to the bucket).
 
 ---
 
@@ -920,10 +934,19 @@ Revenue split key for products: `store_merchandise` (configured at `GET/PUT /adm
 | `POST /stores/me/products` | `{ productType: merchandise \| digital, title, description?, priceUsd, imageUrl, galleryUrls?, digitalUrl?, inventory?, inventoryUnlimited? }` — `digitalUrl` required for digital; merchandise needs `inventory` ≥ 1 or `inventoryUnlimited: true` |
 | `PUT /stores/me/products/:id` | Partial update; `status` can be `active` \| `draft` \| `archived`; seller edits images, stock, pricing |
 | `DELETE /stores/me/products/:id` | Hard delete |
-| `POST /stores/checkout` | `{ productId, quantity?, shippingAddress?, saveBuyerDetails? }` — `shippingAddress` required for merchandise; returns `{ checkoutUrl, sessionId, orderId }` or dev-mode `{ redirectUrl }` |
+| `POST /stores/me/products/images/upload/init` | `{ mimeType, fileName? }` — `image/*` only; returns `UploadTarget` with `uploadUrl: …/media/store-product-image-upload` |
+| `POST /stores/me/products/images/upload/complete` | `{ objectKey }` → `{ storeId, objectKey, imageUrl }` — does **not** attach to a product until create/update |
+| `POST /stores/checkout` | Single line: `{ productId, quantity?, shippingAddress?, saveBuyerDetails? }` **or** cart: `{ items: [{ productId, quantity }], shippingAddress?, saveBuyerDetails? }` — all items must be from the same store; `shippingAddress` required when any line is merchandise; returns `{ checkoutUrl, sessionId, orderId }` or dev-mode `{ redirectUrl }` |
 | `GET /stores/orders/:orderId` | Buyer order — `digitalUrl` on line items only when `status: paid` |
 
-Frontend: profile **Store** tab (seller CRUD + edit), `/creator/:username/store/:productId` (buyer product page with gallery + checkout).
+**Store product image upload flow** (cover + gallery, max 10 gallery images in UI):
+
+1. `POST /stores/me/products/images/upload/init` with `{ mimeType: "image/jpeg", fileName? }` → `objectKey` like `uploads/stores/{storeId}/images/{uuid}.jpg`
+2. Multipart `POST /media/store-product-image-upload` with `file` + `objectKey`
+3. `POST /stores/me/products/images/upload/complete` with `{ objectKey }` → `imageUrl`
+4. Pass `imageUrl` / `galleryUrls[]` into `POST /stores/me/products` or `PUT /stores/me/products/:id`
+
+Frontend: profile **Store** tab (seller CRUD + file uploads), `/creator/:username/store/:productId` (buyer product + add to cart), `/creator/:username/store/cart` (multi-item checkout).
 
 ### Buyer shipping details (`PUT /users/me`)
 
@@ -977,10 +1000,22 @@ No auth. Returns store summary, creator username, and one active product. Physic
 
 ### Checkout flow
 
+**Single product**
+
 1. Buyer opens `/creator/:username/store/:productId`.
 2. For **merchandise**, buyer completes shipping form (pre-filled from `GET /users/me` when logged in).
-3. `POST /stores/checkout` creates a pending `store_orders` row, adds Stripe line items (product + optional shipping fee), returns `checkoutUrl`.
-4. Stripe redirect → `POST /billing/stripe/fulfill` or webhook → `fulfillStoreOrder` (stock decrement, revenue split `store_merchandise`, digital URL unlocked on `GET /stores/orders/:id`).
+3. `POST /stores/checkout` with `{ productId, quantity?, shippingAddress?, saveBuyerDetails? }`.
+
+**Multi-item cart** (same store)
+
+1. Buyer adds items from product pages → `/creator/:username/store/cart`.
+2. `POST /stores/checkout` with `{ items: [{ productId, quantity }, …], shippingAddress?, saveBuyerDetails? }` — duplicate `productId` lines are merged server-side.
+3. Stripe success/cancel URLs point at the cart page when the order has multiple lines or quantity > 1; otherwise the single product page.
+
+**Fulfillment (both flows)**
+
+4. API creates a pending `store_orders` row, adds Stripe line items (products + one optional shipping fee), returns `checkoutUrl`.
+5. Stripe redirect → `POST /billing/stripe/fulfill` or webhook → `fulfillStoreOrder` (stock decrement, revenue split `store_merchandise`, digital URL unlocked on `GET /stores/orders/:id`).
 
 Public product objects **omit** `digitalUrl`. Checkout requires Bearer auth.
 
@@ -1495,7 +1530,7 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 
 **Live stack:** `docker compose up -d mediamtx` (custom image `prysymtv-mediamtx:local` includes `curl` for webhooks) exposes RTMP `:1935` and HLS `:8888`. MediaMTX calls `POST /streams/mediamtx/auth` and `POST /streams/webhooks/ready|done` on the API (no Bearer). Run the API on the host so the container can reach `host.docker.internal:4000`. See [how-to-run.md](./how-to-run.md) § Live streaming.
 
-**Profile images:** Avatar/banner use `POST /users/me/avatar/upload` and `/banner/upload`. With `STORAGE_DRIVER=local`, the client POSTs to `/media/profile-upload`; with `s3`, PUT to a presigned URL.
+**Profile images:** Avatar/banner use `POST /users/me/avatar/upload` and `/banner/upload`, then multipart `POST /media/profile-upload` (`file` + `objectKey`) for both local and R2.
 
 ### Frontend (`.env.local`)
 

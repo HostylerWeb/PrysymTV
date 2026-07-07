@@ -314,36 +314,30 @@ function ProfilePageContent() {
             </Button>
           </div>
 
-          {/* Features list */}
-          <div className="mt-12 space-y-4 w-full max-w-sm">
-            <div className="flex items-center gap-4 text-left">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <Bookmark className="w-5 h-5 text-primary" />
+          {/* Member benefits */}
+          <ul className="mt-10 grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+            <li className="flex flex-col items-center rounded-2xl border border-border/60 bg-card/40 px-4 py-5 text-center">
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+                <Bookmark className="h-5 w-5 text-primary" />
               </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">Save your favorites</p>
-                <p className="text-xs text-muted-foreground">Build your watchlist</p>
+              <p className="text-sm font-medium text-foreground">Save your favorites</p>
+              <p className="mt-1 text-xs text-muted-foreground">Build your watchlist</p>
+            </li>
+            <li className="flex flex-col items-center rounded-2xl border border-border/60 bg-card/40 px-4 py-5 text-center">
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+                <Clock className="h-5 w-5 text-primary" />
               </div>
-            </div>
-            <div className="flex items-center gap-4 text-left">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <Clock className="w-5 h-5 text-primary" />
+              <p className="text-sm font-medium text-foreground">Continue watching</p>
+              <p className="mt-1 text-xs text-muted-foreground">Pick up where you left off</p>
+            </li>
+            <li className="flex flex-col items-center rounded-2xl border border-border/60 bg-card/40 px-4 py-5 text-center">
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+                <Radio className="h-5 w-5 text-primary" />
               </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">Continue watching</p>
-                <p className="text-xs text-muted-foreground">Pick up where you left off</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 text-left">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <Radio className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">Become a streamer</p>
-                <p className="text-xs text-muted-foreground">Share your content live</p>
-              </div>
-            </div>
-          </div>
+              <p className="text-sm font-medium text-foreground">Become a streamer</p>
+              <p className="mt-1 text-xs text-muted-foreground">Share your content live</p>
+            </li>
+          </ul>
         </div>
 
         {/* Bottom Navigation */}

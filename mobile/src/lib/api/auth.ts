@@ -1,6 +1,18 @@
-import { apiRequest, setAccessToken } from './client';
+import {
+  apiRequest,
+  setAccessToken,
+  setRefreshToken,
+} from './client';
 
-type AuthSessionResponse = { accessToken: string };
+type AuthSessionResponse = {
+  accessToken: string;
+  refreshToken?: string;
+};
+
+async function persistSession(data: AuthSessionResponse) {
+  await setAccessToken(data.accessToken);
+  if (data.refreshToken) await setRefreshToken(data.refreshToken);
+}
 
 export async function login(email: string, password: string) {
   const data = await apiRequest<AuthSessionResponse>('/auth/login', {
@@ -8,7 +20,7 @@ export async function login(email: string, password: string) {
     auth: false,
     body: { email, password },
   });
-  await setAccessToken(data.accessToken);
+  await persistSession(data);
   return data;
 }
 
@@ -23,7 +35,33 @@ export async function register(input: {
     auth: false,
     body: input,
   });
-  await setAccessToken(data.accessToken);
+  await persistSession(data);
+  return data;
+}
+
+export async function oauthGoogle(idToken: string) {
+  const data = await apiRequest<AuthSessionResponse>('/auth/oauth/google', {
+    method: 'POST',
+    auth: false,
+    body: { idToken },
+  });
+  await persistSession(data);
+  return data;
+}
+
+export async function oauthApple(
+  identityToken: string,
+  authorizationCode?: string,
+) {
+  const data = await apiRequest<AuthSessionResponse>('/auth/oauth/apple', {
+    method: 'POST',
+    auth: false,
+    body: {
+      identityToken,
+      ...(authorizationCode ? { authorizationCode } : {}),
+    },
+  });
+  await persistSession(data);
   return data;
 }
 
@@ -35,5 +73,6 @@ export async function logoutApi() {
     });
   } finally {
     await setAccessToken(null);
+    await setRefreshToken(null);
   }
 }

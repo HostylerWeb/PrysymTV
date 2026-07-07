@@ -50,6 +50,11 @@ interface AuthContextType {
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string) => Promise<void>
+  loginWithGoogle: (idToken: string) => Promise<void>
+  loginWithApple: (
+    identityToken: string,
+    authorizationCode?: string,
+  ) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
   updateCoins: (amount: number) => void
@@ -112,6 +117,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(mapMeToUser(me))
   }
 
+  const loginWithGoogle = async (idToken: string) => {
+    await authApi.oauthGoogle(idToken)
+    const me = await fetchMe()
+    setUser(mapMeToUser(me))
+  }
+
+  const loginWithApple = async (
+    identityToken: string,
+    authorizationCode?: string,
+  ) => {
+    await authApi.oauthApple(identityToken, authorizationCode)
+    const me = await fetchMe()
+    setUser(mapMeToUser(me))
+  }
+
   const logout = async () => {
     await authApi.logout()
     setUser(null)
@@ -147,6 +167,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         login,
         register,
+        loginWithGoogle,
+        loginWithApple,
         logout,
         refreshUser,
         updateCoins,

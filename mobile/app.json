@@ -30,11 +30,16 @@
       "favicon": "./assets/favicon.webp"
     },
     "extra": {
-      "apiUrl": "https://srv1765056.hstgr.cloud/api/v1"
+      "apiUrl": "https://srv1765056.hstgr.cloud/api/v1",
+      "googleWebClientId": "",
+      "googleIosClientId": "",
+      "googleAndroidClientId": "",
+      "appleClientId": ""
     },
     "plugins": [
       "expo-router",
       "expo-font",
+      "expo-apple-authentication",
       [
         "expo-image-picker",
         {

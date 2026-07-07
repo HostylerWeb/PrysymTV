@@ -240,7 +240,25 @@ export default function VerticalWatchPage({
               >
                 <Flag className="w-4 h-4 text-white" />
               </button>
-              <CastMediaButton variant="on-video" className="w-9 h-9 !bg-black/50" />
+              <CastMediaButton
+                variant="on-video"
+                className="w-9 h-9 !bg-black/50"
+                media={
+                  episode.videoUrl
+                    ? {
+                        title: episode.title,
+                        subtitle: `${series.title} · Ep ${episode.episodeNumber}`,
+                        streamUrl: episode.videoUrl,
+                        posterUrl: series.posterUrl ?? undefined,
+                      }
+                    : null
+                }
+                getCurrentTime={() => videoRef.current?.currentTime ?? 0}
+                onCastStarted={() => {
+                  const el = videoRef.current
+                  if (el && !el.paused) el.pause()
+                }}
+              />
             </div>
           )}
         </div>

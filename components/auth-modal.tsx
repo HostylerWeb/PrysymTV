@@ -5,6 +5,10 @@ import { X, Mail, Lock, User, Eye, EyeOff, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth, getAuthErrorMessage } from "@/contexts/auth-context"
 import { forgotPassword } from "@/lib/api/auth"
+import {
+  OAuthSignInButtons,
+  isOAuthConfigured,
+} from "@/components/oauth-sign-in-buttons"
 
 interface AuthModalProps {
   isOpen: boolean
@@ -30,7 +34,7 @@ export function AuthModal({
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
 
-  const { login, register } = useAuth()
+  const { login, register, loginWithGoogle, loginWithApple } = useAuth()
 
   useEffect(() => {
     if (!isOpen) return
@@ -235,6 +239,41 @@ export function AuthModal({
                 "Send reset link"
               )}
             </Button>
+
+            {(mode === "login" || mode === "register") && isOAuthConfigured() ? (
+              <OAuthSignInButtons
+                disabled={isLoading}
+                onGoogleCredential={async (idToken) => {
+                  setError("")
+                  setIsLoading(true)
+                  try {
+                    await loginWithGoogle(idToken)
+                    onClose()
+                    resetForm()
+                    onSuccess?.()
+                  } catch (err) {
+                    setError(getAuthErrorMessage(err))
+                  } finally {
+                    setIsLoading(false)
+                  }
+                }}
+                onAppleCredential={async (identityToken, authorizationCode) => {
+                  setError("")
+                  setIsLoading(true)
+                  try {
+                    await loginWithApple(identityToken, authorizationCode)
+                    onClose()
+                    resetForm()
+                    onSuccess?.()
+                  } catch (err) {
+                    setError(getAuthErrorMessage(err))
+                  } finally {
+                    setIsLoading(false)
+                  }
+                }}
+                onError={(message) => setError(message)}
+              />
+            ) : null}
 
             {(mode === "login" || mode === "register") && (
               <p className="text-center text-sm text-muted-foreground pt-4">

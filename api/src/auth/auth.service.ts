@@ -7,15 +7,18 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { Response } from 'express';
-import { NotificationPrefType, UserRole } from '@prisma/client';
+import { NotificationPrefType, User, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { generateSecureToken, hashToken } from '../common/utils/crypto.util';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { GoogleOAuthDto } from './dto/google-oauth.dto';
+import { AppleOAuthDto } from './dto/apple-oauth.dto';
 import { JwtPayload } from './strategies/jwt.strategy';
 import { MailService } from '../mail/mail.service';
+import { OAuthVerificationService } from './oauth-verification.service';
 
 const REFRESH_COOKIE = 'prysym_refresh';
 const NOTIFICATION_TYPES: NotificationPrefType[] = [
@@ -35,6 +38,7 @@ export class AuthService {
     private jwt: JwtService,
     private config: ConfigService,
     private mail: MailService,
+    private oauth: OAuthVerificationService,
   ) {}
 
   async register(dto: RegisterDto, res: Response) {
@@ -67,6 +71,41 @@ export class AuthService {
     if (!valid) {
       throw new UnauthorizedException('Invalid credentials');
     }
+    return this.issueTokens(user.id, user.email, user.username, user.role, res);
+  }
+
+  async oauthGoogle(dto: GoogleOAuthDto, res: Response) {
+    const profile = await this.oauth.verifyGoogleIdToken(dto.idToken);
+    if (!profile.email) {
+      throw new BadRequestException(
+        'Google did not share an email address. Use a Google account with email access.',
+      );
+    }
+    if (!profile.emailVerified) {
+      throw new BadRequestException('Google email is not verified');
+    }
+    const user = await this.resolveOAuthUser({
+      provider: 'google',
+      providerId: profile.sub,
+      email: profile.email,
+      displayName: profile.name,
+      avatarUrl: profile.picture,
+    });
+    return this.issueTokens(user.id, user.email, user.username, user.role, res);
+  }
+
+  async oauthApple(dto: AppleOAuthDto, res: Response) {
+    const profile = await this.oauth.verifyAppleIdentityToken(dto.identityToken);
+    if (profile.email && !profile.emailVerified) {
+      throw new BadRequestException('Apple email is not verified');
+    }
+    const user = await this.resolveOAuthUser({
+      provider: 'apple',
+      providerId: profile.sub,
+      email: profile.email,
+      displayName: undefined,
+      avatarUrl: undefined,
+    });
     return this.issueTokens(user.id, user.email, user.username, user.role, res);
   }
 
@@ -209,10 +248,152 @@ export class AuthService {
 
     return {
       accessToken,
+      refreshToken: refreshRaw,
       tokenType: 'Bearer',
       expiresIn: this.config.get<string>('JWT_ACCESS_TTL', '15m'),
       user: { id: userId, email, username, role },
     };
+  }
+
+  private deriveUsername(displayName: string, email: string): string {
+    const fromName = displayName
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .slice(0, 30);
+    if (fromName.length >= 3) return fromName;
+    const fromEmail = email
+      .split('@')[0]
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '')
+      .slice(0, 30);
+    return fromEmail.length >= 3
+      ? fromEmail
+      : `user_${Date.now().toString(36)}`;
+  }
+
+  private async ensureUniqueUsername(base: string): Promise<string> {
+    let username = base.slice(0, 30);
+    let suffix = 0;
+    while (
+      await this.prisma.user.findUnique({
+        where: { username },
+        select: { id: true },
+      })
+    ) {
+      suffix += 1;
+      const stem = base.slice(0, Math.max(3, 28 - String(suffix).length));
+      username = `${stem}_${suffix}`;
+    }
+    return username;
+  }
+
+  private async resolveOAuthUser(params: {
+    provider: 'google' | 'apple';
+    providerId: string;
+    email?: string;
+    displayName?: string;
+    avatarUrl?: string;
+  }): Promise<User> {
+    const { provider, providerId, email, displayName, avatarUrl } = params;
+
+    const byProvider = await this.prisma.user.findFirst({
+      where:
+        provider === 'google'
+          ? { googleId: providerId }
+          : { appleId: providerId },
+    });
+    if (byProvider) {
+      if (byProvider.isBanned) {
+        throw new UnauthorizedException('Account suspended');
+      }
+      return byProvider;
+    }
+
+    if (email) {
+      const byEmail = await this.prisma.user.findUnique({
+        where: { email: email.toLowerCase() },
+      });
+      if (byEmail) {
+        if (byEmail.isBanned) {
+          throw new UnauthorizedException('Account suspended');
+        }
+        if (
+          provider === 'google' &&
+          byEmail.googleId &&
+          byEmail.googleId !== providerId
+        ) {
+          throw new BadRequestException(
+            'Email is already linked to another Google account',
+          );
+        }
+        if (
+          provider === 'apple' &&
+          byEmail.appleId &&
+          byEmail.appleId !== providerId
+        ) {
+          throw new BadRequestException(
+            'Email is already linked to another Apple account',
+          );
+        }
+
+        const providerAlreadyLinked =
+          provider === 'google'
+            ? byEmail.googleId === providerId
+            : byEmail.appleId === providerId;
+
+        if (
+          byEmail.passwordHash &&
+          !providerAlreadyLinked &&
+          !(provider === 'google' ? byEmail.googleId : byEmail.appleId)
+        ) {
+          throw new BadRequestException(
+            'An account with this email already exists. Sign in with your email and password instead.',
+          );
+        }
+
+        return this.prisma.user.update({
+          where: { id: byEmail.id },
+          data: {
+            ...(provider === 'google' ? { googleId: providerId } : {}),
+            ...(provider === 'apple' ? { appleId: providerId } : {}),
+            ...(avatarUrl && !byEmail.avatarUrl ? { avatarUrl } : {}),
+            ...(displayName && !byEmail.displayName
+              ? { displayName }
+              : {}),
+          },
+        });
+      }
+    }
+
+    if (!email) {
+      throw new BadRequestException(
+        'Email is required to create an account. Sign in again and allow email sharing.',
+      );
+    }
+
+    const username = await this.ensureUniqueUsername(
+      this.deriveUsername(displayName ?? '', email),
+    );
+
+    return this.prisma.user.create({
+      data: {
+        email: email.toLowerCase(),
+        username,
+        displayName: displayName ?? username,
+        avatarUrl: avatarUrl ?? null,
+        googleId: provider === 'google' ? providerId : null,
+        appleId: provider === 'apple' ? providerId : null,
+        role: UserRole.user,
+        notificationPrefs: {
+          create: NOTIFICATION_TYPES.map((type) => ({
+            type,
+            enabled: true,
+          })),
+        },
+      },
+    });
   }
 
   private setRefreshCookie(res: Response, token: string, maxAgeMs: number) {

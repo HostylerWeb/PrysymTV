@@ -288,7 +288,24 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
                 </button>
               )}
               <div className="absolute top-4 right-4 z-[110]">
-                <CastMediaButton variant="on-video" />
+                <CastMediaButton
+                  variant="on-video"
+                  media={
+                    movie.videoUrl
+                      ? {
+                          title: movie.title,
+                          subtitle: movie.genres.join(" · "),
+                          streamUrl: movie.videoUrl,
+                          posterUrl: movie.banner,
+                        }
+                      : null
+                  }
+                  getCurrentTime={() => videoRef.current?.currentTime ?? 0}
+                  onCastStarted={() => {
+                    const el = videoRef.current
+                    if (el && !el.paused) el.pause()
+                  }}
+                />
               </div>
             </>
           ) : (
@@ -298,7 +315,20 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
               <div className="absolute top-4 left-4 right-4 flex justify-between z-10">
                 <Link href="/movies"><button className="w-10 h-10 rounded-full bg-background/30 backdrop-blur-md flex items-center justify-center"><ChevronLeft className="w-6 h-6 text-white" /></button></Link>
                 <div className="flex gap-2">
-                  <CastMediaButton variant="on-video" className="bg-background/30 backdrop-blur-md" />
+                  <CastMediaButton
+                    variant="on-video"
+                    className="bg-background/30 backdrop-blur-md"
+                    media={
+                      movie.videoUrl
+                        ? {
+                            title: movie.title,
+                            subtitle: movie.genres.join(" · "),
+                            streamUrl: movie.videoUrl,
+                            posterUrl: movie.banner,
+                          }
+                        : null
+                    }
+                  />
                   <button onClick={() => setIsShareOpen(true)} className="w-10 h-10 rounded-full bg-background/30 backdrop-blur-md flex items-center justify-center"><Share2 className="w-5 h-5 text-white" /></button>
                   <button onClick={() => setIsReportOpen(true)} className="w-10 h-10 rounded-full bg-background/30 backdrop-blur-md flex items-center justify-center"><Flag className="w-5 h-5 text-white" /></button>
                 </div>

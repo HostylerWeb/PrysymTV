@@ -6,6 +6,9 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { GoogleOAuthDto } from './dto/google-oauth.dto';
+import { AppleOAuthDto } from './dto/apple-oauth.dto';
+import { RefreshDto } from './dto/refresh.dto';
 
 const REFRESH_COOKIE = 'prysym_refresh';
 
@@ -34,10 +37,35 @@ export class AuthController {
     return this.auth.login(dto, res);
   }
 
+  @Post('oauth/google')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  oauthGoogle(
+    @Body() dto: GoogleOAuthDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.auth.oauthGoogle(dto, res);
+  }
+
+  @Post('oauth/apple')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  oauthApple(
+    @Body() dto: AppleOAuthDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.auth.oauthApple(dto, res);
+  }
+
   @Post('refresh')
   @Throttle({ default: { limit: 30, ttl: 60000 } })
-  refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    return this.auth.refresh(readRefreshCookie(req), res);
+  refresh(
+    @Req() req: Request,
+    @Body() body: RefreshDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.auth.refresh(
+      body.refreshToken ?? readRefreshCookie(req),
+      res,
+    );
   }
 
   @Post('logout')

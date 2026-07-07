@@ -40,6 +40,11 @@ type MockAuthContextValue = {
   authPromptMode: AuthMode;
   login: (email?: string, password?: string) => Promise<void>;
   register: (name?: string, email?: string, password?: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
+  loginWithApple: (
+    identityToken: string,
+    authorizationCode?: string,
+  ) => Promise<void>;
   logout: () => Promise<void>;
   continueAsGuest: () => Promise<void>;
   updateProfile: (patch: Partial<MeResponse>) => void;
@@ -165,6 +170,31 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
     [finishAuth, login, persistMode],
   );
 
+  const completeOAuthSession = useCallback(async () => {
+    const me = await fetchMe();
+    setUser(me);
+    await persistMode('user');
+    finishAuth();
+  }, [finishAuth, persistMode]);
+
+  const loginWithGoogle = useCallback(
+    async (idToken: string) => {
+      if (!isApiEnabled()) throw new Error('API is not configured');
+      await authApi.oauthGoogle(idToken);
+      await completeOAuthSession();
+    },
+    [completeOAuthSession],
+  );
+
+  const loginWithApple = useCallback(
+    async (identityToken: string, authorizationCode?: string) => {
+      if (!isApiEnabled()) throw new Error('API is not configured');
+      await authApi.oauthApple(identityToken, authorizationCode);
+      await completeOAuthSession();
+    },
+    [completeOAuthSession],
+  );
+
   const logout = useCallback(async () => {
     if (isApiEnabled()) {
       try {
@@ -269,6 +299,8 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
       authPromptMode,
       login,
       register,
+      loginWithGoogle,
+      loginWithApple,
       logout,
       continueAsGuest,
       updateProfile,
@@ -288,6 +320,8 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
       authPromptMode,
       login,
       register,
+      loginWithGoogle,
+      loginWithApple,
       logout,
       continueAsGuest,
       updateProfile,

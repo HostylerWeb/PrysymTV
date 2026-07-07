@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Search, X, Mic, TrendingUp, Clock, ArrowUpRight, Loader2, Users, Radio, Film, Headphones } from "lucide-react"
+import { Search, X, TrendingUp, Clock, ArrowUpRight, Loader2, Users, Radio, Film, Headphones } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   searchApi,
@@ -42,7 +42,6 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
   const scopeConfig = scope ? SEARCH_SCOPE_CONFIG[scope] : null
   const apiType = scopeConfig?.apiType
   const [searchQuery, setSearchQuery] = useState("")
-  const [isListening, setIsListening] = useState(false)
   const [recentSearches, setRecentSearches] = useState<string[]>([])
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([])
   const [results, setResults] = useState<SearchResponse | null>(null)
@@ -135,11 +134,6 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
     void runSearch(query, scope ? apiType : type)
   }
 
-  const handleVoiceSearch = () => {
-    setIsListening(true)
-    setTimeout(() => setIsListening(false), 3000)
-  }
-
   const clearSearch = () => {
     setSearchQuery("")
     setResults(null)
@@ -185,51 +179,22 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={scopeConfig?.placeholder ?? "Search videos, movies, channels..."}
-                className="w-full bg-secondary/50 rounded-full pl-11 pr-12 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="w-full bg-secondary/50 rounded-full pl-11 pr-10 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={clearSearch}
-                  className="absolute right-12 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-muted flex items-center justify-center"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-muted flex items-center justify-center"
                 >
                   <X className="w-4 h-4 text-muted-foreground" />
                 </button>
               )}
-              <button
-                type="button"
-                onClick={handleVoiceSearch}
-                className={cn(
-                  "absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center transition-colors",
-                  isListening ? "bg-primary" : "hover:bg-secondary",
-                )}
-              >
-                <Mic
-                  className={cn(
-                    "w-5 h-5",
-                    isListening ? "text-primary-foreground animate-pulse" : "text-muted-foreground",
-                  )}
-                />
-              </button>
             </form>
           </div>
         </div>
 
         <div className="overflow-y-auto flex-1 min-h-0">
-          {isListening && (
-            <div className="flex flex-col items-center justify-center py-20">
-              <div className="relative mb-6">
-                <div className="w-20 h-20 rounded-full bg-primary/20 animate-ping absolute" />
-                <div className="w-20 h-20 rounded-full bg-primary flex items-center justify-center relative">
-                  <Mic className="w-8 h-8 text-primary-foreground" />
-                </div>
-              </div>
-              <p className="text-lg font-medium text-foreground mb-2">Listening...</p>
-              <p className="text-sm text-muted-foreground">Say what you want to search</p>
-            </div>
-          )}
-
-          {!isListening && (
             <div className="px-4 py-4">
               {!searchQuery.trim() && (
                 <>
@@ -509,7 +474,6 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
                 </p>
               )}
             </div>
-          )}
         </div>
       </div>
     </div>

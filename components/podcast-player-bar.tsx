@@ -109,6 +109,30 @@ export function PodcastPlayerBar({
 
   if (!episode) return null
 
+  const castStreamUrl = isVideo ? episode.videoUrl : episode.audioUrl
+  const castMedia = castStreamUrl
+    ? {
+        title: episode.title,
+        subtitle: episode.podcast,
+        streamUrl: castStreamUrl,
+        posterUrl: episode.cover,
+      }
+    : null
+  const getCastCurrentTime = () => {
+    if (isVideo) return videoRef.current?.currentTime ?? 0
+    return audioRef.current?.currentTime ?? 0
+  }
+  const pauseLocalPlayback = () => {
+    if (isVideo) {
+      const el = videoRef.current
+      if (el && !el.paused) el.pause()
+      return
+    }
+    const el = audioRef.current
+    if (el && !el.paused) el.pause()
+    setIsPlaying(false)
+  }
+
   const goPrev = () => {
     if (currentIndex > 0) onIndexChange(currentIndex - 1)
   }
@@ -150,7 +174,12 @@ export function PodcastPlayerBar({
           <div className="max-w-2xl mx-auto aspect-video rounded-xl overflow-hidden bg-black shadow-2xl border border-border pointer-events-auto relative">
             {videoPlayer}
             <div className="absolute top-2 right-2">
-              <CastMediaButton variant="on-video" />
+              <CastMediaButton
+                variant="on-video"
+                media={castMedia}
+                getCurrentTime={getCastCurrentTime}
+                onCastStarted={pauseLocalPlayback}
+              />
             </div>
           </div>
         </div>
@@ -210,7 +239,12 @@ export function PodcastPlayerBar({
             <p className="text-xs text-muted-foreground truncate">{episode.podcast}</p>
           </div>
           <div className="flex items-center gap-1">
-            <CastMediaButton variant="compact" />
+            <CastMediaButton
+              variant="compact"
+              media={castMedia}
+              getCurrentTime={getCastCurrentTime}
+              onCastStarted={pauseLocalPlayback}
+            />
             <button
               type="button"
               onClick={() => {

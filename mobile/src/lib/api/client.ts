@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiBaseUrl } from './config';
 
 const TOKEN_KEY = 'prysymtv_access_token';
+const REFRESH_KEY = 'prysymtv_refresh_token';
 
 export class ApiError extends Error {
   constructor(
@@ -28,6 +29,54 @@ export async function setAccessToken(token: string | null) {
   else await AsyncStorage.removeItem(TOKEN_KEY);
 }
 
+export async function setRefreshToken(token: string | null) {
+  if (token) await AsyncStorage.setItem(REFRESH_KEY, token);
+  else await AsyncStorage.removeItem(REFRESH_KEY);
+}
+
+export async function loadStoredRefreshToken(): Promise<string | null> {
+  return AsyncStorage.getItem(REFRESH_KEY);
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = await loadStoredRefreshToken();
+  if (!refreshToken) return null;
+
+  const res = await fetch(`${getApiBaseUrl()}/auth/refresh`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ refreshToken }),
+  });
+
+  if (!res.ok) {
+    await setAccessToken(null);
+    await setRefreshToken(null);
+    return null;
+  }
+
+  const data = (await res.json()) as {
+    accessToken: string;
+    refreshToken?: string;
+  };
+  await setAccessToken(data.accessToken);
+  if (data.refreshToken) await setRefreshToken(data.refreshToken);
+  return data.accessToken;
+}
+
+let refreshPromise: Promise<string | null> | null = null;
+
+function getRefreshOnce(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
 export type ApiRequestOptions = {
   method?: string;
   body?: unknown;
@@ -44,19 +93,31 @@ export async function apiRequest<T>(
     ? path
     : `${getApiBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`;
 
-  const token = auth ? await loadStoredAccessToken() : null;
-  const reqHeaders: Record<string, string> = {
-    Accept: 'application/json',
-    ...headers,
-  };
-  if (body !== undefined) reqHeaders['Content-Type'] = 'application/json';
-  if (auth && token) reqHeaders.Authorization = `Bearer ${token}`;
+  const doFetch = async (token: string | null) => {
+    const reqHeaders: Record<string, string> = {
+      Accept: 'application/json',
+      ...headers,
+    };
+    if (body !== undefined) reqHeaders['Content-Type'] = 'application/json';
+    if (auth && token) reqHeaders.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(url, {
-    method,
-    headers: reqHeaders,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+    return fetch(url, {
+      method,
+      headers: reqHeaders,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  };
+
+  let token = auth ? await loadStoredAccessToken() : null;
+  let res = await doFetch(token);
+
+  if (auth && res.status === 401 && token) {
+    const next = await getRefreshOnce();
+    if (next) {
+      token = next;
+      res = await doFetch(token);
+    }
+  }
 
   const text = await res.text();
   let parsed: unknown;

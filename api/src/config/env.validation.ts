@@ -197,6 +197,16 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   AUTO_APPROVE_VERTICAL_CREATOR?: string;
+
+  /** Comma-separated Google OAuth client IDs (web, iOS, Android) */
+  @IsOptional()
+  @IsString()
+  GOOGLE_CLIENT_ID?: string;
+
+  /** Apple Sign In — Services ID (web) or bundle ID (native) */
+  @IsOptional()
+  @IsString()
+  APPLE_CLIENT_ID?: string;
 }
 
 const WEAK_SECRET_MARKERS = [

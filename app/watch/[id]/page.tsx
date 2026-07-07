@@ -476,7 +476,24 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
             <div className="absolute top-0 left-0 right-0 flex justify-between p-3 bg-gradient-to-b from-black/70 to-transparent pointer-events-auto">
               <Link href="/"><button type="button" className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><ChevronLeft className="w-6 h-6 text-white" /></button></Link>
               <div className="flex gap-2">
-                <CastMediaButton variant="on-video" />
+                <CastMediaButton
+                  variant="on-video"
+                  media={
+                    video?.videoUrl
+                      ? {
+                          title: video.title,
+                          subtitle: video.channel,
+                          streamUrl: video.videoUrl,
+                          posterUrl: video.thumbnail,
+                        }
+                      : null
+                  }
+                  getCurrentTime={() => videoRef.current?.currentTime ?? 0}
+                  onCastStarted={() => {
+                    const el = videoRef.current
+                    if (el && !el.paused) el.pause()
+                  }}
+                />
                 <button type="button" onClick={() => setIsShareOpen(true)} className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><Share2 className="w-5 h-5 text-white" /></button>
                 <button type="button" onClick={() => setIsReportOpen(true)} className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center"><Flag className="w-5 h-5 text-white" /></button>
               </div>

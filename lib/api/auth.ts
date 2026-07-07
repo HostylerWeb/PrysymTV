@@ -53,6 +53,32 @@ export async function resetPassword(token: string, newPassword: string) {
   });
 }
 
+export async function oauthGoogle(idToken: string) {
+  const data = await apiRequest<AuthSessionResponse>("/auth/oauth/google", {
+    method: "POST",
+    auth: false,
+    body: { idToken },
+  });
+  setAccessToken(data.accessToken);
+  return data;
+}
+
+export async function oauthApple(
+  identityToken: string,
+  authorizationCode?: string,
+) {
+  const data = await apiRequest<AuthSessionResponse>("/auth/oauth/apple", {
+    method: "POST",
+    auth: false,
+    body: {
+      identityToken,
+      ...(authorizationCode ? { authorizationCode } : {}),
+    },
+  });
+  setAccessToken(data.accessToken);
+  return data;
+}
+
 export function deriveUsername(displayName: string, email: string): string {
   const fromName = displayName
     .toLowerCase()
