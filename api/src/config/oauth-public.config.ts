@@ -20,6 +20,10 @@ export type PublicOAuthConfig = {
     webClientId: string | null;
     iosClientId: string | null;
   };
+  facebook: {
+    enabled: boolean;
+    appId: string | null;
+  };
 };
 
 /** Public OAuth client IDs for web/mobile — secrets stay in api/.env only. */
@@ -28,6 +32,7 @@ export function buildPublicOAuthConfig(
 ): PublicOAuthConfig {
   const googleIds = parseCommaList(config.get<string>('GOOGLE_CLIENT_ID'));
   const appleIds = parseCommaList(config.get<string>('APPLE_CLIENT_ID'));
+  const facebookAppId = config.get<string>('FACEBOOK_APP_ID')?.trim() || null;
 
   return {
     google: {
@@ -40,6 +45,10 @@ export function buildPublicOAuthConfig(
       enabled: appleIds.length > 0,
       webClientId: appleIds[0] ?? null,
       iosClientId: appleIds[1] ?? appleIds[0] ?? null,
+    },
+    facebook: {
+      enabled: Boolean(facebookAppId),
+      appId: facebookAppId,
     },
   };
 }

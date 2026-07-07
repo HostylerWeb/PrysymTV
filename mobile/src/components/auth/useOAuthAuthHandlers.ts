@@ -14,7 +14,7 @@ export function useOAuthAuthHandlers({
   setBusy,
   busy = false,
 }: Options) {
-  const { loginWithGoogle, loginWithApple } = useMockAuth();
+  const { loginWithGoogle, loginWithApple, loginWithFacebook } = useMockAuth();
 
   const runOAuth = useCallback(
     async (action: () => Promise<void>) => {
@@ -47,6 +47,13 @@ export function useOAuthAuthHandlers({
     [loginWithApple, runOAuth],
   );
 
+  const onFacebookCredential = useCallback(
+    async (accessToken: string) => {
+      await runOAuth(() => loginWithFacebook(accessToken));
+    },
+    [loginWithFacebook, runOAuth],
+  );
+
   const onOAuthError = useCallback(
     (message: string) => setError(message),
     [setError],
@@ -55,6 +62,7 @@ export function useOAuthAuthHandlers({
   return {
     onGoogleCredential,
     onAppleCredential,
+    onFacebookCredential,
     onOAuthError,
   };
 }

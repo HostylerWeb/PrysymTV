@@ -8,6 +8,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { GoogleOAuthDto } from './dto/google-oauth.dto';
 import { AppleOAuthDto } from './dto/apple-oauth.dto';
+import { FacebookOAuthDto } from './dto/facebook-oauth.dto';
 import { RefreshDto } from './dto/refresh.dto';
 
 const REFRESH_COOKIE = 'prysym_refresh';
@@ -53,6 +54,15 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     return this.auth.oauthApple(dto, res);
+  }
+
+  @Post('oauth/facebook')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  oauthFacebook(
+    @Body() dto: FacebookOAuthDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.auth.oauthFacebook(dto, res);
   }
 
   @Post('refresh')

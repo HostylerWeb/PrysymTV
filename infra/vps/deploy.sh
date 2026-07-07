@@ -112,7 +112,7 @@ validate_api_env() {
 
 write_api_env() {
   local jwt_access jwt_refresh
-  local s3_region stripe_key stripe_wh playback_ttl google_oauth apple_oauth
+  local s3_region stripe_key stripe_wh playback_ttl google_oauth apple_oauth facebook_app_id facebook_app_secret
 
   jwt_access="$(resolve_api_secret JWT_ACCESS_SECRET "$(grep ^JWT_ACCESS_SECRET= "$API_ENV_TEMPLATE" | cut -d= -f2-)")"
   jwt_refresh="$(resolve_api_secret JWT_REFRESH_SECRET "$(grep ^JWT_REFRESH_SECRET= "$API_ENV_TEMPLATE" | cut -d= -f2-)")"
@@ -127,6 +127,8 @@ write_api_env() {
 
   google_oauth="$(resolve_api_secret GOOGLE_CLIENT_ID "")"
   apple_oauth="$(resolve_api_secret APPLE_CLIENT_ID "")"
+  facebook_app_id="$(resolve_api_secret FACEBOOK_APP_ID "")"
+  facebook_app_secret="$(resolve_api_secret FACEBOOK_APP_SECRET "")"
 
   if [[ -f "$API_ENV" ]] && [[ -s "$API_ENV" ]]; then
     log "Updating api/.env in place (preserving existing secrets)..."
@@ -193,6 +195,12 @@ write_api_env() {
   fi
   if [[ -n "$apple_oauth" ]]; then
     upsert_env_file "$API_ENV" APPLE_CLIENT_ID "$apple_oauth"
+  fi
+  if [[ -n "$facebook_app_id" ]]; then
+    upsert_env_file "$API_ENV" FACEBOOK_APP_ID "$facebook_app_id"
+  fi
+  if [[ -n "$facebook_app_secret" ]]; then
+    upsert_env_file "$API_ENV" FACEBOOK_APP_SECRET "$facebook_app_secret"
   fi
 
   validate_api_env

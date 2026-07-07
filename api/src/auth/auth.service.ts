@@ -16,6 +16,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { GoogleOAuthDto } from './dto/google-oauth.dto';
 import { AppleOAuthDto } from './dto/apple-oauth.dto';
+import { FacebookOAuthDto } from './dto/facebook-oauth.dto';
 import { JwtPayload } from './strategies/jwt.strategy';
 import { MailService } from '../mail/mail.service';
 import { OAuthVerificationService } from './oauth-verification.service';
@@ -105,6 +106,23 @@ export class AuthService {
       email: profile.email,
       displayName: undefined,
       avatarUrl: undefined,
+    });
+    return this.issueTokens(user.id, user.email, user.username, user.role, res);
+  }
+
+  async oauthFacebook(dto: FacebookOAuthDto, res: Response) {
+    const profile = await this.oauth.verifyFacebookAccessToken(dto.accessToken);
+    if (!profile.email) {
+      throw new BadRequestException(
+        'Facebook did not share an email address. Allow email access and try again.',
+      );
+    }
+    const user = await this.resolveOAuthUser({
+      provider: 'facebook',
+      providerId: profile.sub,
+      email: profile.email,
+      displayName: profile.name,
+      avatarUrl: profile.picture,
     });
     return this.issueTokens(user.id, user.email, user.username, user.role, res);
   }
@@ -290,7 +308,7 @@ export class AuthService {
   }
 
   private async resolveOAuthUser(params: {
-    provider: 'google' | 'apple';
+    provider: 'google' | 'apple' | 'facebook';
     providerId: string;
     email?: string;
     displayName?: string;
@@ -298,11 +316,15 @@ export class AuthService {
   }): Promise<User> {
     const { provider, providerId, email, displayName, avatarUrl } = params;
 
+    const providerWhere =
+      provider === 'google'
+        ? { googleId: providerId }
+        : provider === 'apple'
+          ? { appleId: providerId }
+          : { facebookId: providerId };
+
     const byProvider = await this.prisma.user.findFirst({
-      where:
-        provider === 'google'
-          ? { googleId: providerId }
-          : { appleId: providerId },
+      where: providerWhere,
     });
     if (byProvider) {
       if (byProvider.isBanned) {
@@ -337,16 +359,31 @@ export class AuthService {
             'Email is already linked to another Apple account',
           );
         }
+        if (
+          provider === 'facebook' &&
+          byEmail.facebookId &&
+          byEmail.facebookId !== providerId
+        ) {
+          throw new BadRequestException(
+            'Email is already linked to another Facebook account',
+          );
+        }
 
         const providerAlreadyLinked =
           provider === 'google'
             ? byEmail.googleId === providerId
-            : byEmail.appleId === providerId;
+            : provider === 'apple'
+              ? byEmail.appleId === providerId
+              : byEmail.facebookId === providerId;
 
         if (
           byEmail.passwordHash &&
           !providerAlreadyLinked &&
-          !(provider === 'google' ? byEmail.googleId : byEmail.appleId)
+          !(provider === 'google'
+            ? byEmail.googleId
+            : provider === 'apple'
+              ? byEmail.appleId
+              : byEmail.facebookId)
         ) {
           throw new BadRequestException(
             'An account with this email already exists. Sign in with your email and password instead.',
@@ -358,6 +395,7 @@ export class AuthService {
           data: {
             ...(provider === 'google' ? { googleId: providerId } : {}),
             ...(provider === 'apple' ? { appleId: providerId } : {}),
+            ...(provider === 'facebook' ? { facebookId: providerId } : {}),
             ...(avatarUrl && !byEmail.avatarUrl ? { avatarUrl } : {}),
             ...(displayName && !byEmail.displayName
               ? { displayName }
@@ -385,6 +423,7 @@ export class AuthService {
         avatarUrl: avatarUrl ?? null,
         googleId: provider === 'google' ? providerId : null,
         appleId: provider === 'apple' ? providerId : null,
+        facebookId: provider === 'facebook' ? providerId : null,
         role: UserRole.user,
         notificationPrefs: {
           create: NOTIFICATION_TYPES.map((type) => ({

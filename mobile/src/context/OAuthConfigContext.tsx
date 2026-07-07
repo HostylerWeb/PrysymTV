@@ -18,6 +18,7 @@ type OAuthConfigContextValue = {
   googleIosClientId: string | null;
   googleAndroidClientId: string | null;
   appleClientId: string | null;
+  facebookAppId: string | null;
   isGoogleAvailableOnPlatform: boolean;
   showOAuthUi: boolean;
 };
@@ -30,6 +31,7 @@ const defaultAuth: PublicOAuthConfig = {
     androidClientId: null,
   },
   apple: { enabled: false, webClientId: null, iosClientId: null },
+  facebook: { enabled: false, appId: null },
 };
 
 const OAuthConfigContext = createContext<OAuthConfigContextValue>({
@@ -39,6 +41,7 @@ const OAuthConfigContext = createContext<OAuthConfigContextValue>({
   googleIosClientId: null,
   googleAndroidClientId: null,
   appleClientId: null,
+  facebookAppId: null,
   isGoogleAvailableOnPlatform: false,
   showOAuthUi: true,
 });
@@ -67,6 +70,7 @@ export function OAuthConfigProvider({ children }: { children: ReactNode }) {
   const value = useMemo<OAuthConfigContextValue>(() => {
     const google = auth?.google ?? defaultAuth.google;
     const apple = auth?.apple ?? defaultAuth.apple;
+    const facebook = auth?.facebook ?? defaultAuth.facebook;
     const googleConfigured = Boolean(
       google.webClientId || google.iosClientId || google.androidClientId,
     );
@@ -79,6 +83,7 @@ export function OAuthConfigProvider({ children }: { children: ReactNode }) {
       googleIosClientId: google.iosClientId,
       googleAndroidClientId: google.androidClientId,
       appleClientId: apple.iosClientId ?? apple.webClientId,
+      facebookAppId: facebook.appId,
       isGoogleAvailableOnPlatform: googleConfigured,
       showOAuthUi: true,
     };

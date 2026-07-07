@@ -9,11 +9,13 @@ import {
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import * as Facebook from 'expo-auth-session/providers/facebook';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { Ionicons } from '@expo/vector-icons';
 import { useOAuthConfig } from '@/context/OAuthConfigContext';
 import {
   MOCK_APPLE_TOKEN,
+  MOCK_FACEBOOK_TOKEN,
   MOCK_GOOGLE_TOKEN,
   shouldUseMockOAuthSignIn,
 } from '@/lib/oauth-mock';
@@ -28,6 +30,7 @@ type Props = {
     identityToken: string,
     authorizationCode?: string,
   ) => Promise<void>;
+  onFacebookCredential: (accessToken: string) => Promise<void>;
   onError?: (message: string) => void;
   /** Show a subtle divider next to the buttons. */
   showDivider?: boolean;
@@ -135,10 +138,57 @@ function ConfiguredGoogleSignInButton({
   );
 }
 
+function ConfiguredFacebookSignInButton({
+  disabled,
+  onFacebookCredential,
+  onError,
+  appId,
+}: {
+  disabled?: boolean;
+  onFacebookCredential: (accessToken: string) => Promise<void>;
+  onError?: (message: string) => void;
+  appId: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [request, , promptAsync] = Facebook.useAuthRequest({
+    clientId: appId,
+  });
+
+  const handleFacebook = useCallback(async () => {
+    if (!request) {
+      onError?.('Facebook sign-in is still loading. Try again in a moment.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await promptAsync();
+      if (result.type !== 'success') return;
+      const accessToken = result.authentication?.accessToken;
+      if (!accessToken) throw new Error('Facebook did not return a sign-in token');
+      await onFacebookCredential(accessToken);
+    } catch (err) {
+      onError?.(err instanceof Error ? err.message : 'Facebook sign-in failed');
+    } finally {
+      setBusy(false);
+    }
+  }, [onError, onFacebookCredential, promptAsync, request]);
+
+  return (
+    <OAuthPillButton
+      label="Continue with Facebook"
+      icon={<Ionicons name="logo-facebook" size={20} color="#1877F2" />}
+      busy={busy}
+      disabled={disabled}
+      onPress={() => void handleFacebook()}
+    />
+  );
+}
+
 export function OAuthSignInButtons({
   disabled,
   onGoogleCredential,
   onAppleCredential,
+  onFacebookCredential,
   onError,
   showDivider = false,
   dividerLabel = 'or',
@@ -151,17 +201,20 @@ export function OAuthSignInButtons({
     googleIosClientId,
     googleAndroidClientId,
     appleClientId,
+    facebookAppId,
   } = useOAuthConfig();
   const [appleBusy, setAppleBusy] = useState(false);
   const [appleNativeAvailable, setAppleNativeAvailable] = useState(false);
 
   const appleConfigured = Boolean(appleClientId);
+  const facebookConfigured = Boolean(facebookAppId);
   const useMockSignIn = shouldUseMockOAuthSignIn({
     preferMock: preferMockSignIn,
     googleWebClientId,
     googleIosClientId,
     googleAndroidClientId,
     appleClientId,
+    facebookAppId,
   });
   const canUseGoogleHook =
     !useMockSignIn &&
@@ -183,6 +236,13 @@ export function OAuthSignInButtons({
   const handleApplePreview = useCallback(async () => {
     await onAppleCredential(MOCK_APPLE_TOKEN);
   }, [onAppleCredential]);
+
+  const handleFacebookPreview = useCallback(async () => {
+    await onFacebookCredential(MOCK_FACEBOOK_TOKEN);
+  }, [onFacebookCredential]);
+
+  const canUseFacebookHook =
+    !useMockSignIn && facebookConfigured && Boolean(facebookAppId);
 
   const handleAppleNative = useCallback(async () => {
     if (useMockSignIn) {
@@ -283,6 +343,22 @@ export function OAuthSignInButtons({
           />
         )
       ) : null}
+
+      {canUseFacebookHook && facebookAppId ? (
+        <ConfiguredFacebookSignInButton
+          disabled={disabled}
+          onFacebookCredential={onFacebookCredential}
+          onError={onError}
+          appId={facebookAppId}
+        />
+      ) : (
+        <OAuthPillButton
+          label="Continue with Facebook"
+          icon={<Ionicons name="logo-facebook" size={20} color="#1877F2" />}
+          disabled={isBusy}
+          onPress={() => void handleFacebookPreview()}
+        />
+      )}
 
       {showDivider && dividerPosition === 'below' ? (
         <OAuthDivider label={dividerLabel} />

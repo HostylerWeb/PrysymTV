@@ -55,6 +55,7 @@ interface AuthContextType {
     identityToken: string,
     authorizationCode?: string,
   ) => Promise<void>
+  loginWithFacebook: (accessToken: string) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
   updateCoins: (amount: number) => void
@@ -145,6 +146,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(mapMeToUser(me))
   }
 
+  const loginWithFacebook = async (accessToken: string) => {
+    await authApi.oauthFacebook(accessToken)
+    const me = await fetchMe()
+    setUser(mapMeToUser(me))
+  }
+
   const logout = async () => {
     await authApi.logout()
     setUser(null)
@@ -182,6 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         register,
         loginWithGoogle,
         loginWithApple,
+        loginWithFacebook,
         logout,
         refreshUser,
         updateCoins,

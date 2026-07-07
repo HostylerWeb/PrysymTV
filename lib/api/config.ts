@@ -34,6 +34,10 @@ export type PublicOAuthConfig = {
     webClientId: string | null;
     iosClientId: string | null;
   };
+  facebook: {
+    enabled: boolean;
+    appId: string | null;
+  };
 };
 
 export type PublicPushConfig = {

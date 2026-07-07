@@ -21,6 +21,13 @@ export type VerifiedAppleProfile = {
   emailVerified: boolean;
 };
 
+export type VerifiedFacebookProfile = {
+  sub: string;
+  email?: string;
+  name?: string;
+  picture?: string;
+};
+
 @Injectable()
 export class OAuthVerificationService {
   private readonly googleClient = new OAuth2Client();
@@ -97,6 +104,84 @@ export class OAuthVerificationService {
       email,
       emailVerified:
         payload.email_verified === true || payload.email_verified === 'true',
+    };
+  }
+
+  private facebookAppId(): string | null {
+    const raw = this.config.get<string>('FACEBOOK_APP_ID', '').trim();
+    return raw || null;
+  }
+
+  private facebookAppSecret(): string | null {
+    const raw = this.config.get<string>('FACEBOOK_APP_SECRET', '').trim();
+    return raw || null;
+  }
+
+  async verifyFacebookAccessToken(
+    accessToken: string,
+  ): Promise<VerifiedFacebookProfile> {
+    const appId = this.facebookAppId();
+    const appSecret = this.facebookAppSecret();
+    if (!appId || !appSecret) {
+      throw new ServiceUnavailableException(
+        'Facebook sign-in is not configured',
+      );
+    }
+
+    const appAccessToken = `${appId}|${appSecret}`;
+    const debugUrl = new URL('https://graph.facebook.com/debug_token');
+    debugUrl.searchParams.set('input_token', accessToken);
+    debugUrl.searchParams.set('access_token', appAccessToken);
+
+    const debugRes = await fetch(debugUrl);
+    if (!debugRes.ok) {
+      throw new BadRequestException('Invalid Facebook token');
+    }
+
+    const debugPayload = (await debugRes.json()) as {
+      data?: {
+        is_valid?: boolean;
+        app_id?: string;
+        user_id?: string;
+      };
+    };
+    const debugData = debugPayload.data;
+    if (
+      !debugData?.is_valid ||
+      debugData.app_id !== appId ||
+      !debugData.user_id
+    ) {
+      throw new BadRequestException('Invalid Facebook token');
+    }
+
+    const profileUrl = new URL('https://graph.facebook.com/me');
+    profileUrl.searchParams.set(
+      'fields',
+      'id,name,email,picture.type(large)',
+    );
+    profileUrl.searchParams.set('access_token', accessToken);
+
+    const profileRes = await fetch(profileUrl);
+    if (!profileRes.ok) {
+      throw new BadRequestException('Could not load Facebook profile');
+    }
+
+    const profile = (await profileRes.json()) as {
+      id?: string;
+      name?: string;
+      email?: string;
+      picture?: { data?: { url?: string } };
+    };
+
+    if (!profile.id || profile.id !== debugData.user_id) {
+      throw new BadRequestException('Invalid Facebook profile');
+    }
+
+    return {
+      sub: profile.id,
+      email: profile.email?.toLowerCase(),
+      name: profile.name,
+      picture: profile.picture?.data?.url,
     };
   }
 }

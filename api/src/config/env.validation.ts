@@ -208,6 +208,15 @@ export class EnvironmentVariables {
   @IsString()
   APPLE_CLIENT_ID?: string;
 
+  /** Facebook Login — app ID (public) and secret (API only) */
+  @IsOptional()
+  @IsString()
+  FACEBOOK_APP_ID?: string;
+
+  @IsOptional()
+  @IsString()
+  FACEBOOK_APP_SECRET?: string;
+
   /** Web Push (VAPID) — generate with: npx web-push generate-vapid-keys */
   @IsOptional()
   @IsString()

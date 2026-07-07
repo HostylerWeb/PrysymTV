@@ -79,6 +79,16 @@ export async function oauthApple(
   return data;
 }
 
+export async function oauthFacebook(accessToken: string) {
+  const data = await apiRequest<AuthSessionResponse>("/auth/oauth/facebook", {
+    method: "POST",
+    auth: false,
+    body: { accessToken },
+  });
+  setAccessToken(data.accessToken);
+  return data;
+}
+
 export function deriveUsername(displayName: string, email: string): string {
   const fromName = displayName
     .toLowerCase()

@@ -422,6 +422,7 @@ model User {
   buyerCountryCode  String?        @map("buyer_country_code") @db.VarChar(2)
   googleId          String?        @unique @map("google_id")
   appleId           String?        @unique @map("apple_id")
+  facebookId        String?        @unique @map("facebook_id")
   createdAt         DateTime       @default(now()) @map("created_at")
   updatedAt         DateTime       @updatedAt @map("updated_at")
 

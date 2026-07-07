@@ -122,6 +122,7 @@ export default function LoginScreen() {
             preferMockSignIn
             onGoogleCredential={oauth.onGoogleCredential}
             onAppleCredential={oauth.onAppleCredential}
+            onFacebookCredential={oauth.onFacebookCredential}
             onError={oauth.onOAuthError}
             showDivider
             dividerPosition="above"

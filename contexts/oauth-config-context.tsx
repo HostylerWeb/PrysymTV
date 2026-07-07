@@ -18,6 +18,7 @@ type OAuthConfigContextValue = {
   loading: boolean;
   googleWebClientId: string | null;
   appleWebClientId: string | null;
+  facebookAppId: string | null;
   isOAuthAvailable: boolean;
 };
 
@@ -26,11 +27,13 @@ const OAuthConfigContext = createContext<OAuthConfigContextValue>({
   loading: true,
   googleWebClientId: null,
   appleWebClientId: null,
+  facebookAppId: null,
   isOAuthAvailable: false,
 });
 
 const envGoogleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() || null;
 const envAppleClientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID?.trim() || null;
+const envFacebookAppId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID?.trim() || null;
 
 export function OAuthConfigProvider({ children }: { children: ReactNode }) {
   const [auth, setAuth] = useState<PublicOAuthConfig | null>(null);
@@ -58,17 +61,22 @@ export function OAuthConfigProvider({ children }: { children: ReactNode }) {
       auth?.google.webClientId ?? envGoogleClientId;
     const appleWebClientId =
       auth?.apple.webClientId ?? envAppleClientId;
+    const facebookAppId =
+      auth?.facebook.appId ?? envFacebookAppId;
     const isOAuthAvailable = Boolean(
       googleWebClientId ||
         appleWebClientId ||
+        facebookAppId ||
         auth?.google.enabled ||
-        auth?.apple.enabled,
+        auth?.apple.enabled ||
+        auth?.facebook.enabled,
     );
     return {
       auth,
       loading,
       googleWebClientId,
       appleWebClientId,
+      facebookAppId,
       isOAuthAvailable,
     };
   }, [auth, loading]);

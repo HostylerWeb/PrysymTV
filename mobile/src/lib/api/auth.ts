@@ -65,6 +65,16 @@ export async function oauthApple(
   return data;
 }
 
+export async function oauthFacebook(accessToken: string) {
+  const data = await apiRequest<AuthSessionResponse>('/auth/oauth/facebook', {
+    method: 'POST',
+    auth: false,
+    body: { accessToken },
+  });
+  await persistSession(data);
+  return data;
+}
+
 export async function logoutApi() {
   try {
     await apiRequest<{ message: string }>('/auth/logout', {

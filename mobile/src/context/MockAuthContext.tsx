@@ -24,6 +24,7 @@ import { schedulePushPromptAfterLogin } from '@/lib/push-notifications';
 import {
   isPreviewOAuthToken,
   MOCK_APPLE_TOKEN,
+  MOCK_FACEBOOK_TOKEN,
   MOCK_GOOGLE_TOKEN,
 } from '@/lib/oauth-mock';
 
@@ -57,6 +58,7 @@ type MockAuthContextValue = {
     identityToken: string,
     authorizationCode?: string,
   ) => Promise<void>;
+  loginWithFacebook: (accessToken: string) => Promise<void>;
   logout: () => Promise<void>;
   continueAsGuest: () => Promise<void>;
   updateProfile: (patch: Partial<MeResponse>) => void;
@@ -254,6 +256,30 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
     [completeOAuthSession, finishAuth, persistMode],
   );
 
+  const loginWithFacebook = useCallback(
+    async (accessToken: string) => {
+      if (isPreviewOAuthToken(accessToken) || accessToken === MOCK_FACEBOOK_TOKEN) {
+        setUser(mockUser);
+        await persistMode('user');
+        finishAuth();
+        return;
+      }
+      if (isApiEnabled()) {
+        try {
+          await authApi.oauthFacebook(accessToken);
+          await completeOAuthSession();
+          return;
+        } catch {
+          /* fall through to mock for UI testing */
+        }
+      }
+      setUser(mockUser);
+      await persistMode('user');
+      finishAuth();
+    },
+    [completeOAuthSession, finishAuth, persistMode],
+  );
+
   const logout = useCallback(async () => {
     if (isApiEnabled()) {
       try {
@@ -362,6 +388,7 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
       register,
       loginWithGoogle,
       loginWithApple,
+      loginWithFacebook,
       logout,
       continueAsGuest,
       updateProfile,
@@ -383,6 +410,7 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
       register,
       loginWithGoogle,
       loginWithApple,
+      loginWithFacebook,
       logout,
       continueAsGuest,
       updateProfile,

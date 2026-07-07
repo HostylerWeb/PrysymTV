@@ -11,9 +11,14 @@ import {
   signInWithApple,
   subscribeGoogleCredential,
 } from "@/lib/oauth-clients"
+import {
+  prepareFacebookSignIn,
+  signInWithFacebook,
+} from "@/lib/facebook-oauth"
 
 const envGoogleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim()
 const envAppleClientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID?.trim()
+const envFacebookAppId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID?.trim()
 
 /** Match Google filled_black pill + auth modal submit (h-12, full width). */
 const OAUTH_BUTTON_VISUAL =
@@ -29,6 +34,7 @@ type OAuthSignInButtonsProps = {
     identityToken: string,
     authorizationCode?: string,
   ) => Promise<void>
+  onFacebookCredential: (accessToken: string) => Promise<void>
   onError?: (message: string) => void
   className?: string
 }
@@ -65,6 +71,14 @@ function AppleLogoIcon({ className }: { className?: string }) {
       aria-hidden
     >
       <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
+    </svg>
+  )
+}
+
+function FacebookLogoIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="#1877F2" className={className} aria-hidden>
+      <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073c0 6.024 4.388 11.015 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.088 24 18.097 24 12.073z" />
     </svg>
   )
 }
@@ -248,16 +262,87 @@ function AppleSignInButton({
   )
 }
 
+function FacebookSignInButton({
+  disabled,
+  busy: externalBusy,
+  onFacebookCredential,
+  onError,
+  appId,
+}: Pick<
+  OAuthSignInButtonsProps,
+  "disabled" | "onFacebookCredential" | "onError"
+> & { busy?: boolean; appId: string | null }) {
+  const [ready, setReady] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!appId) return
+
+    let cancelled = false
+    void prepareFacebookSignIn(appId)
+      .then(() => {
+        if (!cancelled) setReady(true)
+      })
+      .catch(() => {
+        if (!cancelled) onError?.("Failed to load Facebook Sign In")
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [appId, onError])
+
+  const handleFacebookSignIn = useCallback(async () => {
+    setBusy(true)
+    try {
+      const accessToken = await signInWithFacebook()
+      await onFacebookCredential(accessToken)
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Facebook sign-in failed"
+      if (!message.toLowerCase().includes("cancelled")) {
+        onError?.(message)
+      }
+    } finally {
+      setBusy(false)
+    }
+  }, [onFacebookCredential, onError])
+
+  if (!appId) return null
+
+  const isDisabled = disabled || busy || externalBusy || !ready
+
+  return (
+    <button
+      type="button"
+      className={OAUTH_BUTTON_INTERACTIVE}
+      disabled={isDisabled}
+      onClick={() => void handleFacebookSignIn()}
+    >
+      {busy || externalBusy ? (
+        <Loader2 className="h-5 w-5 animate-spin" />
+      ) : (
+        <>
+          <FacebookLogoIcon className="h-5 w-5 shrink-0" />
+          <span>Continue with Facebook</span>
+        </>
+      )}
+    </button>
+  )
+}
+
 export function OAuthSignInButtons({
   disabled,
   onGoogleCredential,
   onAppleCredential,
+  onFacebookCredential,
   onError,
   className,
 }: OAuthSignInButtonsProps) {
-  const { googleWebClientId, appleWebClientId } = useOAuthConfig()
+  const { googleWebClientId, appleWebClientId, facebookAppId } = useOAuthConfig()
   const googleClientId = googleWebClientId ?? envGoogleClientId ?? null
   const appleClientId = appleWebClientId ?? envAppleClientId ?? null
+  const facebookId = facebookAppId ?? envFacebookAppId ?? null
   const [googleBusy, setGoogleBusy] = useState(false)
 
   const handleGoogleSuccess = useCallback(
@@ -276,7 +361,7 @@ export function OAuthSignInButtons({
     [onGoogleCredential, onError],
   )
 
-  if (!googleClientId && !appleClientId) return null
+  if (!googleClientId && !appleClientId && !facebookId) return null
 
   return (
     <div className={cn("space-y-3", className)}>
@@ -311,13 +396,23 @@ export function OAuthSignInButtons({
             onError={onError}
           />
         ) : null}
+
+        {facebookId ? (
+          <FacebookSignInButton
+            appId={facebookId}
+            disabled={disabled}
+            busy={googleBusy}
+            onFacebookCredential={onFacebookCredential}
+            onError={onError}
+          />
+        ) : null}
       </div>
     </div>
   )
 }
 
 export function isOAuthConfigured(): boolean {
-  return Boolean(envGoogleClientId || envAppleClientId)
+  return Boolean(envGoogleClientId || envAppleClientId || envFacebookAppId)
 }
 
 export function useOAuthButtonsAvailable(): boolean {

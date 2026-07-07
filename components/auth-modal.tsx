@@ -34,7 +34,7 @@ export function AuthModal({
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
 
-  const { login, register, loginWithGoogle, loginWithApple } = useAuth()
+  const { login, register, loginWithGoogle, loginWithApple, loginWithFacebook } = useAuth()
   const { isOAuthAvailable } = useOAuthConfig()
 
   useEffect(() => {
@@ -263,6 +263,20 @@ export function AuthModal({
                   setIsLoading(true)
                   try {
                     await loginWithApple(identityToken, authorizationCode)
+                    onClose()
+                    resetForm()
+                    onSuccess?.()
+                  } catch (err) {
+                    setError(getAuthErrorMessage(err))
+                  } finally {
+                    setIsLoading(false)
+                  }
+                }}
+                onFacebookCredential={async (accessToken) => {
+                  setError("")
+                  setIsLoading(true)
+                  try {
+                    await loginWithFacebook(accessToken)
                     onClose()
                     resetForm()
                     onSuccess?.()
