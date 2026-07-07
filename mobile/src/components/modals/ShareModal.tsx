@@ -11,7 +11,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { buildShareLinks, type SharePlatform } from '@/lib/share-links';
-import { colors, radius } from '@/theme/tokens';
+import { radius } from '@/theme/tokens';
+import type { ThemeColors } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 
 type Props = {
   visible: boolean;
@@ -34,6 +37,8 @@ function shareIconName(id: SharePlatform): keyof typeof Ionicons.glyphMap {
 }
 
 export function ShareModal({ visible, onClose, title, url = 'https://prysym.tv' }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
   const links = buildShareLinks(url, title);
@@ -90,57 +95,59 @@ export function ShareModal({ visible, onClose, title, url = 'https://prysym.tv' 
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    padding: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  title: { color: colors.foreground, fontSize: 18, fontWeight: '800' },
-  closeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  preview: { color: colors.mutedForeground, fontSize: 14, marginBottom: 20, lineHeight: 20 },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 16,
-  },
-  gridItem: { width: '22%', alignItems: 'center', gap: 6 },
-  iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gridLabel: { color: colors.mutedForeground, fontSize: 10, fontWeight: '600', textAlign: 'center' },
-  copyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.secondary,
-    borderRadius: radius.lg,
-    paddingVertical: 14,
-  },
-  copyText: { color: colors.foreground, fontWeight: '600', fontSize: 15 },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      justifyContent: 'flex-end',
+    },
+    sheet: {
+      backgroundColor: colors.background,
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      padding: 20,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    title: { color: colors.foreground, fontSize: 18, fontWeight: '800' },
+    closeBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.secondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    preview: { color: colors.mutedForeground, fontSize: 14, marginBottom: 20, lineHeight: 20 },
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+      marginBottom: 16,
+    },
+    gridItem: { width: '22%', alignItems: 'center', gap: 6 },
+    iconCircle: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    gridLabel: { color: colors.mutedForeground, fontSize: 10, fontWeight: '600', textAlign: 'center' },
+    copyBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: colors.secondary,
+      borderRadius: radius.lg,
+      paddingVertical: 14,
+    },
+    copyText: { color: colors.foreground, fontWeight: '600', fontSize: 15 },
+  });
+}

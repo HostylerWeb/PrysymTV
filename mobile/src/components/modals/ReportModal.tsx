@@ -3,13 +3,16 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
 import { useMockAuth } from '@/context/MockAuthContext';
-import { colors, radius } from '@/theme/tokens';
+import { useThemedStyles } from '@/theme/useThemedStyles';
+import type { ThemeColors } from '@/theme/tokens';
+import { radius } from '@/theme/tokens';
 
 const REASONS = ['Spam', 'Harassment', 'Misinformation', 'Copyright', 'Other'];
 
 type Props = { visible: boolean; onClose: () => void };
 
 export function ReportModal({ visible, onClose }: Props) {
+  const styles = useThemedStyles(createStyles);
   const { isAuthenticated, requireAuth } = useMockAuth();
   const [reason, setReason] = useState<string | null>(null);
 
@@ -29,7 +32,7 @@ export function ReportModal({ visible, onClose }: Props) {
               style={[styles.row, reason === r && styles.rowOn]}
               onPress={() => setReason(r)}
             >
-              <Text style={styles.rowText}>{r}</Text>
+              <Text style={[styles.rowText, reason === r && styles.rowTextOn]}>{r}</Text>
             </Pressable>
           ))}
           <Button label="Submit report" disabled={!reason} onPress={onClose} style={{ marginTop: 16 }} />
@@ -39,15 +42,19 @@ export function ReportModal({ visible, onClose }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  sub: { color: colors.mutedForeground, marginBottom: 12 },
-  row: {
-    padding: 14,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 8,
-  },
-  rowOn: { borderColor: colors.primary, backgroundColor: colors.primary + '12' },
-  rowText: { color: colors.foreground, fontWeight: '600' },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    sub: { color: colors.mutedForeground, marginBottom: 12 },
+    row: {
+      padding: 14,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 8,
+      backgroundColor: colors.card,
+    },
+    rowOn: { borderColor: colors.primary, backgroundColor: colors.primary + '12' },
+    rowText: { color: colors.foreground, fontWeight: '600' },
+    rowTextOn: { color: colors.primary },
+  });
+}

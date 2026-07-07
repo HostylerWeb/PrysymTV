@@ -17,8 +17,8 @@ export default function ShortDeepLinkPage({
   }, [id, router])
 
   return (
-    <main className="min-h-screen bg-black flex items-center justify-center">
-      <p className="text-white/60 text-sm">Opening short…</p>
+    <main className="min-h-screen bg-background flex items-center justify-center md:pl-20">
+      <p className="text-muted-foreground text-sm">Opening short…</p>
     </main>
   )
 }

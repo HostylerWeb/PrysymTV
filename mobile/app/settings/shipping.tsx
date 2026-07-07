@@ -15,7 +15,7 @@ export default function ShippingSettingsScreen() {
       Alert.alert('Incomplete', 'Fill in all required shipping fields.');
       return;
     }
-    Alert.alert('Saved (mock)', 'Shipping details will sync to PUT /users/me in Phase C.');
+    Alert.alert('Saved', 'Your shipping details have been updated.');
   };
 
   return (

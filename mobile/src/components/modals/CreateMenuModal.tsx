@@ -9,7 +9,10 @@ import { UnlockFeaturesModal, type CreatorVerificationContext } from '@/componen
 import { StreamerApplicationModal } from '@/components/modals/StreamerApplicationModal';
 import { CreatorUploadSheet, type CreatorUploadKind } from '@/components/modals/CreatorUploadSheet';
 import { mockUser } from '@/mocks';
-import { colors, radius } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
+import type { ThemeColors } from '@/theme/tokens';
+import { radius } from '@/theme/tokens';
 
 const ITEMS = [
   { id: 'short', label: 'Short', description: 'Quick vertical clip', icon: 'videocam-outline' as const, uploadType: 'short' as const },
@@ -38,6 +41,8 @@ export function CreateMenuModal({
 }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const { user, requireAuth } = useMockAuth();
   const profile = user ?? mockUser;
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -89,7 +94,7 @@ export function CreateMenuModal({
   return (
     <>
       <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-        <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable style={[styles.overlay, { backgroundColor: colors.scrim }]} onPress={onClose}>
           <Pressable style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]} onPress={(e) => e.stopPropagation()}>
             <View style={styles.header}>
               <Text style={styles.headerTitle}>Create</Text>
@@ -166,53 +171,55 @@ export function CreateMenuModal({
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    maxHeight: '75%',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  headerTitle: { color: colors.foreground, fontSize: 18, fontWeight: '700' },
-  closeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  list: { padding: 12, gap: 4 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: radius.lg,
-  },
-  rowHighlight: { backgroundColor: colors.primary + '12', borderWidth: 1, borderColor: colors.primary + '44' },
-  iconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.primary + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconLocked: { backgroundColor: colors.muted },
-  copy: { flex: 1 },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  label: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
-  desc: { color: colors.mutedForeground, fontSize: 12, marginTop: 2 },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    overlay: { flex: 1, justifyContent: 'flex-end' },
+    sheet: {
+      backgroundColor: colors.background,
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      maxHeight: '75%',
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    headerTitle: { color: colors.foreground, fontSize: 18, fontWeight: '700' },
+    closeBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.secondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    list: { padding: 12, gap: 4 },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+      borderRadius: radius.lg,
+    },
+    rowHighlight: { backgroundColor: colors.primary + '12', borderWidth: 1, borderColor: colors.primary + '44' },
+    iconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.primary + '15',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    iconLocked: { backgroundColor: colors.muted },
+    copy: { flex: 1 },
+    labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    label: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
+    desc: { color: colors.mutedForeground, fontSize: 12, marginTop: 2 },
+  });
+}

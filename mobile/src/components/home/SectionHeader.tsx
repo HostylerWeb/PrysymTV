@@ -2,7 +2,8 @@ import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ui/ThemedText';
-import { colors, spacing } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { commonStyles } from '@/theme/styles';
 
 type Props = {
@@ -13,6 +14,7 @@ type Props = {
 };
 
 export function SectionHeader({ title, eyebrow, actionLabel, onAction }: Props) {
+  const { colors } = useTheme();
   return (
     <View style={styles.row}>
       <View style={styles.left}>
@@ -66,7 +68,5 @@ const styles = StyleSheet.create({
     gap: 2,
     paddingBottom: 2,
   },
-  actionText: {
-    color: colors.mutedForeground,
-  },
+  actionText: {},
 });

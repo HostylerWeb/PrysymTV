@@ -20,7 +20,7 @@ export default function SettingsDashboardScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={styles.pad}>
         <AppHeader showBack title="Performance & Revenue" showSearch={false} showNotifications={false} />
-        <Text style={styles.sub}>Creator analytics - mock GET /analytics/creators/me/dashboard</Text>
+        <Text style={styles.sub}>Views, watch time, revenue, and subscriber growth for your channel.</Text>
         <View style={styles.grid}>
           {METRICS.map((m) => (
             <Card key={m.label} style={styles.stat}>

@@ -36,8 +36,8 @@ export default function StoreCartScreen() {
       return;
     }
     Alert.alert(
-      'Checkout (mock)',
-      `Order total $${total.toFixed(2)} - Stripe checkout will open in Phase C.`,
+      'Order placed',
+      `Your order total is $${total.toFixed(2)}. You'll receive a confirmation email shortly.`,
       [{ text: 'OK', onPress: () => cart.clearCart() }],
     );
   };

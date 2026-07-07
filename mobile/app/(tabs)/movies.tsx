@@ -25,7 +25,10 @@ import { FilterChip } from '@/components/ui/FilterChip';
 import { FilterSelect } from '@/components/ui/FilterSelect';
 import { Button } from '@/components/ui/Button';
 import { mockMovies } from '@/mocks';
-import { colors, radius, withAlpha } from '@/theme/tokens';
+import { radius, withAlpha } from '@/theme/tokens';
+import type { ThemeColors } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatDuration, formatViewCount } from '@/utils/format-media';
 
 const GENRES = [
@@ -49,6 +52,8 @@ const GENRE_LABELS: Record<string, string> = {
 };
 
 export default function MoviesScreen() {
+  const styles = useThemedStyles(createMoviesStyles);
+  const { colors } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -247,85 +252,87 @@ export default function MoviesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  headerPad: { paddingHorizontal: 16 },
-  hero: { aspectRatio: 16 / 10, backgroundColor: colors.muted },
-  heroGradBottom: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.heroScrim },
-  heroGradLeft: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.heroScrimLight },
-  heroContent: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 16 },
-  heroBadges: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  newPill: { backgroundColor: colors.primary + 'E6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
-  newPillText: { color: colors.primaryForeground, fontSize: 10, fontWeight: '800' },
-  heroGenre: { color: colors.foreground + 'CC', fontSize: 13 },
-  heroTitle: { fontSize: 28, fontWeight: '800', color: colors.foreground, marginBottom: 6 },
-  heroMeta: { color: colors.foreground + 'CC', fontSize: 13, marginBottom: 8 },
-  heroDesc: { color: colors.foreground + 'B3', fontSize: 13, marginBottom: 12, maxWidth: '90%' },
-  heroActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  playBtn: { paddingHorizontal: 20 },
-  iconAction: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  genreRow: { paddingHorizontal: 16, paddingVertical: 16, gap: 8 },
-  genreChip: { marginRight: 0 },
-  block: { marginBottom: 8, paddingTop: 8 },
-  hRow: { paddingHorizontal: 16, gap: 12, paddingTop: 4 },
-  padH: { paddingHorizontal: 16 },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.secondary,
-    borderRadius: radius.lg,
-    paddingHorizontal: 12,
-    height: 40,
-    marginBottom: 12,
-  },
-  searchInput: { flex: 1, color: colors.foreground, fontSize: 14 },
-  filterRow: { gap: 8, marginBottom: 16, paddingRight: 8 },
-  posterGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  listView: { gap: 10 },
-  listRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 10,
-    borderRadius: radius.lg,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  listThumb: { width: 64, height: 96, borderRadius: radius.md, backgroundColor: colors.secondary },
-  listMeta: { flex: 1 },
-  listTitle: { color: colors.foreground, fontWeight: '700', fontSize: 14 },
-  listSub: { color: colors.mutedForeground, fontSize: 11, marginTop: 4 },
-  listTagline: { color: colors.mutedForeground, fontSize: 12, marginTop: 6, lineHeight: 16 },
-  allMoviesHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  viewToggle: { flexDirection: 'row', gap: 4, backgroundColor: colors.secondary, borderRadius: radius.full, padding: 2 },
-  viewBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.full },
-  viewBtnOn: { backgroundColor: colors.background },
-  empty: { color: colors.mutedForeground, textAlign: 'center', paddingVertical: 32 },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'flex-end',
-  },
-  modalCard: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    padding: 20,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  modalTitle: { color: colors.foreground, fontSize: 20, fontWeight: '800' },
-  modalMeta: { color: colors.mutedForeground, fontSize: 13 },
-  modalDesc: { color: colors.mutedForeground, fontSize: 14, lineHeight: 20 },
-  modalStats: { color: colors.mutedForeground, fontSize: 12, marginBottom: 8 },
-});
+function createMoviesStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
+    headerPad: { paddingHorizontal: 16 },
+    hero: { aspectRatio: 16 / 10, backgroundColor: colors.muted },
+    heroGradBottom: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.heroScrim },
+    heroGradLeft: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.heroScrimLight },
+    heroContent: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 16 },
+    heroBadges: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+    newPill: { backgroundColor: colors.primary + 'E6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
+    newPillText: { color: colors.primaryForeground, fontSize: 10, fontWeight: '800' },
+    heroGenre: { color: colors.foreground + 'CC', fontSize: 13 },
+    heroTitle: { fontSize: 28, fontWeight: '800', color: colors.foreground, marginBottom: 6 },
+    heroMeta: { color: colors.foreground + 'CC', fontSize: 13, marginBottom: 8 },
+    heroDesc: { color: colors.foreground + 'B3', fontSize: 13, marginBottom: 12, maxWidth: '90%' },
+    heroActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    playBtn: { paddingHorizontal: 20 },
+    iconAction: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.secondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    genreRow: { paddingHorizontal: 16, paddingVertical: 16, gap: 8 },
+    genreChip: { marginRight: 0 },
+    block: { marginBottom: 8, paddingTop: 8 },
+    hRow: { paddingHorizontal: 16, gap: 12, paddingTop: 4 },
+    padH: { paddingHorizontal: 16 },
+    searchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: colors.secondary,
+      borderRadius: radius.lg,
+      paddingHorizontal: 12,
+      height: 40,
+      marginBottom: 12,
+    },
+    searchInput: { flex: 1, color: colors.foreground, fontSize: 14 },
+    filterRow: { gap: 8, marginBottom: 16, paddingRight: 8 },
+    posterGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+    listView: { gap: 10 },
+    listRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      padding: 10,
+      borderRadius: radius.lg,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    listThumb: { width: 64, height: 96, borderRadius: radius.md, backgroundColor: colors.secondary },
+    listMeta: { flex: 1 },
+    listTitle: { color: colors.foreground, fontWeight: '700', fontSize: 14 },
+    listSub: { color: colors.mutedForeground, fontSize: 11, marginTop: 4 },
+    listTagline: { color: colors.mutedForeground, fontSize: 12, marginTop: 6, lineHeight: 16 },
+    allMoviesHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    viewToggle: { flexDirection: 'row', gap: 4, backgroundColor: colors.secondary, borderRadius: radius.full, padding: 2 },
+    viewBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.full },
+    viewBtnOn: { backgroundColor: colors.background },
+    empty: { color: colors.mutedForeground, textAlign: 'center', paddingVertical: 32 },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.55)',
+      justifyContent: 'flex-end',
+    },
+    modalCard: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      padding: 20,
+      gap: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modalTitle: { color: colors.foreground, fontSize: 20, fontWeight: '800' },
+    modalMeta: { color: colors.mutedForeground, fontSize: 13 },
+    modalDesc: { color: colors.mutedForeground, fontSize: 14, lineHeight: 20 },
+    modalStats: { color: colors.mutedForeground, fontSize: 12, marginBottom: 8 },
+  });
+}

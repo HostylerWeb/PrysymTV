@@ -1,7 +1,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, View, type ScrollViewProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 
 type Props = ScrollViewProps & {
   padded?: boolean;
@@ -10,9 +11,10 @@ type Props = ScrollViewProps & {
 
 export function Screen({ children, padded = true, edges = ['top'], style, ...rest }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   return (
     <ScrollView
-      style={[styles.screen, style]}
+      style={[styles.screen, { backgroundColor: colors.background }, style]}
       contentContainerStyle={[
         padded && styles.padded,
         edges.includes('top') && { paddingTop: insets.top + spacing.sm },
@@ -31,7 +33,7 @@ export function ScreenBody({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
+  screen: { flex: 1 },
   padded: { paddingHorizontal: spacing.page },
   body: { gap: spacing.lg },
 });

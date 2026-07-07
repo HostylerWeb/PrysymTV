@@ -28,10 +28,12 @@ import {
   mockVerticals,
   mockVideos,
 } from '@/mocks';
+import { useTheme } from '@/theme/ThemeProvider';
 import { colors, radius, spacing, withAlpha } from '@/theme/tokens';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const { requireAuth } = useMockAuth();
   const [category, setCategory] = useState<HomeCategory>('all');
   const { trigger, flowHost } = useCreateFlow();
@@ -67,6 +69,40 @@ export default function HomeScreen() {
           <>
             <HomeHero slides={heroSlides} />
             {mockLiveStreams[0] && <LiveStreamCard stream={mockLiveStreams[0]} featured />}
+            <Pressable
+              style={[
+                styles.promoCard,
+                {
+                  backgroundColor: withAlpha(colors.primary, 0.1),
+                  borderColor: withAlpha(colors.primary, 0.35),
+                },
+              ]}
+              onPress={() => router.push('/premium')}
+            >
+              <ThemedText variant="eyebrow" primary>
+                Prysym memberships
+              </ThemedText>
+              <ThemedText variant="body" style={{ marginTop: 4 }}>
+                Go ad-free with Premium, shape the platform with Insider, or join a creator&apos;s channel.
+              </ThemedText>
+              <View style={styles.promoLinks}>
+                <Pressable onPress={() => router.push('/premium')}>
+                  <ThemedText variant="caption" primary style={{ fontWeight: '700' }}>
+                    Premium
+                  </ThemedText>
+                </Pressable>
+                <Pressable onPress={() => router.push('/insider')}>
+                  <ThemedText variant="caption" primary style={{ fontWeight: '700' }}>
+                    Insider
+                  </ThemedText>
+                </Pressable>
+                <Pressable onPress={() => router.push('/impact')}>
+                  <ThemedText variant="caption" primary style={{ fontWeight: '700' }}>
+                    Community Impact
+                  </ThemedText>
+                </Pressable>
+              </View>
+            </Pressable>
             <CategoryTabs active={category} onChange={setCategory} />
             <ContinueWatchingRow items={mockContinueWatching} />
 
@@ -106,7 +142,10 @@ export default function HomeScreen() {
             {category === 'all' && (
               <ContentRow title="Shorts" actionLabel="View all" onAction={() => router.push('/(tabs)/shorts')}>
                 {mockShorts.slice(0, 5).map((v) => (
-                  <Pressable key={v.id} onPress={() => router.push('/(tabs)/shorts')}>
+                  <Pressable
+                    key={v.id}
+                    onPress={() => router.push({ pathname: '/(tabs)/shorts', params: { start: v.id } })}
+                  >
                     <Image source={{ uri: v.thumbnailUrl ?? '' }} style={styles.shortThumb} contentFit="cover" />
                   </Pressable>
                 ))}
@@ -175,6 +214,18 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  promoCard: {
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  promoLinks: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginTop: 10,
+  },
   shortThumb: {
     width: 100,
     height: 160,

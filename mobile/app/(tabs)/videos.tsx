@@ -17,13 +17,18 @@ import { Button } from '@/components/ui/Button';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { mockLiveStreams, mockVideos } from '@/mocks';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { radius, spacing, typography } from '@/theme/tokens';
+import type { ThemeColors } from '@/theme/tokens';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 
 const CATEGORIES = ['All', 'Gaming', 'Music', 'Talk', 'Education', 'Sports'] as const;
 const MODES = ['All', 'Videos', 'Live'] as const;
 const SORTS = ['Popular', 'Newest'] as const;
 
 export default function VideosScreen() {
+  const styles = useThemedStyles(createVideosStyles);
+  const { colors } = useTheme();
   const { requireAuth } = useMockAuth();
   const { trigger, flowHost } = useCreateFlow();
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('All');
@@ -174,54 +179,56 @@ export default function VideosScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  filterBar: {
-    backgroundColor: colors.background + 'F2',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingHorizontal: spacing.page,
-    paddingBottom: spacing.md,
-    gap: spacing.md,
-  },
-  headerPad: { marginHorizontal: -spacing.page, paddingHorizontal: spacing.page },
-  pageTitle: { ...typography.h2, color: colors.foreground, fontWeight: '800', marginTop: spacing.sm },
-  pageSub: { color: colors.mutedForeground, fontSize: 12, marginBottom: spacing.xs },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.secondary + '99',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.full,
-    paddingHorizontal: 12,
-    height: 40,
-    marginTop: spacing.sm,
-  },
-  searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, color: colors.foreground, fontSize: 14 },
-  chipRow: { gap: 8, paddingVertical: 2 },
-  chipGap: { marginRight: 0 },
-  modeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  modeGroup: {
-    flexDirection: 'row',
-    backgroundColor: colors.secondary + '80',
-    borderRadius: radius.full,
-    padding: 2,
-  },
-  modeBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.full },
-  modeBtnOn: { backgroundColor: colors.background },
-  modeText: { color: colors.mutedForeground, fontSize: 12, fontWeight: '600' },
-  modeTextOn: { color: colors.foreground },
-  content: { paddingHorizontal: spacing.page, paddingTop: spacing.lg },
-  section: { marginBottom: spacing.lg },
-  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  livePulse: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary },
-  sectionTitle: { ...typography.h3, color: colors.foreground },
-  liveRow: { gap: 12, paddingRight: spacing.page },
-  liveCardWrap: { width: 300 },
-  empty: { alignItems: 'center', gap: 8, paddingVertical: 40, paddingHorizontal: 16 },
-  emptyTitle: { color: colors.foreground, fontWeight: '700', fontSize: 16 },
-  emptySub: { color: colors.mutedForeground, textAlign: 'center', marginBottom: 8 },
-  loadMore: { marginTop: 12 },
-});
+function createVideosStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
+    filterBar: {
+      backgroundColor: colors.background + 'F2',
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingHorizontal: spacing.page,
+      paddingBottom: spacing.md,
+      gap: spacing.md,
+    },
+    headerPad: { marginHorizontal: -spacing.page, paddingHorizontal: spacing.page },
+    pageTitle: { ...typography.h2, color: colors.foreground, fontWeight: '800', marginTop: spacing.sm },
+    pageSub: { color: colors.mutedForeground, fontSize: 12, marginBottom: spacing.xs },
+    searchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.secondary + '99',
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.full,
+      paddingHorizontal: 12,
+      height: 40,
+      marginTop: spacing.sm,
+    },
+    searchIcon: { marginRight: 8 },
+    searchInput: { flex: 1, color: colors.foreground, fontSize: 14 },
+    chipRow: { gap: 8, paddingVertical: 2 },
+    chipGap: { marginRight: 0 },
+    modeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+    modeGroup: {
+      flexDirection: 'row',
+      backgroundColor: colors.secondary + '80',
+      borderRadius: radius.full,
+      padding: 2,
+    },
+    modeBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.full },
+    modeBtnOn: { backgroundColor: colors.background },
+    modeText: { color: colors.mutedForeground, fontSize: 12, fontWeight: '600' },
+    modeTextOn: { color: colors.foreground },
+    content: { paddingHorizontal: spacing.page, paddingTop: spacing.lg },
+    section: { marginBottom: spacing.lg },
+    sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+    livePulse: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary },
+    sectionTitle: { ...typography.h3, color: colors.foreground },
+    liveRow: { gap: 12, paddingRight: spacing.page },
+    liveCardWrap: { width: 300 },
+    empty: { alignItems: 'center', gap: 8, paddingVertical: 40, paddingHorizontal: 16 },
+    emptyTitle: { color: colors.foreground, fontWeight: '700', fontSize: 16 },
+    emptySub: { color: colors.mutedForeground, textAlign: 'center', marginBottom: 8 },
+    loadMore: { marginTop: 12 },
+  });
+}

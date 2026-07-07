@@ -13,7 +13,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { mockComments } from '@/mocks';
-import { colors, radius, spacing, withAlpha } from '@/theme/tokens';
+import { radius, spacing, withAlpha } from '@/theme/tokens';
+import type { ThemeColors } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatViewCount } from '@/utils/format-media';
 
 const MINI_PLAYER_VH = 32;
@@ -33,6 +36,8 @@ type Props = {
 };
 
 export function WatchCommentsPanel({ count, videoTitle, thumbnailUrl }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const { isAuthenticated, requireAuth, user } = useMockAuth();
   const [open, setOpen] = useState(false);
@@ -202,138 +207,140 @@ export function WatchCommentsPanel({ count, videoTitle, thumbnailUrl }: Props) {
 
 const MINI_HEIGHT = 220;
 
-const styles = StyleSheet.create({
-  preview: {
-    marginHorizontal: spacing.page,
-    marginTop: spacing.md,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  previewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  previewTitle: { color: colors.foreground, fontSize: 16, fontWeight: '700' },
-  previewRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  previewCount: { color: colors.mutedForeground, fontSize: 14 },
-  previewRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  previewAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  previewAvatarLetter: { color: colors.foreground, fontWeight: '700' },
-  previewSnippet: { flex: 1, fontSize: 14, lineHeight: 20 },
-  previewAuthor: { fontWeight: '700', color: colors.foreground },
-  previewBody: { color: colors.mutedForeground },
-  previewEmpty: { color: colors.mutedForeground, fontSize: 14 },
-  modalRoot: { flex: 1, backgroundColor: colors.background },
-  miniPlayer: {
-    height: MINI_HEIGHT,
-    backgroundColor: colors.videoBackground,
-    zIndex: 2,
-  },
-  miniOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: withAlpha('#000', 0.35),
-    gap: 8,
-    paddingHorizontal: 16,
-  },
-  miniTitle: { color: colors.onVideo, fontSize: 13, fontWeight: '600', maxWidth: '90%' },
-  sheet: { flex: 1, backgroundColor: colors.background },
-  sheetBelowMini: {
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    marginTop: -12,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  sheetTitle: { fontSize: 16, fontWeight: '700', color: colors.foreground },
-  sheetHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  sheetCount: { color: colors.mutedForeground, fontSize: 14 },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addCommentRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  signInRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  signInText: { color: colors.mutedForeground, fontSize: 14 },
-  replyBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  replyText: { color: colors.mutedForeground, fontSize: 12 },
-  replyCancel: { color: colors.primary, fontSize: 12, fontWeight: '600' },
-  composerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  composerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: withAlpha(colors.primary, 0.2),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  composerAvatarLetter: { color: colors.primary, fontWeight: '800' },
-  composerInput: {
-    flex: 1,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingVertical: 8,
-    color: colors.foreground,
-    fontSize: 14,
-  },
-  sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendBtnOff: { opacity: 0.4 },
-  list: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
-  comment: { flexDirection: 'row', gap: 12, marginBottom: 20 },
-  commentAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  commentAvatarLetter: { color: colors.foreground, fontWeight: '700' },
-  commentBody: { flex: 1 },
-  commentMeta: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 4 },
-  commentAuthor: { color: colors.foreground, fontWeight: '700', fontSize: 14 },
-  commentTime: { color: colors.mutedForeground, fontSize: 12 },
-  commentText: { color: colors.foreground, fontSize: 14, lineHeight: 20 },
-  commentActions: { flexDirection: 'row', gap: 16, marginTop: 8 },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  actionLabel: { color: colors.mutedForeground, fontSize: 12, fontWeight: '600' },
-  actionOn: { color: colors.primary },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    preview: {
+      marginHorizontal: spacing.page,
+      marginTop: spacing.md,
+      paddingVertical: spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    previewHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: spacing.sm,
+    },
+    previewTitle: { color: colors.foreground, fontSize: 16, fontWeight: '700' },
+    previewRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    previewCount: { color: colors.mutedForeground, fontSize: 14 },
+    previewRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+    previewAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.secondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    previewAvatarLetter: { color: colors.foreground, fontWeight: '700' },
+    previewSnippet: { flex: 1, fontSize: 14, lineHeight: 20 },
+    previewAuthor: { fontWeight: '700', color: colors.foreground },
+    previewBody: { color: colors.mutedForeground },
+    previewEmpty: { color: colors.mutedForeground, fontSize: 14 },
+    modalRoot: { flex: 1, backgroundColor: colors.background },
+    miniPlayer: {
+      height: MINI_HEIGHT,
+      backgroundColor: colors.videoBackground,
+      zIndex: 2,
+    },
+    miniOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: withAlpha('#000', 0.35),
+      gap: 8,
+      paddingHorizontal: 16,
+    },
+    miniTitle: { color: colors.onVideo, fontSize: 13, fontWeight: '600', maxWidth: '90%' },
+    sheet: { flex: 1, backgroundColor: colors.background },
+    sheetBelowMini: {
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      marginTop: -12,
+    },
+    sheetHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    sheetTitle: { fontSize: 16, fontWeight: '700', color: colors.foreground },
+    sheetHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    sheetCount: { color: colors.mutedForeground, fontSize: 14 },
+    closeBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.secondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    addCommentRow: {
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    signInRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    signInText: { color: colors.mutedForeground, fontSize: 14 },
+    replyBar: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    replyText: { color: colors.mutedForeground, fontSize: 12 },
+    replyCancel: { color: colors.primary, fontSize: 12, fontWeight: '600' },
+    composerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    composerAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: withAlpha(colors.primary, 0.2),
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    composerAvatarLetter: { color: colors.primary, fontWeight: '800' },
+    composerInput: {
+      flex: 1,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingVertical: 8,
+      color: colors.foreground,
+      fontSize: 14,
+    },
+    sendBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    sendBtnOff: { opacity: 0.4 },
+    list: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
+    comment: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+    commentAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.secondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    commentAvatarLetter: { color: colors.foreground, fontWeight: '700' },
+    commentBody: { flex: 1 },
+    commentMeta: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 4 },
+    commentAuthor: { color: colors.foreground, fontWeight: '700', fontSize: 14 },
+    commentTime: { color: colors.mutedForeground, fontSize: 12 },
+    commentText: { color: colors.foreground, fontSize: 14, lineHeight: 20 },
+    commentActions: { flexDirection: 'row', gap: 16, marginTop: 8 },
+    actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    actionLabel: { color: colors.mutedForeground, fontSize: 12, fontWeight: '600' },
+    actionOn: { color: colors.primary },
+  });
+}

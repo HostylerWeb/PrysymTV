@@ -16,7 +16,7 @@ export default function SettingsSocialScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={styles.pad}>
         <AppHeader showBack title="Social links" showSearch={false} showNotifications={false} />
-        <Text style={styles.sub}>Shown on your public profile - mock PATCH /users/me</Text>
+        <Text style={styles.sub}>Links shown on your public creator profile.</Text>
         {PLATFORMS.map((p) => (
           <View key={p} style={styles.field}>
             <Text style={styles.label}>{p}</Text>

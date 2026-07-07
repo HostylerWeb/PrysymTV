@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, type TextProps, type TextStyle } from 'react-native';
-import { colors, typography } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { typography } from '@/theme/tokens';
 
 type Variant = keyof typeof typography;
 
@@ -19,6 +20,7 @@ export function ThemedText({
   children,
   ...rest
 }: Props) {
+  const { colors } = useTheme();
   const color = primary
     ? colors.primary
     : muted

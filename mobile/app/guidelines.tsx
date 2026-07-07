@@ -1,18 +1,25 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
-import { AppHeader } from '@/components/layout/AppHeader';
-import { colors } from '@/theme/tokens';
+import { LegalHeading, LegalPage, LegalParagraph } from '@/components/layout/LegalPage';
 
 export default function GuidelinesScreen() {
   return (
-    <ScrollView style={styles.screen}>
-      <AppHeader showBack title="Guidelines" showSearch={false} showNotifications={false} />
-      <Text style={styles.body}>Community Guidelines - placeholder. Copy from app/guidelines/page.tsx.</Text>
-    </ScrollView>
+    <LegalPage title="Community Guidelines">
+      <LegalHeading>Be respectful</LegalHeading>
+      <LegalParagraph>
+        Treat creators and viewers with respect. Harassment, hate speech, and threats are not allowed.
+      </LegalParagraph>
+      <LegalHeading>Original & lawful content</LegalHeading>
+      <LegalParagraph>
+        Upload content you have rights to share. Do not post illegal material, spam, or misleading impersonations.
+      </LegalParagraph>
+      <LegalHeading>Monetization & gifts</LegalHeading>
+      <LegalParagraph>
+        Coins, memberships, and ads must follow platform rules. Fraudulent engagement or deceptive promotions may result in account action.
+      </LegalParagraph>
+      <LegalHeading>Enforcement</LegalHeading>
+      <LegalParagraph>
+        Reports are reviewed by our team. Violations may lead to content removal, demonetization, or account suspension.
+      </LegalParagraph>
+    </LegalPage>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 16 },
-  body: { color: colors.mutedForeground, fontSize: 14, lineHeight: 22, paddingVertical: 16 },
-});

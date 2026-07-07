@@ -49,7 +49,7 @@ export function PlayerShell({
       ) : null}
       <View style={styles.overlay}>
         <Ionicons name="play-circle" size={72} color={withAlpha(colors.onVideo, 0.85)} />
-        <Text style={styles.mock}>Mock player</Text>
+        <Text style={styles.mock}>Tap to play</Text>
       </View>
       {badge ? (
         <View style={styles.badge}>

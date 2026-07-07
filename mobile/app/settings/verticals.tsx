@@ -19,7 +19,7 @@ export default function SettingsVerticalsScreen() {
       <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 40 }}>
         <View style={styles.pad}>
           <AppHeader showBack title="Micro-dramas" showSearch={false} showNotifications={false} />
-          <Text style={styles.sub}>Manage vertical series - mock GET /verticals/me</Text>
+          <Text style={styles.sub}>Manage your vertical series, episodes, and publishing schedule.</Text>
           <Button label="Create new series" onPress={() => setWizardOpen(true)} style={{ marginBottom: 8 }} />
           <Button label="Apply for vertical creator" variant="outline" onPress={() => setApplyOpen(true)} style={{ marginBottom: 16 }} />
           {mockVerticals.slice(0, 4).map((s) => (

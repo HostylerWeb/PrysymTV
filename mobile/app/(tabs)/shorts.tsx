@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommentsSheet } from '@/components/modals/CommentsSheet';
 import { ShareModal } from '@/components/modals/ShareModal';
@@ -32,10 +32,13 @@ export default function ShortsScreen() {
   const insets = useSafeAreaInsets();
   const tabInset = useTabBarInset();
   const router = useRouter();
+  const { start } = useLocalSearchParams<{ start?: string }>();
   const { requireAuth } = useMockAuth();
   const { trigger, flowHost } = useCreateFlow();
   const [feedHeight, setFeedHeight] = useState(0);
-  const [index, setIndex] = useState(0);
+  const startIndex = start ? Math.max(0, mockShorts.findIndex((s) => s.id === start)) : 0;
+  const [index, setIndex] = useState(startIndex >= 0 ? startIndex : 0);
+  const listRef = useRef<FlatList>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -47,6 +50,16 @@ export default function ShortsScreen() {
   const [adOpen, setAdOpen] = useState(false);
   const swipeCount = useRef(0);
   const current = mockShorts[index];
+
+  useEffect(() => {
+    if (!start || feedHeight <= 0) return;
+    const i = mockShorts.findIndex((s) => s.id === start);
+    if (i < 0) return;
+    setIndex(i);
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({ index: i, animated: false });
+    });
+  }, [start, feedHeight]);
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const next = viewableItems[0]?.index;
@@ -72,8 +85,11 @@ export default function ShortsScreen() {
       <View style={styles.screen} onLayout={(e) => setFeedHeight(e.nativeEvent.layout.height)}>
         {feedHeight > 0 && (
           <FlatList
+            ref={listRef}
             data={mockShorts}
             keyExtractor={(item) => item.id}
+            initialScrollIndex={startIndex > 0 ? startIndex : undefined}
+            onScrollToIndexFailed={() => {}}
             pagingEnabled
             snapToInterval={feedHeight}
             snapToAlignment="start"

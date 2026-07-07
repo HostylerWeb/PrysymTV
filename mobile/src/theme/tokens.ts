@@ -1,7 +1,7 @@
 /**
- * Design tokens aligned with web `app/globals.css` (Prysym TV dark theme).
+ * Design tokens aligned with web `app/globals.css` (Prysym TV).
  */
-export const colors = {
+export const darkColors = {
   background: '#030303',
   foreground: '#F8F8F8',
   card: '#0B0B0B',
@@ -38,6 +38,44 @@ export const colors = {
   onVideoSoft: 'rgba(255,255,255,0.9)',
   onVideoCaption: 'rgba(255,255,255,0.75)',
 } as const;
+
+export const lightColors = {
+  background: '#FAFAFA',
+  foreground: '#171717',
+  card: '#FFFFFF',
+  cardForeground: '#171717',
+  popover: '#FFFFFF',
+  primary: '#EF511D',
+  primaryForeground: '#FAFAFA',
+  secondary: '#F4F4F5',
+  secondaryForeground: '#27272A',
+  muted: '#F4F4F5',
+  mutedForeground: '#71717A',
+  accent: '#EF511D',
+  destructive: '#DC2626',
+  border: '#E4E4E7',
+  input: '#E4E4E7',
+  ring: '#EF511D',
+  live: '#EF511D',
+  sidebar: '#FFFFFF',
+  success: '#16A34A',
+  warning: '#D97706',
+  yellow: '#CA8A04',
+  videoBackground: '#000000',
+  onVideo: '#F8F8F8',
+  scrim: 'rgba(0,0,0,0.55)',
+  scrimLight: 'rgba(0,0,0,0.35)',
+  heroScrim: 'rgba(250,250,250,0.75)',
+  heroScrimLight: 'rgba(250,250,250,0.55)',
+  onVideoMuted: 'rgba(255,255,255,0.12)',
+  onVideoSoft: 'rgba(255,255,255,0.9)',
+  onVideoCaption: 'rgba(255,255,255,0.75)',
+} as const;
+
+export type ThemeColors = { [K in keyof typeof darkColors]: string };
+
+/** Default static palette (dark). Prefer `useTheme().colors` in new screens. */
+export const colors = darkColors;
 
 /** Append 2-digit hex alpha to a 6-char hex color. */
 export function withAlpha(hex: string, alpha: number): string {

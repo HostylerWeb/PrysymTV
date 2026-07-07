@@ -18,7 +18,7 @@ export default function SettingsPodcastsScreen() {
       <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 40 }}>
         <View style={styles.pad}>
           <AppHeader showBack title="Podcasts" showSearch={false} showNotifications={false} />
-          <Text style={styles.sub}>Manage shows and episodes - mock GET /podcasts/me</Text>
+          <Text style={styles.sub}>Manage your podcast shows, episodes, and RSS feeds.</Text>
           <Button label="New episode" onPress={() => router.push('/settings/upload?type=podcast')} style={{ marginBottom: 8 }} />
           <Button label="Create show" variant="outline" onPress={() => setCreateOpen(true)} style={{ marginBottom: 16 }} />
           {mockPodcastShows.map((s) => (

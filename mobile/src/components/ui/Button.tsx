@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -7,7 +7,8 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
-import { colors, radius, shadows, typography } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { radius, shadows, typography } from '@/theme/tokens';
 
 type Variant = 'primary' | 'secondary' | 'outline' | 'ghost';
 type Size = 'default' | 'sm' | 'lg';
@@ -34,6 +35,33 @@ export function Button({
   textStyle,
   ...rest
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        base: {
+          borderRadius: radius.full,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        primary: { backgroundColor: colors.primary },
+        secondary: { backgroundColor: colors.secondary },
+        outline: {
+          backgroundColor: colors.background,
+          borderWidth: 1,
+          borderColor: colors.border,
+        },
+        ghost: { backgroundColor: 'transparent' },
+        pressed: { opacity: 0.88 },
+        text: { ...typography.button },
+        primaryText: { color: colors.primaryForeground },
+        secondaryText: { color: colors.secondaryForeground },
+        outlineText: { color: colors.foreground },
+        ghostText: { color: colors.primary },
+      }),
+    [colors],
+  );
+
   return (
     <Pressable
       style={({ pressed }) => [
@@ -50,25 +78,3 @@ export function Button({
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  base: {
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primary: { backgroundColor: colors.primary },
-  secondary: { backgroundColor: colors.secondary },
-  outline: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  ghost: { backgroundColor: 'transparent' },
-  pressed: { opacity: 0.88 },
-  text: { ...typography.button },
-  primaryText: { color: colors.primaryForeground },
-  secondaryText: { color: colors.secondaryForeground },
-  outlineText: { color: colors.foreground },
-  ghostText: { color: colors.primary },
-});

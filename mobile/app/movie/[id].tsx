@@ -17,9 +17,14 @@ import { ShareModal } from '@/components/modals/ShareModal';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { getMockVideo } from '@/mocks';
-import { colors, withAlpha } from '@/theme/tokens';
+import { withAlpha } from '@/theme/tokens';
+import type { ThemeColors } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 
 export default function MovieScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { requireAuth } = useMockAuth();
@@ -62,7 +67,7 @@ export default function MovieScreen() {
             {movie.releaseYear} · 120 min · {movie.ageRating} · Action, Drama · 92% match
           </Text>
           <Text style={styles.desc} numberOfLines={expanded ? undefined : 3}>
-            {movie.tagline ?? 'Mock synopsis. Cast, crew, and metadata load from GET /videos/:id in Phase C.'}
+            {movie.tagline ?? 'A gripping story of ambition, loyalty, and second chances — streaming exclusively on Prysym TV.'}
           </Text>
           <Pressable onPress={() => setExpanded(!expanded)}>
             <Text style={styles.readMore}>{expanded ? 'Show less' : 'Read more'}</Text>
@@ -99,7 +104,7 @@ export default function MovieScreen() {
           <Image source={{ uri: movie.thumbnailUrl ?? '' }} style={styles.playerVideo} contentFit="contain" />
           <View style={styles.playerOverlay}>
             <Ionicons name="play-circle" size={72} color={withAlpha(colors.onVideo, 0.85)} />
-            <Text style={styles.playerMock}>Mock movie player</Text>
+            <Text style={styles.playerMock}>Now playing</Text>
           </View>
           <Pressable
             style={[styles.playerClose, { top: insets.top + 12 }]}
@@ -124,7 +129,8 @@ export default function MovieScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   pad: { paddingHorizontal: 16 },
   body: { padding: 16, gap: 12 },
@@ -155,4 +161,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   playerCast: { position: 'absolute', right: 16 },
-});
+  });

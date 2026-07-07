@@ -14,11 +14,16 @@ import { GiftModal } from '@/components/modals/GiftModal';
 import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { getMockVertical } from '@/mocks';
-import { colors, radius, withAlpha } from '@/theme/tokens';
+import { radius, withAlpha } from '@/theme/tokens';
+import type { ThemeColors } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 
 const { height } = Dimensions.get('window');
 
 export default function VerticalWatchScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const { slug, episode } = useLocalSearchParams<{ slug: string; episode: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -125,8 +130,9 @@ export default function VerticalWatchScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.videoBackground },
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.background },
   back: { position: 'absolute', left: 12, zIndex: 2, padding: 8 },
   topActions: {
     position: 'absolute',
@@ -165,4 +171,4 @@ const styles = StyleSheet.create({
   ep: { color: colors.primary, marginTop: 4, fontWeight: '600' },
   cliff: { color: colors.primary, fontSize: 13, marginTop: 8, fontStyle: 'italic' },
   hint: { color: colors.mutedForeground, fontSize: 12, marginTop: 8 },
-});
+  });

@@ -15,10 +15,14 @@ import { GiftModal } from '@/components/modals/GiftModal';
 import { Button } from '@/components/ui/Button';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { mockCreatorProfile, mockPodcastEpisodes } from '@/mocks';
-import { colors, radius } from '@/theme/tokens';
+import { radius } from '@/theme/tokens';
+import type { ThemeColors } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatDuration } from '@/utils/format-media';
 
 export default function PodcastEpisodeScreen() {
+  const styles = useThemedStyles(createStyles);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { requireAuth } = useMockAuth();
@@ -64,7 +68,7 @@ export default function PodcastEpisodeScreen() {
               </Pressable>
               <Pressable style={styles.ctrlBtn}><Text style={styles.ctrlText}>15s</Text></Pressable>
             </View>
-            <Text style={styles.hint}>{started ? 'Mock audio player running' : 'Tap play to start (short ad first)'}</Text>
+            <Text style={styles.hint}>{started ? 'Now playing' : 'Tap play to start (short ad first)'}</Text>
           </View>
         )}
         <Text style={styles.epDesc}>Listen to {ep.title} on Prysym Podcasts.</Text>
@@ -74,7 +78,7 @@ export default function PodcastEpisodeScreen() {
             <Text style={styles.hostLabel}>Hosted by</Text>
             <Text style={styles.hostName}>{mockCreatorProfile.displayName}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+          <IconChevron />
         </Pressable>
         <View style={styles.iconRow}>
           <IconBtn icon={liked ? 'heart' : 'heart-outline'} label="Like" active={liked} onPress={() => requireAuth(() => setLiked(!liked))} />
@@ -100,6 +104,11 @@ export default function PodcastEpisodeScreen() {
   );
 }
 
+function IconChevron() {
+  const { colors } = useTheme();
+  return <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />;
+}
+
 function IconBtn({
   icon,
   label,
@@ -111,6 +120,9 @@ function IconBtn({
   active?: boolean;
   onPress?: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <Pressable style={[styles.iconBtn, active && styles.iconBtnActive]} onPress={onPress}>
       <Ionicons name={icon} size={20} color={active ? colors.primary : colors.foreground} />
@@ -119,59 +131,61 @@ function IconBtn({
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  pad: { paddingHorizontal: 16 },
-  backLink: { color: colors.primary, fontWeight: '600', marginBottom: 8 },
-  epDesc: { color: colors.mutedForeground, fontSize: 14, lineHeight: 20, paddingHorizontal: 16, marginBottom: 12 },
-  hostCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 12,
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  hostAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.muted },
-  hostLabel: { color: colors.mutedForeground, fontSize: 11 },
-  hostName: { color: colors.foreground, fontWeight: '700' },
-  iconRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, marginBottom: 8 },
-  iconBtn: {
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: radius.md,
-    backgroundColor: colors.secondary,
-    minWidth: 64,
-  },
-  iconBtnActive: { backgroundColor: colors.primary + '22' },
-  iconLabel: { color: colors.foreground, fontSize: 10, fontWeight: '600' },
-  iconLabelActive: { color: colors.primary },
-  bodyBtn: { marginHorizontal: 16, marginBottom: 16 },
-  audio: { padding: 24, alignItems: 'center', gap: 12 },
-  audioTitle: { color: colors.foreground, fontSize: 20, fontWeight: '700', textAlign: 'center' },
-  audioSub: { color: colors.mutedForeground, fontSize: 14 },
-  controls: { flexDirection: 'row', gap: 12, marginTop: 16, alignItems: 'center' },
-  ctrlBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.secondary,
-  },
-  ctrlText: { color: colors.foreground, fontWeight: '600', fontSize: 12 },
-  playBtn: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: radius.full,
-    backgroundColor: colors.primary,
-  },
-  playText: { color: colors.primaryForeground, fontWeight: '800', fontSize: 15 },
-  hint: { color: colors.mutedForeground, fontSize: 12, marginTop: 16 },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
+    pad: { paddingHorizontal: 16 },
+    backLink: { color: colors.primary, fontWeight: '600', marginBottom: 8 },
+    epDesc: { color: colors.mutedForeground, fontSize: 14, lineHeight: 20, paddingHorizontal: 16, marginBottom: 12 },
+    hostCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginHorizontal: 16,
+      marginBottom: 16,
+      padding: 12,
+      backgroundColor: colors.card,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    hostAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.muted },
+    hostLabel: { color: colors.mutedForeground, fontSize: 11 },
+    hostName: { color: colors.foreground, fontWeight: '700' },
+    iconRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, marginBottom: 8 },
+    iconBtn: {
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRadius: radius.md,
+      backgroundColor: colors.secondary,
+      minWidth: 64,
+    },
+    iconBtnActive: { backgroundColor: colors.primary + '22' },
+    iconLabel: { color: colors.foreground, fontSize: 10, fontWeight: '600' },
+    iconLabelActive: { color: colors.primary },
+    bodyBtn: { marginHorizontal: 16, marginBottom: 16 },
+    audio: { padding: 24, alignItems: 'center', gap: 12 },
+    audioTitle: { color: colors.foreground, fontSize: 20, fontWeight: '700', textAlign: 'center' },
+    audioSub: { color: colors.mutedForeground, fontSize: 14 },
+    controls: { flexDirection: 'row', gap: 12, marginTop: 16, alignItems: 'center' },
+    ctrlBtn: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: radius.full,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.secondary,
+    },
+    ctrlText: { color: colors.foreground, fontWeight: '600', fontSize: 12 },
+    playBtn: {
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: radius.full,
+      backgroundColor: colors.primary,
+    },
+    playText: { color: colors.primaryForeground, fontWeight: '800', fontSize: 15 },
+    hint: { color: colors.mutedForeground, fontSize: 12, marginTop: 16 },
+  });
+}

@@ -1,13 +1,12 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Switch, Text, View } from 'react-native';
 import {
   handlePushToggle,
   loadPushPreference,
 } from '@/lib/push-notifications';
-import { colors } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
 
 type Props = {
-  /** Shown in a highlighted card when true (settings notifications panel). */
   featured?: boolean;
   description?: string;
 };
@@ -16,6 +15,40 @@ export function PushNotificationToggle({
   featured = false,
   description = 'Get alerts for live streams, likes, comments, and new uploads — even when Prysym TV is in the background.',
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        row: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          paddingVertical: 14,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+        },
+        rowFeatured: {
+          borderBottomWidth: 0,
+          padding: 14,
+          borderRadius: 12,
+          backgroundColor: colors.primary + '12',
+          borderWidth: 1,
+          borderColor: colors.primary + '30',
+          marginBottom: 12,
+        },
+        copy: { flex: 1 },
+        label: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
+        description: {
+          color: colors.mutedForeground,
+          fontSize: 12,
+          lineHeight: 17,
+          marginTop: 4,
+        },
+      }),
+    [colors],
+  );
+
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -56,7 +89,7 @@ export function PushNotificationToggle({
     }
   }, [busy]);
 
-  const content = (
+  return (
     <View style={[styles.row, featured && styles.rowFeatured]}>
       <View style={styles.copy}>
         <Text style={styles.label}>Push notifications</Text>
@@ -74,35 +107,4 @@ export function PushNotificationToggle({
       )}
     </View>
   );
-
-  return content;
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  rowFeatured: {
-    borderBottomWidth: 0,
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: colors.primary + '12',
-    borderWidth: 1,
-    borderColor: colors.primary + '30',
-    marginBottom: 12,
-  },
-  copy: { flex: 1 },
-  label: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
-  description: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 4,
-  },
-});

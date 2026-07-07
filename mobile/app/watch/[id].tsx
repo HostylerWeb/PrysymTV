@@ -14,10 +14,13 @@ import { ReportModal } from '@/components/modals/ReportModal';
 import { Button } from '@/components/ui/Button';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { getMockVideo, mockComments, mockVideos } from '@/mocks';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
+import type { ThemeColors } from '@/theme/tokens';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatDuration, formatViewCount } from '@/utils/format-media';
 
 export default function WatchScreen() {
+  const styles = useThemedStyles(createStyles);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { requireAuth } = useMockAuth();
@@ -133,7 +136,8 @@ export default function WatchScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   pad: { paddingHorizontal: spacing.page },
   metaBlock: { paddingHorizontal: spacing.page, paddingTop: spacing.md },
@@ -211,4 +215,4 @@ const styles = StyleSheet.create({
   upNextBody: { flex: 1, justifyContent: 'center', minWidth: 0 },
   upNextTitle: { color: colors.foreground, fontWeight: '600', fontSize: 14, marginBottom: 4 },
   upNextMeta: { color: colors.mutedForeground, fontSize: 12 },
-});
+  });

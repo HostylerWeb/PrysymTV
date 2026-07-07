@@ -8,11 +8,14 @@ import { ShareModal } from '@/components/modals/ShareModal';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { getMockVertical } from '@/mocks';
-import { colors, radius } from '@/theme/tokens';
+import { radius } from '@/theme/tokens';
+import type { ThemeColors } from '@/theme/tokens';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 
 const EPISODE_PROGRESS: Record<number, number> = { 1: 1, 2: 0.65, 3: 0.2 };
 
 export default function VerticalSeriesScreen() {
+  const styles = useThemedStyles(createStyles);
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
   const series = getMockVertical(slug ?? '') ?? getMockVertical('series-1')!;
@@ -86,7 +89,8 @@ export default function VerticalSeriesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   pad: { paddingHorizontal: 16 },
   hero: { width: '100%', height: 220, backgroundColor: colors.secondary },
@@ -120,4 +124,4 @@ const styles = StyleSheet.create({
   epNum: { color: colors.primary, fontWeight: '800', fontSize: 12 },
   epTitle: { color: colors.foreground, fontSize: 15, marginTop: 2 },
   epProgress: { color: colors.mutedForeground, fontSize: 11, marginTop: 4 },
-});
+  });

@@ -15,12 +15,27 @@ import { useMockAuth } from '@/context/MockAuthContext';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
 import { mockPodcastEpisodes, mockPodcastShows } from '@/mocks';
 import type { PodcastShow } from '@/types/api';
-import { colors, radius, typography, withAlpha } from '@/theme/tokens';
+import { radius, typography, withAlpha } from '@/theme/tokens';
+import type { ThemeColors } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatDuration } from '@/utils/format-media';
 
 const CATEGORIES = ['All', 'Business', 'Education', 'Lifestyle', 'Sports'] as const;
 
-function ShowRail({ title, shows, onShowPress }: { title: string; shows: PodcastShow[]; onShowPress: (show: PodcastShow) => void }) {
+type PodcastStyles = ReturnType<typeof createPodcastStyles>;
+
+function ShowRail({
+  title,
+  shows,
+  onShowPress,
+  styles,
+}: {
+  title: string;
+  shows: PodcastShow[];
+  onShowPress: (show: PodcastShow) => void;
+  styles: PodcastStyles;
+}) {
   return (
     <View style={styles.railWrap}>
       <SectionHeader title={title} />
@@ -38,6 +53,8 @@ function ShowRail({ title, shows, onShowPress }: { title: string; shows: Podcast
 }
 
 export default function PodcastsScreen() {
+  const styles = useThemedStyles(createPodcastStyles);
+  const { colors } = useTheme();
   const router = useRouter();
   const { requireAuth } = useMockAuth();
   const { trigger, flowHost } = useCreateFlow();
@@ -106,8 +123,8 @@ export default function PodcastsScreen() {
               ))}
             </ScrollView>
 
-            <ShowRail title="Trending shows" shows={mockPodcastShows.slice(0, 3)} onShowPress={openShow} />
-            <ShowRail title="Featured shows" shows={mockPodcastShows} onShowPress={openShow} />
+            <ShowRail title="Trending shows" shows={mockPodcastShows.slice(0, 3)} onShowPress={openShow} styles={styles} />
+            <ShowRail title="Featured shows" shows={mockPodcastShows} onShowPress={openShow} styles={styles} />
 
             <Text style={styles.section}>Latest episodes</Text>
           </View>
@@ -141,38 +158,40 @@ export default function PodcastsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  list: { flex: 1 },
-  pad: { paddingHorizontal: 16 },
-  hero: {
-    height: 200,
-    borderRadius: radius.xl,
-    overflow: 'hidden',
-    marginBottom: 16,
-    backgroundColor: colors.secondary,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  heroContent: { flex: 1, justifyContent: 'flex-end', padding: 16 },
-  heroEyebrow: { color: colors.primary, fontSize: 11, fontWeight: '800', marginBottom: 4 },
-  heroTitle: { color: colors.foreground, fontSize: 22, fontWeight: '800' },
-  heroSub: { color: colors.mutedForeground, fontSize: 12, marginTop: 4, marginBottom: 12 },
-  catRow: { gap: 8, marginBottom: 16, paddingRight: 8 },
-  catChip: { marginRight: 0 },
-  railWrap: { marginBottom: 8 },
-  rail: { gap: 12, paddingRight: 8 },
-  showCard: { width: 120 },
-  showCover: { width: 120, height: 120, borderRadius: radius.md, backgroundColor: colors.secondary },
-  showTitle: { color: colors.foreground, fontSize: 12, fontWeight: '600', marginTop: 6 },
-  showMeta: { color: colors.mutedForeground, fontSize: 10, marginTop: 2 },
-  section: { ...typography.h3, color: colors.foreground, marginBottom: 12, marginTop: 8 },
-  episode: { flexDirection: 'row', gap: 12, marginBottom: 16, paddingHorizontal: 16 },
-  epCover: { width: 72, height: 72, borderRadius: radius.md, backgroundColor: colors.secondary },
-  epInfo: { flex: 1, justifyContent: 'center' },
-  epTitle: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
-  epMeta: { color: colors.mutedForeground, fontSize: 12, marginTop: 4 },
-  epActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
-  badge: { color: colors.primary, fontSize: 10, fontWeight: '700' },
-  playIcon: { padding: 2 },
-});
+function createPodcastStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
+    list: { flex: 1 },
+    pad: { paddingHorizontal: 16 },
+    hero: {
+      height: 200,
+      borderRadius: radius.xl,
+      overflow: 'hidden',
+      marginBottom: 16,
+      backgroundColor: colors.secondary,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    heroContent: { flex: 1, justifyContent: 'flex-end', padding: 16 },
+    heroEyebrow: { color: colors.primary, fontSize: 11, fontWeight: '800', marginBottom: 4 },
+    heroTitle: { color: colors.foreground, fontSize: 22, fontWeight: '800' },
+    heroSub: { color: colors.mutedForeground, fontSize: 12, marginTop: 4, marginBottom: 12 },
+    catRow: { gap: 8, marginBottom: 16, paddingRight: 8 },
+    catChip: { marginRight: 0 },
+    railWrap: { marginBottom: 8 },
+    rail: { gap: 12, paddingRight: 8 },
+    showCard: { width: 120 },
+    showCover: { width: 120, height: 120, borderRadius: radius.md, backgroundColor: colors.secondary },
+    showTitle: { color: colors.foreground, fontSize: 12, fontWeight: '600', marginTop: 6 },
+    showMeta: { color: colors.mutedForeground, fontSize: 10, marginTop: 2 },
+    section: { ...typography.h3, color: colors.foreground, marginBottom: 12, marginTop: 8 },
+    episode: { flexDirection: 'row', gap: 12, marginBottom: 16, paddingHorizontal: 16 },
+    epCover: { width: 72, height: 72, borderRadius: radius.md, backgroundColor: colors.secondary },
+    epInfo: { flex: 1, justifyContent: 'center' },
+    epTitle: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
+    epMeta: { color: colors.mutedForeground, fontSize: 12, marginTop: 4 },
+    epActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
+    badge: { color: colors.primary, fontSize: 10, fontWeight: '700' },
+    playIcon: { padding: 2 },
+  });
+}

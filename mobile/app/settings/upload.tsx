@@ -38,7 +38,7 @@ export default function SettingsUploadScreen() {
         {step === 0 && (
           <Card>
             <Text style={styles.cardTitle}>Choose file</Text>
-            <Text style={styles.cardSub}>Mock file picker - multipart upload in Phase C</Text>
+            <Text style={styles.cardSub}>Select a video file from your device to upload.</Text>
             <Button label="Select from library" variant="outline" onPress={() => setStep(1)} style={{ marginTop: 12 }} />
           </Card>
         )}

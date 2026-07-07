@@ -1,26 +1,29 @@
 import { Tabs, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { PrysymTabBar } from '@/components/layout/PrysymTabBar';
-import { colors } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
 
 type TabIcon = keyof typeof Ionicons.glyphMap;
 
-function tabIcon(name: TabIcon, focused: boolean) {
-  return (
-    <Ionicons
-      name={name}
-      size={focused ? 26 : 24}
-      color={focused ? colors.primary : colors.mutedForeground}
-    />
-  );
-}
-
 export default function TabsLayout() {
+  const { colors } = useTheme();
+
+  function tabIcon(name: TabIcon, focused: boolean) {
+    return (
+      <Ionicons
+        name={name}
+        size={focused ? 26 : 24}
+        color={focused ? colors.primary : colors.mutedForeground}
+      />
+    );
+  }
+
   return (
     <Tabs
       tabBar={(props) => <PrysymTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        sceneStyle: { backgroundColor: colors.background },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
       }}

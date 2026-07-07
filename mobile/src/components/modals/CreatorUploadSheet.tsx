@@ -14,7 +14,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
-import { colors, radius } from '@/theme/tokens';
+import { ThemedInput } from '@/components/ui/ThemedInput';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
+import type { ThemeColors } from '@/theme/tokens';
+import { radius } from '@/theme/tokens';
 
 export type CreatorUploadKind = 'short' | 'video' | 'podcast';
 
@@ -65,6 +69,8 @@ type PickedMedia = { uri: string; name: string; mimeType?: string };
 
 export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createUploadStyles);
   const meta = KIND_META[kind];
 
   const [title, setTitle] = useState('');
@@ -379,24 +385,20 @@ function Field({
 }) {
   return (
     <View style={{ marginBottom: 12 }}>
-      <Text style={styles.fieldLabel}>
-        {label}
-        {required ? ' *' : ''}
-      </Text>
-      <TextInput
-        style={[styles.input, multiline && styles.inputMulti]}
+      <ThemedInput
+        label={`${label}${required ? ' *' : ''}`}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.mutedForeground}
         multiline={multiline}
       />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+function createUploadStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: colors.scrim, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.background,
     borderTopLeftRadius: radius.xl,
@@ -434,7 +436,9 @@ const styles = StyleSheet.create({
   section: { marginBottom: 8 },
   fieldLabel: { color: colors.foreground, fontSize: 13, fontWeight: '600', marginBottom: 6 },
   input: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.input,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.lg,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -482,4 +486,5 @@ const styles = StyleSheet.create({
   doneBox: { alignItems: 'center', paddingVertical: 32 },
   doneTitle: { color: colors.foreground, fontSize: 18, fontWeight: '700', marginTop: 12 },
   doneSub: { color: colors.mutedForeground, fontSize: 13, marginTop: 4 },
-});
+  });
+}

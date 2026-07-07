@@ -19,7 +19,10 @@ import {
   isSearchScope,
   type SearchScope,
 } from '@/lib/search-scope';
-import { colors, radius } from '@/theme/tokens';
+import { radius } from '@/theme/tokens';
+import type { ThemeColors } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatViewCount } from '@/utils/format-media';
 
 const SUGGESTIONS = ['studio tour', 'live', 'podcast', 'city lights'];
@@ -117,6 +120,8 @@ function catalogForScope(scope: SearchScope): SearchResult[] {
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createSearchStyles);
   const { scope: scopeParam } = useLocalSearchParams<{ scope?: string }>();
   const scope = isSearchScope(scopeParam) ? scopeParam : undefined;
   const scopeConfig = scope ? SEARCH_SCOPE_CONFIG[scope] : null;
@@ -260,38 +265,56 @@ export default function SearchScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  bar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8 },
-  back: { padding: 8 },
-  input: { flex: 1, backgroundColor: colors.secondary, borderRadius: radius.full, paddingHorizontal: 16, paddingVertical: 12, color: colors.foreground },
-  scopeHint: { color: colors.mutedForeground, fontSize: 13, paddingHorizontal: 16, paddingTop: 8 },
-  suggest: { padding: 16 },
-  recentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  label: { color: colors.mutedForeground, fontSize: 12, fontWeight: '700' },
-  clear: { color: colors.primary, fontSize: 12, fontWeight: '600' },
-  emptyRecent: { color: colors.mutedForeground, fontSize: 14, paddingVertical: 8 },
-  recentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
-  suggestItem: { color: colors.foreground, fontSize: 16 },
-  tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, marginBottom: 8 },
-  tab: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.full, backgroundColor: colors.secondary },
-  tabOn: { backgroundColor: colors.primary + '25' },
-  tabText: { color: colors.mutedForeground, fontSize: 12, fontWeight: '600' },
-  tabOnText: { color: colors.primary },
-  list: { padding: 16, paddingBottom: 40 },
-  noResults: { color: colors.mutedForeground, textAlign: 'center', paddingVertical: 32 },
-  result: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  thumb: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.secondary },
-  thumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  resultBody: { flex: 1 },
-  resultType: { color: colors.primary, fontSize: 11, fontWeight: '700' },
-  resultTitle: { color: colors.foreground, fontSize: 15, fontWeight: '600', marginTop: 2 },
-  resultSub: { color: colors.mutedForeground, fontSize: 12, marginTop: 2 },
-});
+function createSearchStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
+    bar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8 },
+    back: { padding: 8 },
+    input: {
+      flex: 1,
+      backgroundColor: colors.input,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.full,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      color: colors.foreground,
+    },
+    scopeHint: { color: colors.mutedForeground, fontSize: 13, paddingHorizontal: 16, paddingTop: 8 },
+    suggest: { padding: 16 },
+    recentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+    label: { color: colors.mutedForeground, fontSize: 12, fontWeight: '700' },
+    clear: { color: colors.primary, fontSize: 12, fontWeight: '600' },
+    emptyRecent: { color: colors.mutedForeground, fontSize: 14, paddingVertical: 8 },
+    recentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
+    suggestItem: { color: colors.foreground, fontSize: 16 },
+    tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, marginBottom: 8 },
+    tab: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: radius.full,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    tabOn: { backgroundColor: colors.primary + '18', borderColor: colors.primary },
+    tabText: { color: colors.foreground, fontSize: 12, fontWeight: '600' },
+    tabOnText: { color: colors.primary },
+    list: { padding: 16, paddingBottom: 40 },
+    noResults: { color: colors.mutedForeground, textAlign: 'center', paddingVertical: 32 },
+    result: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    thumb: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.secondary },
+    thumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
+    resultBody: { flex: 1 },
+    resultType: { color: colors.primary, fontSize: 11, fontWeight: '700' },
+    resultTitle: { color: colors.foreground, fontSize: 15, fontWeight: '600', marginTop: 2 },
+    resultSub: { color: colors.mutedForeground, fontSize: 12, marginTop: 2 },
+  });
+}

@@ -13,7 +13,10 @@ import { Button } from '@/components/ui/Button';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { getCreatorCapabilities, isIdentityVerified } from '@/utils/creator-capabilities';
 import type { MeResponse } from '@/types/api';
-import { colors, radius } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
+import type { ThemeColors } from '@/theme/tokens';
+import { radius } from '@/theme/tokens';
 
 export type CreatorVerificationContext = {
   description?: string;
@@ -38,6 +41,8 @@ export function UnlockFeaturesModal({
   onNeedVerification,
   preselect,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createUnlockStyles);
   const { requestCreatorAccess } = useMockAuth();
   const [selected, setSelected] = useState<Set<UnlockFeature>>(() => {
     const s = new Set<UnlockFeature>();
@@ -268,7 +273,8 @@ export function UnlockFeaturesModal({
   );
 }
 
-const styles = StyleSheet.create({
+function createUnlockStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   verifiedRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -333,7 +339,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.input,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.lg,
     padding: 12,
     color: colors.foreground,
@@ -344,4 +352,5 @@ const styles = StyleSheet.create({
   success: { alignItems: 'center', paddingVertical: 16, gap: 8 },
   successTitle: { color: colors.foreground, fontSize: 18, fontWeight: '800' },
   sub: { color: colors.mutedForeground, fontSize: 13, textAlign: 'center', lineHeight: 20 },
-});
+  });
+}

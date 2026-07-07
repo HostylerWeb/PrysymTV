@@ -1,13 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { VideoCardTile } from '@/components/feed/VideoCardTile';
 import { Button } from '@/components/ui/Button';
-import { ThemedText } from '@/components/ui/ThemedText';
 import { mockPodcastShows, mockShorts, mockVerticals, mockVideos } from '@/mocks';
 import type { VideoCard } from '@/types/api';
-import { colors, radius, spacing, withAlpha } from '@/theme/tokens';
+import type { ThemeColors } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 
 type ContentTab = 'videos' | 'shorts' | 'verticals' | 'podcasts';
 
@@ -25,6 +27,8 @@ type Props = {
 
 export function ProfileMyContent({ onOpenVerticalUpload, onOpenPodcastUpload }: Props) {
   const router = useRouter();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [tab, setTab] = useState<ContentTab>('videos');
   const [deletedVideoIds, setDeletedVideoIds] = useState<string[]>([]);
 
@@ -55,9 +59,7 @@ export function ProfileMyContent({ onOpenVerticalUpload, onOpenPodcastUpload }: 
           <VideoCardTile video={v} variant="grid" />
           <Pressable style={styles.deleteBtn} onPress={() => confirmDelete(v)} hitSlop={8}>
             <Ionicons name="trash-outline" size={16} color={colors.destructive} />
-            <ThemedText variant="caption" style={styles.deleteLabel}>
-              Delete
-            </ThemedText>
+            <Text style={styles.deleteLabel}>Delete</Text>
           </Pressable>
         </View>
       ))}
@@ -75,9 +77,7 @@ export function ProfileMyContent({ onOpenVerticalUpload, onOpenPodcastUpload }: 
               style={[styles.chip, active && styles.chipActive]}
               onPress={() => setTab(t.id)}
             >
-              <ThemedText variant="bodyMedium" primary={active} muted={!active}>
-                {t.label}
-              </ThemedText>
+              <Text style={[styles.chipText, active && styles.chipTextActive]}>{t.label}</Text>
             </Pressable>
           );
         })}
@@ -95,10 +95,8 @@ export function ProfileMyContent({ onOpenVerticalUpload, onOpenPodcastUpload }: 
               onPress={() => router.push(`/verticals/${s.slug}`)}
             >
               <View style={{ flex: 1 }}>
-                <ThemedText variant="bodyMedium">{s.title}</ThemedText>
-                <ThemedText variant="caption" muted>
-                  {s.episodeCount} episodes
-                </ThemedText>
+                <Text style={styles.rowTitle}>{s.title}</Text>
+                <Text style={styles.rowMeta}>{s.episodeCount} episodes</Text>
               </View>
               <Button label="Manage" variant="outline" size="sm" onPress={onOpenVerticalUpload} />
             </Pressable>
@@ -113,10 +111,8 @@ export function ProfileMyContent({ onOpenVerticalUpload, onOpenPodcastUpload }: 
             <Pressable key={s.id} style={styles.seriesRow} onPress={() => router.push('/settings/podcasts')}>
               <Ionicons name="mic-outline" size={20} color={colors.primary} />
               <View style={{ flex: 1 }}>
-                <ThemedText variant="bodyMedium">{s.title}</ThemedText>
-                <ThemedText variant="caption" muted>
-                  {s.episodeCount} episodes
-                </ThemedText>
+                <Text style={styles.rowTitle}>{s.title}</Text>
+                <Text style={styles.rowMeta}>{s.episodeCount} episodes</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
             </Pressable>
@@ -128,41 +124,48 @@ export function ProfileMyContent({ onOpenVerticalUpload, onOpenPodcastUpload }: 
   );
 }
 
-const styles = StyleSheet.create({
-  tabs: { gap: spacing.sm, marginBottom: spacing.lg },
-  chip: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-    backgroundColor: withAlpha(colors.secondary, 0.6),
-  },
-  chipActive: {
-    backgroundColor: withAlpha(colors.primary, 0.1),
-    borderWidth: 1,
-    borderColor: withAlpha(colors.primary, 0.35),
-  },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
-  half: { width: '48%' },
-  deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    marginTop: 6,
-    paddingVertical: 6,
-    borderRadius: radius.md,
-    backgroundColor: withAlpha(colors.destructive, 0.08),
-  },
-  deleteLabel: { color: colors.destructive, fontSize: 11 },
-  list: { gap: spacing.sm },
-  seriesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: withAlpha(colors.border, 0.8),
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    tabs: { gap: spacing.sm, marginBottom: spacing.lg },
+    chip: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.full,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    chipActive: {
+      backgroundColor: colors.primary + '14',
+      borderColor: colors.primary,
+    },
+    chipText: { color: colors.foreground, fontSize: 14, fontWeight: '600' },
+    chipTextActive: { color: colors.primary },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+    half: { width: '48%' },
+    deleteBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      marginTop: 6,
+      paddingVertical: 6,
+      borderRadius: radius.md,
+      backgroundColor: colors.destructive + '14',
+    },
+    deleteLabel: { color: colors.destructive, fontSize: 11, fontWeight: '600' },
+    list: { gap: spacing.sm },
+    seriesRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      padding: spacing.md,
+      borderRadius: radius.lg,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    rowTitle: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
+    rowMeta: { color: colors.mutedForeground, fontSize: 12, marginTop: 2 },
+  });
+}

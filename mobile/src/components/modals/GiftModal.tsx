@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
-import { colors, radius } from '@/theme/tokens';
+import { useThemedStyles } from '@/theme/useThemedStyles';
+import type { ThemeColors } from '@/theme/tokens';
+import { radius } from '@/theme/tokens';
 
 const GIFTS = [
   { id: 'g1', name: 'Rose', coins: 10 },
@@ -13,6 +15,7 @@ const GIFTS = [
 type Props = { visible: boolean; onClose: () => void };
 
 export function GiftModal({ visible, onClose }: Props) {
+  const styles = useThemedStyles(createStyles);
   const [selected, setSelected] = useState<string | null>(null);
 
   return (
@@ -36,20 +39,22 @@ export function GiftModal({ visible, onClose }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  sub: { color: colors.mutedForeground, marginBottom: 16 },
-  grid: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  gift: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-  },
-  giftOn: { borderColor: colors.primary },
-  emoji: { fontSize: 28 },
-  name: { color: colors.foreground, fontWeight: '600', marginTop: 6 },
-  coins: { color: colors.primary, fontSize: 12, marginTop: 2 },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    sub: { color: colors.mutedForeground, marginBottom: 16 },
+    grid: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+    gift: {
+      flex: 1,
+      alignItems: 'center',
+      padding: 12,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    giftOn: { borderColor: colors.primary, backgroundColor: colors.primary + '10' },
+    emoji: { fontSize: 28 },
+    name: { color: colors.foreground, fontWeight: '600', marginTop: 6 },
+    coins: { color: colors.primary, fontSize: 12, marginTop: 2 },
+  });
+}

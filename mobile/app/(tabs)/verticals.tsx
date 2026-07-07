@@ -8,9 +8,12 @@ import { SectionHeader } from '@/components/home/SectionHeader';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
 import { mockVerticals } from '@/mocks';
-import { colors, radius, typography } from '@/theme/tokens';
+import { radius, typography } from '@/theme/tokens';
+import type { ThemeColors } from '@/theme/tokens';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 
 export default function VerticalsScreen() {
+  const styles = useThemedStyles(createVerticalsStyles);
   const router = useRouter();
   const { requireAuth } = useMockAuth();
   const { trigger, flowHost } = useCreateFlow();
@@ -46,14 +49,16 @@ export default function VerticalsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  pad: { paddingHorizontal: 16 },
-  sub: { color: colors.mutedForeground, fontSize: 13, marginBottom: 16 },
-  row: { justifyContent: 'space-between', paddingHorizontal: 16 },
-  list: { paddingBottom: 0 },
-  card: { width: '48%', marginBottom: 20 },
-  poster: { width: '100%', aspectRatio: 2 / 3, borderRadius: radius.md, backgroundColor: colors.secondary },
-  title: { ...typography.h3, color: colors.foreground, fontSize: 14, marginTop: 8 },
-  meta: { color: colors.mutedForeground, fontSize: 11, marginTop: 4 },
-});
+function createVerticalsStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
+    pad: { paddingHorizontal: 16 },
+    sub: { color: colors.mutedForeground, fontSize: 13, marginBottom: 16 },
+    row: { justifyContent: 'space-between', paddingHorizontal: 16 },
+    list: { paddingBottom: 0 },
+    card: { width: '48%', marginBottom: 20 },
+    poster: { width: '100%', aspectRatio: 2 / 3, borderRadius: radius.md, backgroundColor: colors.secondary },
+    title: { ...typography.h3, color: colors.foreground, fontSize: 14, marginTop: 8 },
+    meta: { color: colors.mutedForeground, fontSize: 11, marginTop: 4 },
+  });
+}

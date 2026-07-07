@@ -116,7 +116,7 @@ export default function VerticalWatchPage({
 
   if (error) {
     return (
-      <main className="min-h-[100dvh] bg-black flex items-center justify-center text-white">
+      <main className="min-h-[100dvh] bg-background flex items-center justify-center text-muted-foreground md:pl-20">
         <p>{error}</p>
       </main>
     )
@@ -124,8 +124,8 @@ export default function VerticalWatchPage({
 
   if (!data) {
     return (
-      <main className="min-h-[100dvh] bg-black flex items-center justify-center text-white">
-        <p className="text-white/70">Loading…</p>
+      <main className="min-h-[100dvh] bg-background flex items-center justify-center text-muted-foreground md:pl-20">
+        <p>Loading…</p>
       </main>
     )
   }
@@ -133,7 +133,7 @@ export default function VerticalWatchPage({
   const { episode, series, nextEpisode } = data
 
   return (
-    <main className="min-h-[100dvh] bg-black flex flex-col max-w-lg mx-auto relative">
+    <main className="min-h-[100dvh] bg-background flex flex-col max-w-lg mx-auto relative md:border-x border-border">
       {showAd && gateAd && (
         <VerticalEpisodeAdGate
           servedAd={gateAd}
@@ -266,7 +266,7 @@ export default function VerticalWatchPage({
 
       {canPlay && !showAd && (
         <>
-          <div className="flex-1 flex items-center justify-center min-h-0">
+          <div className="flex-1 flex flex-col items-center justify-center min-h-0 bg-black">
             {episode.videoUrl ? (
               <HlsVideoPlayer
                 key={episode.id}

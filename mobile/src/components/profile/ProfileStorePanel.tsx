@@ -169,7 +169,7 @@ export function ProfileStorePanel() {
             multiline
           />
           <ThemedText variant="caption" muted>
-            Image upload uses the same init/upload/complete flow as the website (Phase C on mobile).
+            Add a product image from your photo library or camera roll.
           </ThemedText>
           <Button
             label={editingId ? 'Save changes' : 'Create product'}

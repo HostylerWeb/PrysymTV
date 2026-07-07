@@ -7,7 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NotificationsSheet } from '@/components/modals/NotificationsSheet';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { mockNotifications } from '@/mocks';
-import { colors, radius, shadows, spacing, typography, withAlpha } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { radius, shadows, spacing, typography, withAlpha } from '@/theme/tokens';
 import { commonStyles } from '@/theme/styles';
 
 import type { SearchScope } from '@/lib/search-scope';
@@ -39,6 +40,7 @@ export function AppHeader({
 }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const { user, isAuthenticated } = useMockAuth();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const unread = mockNotifications.filter((n) => !n.isRead).length;
@@ -49,7 +51,14 @@ export function AppHeader({
       <View
         style={[
           styles.wrap,
-          sticky && styles.sticky,
+          { backgroundColor: colors.background },
+          sticky && [
+            styles.sticky,
+            {
+              backgroundColor: withAlpha(colors.background, 0.95),
+              borderBottomColor: colors.border,
+            },
+          ],
           { paddingTop: topPad },
         ]}
       >
@@ -65,14 +74,14 @@ export function AppHeader({
               </Pressable>
             )}
             {title ? (
-              <Text style={styles.title} numberOfLines={1}>
+              <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
                 {title}
               </Text>
             ) : null}
           </View>
           <View style={styles.actions}>
             {showCreate && onCreatePress && (
-              <Pressable onPress={onCreatePress} style={styles.createBtn}>
+              <Pressable onPress={onCreatePress} style={[styles.createBtn, { backgroundColor: colors.secondary }]}>
                 <Ionicons name="add" size={22} color={colors.foreground} />
               </Pressable>
             )}
@@ -101,7 +110,9 @@ export function AppHeader({
                 style={commonStyles.iconButton}
               >
                 <Ionicons name="notifications-outline" size={22} color={colors.foreground} />
-                {isAuthenticated && unread > 0 && <View style={styles.badge} />}
+                {isAuthenticated && unread > 0 && (
+                  <View style={[styles.badge, { backgroundColor: colors.primary }]} />
+                )}
               </Pressable>
             )}
             <Pressable
@@ -109,7 +120,17 @@ export function AppHeader({
               style={styles.avatarBtn}
             >
               {isAuthenticated && user?.avatarUrl ? (
-                <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+                <Image
+                  source={{ uri: user.avatarUrl }}
+                  style={[
+                    styles.avatarImage,
+                    {
+                      borderColor: withAlpha(colors.border, 0.6),
+                      backgroundColor: colors.secondary,
+                    },
+                  ]}
+                  contentFit="cover"
+                />
               ) : (
                 <Ionicons name="person-circle-outline" size={28} color={colors.foreground} />
               )}
@@ -131,9 +152,7 @@ const styles = StyleSheet.create({
     marginHorizontal: -spacing.page,
     paddingHorizontal: spacing.page,
     paddingBottom: spacing.sm,
-    backgroundColor: withAlpha(colors.background, 0.95),
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   row: {
     flexDirection: 'row',
@@ -146,7 +165,6 @@ const styles = StyleSheet.create({
   logoImage: { width: 120, height: 32 },
   title: {
     ...typography.h2,
-    color: colors.foreground,
     flex: 1,
   },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
@@ -154,7 +172,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radius.full,
-    backgroundColor: colors.secondary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 2,
@@ -166,7 +183,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.primary,
   },
   avatarBtn: {
     padding: 4,
@@ -177,7 +193,5 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: radius.full,
     borderWidth: 2,
-    borderColor: withAlpha(colors.border, 0.6),
-    backgroundColor: colors.secondary,
   },
 });

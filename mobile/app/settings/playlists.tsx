@@ -17,7 +17,7 @@ export default function SettingsPlaylistsScreen() {
       <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 40 }}>
         <View style={styles.pad}>
           <AppHeader showBack title="Playlists" showSearch={false} showNotifications={false} />
-          <Text style={styles.sub}>Create and manage playlists - mock GET /playlists/me</Text>
+          <Text style={styles.sub}>Create and manage playlists for your channel and profile.</Text>
           <Button label="New playlist" onPress={() => setCreateOpen(true)} style={{ marginBottom: 16 }} />
           {mockPlaylists.map((p) => (
             <Pressable key={p.id} style={styles.row} onPress={() => router.push(`/playlist/${p.id}`)}>

@@ -25,7 +25,10 @@ import { useMockAuth } from '@/context/MockAuthContext';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { ProfileSettingsSheet } from '@/components/profile/ProfileSettingsSheet';
 import { mockContinueWatching, mockPlaylists, mockUser, mockVideos } from '@/mocks';
-import { colors, radius, spacing, typography, withAlpha } from '@/theme/tokens';
+import { radius, spacing, typography, withAlpha } from '@/theme/tokens';
+import type { ThemeColors } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatDuration } from '@/utils/format-media';
 
 const TABS = [
@@ -38,6 +41,8 @@ const TABS = [
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const styles = useThemedStyles(createProfileStyles);
+  const { colors } = useTheme();
   const { settings: settingsParam } = useLocalSearchParams<{ settings?: string }>();
   const insets = useSafeAreaInsets();
   const tabInset = useTabBarInset();
@@ -53,7 +58,6 @@ export default function ProfileScreen() {
   const [verifyContext, setVerifyContext] = useState<CreatorVerificationContext | null>(null);
   const { trigger, flowHost } = useCreateFlow();
   const [shareOpen, setShareOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(true);
 
   const visibleTabs = TABS.filter((t) => t.id !== 'store' || profile.storeCreatorStatus === 'approved');
 
@@ -87,7 +91,7 @@ export default function ProfileScreen() {
   return (
     <>
       <ScrollView
-        style={styles.screen}
+        style={[styles.screen, { backgroundColor: colors.background }]}
         contentContainerStyle={{ paddingBottom: tabInset + 24 }}
         showsVerticalScrollIndicator={false}
       >
@@ -162,9 +166,9 @@ export default function ProfileScreen() {
           </Pressable>
 
           <View style={styles.statsRow}>
-            <Stat label="Followers" value={profile.followersCount} />
-            <Stat label="Following" value={profile.followingCount} />
-            <Stat label="Videos" value={profile.videosCount} />
+            <Stat label="Followers" value={profile.followersCount} styles={styles} />
+            <Stat label="Following" value={profile.followingCount} styles={styles} />
+            <Stat label="Videos" value={profile.videosCount} styles={styles} />
           </View>
         </View>
 
@@ -263,10 +267,8 @@ export default function ProfileScreen() {
         <ProfileSettingsSheet
           visible={settingsOpen}
           user={profile}
-          darkMode={darkMode}
           initialScreen={settingsScreen}
           onClose={() => { setSettingsOpen(false); setSettingsScreen(undefined); }}
-          onDarkMode={setDarkMode}
           onCoins={() => { setSettingsOpen(false); setCoinsOpen(true); }}
           onStreamerApply={() => { setSettingsOpen(false); setStreamerOpen(true); }}
           onUnlockFeatures={() => { setSettingsOpen(false); setUnlockOpen(true); }}
@@ -314,7 +316,15 @@ export default function ProfileScreen() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({
+  label,
+  value,
+  styles,
+}: {
+  label: string;
+  value: number;
+  styles: ReturnType<typeof createProfileStyles>;
+}) {
   return (
     <View style={styles.stat}>
       <Text style={styles.statVal}>{value.toLocaleString()}</Text>
@@ -323,7 +333,8 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+function createProfileStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   guestScreen: {
     flex: 1,
@@ -509,4 +520,5 @@ const styles = StyleSheet.create({
   emptyTitle: { color: colors.foreground, fontWeight: '700', fontSize: 16 },
   emptySub: { color: colors.mutedForeground, fontSize: 13, textAlign: 'center', marginBottom: 8 },
   legalHeader: { color: colors.mutedForeground, fontSize: 11, fontWeight: '700', marginTop: 16, marginBottom: 4, letterSpacing: 1 },
-});
+  });
+}

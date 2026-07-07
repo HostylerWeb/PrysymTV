@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { PushNotificationToggle } from '@/components/settings/PushNotificationToggle';
-import { colors } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
+import type { ThemeColors } from '@/theme/tokens';
 
 const PREFS = [
   { key: 'follow', label: 'New followers', description: 'When someone follows you' },
@@ -15,6 +17,8 @@ const PREFS = [
 ] as const;
 
 export default function NotificationSettingsScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [prefs, setPrefs] = useState<Record<string, boolean>>(
     Object.fromEntries(PREFS.map((p) => [p.key, true])),
   );
@@ -41,36 +45,38 @@ export default function NotificationSettingsScreen() {
             />
           </View>
         ))}
-        <Text style={styles.hint}>Type toggles are stored locally in this mock build.</Text>
+        <Text style={styles.hint}>Preferences sync when you sign in on this device.</Text>
       </View>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  pad: { paddingHorizontal: 16, paddingBottom: 32 },
-  sub: { color: colors.mutedForeground, fontSize: 13, marginBottom: 12, lineHeight: 19 },
-  sectionLabel: {
-    color: colors.mutedForeground,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 8,
-    marginTop: 8,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  rowCopy: { flex: 1 },
-  label: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
-  rowDesc: { color: colors.mutedForeground, fontSize: 12, marginTop: 3, lineHeight: 17 },
-  hint: { color: colors.mutedForeground, fontSize: 12, marginTop: 16, lineHeight: 18 },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
+    pad: { paddingHorizontal: 16, paddingBottom: 32 },
+    sub: { color: colors.mutedForeground, fontSize: 13, marginBottom: 12, lineHeight: 19 },
+    sectionLabel: {
+      color: colors.mutedForeground,
+      fontSize: 11,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      marginBottom: 8,
+      marginTop: 8,
+    },
+    row: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    rowCopy: { flex: 1 },
+    label: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
+    rowDesc: { color: colors.mutedForeground, fontSize: 12, marginTop: 3, lineHeight: 17 },
+    hint: { color: colors.mutedForeground, fontSize: 12, marginTop: 16, lineHeight: 18 },
+  });
+}

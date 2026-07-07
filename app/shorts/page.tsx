@@ -222,7 +222,7 @@ function ShortVideo({
   }
 
   return (
-    <div className="relative w-full h-full bg-black snap-start snap-always flex items-center justify-center">
+    <div className="relative w-full h-full bg-black snap-start snap-always flex items-center justify-center md:max-w-[480px] md:mx-auto">
       {/* Video */}
       <HlsVideoPlayer
         src={short.videoUrl}
@@ -900,8 +900,8 @@ function ShortsPageContent() {
 
   if (feedLoaded && shortsData.length === 0) {
     return (
-      <main className="h-screen bg-black overflow-hidden md:pl-20 flex flex-col items-center justify-center gap-3 px-6">
-        <p className="text-white/70 text-center">No shorts yet. Tap + to upload your first short.</p>
+      <main className="h-screen bg-background overflow-hidden md:pl-20 flex flex-col items-center justify-center gap-3 px-6">
+        <p className="text-muted-foreground text-center">No shorts yet. Tap + to upload your first short.</p>
         <CreateHeaderButton
           variant="on-dark"
           label="Upload short"
@@ -919,12 +919,12 @@ function ShortsPageContent() {
   }
 
   return (
-    <main className="h-screen bg-black overflow-hidden md:pl-20">
+    <main className="h-screen bg-background overflow-hidden md:pl-20">
       {/* Shorts Container */}
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="h-full overflow-y-scroll snap-y snap-mandatory scrollbar-hide"
+        className="h-full overflow-y-scroll snap-y snap-mandatory scrollbar-hide md:max-w-[520px] md:mx-auto"
         style={{ scrollSnapType: 'y mandatory' }}
       >
         {shortsData.map((short, index) => (
@@ -968,14 +968,14 @@ function ShortsPageContent() {
         <button 
           onClick={() => scrollTo(activeIndex - 1)}
           disabled={activeIndex === 0}
-          className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center disabled:opacity-30 transition-all text-white border border-white/20 shadow-xl"
+          className="w-12 h-12 rounded-full bg-secondary/90 hover:bg-secondary backdrop-blur-md flex items-center justify-center disabled:opacity-30 transition-all text-foreground border border-border shadow-xl"
         >
           <ChevronUp className="w-6 h-6" />
         </button>
         <button 
           onClick={() => scrollTo(activeIndex + 1)}
           disabled={activeIndex === shortsData.length - 1}
-          className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center disabled:opacity-30 transition-all text-white border border-white/20 shadow-xl"
+          className="w-12 h-12 rounded-full bg-secondary/90 hover:bg-secondary backdrop-blur-md flex items-center justify-center disabled:opacity-30 transition-all text-foreground border border-border shadow-xl"
         >
           <ChevronDown className="w-6 h-6" />
         </button>

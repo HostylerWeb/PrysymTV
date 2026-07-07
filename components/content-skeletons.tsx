@@ -406,13 +406,13 @@ export function PodcastEpisodeSkeleton() {
 
 export function ShortsPageSkeleton() {
   return (
-    <main className="h-screen bg-black overflow-hidden md:pl-20 flex items-center justify-center">
+    <main className="h-screen bg-background overflow-hidden md:pl-20 flex items-center justify-center">
       <div className="w-full max-w-[420px] mx-auto px-4 space-y-4 animate-in fade-in duration-300">
-        <Skeleton className={`w-full aspect-[9/16] rounded-2xl bg-white/10`} />
+        <Skeleton className="w-full aspect-[9/16] rounded-2xl bg-muted/60" />
         <div className="flex justify-center gap-3">
-          <Skeleton className={`w-10 h-10 rounded-full bg-white/10`} />
-          <Skeleton className={`w-10 h-10 rounded-full bg-white/10`} />
-          <Skeleton className={`w-10 h-10 rounded-full bg-white/10`} />
+          <Skeleton className="w-10 h-10 rounded-full bg-muted/60" />
+          <Skeleton className="w-10 h-10 rounded-full bg-muted/60" />
+          <Skeleton className="w-10 h-10 rounded-full bg-muted/60" />
         </div>
       </div>
     </main>

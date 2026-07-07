@@ -1,7 +1,10 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radius, spacing, withAlpha } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
+import type { ThemeColors } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatViewCount } from '@/utils/format-media';
 
 type Props = {
@@ -33,29 +36,37 @@ export function WatchEngagementRow({
   onGift,
   onShare,
 }: Props) {
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View style={styles.wrap}>
-      <Pill active={liked} onPress={onLike} icon={liked ? 'thumbs-up' : 'thumbs-up-outline'} label={formatViewCount(likesCount)} />
-      <Pill active={disliked} onPress={onDislike} icon={disliked ? 'thumbs-down' : 'thumbs-down-outline'} />
-      {showGift && <Pill onPress={onGift} icon="gift-outline" label="Gift" />}
-      <Pill onPress={onShare} icon="share-outline" label="Share" />
-      <Pill active={saved} onPress={onSave} icon={saved ? 'bookmark' : 'bookmark-outline'} label="Save" />
-      {showPlaylist && <Pill onPress={onPlaylist} icon="list-outline" label="Playlist" />}
+      <Pill styles={styles} active={liked} onPress={onLike} icon={liked ? 'thumbs-up' : 'thumbs-up-outline'} label={formatViewCount(likesCount)} />
+      <Pill styles={styles} active={disliked} onPress={onDislike} icon={disliked ? 'thumbs-down' : 'thumbs-down-outline'} />
+      {showGift && <Pill styles={styles} onPress={onGift} icon="gift-outline" label="Gift" />}
+      <Pill styles={styles} onPress={onShare} icon="share-outline" label="Share" />
+      <Pill styles={styles} active={saved} onPress={onSave} icon={saved ? 'bookmark' : 'bookmark-outline'} label="Save" />
+      {showPlaylist && <Pill styles={styles} onPress={onPlaylist} icon="list-outline" label="Playlist" />}
     </View>
   );
 }
+
+type PillStyles = ReturnType<typeof createStyles>;
 
 function Pill({
   icon,
   label,
   active,
   onPress,
+  styles,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label?: string;
   active?: boolean;
   onPress?: () => void;
+  styles: PillStyles;
 }) {
+  const { colors } = useTheme();
+
   return (
     <Pressable
       style={[styles.pill, active && styles.pillActive]}
@@ -69,32 +80,34 @@ function Pill({
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.page,
-    paddingVertical: spacing.sm,
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radius.full,
-    backgroundColor: colors.secondary,
-  },
-  pillActive: {
-    backgroundColor: colors.primary,
-  },
-  pillText: {
-    color: colors.foreground,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  pillTextActive: {
-    color: colors.primaryForeground,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    wrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.page,
+      paddingVertical: spacing.sm,
+    },
+    pill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: radius.full,
+      backgroundColor: colors.secondary,
+    },
+    pillActive: {
+      backgroundColor: colors.primary,
+    },
+    pillText: {
+      color: colors.foreground,
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    pillTextActive: {
+      color: colors.primaryForeground,
+    },
+  });
+}

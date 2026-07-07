@@ -11,18 +11,18 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { MeResponse } from '@/types/api';
+import { mockChannelMemberships } from '@/mocks/monetization';
 import { PushNotificationToggle } from '@/components/settings/PushNotificationToggle';
-import { colors, radius, spacing, typography, withAlpha } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { radius, spacing, typography, withAlpha } from '@/theme/tokens';
 
-type SettingsScreen = 'main' | 'notifications' | 'shipping' | 'playlists' | 'social' | 'dashboard';
+type SettingsScreen = 'main' | 'notifications' | 'shipping' | 'playlists' | 'social' | 'dashboard' | 'memberships';
 
 type Props = {
   visible: boolean;
   user: MeResponse;
-  darkMode: boolean;
   initialScreen?: string;
   onClose: () => void;
-  onDarkMode: (v: boolean) => void;
   onCoins: () => void;
   onStreamerApply: () => void;
   onUnlockFeatures?: () => void;
@@ -47,15 +47,14 @@ const SCREEN_TITLES: Record<Exclude<SettingsScreen, 'main'>, string> = {
   playlists: 'Playlists',
   social: 'Social links',
   dashboard: 'Performance & revenue',
+  memberships: 'Channel memberships',
 };
 
 export function ProfileSettingsSheet({
   visible,
   user,
-  darkMode,
   initialScreen,
   onClose,
-  onDarkMode,
   onCoins,
   onStreamerApply,
   onUnlockFeatures,
@@ -63,6 +62,7 @@ export function ProfileSettingsSheet({
 }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { colors, isDark, setDarkMode } = useTheme();
   const isStreamer = user.streamerStatus === 'approved';
   const showDashboard = user.role === 'creator' || (user.videosCount ?? 0) > 0;
   const premiumActive =
@@ -75,7 +75,7 @@ export function ProfileSettingsSheet({
 
   useEffect(() => {
     if (!visible) return;
-    const valid = ['notifications', 'shipping', 'playlists', 'social', 'dashboard'] as const;
+    const valid = ['notifications', 'shipping', 'playlists', 'social', 'dashboard', 'memberships'] as const;
     if (initialScreen && valid.includes(initialScreen as typeof valid[number])) {
       setScreen(initialScreen as SettingsScreen);
     } else {
@@ -99,6 +99,19 @@ export function ProfileSettingsSheet({
         : 'Ad-free viewing & exclusive perks',
       route: '/premium',
       accent: 'premium',
+    },
+    {
+      icon: 'sparkles-outline',
+      label: 'Platform Insider',
+      description: 'Roadmaps, town halls & platform voice',
+      route: '/insider',
+      accent: 'premium',
+    },
+    {
+      icon: 'ribbon-outline',
+      label: 'Channel memberships',
+      description: 'Creators you support monthly',
+      screen: 'memberships',
     },
     isStreamer
       ? {
@@ -153,9 +166,9 @@ export function ProfileSettingsSheet({
     {
       icon: 'moon-outline',
       label: 'Dark Mode',
-      description: darkMode ? 'Currently enabled' : 'Currently disabled',
+      description: isDark ? 'Currently enabled' : 'Currently disabled',
       toggle: true,
-      action: () => onDarkMode(!darkMode),
+      action: () => setDarkMode(!isDark),
     },
     { icon: 'help-circle-outline', label: 'Help & Support', description: 'FAQs and contact', route: '/help' },
     {
@@ -176,50 +189,77 @@ export function ProfileSettingsSheet({
         return (
           <>
             <PushNotificationToggle featured />
-            <Text style={styles.sectionLabel}>In-app notification types</Text>
-            <ToggleRow label="Email notifications" value={emailNotifs} onChange={setEmailNotifs} />
-            <ToggleRow label="Live stream alerts" value={liveAlerts} onChange={setLiveAlerts} />
-            <Text style={styles.hint}>
-              Type preferences are saved locally for this mock build. Push uses your device permission when enabled above.
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>In-app notification types</Text>
+            <ToggleRow label="Email notifications" value={emailNotifs} onChange={setEmailNotifs} colors={colors} />
+            <ToggleRow label="Live stream alerts" value={liveAlerts} onChange={setLiveAlerts} colors={colors} />
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              Push uses your device permission when enabled above. Email preferences sync when you sign in on a new device.
             </Text>
           </>
         );
       case 'shipping':
         return (
           <>
-            <Field label="Full name" value={user.displayName ?? ''} />
-            <Field label="Address" value="123 Creator Lane" />
-            <Field label="City" value="Los Angeles, CA 90001" />
-            <Text style={styles.hint}>Manage full shipping details from the creator store checkout flow.</Text>
+            <Field label="Full name" value={user.displayName ?? ''} colors={colors} />
+            <Field label="Address" value="123 Creator Lane" colors={colors} />
+            <Field label="City" value="Los Angeles, CA 90001" colors={colors} />
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>Manage full shipping details from the creator store checkout flow.</Text>
           </>
         );
       case 'playlists':
         return (
           <>
-            <Field label="Favorites" value="12 items" />
-            <Field label="Watch later" value="5 items" />
+            <Field label="Favorites" value="12 items" colors={colors} />
+            <Field label="Watch later" value="5 items" colors={colors} />
             <Pressable style={styles.linkBtn} onPress={() => navigate('/settings/playlists')}>
-              <Text style={styles.linkBtnText}>Open playlist manager</Text>
+              <Text style={[styles.linkBtnText, { color: colors.primary }]}>Open playlist manager</Text>
             </Pressable>
           </>
         );
       case 'social':
         return (
           <>
-            <Field label="Website" value="https://prysym.tv" />
-            <Field label="X / Twitter" value={`@${user.username}`} />
-            <Field label="Instagram" value="@prysymtv" />
+            <Field label="Website" value="https://prysym.tv" colors={colors} />
+            <Field label="X / Twitter" value={`@${user.username}`} colors={colors} />
+            <Field label="Instagram" value="@prysymtv" colors={colors} />
           </>
         );
       case 'dashboard':
         return (
           <>
-            <StatCard label="Views (30d)" value="24.8K" />
-            <StatCard label="Ad earnings" value="$128.40" />
-            <StatCard label="Gifts received" value="1,420 coins" />
+            <StatCard label="Views (30d)" value="24.8K" colors={colors} />
+            <StatCard label="Ad earnings" value="$128.40" colors={colors} />
+            <StatCard label="GAF contribution" value="$12.80" colors={colors} />
+            <StatCard label="Gifts received" value="1,420 coins" colors={colors} />
             <Pressable style={styles.linkBtn} onPress={() => navigate('/settings/dashboard')}>
-              <Text style={styles.linkBtnText}>Open full dashboard</Text>
+              <Text style={[styles.linkBtnText, { color: colors.primary }]}>Open full dashboard</Text>
             </Pressable>
+            <Pressable style={styles.linkBtn} onPress={() => navigate('/impact')}>
+              <Text style={[styles.linkBtnText, { color: colors.primary }]}>View community impact (GAF)</Text>
+            </Pressable>
+          </>
+        );
+      case 'memberships':
+        return (
+          <>
+            <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0, marginBottom: 12 }]}>
+              Channel memberships are separate from platform Premium and Insider.
+            </Text>
+            {mockChannelMemberships.map((sub) => (
+              <View key={sub.id} style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={{ color: colors.foreground, fontWeight: '700' }}>@{sub.creatorUsername}</Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 4 }}>
+                  {sub.tier === 'premium' ? 'VIP' : 'Member'} · ${sub.priceUsd.toFixed(2)}/mo
+                </Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 2 }}>
+                  Renews {new Date(sub.currentPeriodEnd).toLocaleDateString()}
+                </Text>
+                <Pressable style={{ marginTop: 10 }} onPress={() => navigate(`/creator/${sub.creatorUsername}`)}>
+                  <Text style={{ color: colors.primary, fontWeight: '600' }}>View creator</Text>
+                </Pressable>
+              </View>
+            ))}
+            <ButtonRow label="Browse creators" onPress={() => navigate('/(tabs)/videos')} colors={colors} />
           </>
         );
       default:
@@ -231,10 +271,10 @@ export function ProfileSettingsSheet({
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + 16, maxHeight: '88%' }]}>
-        <View style={styles.handle} />
-        <View style={styles.header}>
+      <Pressable style={[styles.backdrop, { backgroundColor: colors.scrim }]} onPress={onClose} />
+      <View style={[styles.sheet, { paddingBottom: insets.bottom + 16, maxHeight: '88%', backgroundColor: colors.background, borderColor: colors.border }]}>
+        <View style={[styles.handle, { backgroundColor: colors.border }]} />
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
           {screen !== 'main' ? (
             <Pressable onPress={() => setScreen('main')} hitSlop={8} style={styles.headerIcon}>
               <Ionicons name="chevron-back" size={24} color={colors.foreground} />
@@ -244,7 +284,7 @@ export function ProfileSettingsSheet({
               <Ionicons name="settings-outline" size={22} color={colors.foreground} />
             </View>
           )}
-          <Text style={styles.headerTitle}>{title}</Text>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{title}</Text>
           <Pressable onPress={onClose} hitSlop={8}>
             <Ionicons name="close" size={24} color={colors.foreground} />
           </Pressable>
@@ -253,15 +293,17 @@ export function ProfileSettingsSheet({
         <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
           {screen === 'main' ? (
             <>
-              <Pressable style={styles.coinsCard} onPress={() => { onClose(); onCoins(); }}>
+              <Pressable style={[styles.coinsCard, { backgroundColor: withAlpha(colors.yellow, 0.1), borderColor: withAlpha(colors.yellow, 0.25) }]} onPress={() => { onClose(); onCoins(); }}>
                 <View style={styles.coinsIcon}>
                   <Text style={styles.coinsEmoji}>🪙</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.coinsTitle}>Your Coins</Text>
-                  <Text style={styles.coinsSub}>{user.coinsBalance.toLocaleString()} available</Text>
+                  <Text style={[styles.coinsTitle, { color: colors.foreground }]}>Your Coins</Text>
+                  <Text style={[styles.coinsSub, { color: colors.mutedForeground }]}>
+                    {user.coinsBalance.toLocaleString()} available
+                  </Text>
                 </View>
-                <Text style={styles.coinsCta}>Top Up</Text>
+                <Text style={[styles.coinsCta, { color: colors.primary }]}>Top Up</Text>
               </Pressable>
 
               {items.map((item) => (
@@ -269,8 +311,7 @@ export function ProfileSettingsSheet({
                   key={item.label}
                   style={[
                     styles.menuItem,
-                    item.accent === 'premium' && styles.menuPremium,
-                    item.accent === 'live' && styles.menuLive,
+                    item.accent === 'premium' && { backgroundColor: withAlpha(colors.primary, 0.06) },
                   ]}
                   onPress={() => {
                     if (item.toggle && item.action) item.action();
@@ -279,7 +320,7 @@ export function ProfileSettingsSheet({
                     else if (item.route) navigate(item.route);
                   }}
                 >
-                  <View style={[styles.menuIcon, item.danger && styles.menuIconDanger]}>
+                  <View style={[styles.menuIcon, { backgroundColor: colors.secondary }, item.danger && { backgroundColor: withAlpha(colors.destructive, 0.1) }]}>
                     <Ionicons
                       name={item.icon}
                       size={20}
@@ -287,13 +328,13 @@ export function ProfileSettingsSheet({
                     />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.menuLabel, item.danger && styles.menuLabelDanger]}>{item.label}</Text>
+                    <Text style={[styles.menuLabel, { color: item.danger ? colors.destructive : colors.foreground }]}>{item.label}</Text>
                     {!item.toggle && item.description ? (
-                      <Text style={styles.menuDesc}>{item.description}</Text>
+                      <Text style={[styles.menuDesc, { color: colors.mutedForeground }]}>{item.description}</Text>
                     ) : null}
                   </View>
                   {item.toggle ? (
-                    <Switch value={darkMode} onValueChange={onDarkMode} trackColor={{ true: colors.primary }} />
+                    <Switch value={isDark} onValueChange={setDarkMode} trackColor={{ true: colors.primary }} />
                   ) : (
                     <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
                   )}
@@ -309,52 +350,75 @@ export function ProfileSettingsSheet({
   );
 }
 
-function ToggleRow({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+function ToggleRow({
+  label,
+  value,
+  onChange,
+  colors,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
   return (
-    <View style={styles.toggleRow}>
-      <Text style={styles.toggleLabel}>{label}</Text>
+    <View style={[styles.toggleRow, { borderBottomColor: colors.border }]}>
+      <Text style={[styles.toggleLabel, { color: colors.foreground }]}>{label}</Text>
       <Switch value={value} onValueChange={onChange} trackColor={{ true: colors.primary }} />
     </View>
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({
+  label,
+  value,
+  colors,
+}: {
+  label: string;
+  value: string;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
   return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <Text style={styles.fieldValue}>{value}</Text>
+    <View style={[styles.field, { borderBottomColor: colors.border }]}>
+      <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{label}</Text>
+      <Text style={[styles.fieldValue, { color: colors.foreground }]}>{value}</Text>
     </View>
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({ label, value, colors }: { label: string; value: string; colors: ReturnType<typeof useTheme>['colors'] }) {
   return (
-    <View style={styles.statCard}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
+    <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{label}</Text>
+      <Text style={[styles.statValue, { color: colors.foreground }]}>{value}</Text>
     </View>
+  );
+}
+
+function ButtonRow({ label, onPress, colors }: { label: string; onPress: () => void; colors: ReturnType<typeof useTheme>['colors'] }) {
+  return (
+    <Pressable style={styles.linkBtn} onPress={onPress}>
+      <Text style={[styles.linkBtnText, { color: colors.primary }]}>{label}</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.scrim },
+  backdrop: { ...StyleSheet.absoluteFillObject },
   sheet: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: colors.background,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   handle: {
     alignSelf: 'center',
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.border,
     marginTop: 10,
     marginBottom: 4,
   },
@@ -364,11 +428,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.page,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
     gap: spacing.sm,
   },
   headerIcon: { width: 40, alignItems: 'center' },
-  headerTitle: { ...typography.h2, color: colors.foreground, flex: 1, textAlign: 'center' },
+  headerTitle: { ...typography.h2, flex: 1, textAlign: 'center' },
   body: { padding: spacing.page },
   coinsCard: {
     flexDirection: 'row',
@@ -377,22 +440,19 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderRadius: radius.xl,
     marginBottom: spacing.md,
-    backgroundColor: withAlpha(colors.yellow, 0.1),
     borderWidth: 1,
-    borderColor: withAlpha(colors.yellow, 0.25),
   },
   coinsIcon: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: withAlpha(colors.yellow, 0.35),
     alignItems: 'center',
     justifyContent: 'center',
   },
   coinsEmoji: { fontSize: 22 },
-  coinsTitle: { color: colors.foreground, fontWeight: '700', fontSize: 15 },
-  coinsSub: { color: colors.mutedForeground, fontSize: 12, marginTop: 2 },
-  coinsCta: { color: colors.primary, fontWeight: '700', fontSize: 14 },
+  coinsTitle: { fontWeight: '700', fontSize: 15 },
+  coinsSub: { fontSize: 12, marginTop: 2 },
+  coinsCta: { fontWeight: '700', fontSize: 14 },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -400,32 +460,26 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.lg,
+    marginBottom: 2,
   },
-  menuPremium: { backgroundColor: withAlpha(colors.primary, 0.06), marginBottom: 4 },
-  menuLive: { marginBottom: 2 },
   menuIcon: {
     width: 40,
     height: 40,
     borderRadius: radius.md,
-    backgroundColor: colors.secondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  menuIconDanger: { backgroundColor: withAlpha(colors.destructive, 0.1) },
-  menuLabel: { color: colors.foreground, fontWeight: '600', fontSize: 15 },
-  menuLabelDanger: { color: colors.destructive },
-  menuDesc: { color: colors.mutedForeground, fontSize: 12, marginTop: 2, lineHeight: 16 },
+  menuLabel: { fontWeight: '600', fontSize: 15 },
+  menuDesc: { fontSize: 12, marginTop: 2, lineHeight: 16 },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
-  toggleLabel: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
+  toggleLabel: { fontSize: 15, fontWeight: '600' },
   sectionLabel: {
-    color: colors.mutedForeground,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -436,21 +490,18 @@ const styles = StyleSheet.create({
   field: {
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
-  fieldLabel: { color: colors.mutedForeground, fontSize: 11, fontWeight: '700', marginBottom: 4 },
-  fieldValue: { color: colors.foreground, fontSize: 15 },
+  fieldLabel: { fontSize: 11, fontWeight: '700', marginBottom: 4 },
+  fieldValue: { fontSize: 15 },
   statCard: {
     padding: 14,
     borderRadius: radius.lg,
-    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: colors.border,
     marginBottom: 10,
   },
-  statLabel: { color: colors.mutedForeground, fontSize: 12 },
-  statValue: { color: colors.foreground, fontSize: 20, fontWeight: '800', marginTop: 4 },
-  hint: { color: colors.mutedForeground, fontSize: 12, marginTop: 16, lineHeight: 18 },
+  statLabel: { fontSize: 12 },
+  statValue: { fontSize: 20, fontWeight: '800', marginTop: 4 },
+  hint: { fontSize: 12, marginTop: 16, lineHeight: 18 },
   linkBtn: { marginTop: 12, paddingVertical: 12, alignItems: 'center' },
-  linkBtnText: { color: colors.primary, fontWeight: '700' },
+  linkBtnText: { fontWeight: '700' },
 });

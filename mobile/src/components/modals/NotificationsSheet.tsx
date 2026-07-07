@@ -17,21 +17,24 @@ import { useMockAuth } from '@/context/MockAuthContext';
 import { mockNotifications } from '@/mocks';
 import { MOCK_IMAGES } from '@/lib/mock-images';
 import type { NotificationItem } from '@/types/api';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
+import type { ThemeColors } from '@/theme/tokens';
+import { radius, spacing, typography } from '@/theme/tokens';
 
 type Props = { visible: boolean; onClose: () => void };
 
 const AVATAR_POOL = MOCK_IMAGES.avatar;
 
-function iconFor(type: string): { name: keyof typeof Ionicons.glyphMap; color: string } {
+function iconFor(type: string, colors: ThemeColors): { name: keyof typeof Ionicons.glyphMap; color: string } {
   switch (type) {
     case 'like': return { name: 'heart', color: colors.primary };
     case 'comment': return { name: 'chatbubble', color: '#3b82f6' };
-    case 'follow': return { name: 'person-add', color: '#22c55e' };
+    case 'follow': return { name: 'person-add', color: colors.success };
     case 'live':
     case 'upload': return { name: 'play', color: colors.primary };
-    case 'gift': return { name: 'gift', color: '#f59e0b' };
-    default: return { name: 'notifications', color: '#eab308' };
+    case 'gift': return { name: 'gift', color: colors.warning };
+    default: return { name: 'notifications', color: colors.yellow };
   }
 }
 
@@ -51,6 +54,8 @@ function avatarFor(item: NotificationItem, index: number) {
 export function NotificationsSheet({ visible, onClose }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createNotificationStyles);
   const { isAuthenticated } = useMockAuth();
   const [items, setItems] = useState<NotificationItem[]>(mockNotifications);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
@@ -152,7 +157,7 @@ export function NotificationsSheet({ visible, onClose }: Props) {
                 </View>
               ) : (
                 filtered.map((item, index) => {
-                  const icon = iconFor(item.type);
+                  const icon = iconFor(item.type, colors);
                   const avatar = avatarFor(item, index);
                   return (
                     <Pressable
@@ -200,10 +205,11 @@ export function NotificationsSheet({ visible, onClose }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createNotificationStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.scrim,
     justifyContent: 'flex-end',
   },
   panel: {
@@ -251,11 +257,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: radius.full,
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  filterChipOn: { backgroundColor: colors.foreground },
+  filterChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   filterText: { color: colors.foreground, fontSize: 13, fontWeight: '600' },
-  filterTextOn: { color: colors.background },
+  filterTextOn: { color: colors.primaryForeground },
   markAll: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   markAllText: { color: colors.primary, fontSize: 13, fontWeight: '600' },
   list: { flex: 1 },
@@ -329,4 +337,5 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   clearAllText: { color: colors.mutedForeground, fontWeight: '600' },
-});
+  });
+}

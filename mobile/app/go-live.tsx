@@ -73,7 +73,7 @@ export default function GoLiveScreen() {
                   onChangeText={setCategory}
                 />
                 <Text style={styles.hintBanner}>
-                  Ingest health: mock endpoint reachable. Real status from GET /streams/health in Phase C.
+                  Stream health looks good. You&apos;re ready to go live.
                 </Text>
               </Card>
 

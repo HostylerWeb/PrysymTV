@@ -1,18 +1,21 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
-import { AppHeader } from '@/components/layout/AppHeader';
-import { colors } from '@/theme/tokens';
+import { LegalHeading, LegalPage, LegalParagraph } from '@/components/layout/LegalPage';
 
 export default function PrivacyScreen() {
   return (
-    <ScrollView style={styles.screen}>
-      <AppHeader showBack title="Privacy" showSearch={false} showNotifications={false} />
-      <Text style={styles.body}>Privacy Policy - placeholder. Copy from app/privacy/page.tsx for production UI.</Text>
-    </ScrollView>
+    <LegalPage title="Privacy Policy">
+      <LegalHeading>What we collect</LegalHeading>
+      <LegalParagraph>
+        We collect account information, usage data, and content you upload to provide and improve Prysym TV.
+      </LegalParagraph>
+      <LegalHeading>How we use it</LegalHeading>
+      <LegalParagraph>
+        Data is used to operate the service, personalize recommendations, process payments, and communicate with you about your account.
+      </LegalParagraph>
+      <LegalHeading>Your choices</LegalHeading>
+      <LegalParagraph>
+        You can update profile details in Settings, manage notification preferences, and contact support@prysym.tv for privacy requests.
+      </LegalParagraph>
+    </LegalPage>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 16 },
-  body: { color: colors.mutedForeground, fontSize: 14, lineHeight: 22, paddingVertical: 16 },
-});

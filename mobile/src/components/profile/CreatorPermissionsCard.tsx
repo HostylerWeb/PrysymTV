@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
-import { BottomSheet } from '@/components/ui/BottomSheet';
-import { colors, radius } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
+import type { ThemeColors } from '@/theme/tokens';
+import { radius } from '@/theme/tokens';
 import {
   getCreatorCapabilities,
   hasLockedCapabilities,
@@ -28,6 +30,9 @@ type Props = {
 };
 
 export function CreatorPermissionsCard({ user, onUnlock, onApplyLive, onApplyVertical }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   if (!user) return null;
   const caps = getCreatorCapabilities(user);
   const readyCount = caps.filter((c) => c.allowed).length;
@@ -82,30 +87,32 @@ export function CreatorPermissionsCard({ user, onUnlock, onApplyLive, onApplyVer
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    padding: 14,
-    marginBottom: 16,
-  },
-  title: { color: colors.foreground, fontSize: 13, fontWeight: '700' },
-  sub: { color: colors.mutedForeground, fontSize: 11, marginTop: 4, marginBottom: 10 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tile: {
-    width: '30%',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.secondary,
-    gap: 4,
-  },
-  ready: { borderColor: colors.success + '44', backgroundColor: colors.success + '11' },
-  pending: { borderColor: colors.warning + '44', backgroundColor: colors.warning + '11' },
-  tileLabel: { color: colors.foreground, fontSize: 9, fontWeight: '600', textAlign: 'center' },
-  tapHint: { color: colors.primary, fontSize: 8, fontWeight: '700' },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    card: {
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      padding: 14,
+      marginBottom: 16,
+    },
+    title: { color: colors.foreground, fontSize: 13, fontWeight: '700' },
+    sub: { color: colors.mutedForeground, fontSize: 11, marginTop: 4, marginBottom: 10 },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    tile: {
+      width: '30%',
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderRadius: radius.sm,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.secondary,
+      gap: 4,
+    },
+    ready: { borderColor: colors.success + '44', backgroundColor: colors.success + '11' },
+    pending: { borderColor: colors.warning + '44', backgroundColor: colors.warning + '11' },
+    tileLabel: { color: colors.foreground, fontSize: 9, fontWeight: '600', textAlign: 'center' },
+    tapHint: { color: colors.primary, fontSize: 8, fontWeight: '700' },
+  });
+}
