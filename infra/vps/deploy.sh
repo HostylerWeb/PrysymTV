@@ -201,7 +201,7 @@ if [[ ! -d "$APP/.git" ]]; then
   rm -rf "$APP"/*
   su - "$DEPLOY_USER" -c "git clone '$REPO' '$APP'"
 else
-  su - "$DEPLOY_USER" -c "cd '$APP' && git fetch origin && git reset --hard origin/main"
+  su - "$DEPLOY_USER" -c "cd '$APP' && git fetch origin && git reset --hard origin/main && git clean -fd"
 fi
 
 load_deploy_secrets
