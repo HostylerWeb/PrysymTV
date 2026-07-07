@@ -28,8 +28,7 @@ export default function LoginScreen() {
   const [busy, setBusy] = useState(false);
 
   const finish = () => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)/home');
+    router.replace('/(tabs)/home');
   };
 
   const oauth = useOAuthAuthHandlers({
@@ -120,6 +119,7 @@ export default function LoginScreen() {
         <View style={styles.oauth}>
           <OAuthSignInButtons
             disabled={busy}
+            preferMockSignIn
             onGoogleCredential={oauth.onGoogleCredential}
             onAppleCredential={oauth.onAppleCredential}
             onError={oauth.onOAuthError}

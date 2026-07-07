@@ -103,7 +103,7 @@ export async function apiRequest<T>(
   let token = auth ? loadStoredAccessToken() : null;
   let res = await run(token);
 
-  if (res.status === 401 && auth) {
+  if (res.status === 401 && auth && token) {
     const newToken = await getRefreshOnce();
     if (newToken) {
       token = newToken;

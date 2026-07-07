@@ -41,8 +41,7 @@ export default function RegisterScreen() {
   );
 
   const finish = () => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)/home');
+    router.replace('/(tabs)/home');
   };
 
   const oauth = useOAuthAuthHandlers({
@@ -148,6 +147,7 @@ export default function RegisterScreen() {
         <View style={styles.oauth}>
           <OAuthSignInButtons
             disabled={busy}
+            preferMockSignIn
             onGoogleCredential={oauth.onGoogleCredential}
             onAppleCredential={oauth.onAppleCredential}
             onError={oauth.onOAuthError}

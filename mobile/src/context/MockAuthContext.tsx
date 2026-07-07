@@ -21,6 +21,11 @@ import {
 import { getAuthErrorMessage, loadStoredAccessToken, setAccessToken } from '@/lib/api/client';
 import { isApiEnabled } from '@/lib/api/config';
 import { schedulePushPromptAfterLogin } from '@/lib/push-notifications';
+import {
+  isPreviewOAuthToken,
+  MOCK_APPLE_TOKEN,
+  MOCK_GOOGLE_TOKEN,
+} from '@/lib/oauth-mock';
 
 const AUTH_STORAGE_KEY = 'prysym_auth_mode';
 
@@ -200,6 +205,12 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithGoogle = useCallback(
     async (idToken: string) => {
+      if (isPreviewOAuthToken(idToken) || idToken === MOCK_GOOGLE_TOKEN) {
+        setUser(mockUser);
+        await persistMode('user');
+        finishAuth();
+        return;
+      }
       if (isApiEnabled()) {
         try {
           await authApi.oauthGoogle(idToken);
@@ -218,6 +229,15 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithApple = useCallback(
     async (identityToken: string, authorizationCode?: string) => {
+      if (
+        isPreviewOAuthToken(identityToken) ||
+        identityToken === MOCK_APPLE_TOKEN
+      ) {
+        setUser(mockUser);
+        await persistMode('user');
+        finishAuth();
+        return;
+      }
       if (isApiEnabled()) {
         try {
           await authApi.oauthApple(identityToken, authorizationCode);

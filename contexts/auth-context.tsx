@@ -73,6 +73,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   const refreshUser = useCallback(async () => {
+    if (!loadStoredAccessToken()) {
+      setUser(null)
+      return
+    }
     const me = await fetchMe()
     setUser(mapMeToUser(me))
   }, [])
@@ -82,6 +86,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function hydrate() {
       loadStoredAccessToken()
+      const token = loadStoredAccessToken()
+      if (!token) {
+        if (!cancelled) {
+          setUser(null)
+          setIsLoading(false)
+        }
+        return
+      }
+
       try {
         const me = await fetchMe()
         if (!cancelled) setUser(mapMeToUser(me))

@@ -12,6 +12,11 @@ import * as Google from 'expo-auth-session/providers/google';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { Ionicons } from '@expo/vector-icons';
 import { useOAuthConfig } from '@/context/OAuthConfigContext';
+import {
+  MOCK_APPLE_TOKEN,
+  MOCK_GOOGLE_TOKEN,
+  shouldUseMockOAuthSignIn,
+} from '@/lib/oauth-mock';
 import { colors, radius } from '@/theme/tokens';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -29,6 +34,8 @@ type Props = {
   dividerLabel?: string;
   /** Place divider above (before form) or below (after form) the OAuth buttons. */
   dividerPosition?: 'above' | 'below';
+  /** Use preview tokens instead of native Google/Apple flows (auth screens). */
+  preferMockSignIn?: boolean;
 };
 
 function OAuthDivider({ label }: { label: string }) {
@@ -136,6 +143,7 @@ export function OAuthSignInButtons({
   showDivider = false,
   dividerLabel = 'or',
   dividerPosition = 'below',
+  preferMockSignIn = false,
 }: Props) {
   const {
     loading,
@@ -148,12 +156,20 @@ export function OAuthSignInButtons({
   const [appleNativeAvailable, setAppleNativeAvailable] = useState(false);
 
   const appleConfigured = Boolean(appleClientId);
+  const useMockSignIn = shouldUseMockOAuthSignIn({
+    preferMock: preferMockSignIn,
+    googleWebClientId,
+    googleIosClientId,
+    googleAndroidClientId,
+    appleClientId,
+  });
   const canUseGoogleHook =
-    Platform.OS === 'android'
+    !useMockSignIn &&
+    (Platform.OS === 'android'
       ? Boolean(googleAndroidClientId)
       : Platform.OS === 'ios'
         ? Boolean(googleIosClientId || googleWebClientId)
-        : Boolean(googleWebClientId);
+        : Boolean(googleWebClientId));
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
@@ -161,12 +177,20 @@ export function OAuthSignInButtons({
   }, []);
 
   const handleGooglePreview = useCallback(async () => {
-    await onGoogleCredential('ui-preview-google-token');
+    await onGoogleCredential(MOCK_GOOGLE_TOKEN);
   }, [onGoogleCredential]);
 
+  const handleApplePreview = useCallback(async () => {
+    await onAppleCredential(MOCK_APPLE_TOKEN);
+  }, [onAppleCredential]);
+
   const handleAppleNative = useCallback(async () => {
+    if (useMockSignIn) {
+      await handleApplePreview();
+      return;
+    }
     if (!appleConfigured) {
-      await onAppleCredential('ui-preview-apple-token');
+      await handleApplePreview();
       return;
     }
     setAppleBusy(true);
@@ -191,18 +215,25 @@ export function OAuthSignInButtons({
     } finally {
       setAppleBusy(false);
     }
-  }, [appleConfigured, onAppleCredential, onError]);
+  }, [appleConfigured, handleApplePreview, onAppleCredential, onError, useMockSignIn]);
 
   const handleAppleAndroid = useCallback(async () => {
-    if (!appleConfigured) {
-      await onAppleCredential('ui-preview-apple-token');
+    if (useMockSignIn || !appleConfigured) {
+      await handleApplePreview();
       return;
     }
     onError?.('Apple Sign-In is not available on this device.');
-  }, [appleConfigured, onAppleCredential, onError]);
+  }, [appleConfigured, handleApplePreview, onError, useMockSignIn]);
 
   const showApple =
-    Platform.OS === 'ios' ? appleNativeAvailable || !appleConfigured : true;
+    Platform.OS === 'ios'
+      ? useMockSignIn || appleNativeAvailable || !appleConfigured
+      : true;
+  const useNativeAppleButton =
+    Platform.OS === 'ios' &&
+    appleNativeAvailable &&
+    appleConfigured &&
+    !useMockSignIn;
   const isBusy = disabled || appleBusy;
 
   if (loading) return null;
@@ -232,7 +263,7 @@ export function OAuthSignInButtons({
       )}
 
       {showApple ? (
-        Platform.OS === 'ios' && appleNativeAvailable && appleConfigured ? (
+        useNativeAppleButton ? (
           <AppleAuthentication.AppleAuthenticationButton
             buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
             buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
