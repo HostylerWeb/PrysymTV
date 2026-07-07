@@ -22,12 +22,14 @@ import { GiftSheet } from "@/components/gift-sheet"
 import { ShortsPageSkeleton } from "@/components/content-skeletons"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { notify } from "@/lib/site-notifications"
 import Link from "next/link"
 import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
 import { AuthModal } from "@/components/auth-modal"
 import { Header } from "@/components/header"
 import { useAuth } from "@/contexts/auth-context"
+import { useConfirm } from "@/contexts/confirm-context"
 
 import { AdInterstitial } from "@/components/ad-interstitial"
 import { fetchServedAd, isValidServedAd, type ServedAd } from "@/lib/api/ads"
@@ -436,6 +438,7 @@ function ShortsPageContent() {
   const highlightCommentId = searchParams.get("comment")
   const createFlow = useCreateFlow()
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
+  const confirm = useConfirm()
   const uploadShort = () =>
     triggerContextualCreate("short", createFlow, { isAuthenticated, user })
   const [shortsData, setShortsData] = useState<ShortItem[]>([])
@@ -771,8 +774,14 @@ function ShortsPageContent() {
     openComments(startShortId)
   }, [startShortId, deepLinkReady, openCommentsFromUrl])
 
-  const removeComment = (shortId: string, commentId: string) => {
-    if (!window.confirm("Delete this comment?")) return
+  const removeComment = async (shortId: string, commentId: string) => {
+    const ok = await confirm({
+      title: "Delete comment?",
+      description: "This comment will be removed permanently.",
+      confirmLabel: "Delete",
+      variant: "destructive",
+    })
+    if (!ok) return
     void deleteVideoComment(commentId)
       .then((res) => {
         const removed = new Set(res.deletedIds)
@@ -794,7 +803,11 @@ function ShortsPageContent() {
           return next
         })
       })
-      .catch(() => {})
+      .catch(() => {
+        notify.error("Could not delete comment", {
+          description: "Please try again in a moment.",
+        })
+      })
   }
 
   const toggleCommentLike = (commentId: string) => {

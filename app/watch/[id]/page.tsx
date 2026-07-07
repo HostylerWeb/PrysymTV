@@ -10,7 +10,7 @@ import {
 import { GiftSheet } from "@/components/gift-sheet"
 import { WatchPageSkeleton } from "@/components/content-skeletons"
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+import { notify } from "@/lib/site-notifications"
 import Link from "next/link"
 import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
@@ -20,6 +20,7 @@ import { AddToPlaylistSheet } from "@/components/add-to-playlist-sheet"
 import { ShareSheet } from "@/components/share-sheet"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
 import { useAuth } from "@/contexts/auth-context"
+import { useConfirm } from "@/contexts/confirm-context"
 import {
   fetchVideo,
   fetchVideosBrowse,
@@ -91,6 +92,7 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
   const highlightCommentId = searchParams.get("comment")
   const openCommentsFromUrl = searchParams.get("comments") === "1"
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
+  const confirm = useConfirm()
   const videoRef = useRef<HTMLVideoElement>(null)
   const {
     playerContainerRef,
@@ -320,8 +322,14 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
     }
   }, [])
 
-  const removeComment = (commentId: string) => {
-    if (!window.confirm("Delete this comment?")) return
+  const removeComment = async (commentId: string) => {
+    const ok = await confirm({
+      title: "Delete comment?",
+      description: "This comment will be removed permanently.",
+      confirmLabel: "Delete",
+      variant: "destructive",
+    })
+    if (!ok) return
     void deleteVideoComment(commentId)
       .then((res) => {
         const removed = new Set(res.deletedIds)
@@ -335,7 +343,11 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
         )
         setCommentsTotal((t) => Math.max(0, t - res.deletedIds.length))
       })
-      .catch(() => {})
+      .catch(() => {
+        notify.error("Could not delete comment", {
+          description: "Please try again in a moment.",
+        })
+      })
   }
 
   const handleCommentLike = (commentId: string) => {

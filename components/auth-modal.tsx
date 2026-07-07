@@ -7,8 +7,8 @@ import { useAuth, getAuthErrorMessage } from "@/contexts/auth-context"
 import { forgotPassword } from "@/lib/api/auth"
 import {
   OAuthSignInButtons,
-  isOAuthConfigured,
 } from "@/components/oauth-sign-in-buttons"
+import { useOAuthConfig } from "@/contexts/oauth-config-context"
 
 interface AuthModalProps {
   isOpen: boolean
@@ -35,6 +35,7 @@ export function AuthModal({
   const [password, setPassword] = useState("")
 
   const { login, register, loginWithGoogle, loginWithApple } = useAuth()
+  const { isOAuthAvailable } = useOAuthConfig()
 
   useEffect(() => {
     if (!isOpen) return
@@ -240,7 +241,7 @@ export function AuthModal({
               )}
             </Button>
 
-            {(mode === "login" || mode === "register") && isOAuthConfigured() ? (
+            {(mode === "login" || mode === "register") && isOAuthAvailable ? (
               <OAuthSignInButtons
                 disabled={isLoading}
                 onGoogleCredential={async (idToken) => {

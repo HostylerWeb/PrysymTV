@@ -25,7 +25,7 @@ import { useMockAuth } from '@/context/MockAuthContext';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { ProfileSettingsSheet } from '@/components/profile/ProfileSettingsSheet';
 import { mockContinueWatching, mockPlaylists, mockUser, mockVideos } from '@/mocks';
-import { colors, radius, typography, withAlpha } from '@/theme/tokens';
+import { colors, radius, spacing, typography, withAlpha } from '@/theme/tokens';
 import { formatDuration } from '@/utils/format-media';
 
 const TABS = [
@@ -58,27 +58,28 @@ export default function ProfileScreen() {
   const visibleTabs = TABS.filter((t) => t.id !== 'store' || profile.storeCreatorStatus === 'approved');
 
   if (!isAuthenticated) {
-    const GUEST_FEATURES = [
-      { icon: 'bookmark-outline' as const, title: 'Save favorites', sub: 'Build your watchlist across videos, movies, and podcasts' },
-      { icon: 'time-outline' as const, title: 'Continue watching', sub: 'Pick up right where you left off on any device' },
-      { icon: 'radio-outline' as const, title: 'Become a streamer', sub: 'Apply to go live and unlock creator tools' },
-    ];
     return (
-      <View style={[styles.center, { paddingTop: insets.top, paddingHorizontal: 24 }]}>
-        <Text style={styles.guestEmoji}>👋</Text>
-        <Text style={styles.guestTitle}>Welcome to Prysym TV</Text>
-        <Text style={styles.guestSub}>Sign in to access your profile, save videos, and track watch history.</Text>
-        {GUEST_FEATURES.map((f) => (
-          <View key={f.title} style={styles.guestFeature}>
-            <Ionicons name={f.icon} size={22} color={colors.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.guestFeatureTitle}>{f.title}</Text>
-              <Text style={styles.guestFeatureSub}>{f.sub}</Text>
-            </View>
+      <View
+        style={[
+          styles.guestScreen,
+          { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 },
+        ]}
+      >
+        <View style={styles.guestContent}>
+          <Image source={require('../assets/logo.webp')} style={styles.guestLogo} contentFit="contain" />
+          <Text style={styles.guestTitle}>Sign in to your profile</Text>
+          <Text style={styles.guestSub}>
+            Save videos, pick up where you left off, and manage your account.
+          </Text>
+          <View style={styles.guestActions}>
+            <Button label="Sign in" onPress={() => router.push('/(auth)/login')} />
+            <Button
+              label="Create account"
+              variant="secondary"
+              onPress={() => router.push('/(auth)/register')}
+            />
           </View>
-        ))}
-        <Button label="Sign in" onPress={() => router.push('/(auth)/login')} style={{ width: '100%', maxWidth: 280, marginTop: 16 }} />
-        <Button label="Create account" variant="secondary" onPress={() => router.push('/(auth)/register')} style={{ marginTop: 8, width: '100%', maxWidth: 280 }} />
+        </View>
       </View>
     );
   }
@@ -324,10 +325,23 @@ function Stat({ label, value }: { label: string; value: number }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  guestEmoji: { fontSize: 48, marginBottom: 12 },
-  guestTitle: { ...typography.h1, color: colors.foreground, marginBottom: 8 },
-  guestSub: { color: colors.mutedForeground, textAlign: 'center', marginBottom: 20, maxWidth: 300 },
+  guestScreen: {
+    flex: 1,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.page,
+    justifyContent: 'center',
+  },
+  guestContent: { alignItems: 'center', width: '100%', maxWidth: 320, alignSelf: 'center' },
+  guestLogo: { width: 140, height: 36, marginBottom: 24 },
+  guestTitle: { ...typography.h2, color: colors.foreground, textAlign: 'center', marginBottom: 8 },
+  guestSub: {
+    color: colors.mutedForeground,
+    textAlign: 'center',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 28,
+  },
+  guestActions: { width: '100%', gap: 10 },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -491,21 +505,6 @@ const styles = StyleSheet.create({
   },
   premiumTitle: { color: colors.foreground, fontWeight: '800', fontSize: 15 },
   premiumSub: { color: colors.mutedForeground, fontSize: 12, marginTop: 4 },
-  guestFeature: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    width: '100%',
-    maxWidth: 320,
-    marginTop: 16,
-    padding: 14,
-    borderRadius: radius.lg,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  guestFeatureTitle: { color: colors.foreground, fontWeight: '700' },
-  guestFeatureSub: { color: colors.mutedForeground, fontSize: 12, marginTop: 4, lineHeight: 18 },
   emptyPlaylists: { alignItems: 'center', gap: 8, paddingVertical: 32 },
   emptyTitle: { color: colors.foreground, fontWeight: '700', fontSize: 16 },
   emptySub: { color: colors.mutedForeground, fontSize: 13, textAlign: 'center', marginBottom: 8 },

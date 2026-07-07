@@ -6,6 +6,7 @@ import {
 } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from './push.service';
 
 export type NotificationMetadata = {
   /** Prevents duplicate notifications (e.g. unlike → like again). */
@@ -21,7 +22,10 @@ export type NotificationMetadata = {
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly push: PushService,
+  ) {}
 
   async isPrefEnabled(
     userId: string,
@@ -58,6 +62,18 @@ export class NotificationsService {
     return Boolean(existing);
   }
 
+  private async persistNotification(
+    data: Prisma.NotificationUncheckedCreateInput,
+  ): Promise<void> {
+    const notification = await this.prisma.notification.create({
+      data,
+      include: {
+        actor: { select: { username: true, displayName: true } },
+      },
+    });
+    void this.push.sendForNotification(notification);
+  }
+
   async send(params: {
     recipientId: string;
     actorId: string;
@@ -74,15 +90,13 @@ export class NotificationsService {
       return;
     }
 
-    await this.prisma.notification.create({
-      data: {
-        userId: params.recipientId,
-        type: params.type,
-        actorId: params.actorId,
-        referenceId: params.referenceId,
-        message: params.message,
-        metadata: (params.metadata ?? undefined) as Prisma.InputJsonValue,
-      },
+    await this.persistNotification({
+      userId: params.recipientId,
+      type: params.type,
+      actorId: params.actorId,
+      referenceId: params.referenceId,
+      message: params.message,
+      metadata: (params.metadata ?? undefined) as Prisma.InputJsonValue,
     });
   }
 
@@ -223,15 +237,13 @@ export class NotificationsService {
       if (!(await this.isPrefEnabled(alert.userId, 'live'))) continue;
       if (await this.alreadySent(alert.userId, `live:${streamId}`)) continue;
 
-      await this.prisma.notification.create({
-        data: {
-          userId: alert.userId,
-          type: 'live',
-          actorId: creatorId,
-          referenceId: streamId,
-          message: `${creatorName} is live now`,
-          metadata: { dedupeKey: `live:${streamId}` },
-        },
+      await this.persistNotification({
+        userId: alert.userId,
+        type: 'live',
+        actorId: creatorId,
+        referenceId: streamId,
+        message: `${creatorName} is live now`,
+        metadata: { dedupeKey: `live:${streamId}` },
       });
     }
   }
@@ -305,15 +317,13 @@ export class NotificationsService {
         continue;
       }
 
-      await this.prisma.notification.create({
-        data: {
-          userId: follower.followerId,
-          type: 'upload',
-          actorId: params.creatorId,
-          referenceId: params.referenceId,
-          message: `${name} posted "${params.title}"`,
-          metadata: params.metadata as Prisma.InputJsonValue,
-        },
+      await this.persistNotification({
+        userId: follower.followerId,
+        type: 'upload',
+        actorId: params.creatorId,
+        referenceId: params.referenceId,
+        message: `${name} posted "${params.title}"`,
+        metadata: params.metadata as Prisma.InputJsonValue,
       });
     }
   }

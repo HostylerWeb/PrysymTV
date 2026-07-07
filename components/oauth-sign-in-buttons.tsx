@@ -8,9 +8,10 @@ import {
   useGoogleOAuth,
 } from "@react-oauth/google"
 import { cn } from "@/lib/utils"
+import { useOAuthConfig } from "@/contexts/oauth-config-context"
 
-const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim()
-const appleClientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID?.trim()
+const envGoogleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim()
+const envAppleClientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID?.trim()
 
 /** Match Google filled_black pill + auth modal submit (h-12, full width). */
 const OAUTH_BUTTON_VISUAL =
@@ -112,11 +113,13 @@ function GoogleSignInButton({
   busy,
   onSuccess,
   onError,
+  clientId,
 }: {
   disabled?: boolean
   busy?: boolean
   onSuccess: (response: CredentialResponse) => void
   onError: () => void
+  clientId: string | null
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
@@ -137,7 +140,7 @@ function GoogleSignInButton({
     return () => observer.disconnect()
   }, [])
 
-  if (!googleClientId) return null
+  if (!clientId) return null
 
   return (
     <div
@@ -180,19 +183,20 @@ function AppleSignInButton({
   busy: externalBusy,
   onAppleCredential,
   onError,
+  clientId,
 }: Pick<
   OAuthSignInButtonsProps,
   "disabled" | "onAppleCredential" | "onError"
-> & { busy?: boolean }) {
+> & { busy?: boolean; clientId: string | null }) {
   const [ready, setReady] = useState(false)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    if (!appleClientId || typeof window === "undefined") return
+    if (!clientId || typeof window === "undefined") return
 
     const initApple = () => {
       window.AppleID?.auth.init({
-        clientId: appleClientId,
+        clientId,
         scope: "name email",
         redirectURI: window.location.origin,
         usePopup: true,
@@ -212,7 +216,7 @@ function AppleSignInButton({
     script.onload = initApple
     script.onerror = () => onError?.("Failed to load Apple Sign In")
     document.head.appendChild(script)
-  }, [onError])
+  }, [clientId, onError])
 
   const handleAppleSignIn = useCallback(async () => {
     if (!window.AppleID?.auth) {
@@ -239,7 +243,7 @@ function AppleSignInButton({
     }
   }, [onAppleCredential, onError])
 
-  if (!appleClientId) return null
+  if (!clientId) return null
 
   const isDisabled = disabled || busy || externalBusy || !ready
 
@@ -269,6 +273,9 @@ export function OAuthSignInButtons({
   onError,
   className,
 }: OAuthSignInButtonsProps) {
+  const { googleWebClientId, appleWebClientId } = useOAuthConfig()
+  const googleClientId = googleWebClientId ?? envGoogleClientId ?? null
+  const appleClientId = appleWebClientId ?? envAppleClientId ?? null
   const [googleBusy, setGoogleBusy] = useState(false)
 
   const handleGoogleSuccess = useCallback(
@@ -310,6 +317,7 @@ export function OAuthSignInButtons({
       <div className="flex flex-col gap-3">
       {googleClientId ? (
           <GoogleSignInButton
+            clientId={googleClientId}
             disabled={disabled}
             busy={googleBusy}
             onSuccess={(response) => void handleGoogleSuccess(response)}
@@ -319,6 +327,7 @@ export function OAuthSignInButtons({
 
       {appleClientId ? (
           <AppleSignInButton
+            clientId={appleClientId}
             disabled={disabled}
             busy={googleBusy}
             onAppleCredential={onAppleCredential}
@@ -331,5 +340,5 @@ export function OAuthSignInButtons({
 }
 
 export function isOAuthConfigured(): boolean {
-  return Boolean(googleClientId || appleClientId)
+  return Boolean(envGoogleClientId || envAppleClientId)
 }

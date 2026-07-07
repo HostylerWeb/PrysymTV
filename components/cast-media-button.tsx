@@ -10,6 +10,7 @@ import {
   subscribeCastState,
   type CastableMedia,
 } from "@/lib/chromecast"
+import { notify } from "@/lib/site-notifications"
 
 type CastMediaButtonProps = {
   className?: string
@@ -75,7 +76,9 @@ export function CastMediaButton({
       const message =
         err instanceof Error ? err.message : "Could not cast to your TV"
       setError(message)
-      window.alert(message)
+      notify.error(message, {
+        description: "Make sure your TV or Chromecast is on and connected to the same Wi‑Fi network.",
+      })
     } finally {
       setBusy(false)
     }

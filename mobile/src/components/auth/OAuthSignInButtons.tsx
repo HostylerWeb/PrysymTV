@@ -1,19 +1,20 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
-import Constants from 'expo-constants';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { Button } from '@/components/ui/Button';
-import { colors } from '@/theme/tokens';
+import { Ionicons } from '@expo/vector-icons';
+import { useOAuthConfig } from '@/context/OAuthConfigContext';
+import { colors, radius } from '@/theme/tokens';
 
 WebBrowser.maybeCompleteAuthSession();
-
-const extra = Constants.expoConfig?.extra ?? {};
-const googleWebClientId = extra.googleWebClientId as string | undefined;
-const googleIosClientId = extra.googleIosClientId as string | undefined;
-const googleAndroidClientId = extra.googleAndroidClientId as string | undefined;
-const appleClientId = extra.appleClientId as string | undefined;
 
 type Props = {
   disabled?: boolean;
@@ -23,44 +24,86 @@ type Props = {
     authorizationCode?: string,
   ) => Promise<void>;
   onError?: (message: string) => void;
+  /** Show a subtle divider next to the buttons. */
+  showDivider?: boolean;
+  dividerLabel?: string;
+  /** Place divider above (before form) or below (after form) the OAuth buttons. */
+  dividerPosition?: 'above' | 'below';
 };
 
-export function isMobileOAuthConfigured(): boolean {
-  return Boolean(
-    googleWebClientId ||
-      googleIosClientId ||
-      googleAndroidClientId ||
-      (Platform.OS === 'ios' && appleClientId),
+function OAuthDivider({ label }: { label: string }) {
+  return (
+    <View style={styles.dividerRow}>
+      <View style={styles.divider} />
+      <Text style={styles.dividerText}>{label}</Text>
+      <View style={styles.divider} />
+    </View>
   );
 }
 
-export function OAuthSignInButtons({
+function OAuthPillButton({
+  label,
+  icon,
+  busy,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  busy?: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled || busy}
+      style={({ pressed }) => [
+        styles.oauthButton,
+        (disabled || busy) && styles.oauthButtonDisabled,
+        pressed && !disabled && !busy && styles.oauthButtonPressed,
+      ]}
+    >
+      {busy ? (
+        <ActivityIndicator color={colors.foreground} size="small" />
+      ) : (
+        <>
+          {icon}
+          <Text style={styles.oauthLabel}>{label}</Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
+function ConfiguredGoogleSignInButton({
   disabled,
   onGoogleCredential,
-  onAppleCredential,
   onError,
-}: Props) {
-  const [googleBusy, setGoogleBusy] = useState(false);
-  const [appleBusy, setAppleBusy] = useState(false);
-  const [appleAvailable, setAppleAvailable] = useState(false);
-
+  webClientId,
+  iosClientId,
+  androidClientId,
+}: {
+  disabled?: boolean;
+  onGoogleCredential: (idToken: string) => Promise<void>;
+  onError?: (message: string) => void;
+  webClientId?: string | null;
+  iosClientId?: string | null;
+  androidClientId?: string | null;
+}) {
+  const [busy, setBusy] = useState(false);
   const [request, , promptAsync] = Google.useIdTokenAuthRequest({
-    webClientId: googleWebClientId,
-    iosClientId: googleIosClientId,
-    androidClientId: googleAndroidClientId,
+    webClientId: webClientId || undefined,
+    iosClientId: iosClientId || undefined,
+    androidClientId: androidClientId || undefined,
   });
-
-  useEffect(() => {
-    if (Platform.OS !== 'ios' || !appleClientId) return;
-    void AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
-  }, []);
 
   const handleGoogle = useCallback(async () => {
     if (!request) {
-      onError?.('Google sign-in is not configured');
+      onError?.('Google sign-in is still loading. Try again in a moment.');
       return;
     }
-    setGoogleBusy(true);
+    setBusy(true);
     try {
       const result = await promptAsync();
       if (result.type !== 'success') return;
@@ -70,11 +113,62 @@ export function OAuthSignInButtons({
     } catch (err) {
       onError?.(err instanceof Error ? err.message : 'Google sign-in failed');
     } finally {
-      setGoogleBusy(false);
+      setBusy(false);
     }
   }, [onError, onGoogleCredential, promptAsync, request]);
 
-  const handleApple = useCallback(async () => {
+  return (
+    <OAuthPillButton
+      label="Continue with Google"
+      icon={<Ionicons name="logo-google" size={20} color="#4285F4" />}
+      busy={busy}
+      disabled={disabled}
+      onPress={() => void handleGoogle()}
+    />
+  );
+}
+
+export function OAuthSignInButtons({
+  disabled,
+  onGoogleCredential,
+  onAppleCredential,
+  onError,
+  showDivider = false,
+  dividerLabel = 'or',
+  dividerPosition = 'below',
+}: Props) {
+  const {
+    loading,
+    googleWebClientId,
+    googleIosClientId,
+    googleAndroidClientId,
+    appleClientId,
+  } = useOAuthConfig();
+  const [appleBusy, setAppleBusy] = useState(false);
+  const [appleNativeAvailable, setAppleNativeAvailable] = useState(false);
+
+  const appleConfigured = Boolean(appleClientId);
+  const canUseGoogleHook =
+    Platform.OS === 'android'
+      ? Boolean(googleAndroidClientId)
+      : Platform.OS === 'ios'
+        ? Boolean(googleIosClientId || googleWebClientId)
+        : Boolean(googleWebClientId);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    void AppleAuthentication.isAvailableAsync().then(setAppleNativeAvailable);
+  }, []);
+
+  const handleGooglePreview = useCallback(async () => {
+    await onGoogleCredential('ui-preview-google-token');
+  }, [onGoogleCredential]);
+
+  const handleAppleNative = useCallback(async () => {
+    if (!appleConfigured) {
+      await onAppleCredential('ui-preview-apple-token');
+      return;
+    }
     setAppleBusy(true);
     try {
       const credential = await AppleAuthentication.signInAsync({
@@ -97,59 +191,114 @@ export function OAuthSignInButtons({
     } finally {
       setAppleBusy(false);
     }
-  }, [onAppleCredential, onError]);
+  }, [appleConfigured, onAppleCredential, onError]);
 
-  const showGoogle = Boolean(
-    googleWebClientId || googleIosClientId || googleAndroidClientId,
-  );
-  const showApple = Platform.OS === 'ios' && appleAvailable && appleClientId;
+  const handleAppleAndroid = useCallback(async () => {
+    if (!appleConfigured) {
+      await onAppleCredential('ui-preview-apple-token');
+      return;
+    }
+    onError?.('Apple Sign-In is not available on this device.');
+  }, [appleConfigured, onAppleCredential, onError]);
 
-  if (!showGoogle && !showApple) return null;
+  const showApple =
+    Platform.OS === 'ios' ? appleNativeAvailable || !appleConfigured : true;
+  const isBusy = disabled || appleBusy;
+
+  if (loading) return null;
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.dividerRow}>
-        <View style={styles.divider} />
-        <Text style={styles.dividerText}>Or continue with</Text>
-        <View style={styles.divider} />
-      </View>
-
-      {showGoogle ? (
-        <Button
-          label={googleBusy ? 'Signing in…' : 'Continue with Google'}
-          variant="secondary"
-          disabled={disabled || googleBusy || !request}
-          onPress={() => void handleGoogle()}
-        />
+      {showDivider && dividerPosition === 'above' ? (
+        <OAuthDivider label={dividerLabel} />
       ) : null}
+
+      {canUseGoogleHook ? (
+        <ConfiguredGoogleSignInButton
+          disabled={disabled}
+          onGoogleCredential={onGoogleCredential}
+          onError={onError}
+          webClientId={googleWebClientId}
+          iosClientId={googleIosClientId}
+          androidClientId={googleAndroidClientId}
+        />
+      ) : (
+        <OAuthPillButton
+          label="Continue with Google"
+          icon={<Ionicons name="logo-google" size={20} color="#4285F4" />}
+          disabled={isBusy}
+          onPress={() => void handleGooglePreview()}
+        />
+      )}
 
       {showApple ? (
-        <AppleAuthentication.AppleAuthenticationButton
-          buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-          buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-          cornerRadius={12}
-          style={styles.appleButton}
-          onPress={() => void handleApple()}
-        />
+        Platform.OS === 'ios' && appleNativeAvailable && appleConfigured ? (
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+            cornerRadius={24}
+            style={styles.appleNativeButton}
+            onPress={() => void handleAppleNative()}
+          />
+        ) : (
+          <OAuthPillButton
+            label="Continue with Apple"
+            icon={<Ionicons name="logo-apple" size={22} color={colors.foreground} />}
+            busy={appleBusy}
+            disabled={isBusy && !appleBusy}
+            onPress={() =>
+              void (Platform.OS === 'ios' ? handleAppleNative() : handleAppleAndroid())
+            }
+          />
+        )
       ) : null}
 
-      {(googleBusy || appleBusy) && (
-        <ActivityIndicator color={colors.primary} style={styles.spinner} />
-      )}
+      {showDivider && dividerPosition === 'below' ? (
+        <OAuthDivider label={dividerLabel} />
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 12, marginTop: 4 },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  wrap: { gap: 10 },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 4,
+    marginBottom: 2,
+  },
   divider: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
   dividerText: {
     color: colors.mutedForeground,
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    fontSize: 13,
   },
-  appleButton: { width: '100%', height: 48 },
-  spinner: { marginTop: 4 },
+  oauthButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    minHeight: 48,
+    paddingHorizontal: 16,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: '#747775',
+    backgroundColor: '#131314',
+  },
+  oauthButtonPressed: {
+    backgroundColor: '#1f1f1f',
+  },
+  oauthButtonDisabled: {
+    opacity: 0.55,
+  },
+  oauthLabel: {
+    color: colors.foreground,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  appleNativeButton: {
+    width: '100%',
+    height: 48,
+  },
 });

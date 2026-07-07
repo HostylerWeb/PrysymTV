@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { MeResponse } from '@/types/api';
+import { PushNotificationToggle } from '@/components/settings/PushNotificationToggle';
 import { colors, radius, spacing, typography, withAlpha } from '@/theme/tokens';
 
 type SettingsScreen = 'main' | 'notifications' | 'shipping' | 'playlists' | 'social' | 'dashboard';
@@ -70,7 +71,6 @@ export function ProfileSettingsSheet({
     (!user.premiumExpiresAt || new Date(user.premiumExpiresAt).getTime() > Date.now());
   const [screen, setScreen] = useState<SettingsScreen>('main');
   const [emailNotifs, setEmailNotifs] = useState(true);
-  const [pushNotifs, setPushNotifs] = useState(true);
   const [liveAlerts, setLiveAlerts] = useState(true);
 
   useEffect(() => {
@@ -175,10 +175,13 @@ export function ProfileSettingsSheet({
       case 'notifications':
         return (
           <>
+            <PushNotificationToggle featured />
+            <Text style={styles.sectionLabel}>In-app notification types</Text>
             <ToggleRow label="Email notifications" value={emailNotifs} onChange={setEmailNotifs} />
-            <ToggleRow label="Push notifications" value={pushNotifs} onChange={setPushNotifs} />
             <ToggleRow label="Live stream alerts" value={liveAlerts} onChange={setLiveAlerts} />
-            <Text style={styles.hint}>Preferences are saved locally for this mock build.</Text>
+            <Text style={styles.hint}>
+              Type preferences are saved locally for this mock build. Push uses your device permission when enabled above.
+            </Text>
           </>
         );
       case 'shipping':
@@ -421,6 +424,15 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   toggleLabel: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
+  sectionLabel: {
+    color: colors.mutedForeground,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 4,
+    marginTop: 4,
+  },
   field: {
     paddingVertical: 12,
     borderBottomWidth: 1,

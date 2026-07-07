@@ -1,21 +1,29 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
-import {
-  OAuthSignInButtons,
-  isMobileOAuthConfigured,
-} from '@/components/auth/OAuthSignInButtons';
+import { AuthErrorBox, AuthFormField } from '@/components/auth/AuthFormField';
+import { OAuthSignInButtons } from '@/components/auth/OAuthSignInButtons';
+import { useOAuthAuthHandlers } from '@/components/auth/useOAuthAuthHandlers';
 import { useMockAuth, getAuthErrorMessage } from '@/context/MockAuthContext';
-import { colors, radius, typography } from '@/theme/tokens';
+import { colors, spacing, typography } from '@/theme/tokens';
 
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { login, loginWithGoogle, loginWithApple } = useMockAuth();
-  const [email, setEmail] = useState('demo@prysym.tv');
-  const [password, setPassword] = useState('password');
+  const { login } = useMockAuth();
+  const [email, setEmail] = useState(__DEV__ ? 'demo@prysym.tv' : '');
+  const [password, setPassword] = useState(__DEV__ ? 'password' : '');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -24,11 +32,22 @@ export default function LoginScreen() {
     else router.replace('/(tabs)/home');
   };
 
+  const oauth = useOAuthAuthHandlers({
+    onSuccess: finish,
+    setError,
+    setBusy,
+    busy,
+  });
+
   const handleLogin = async () => {
+    if (!email.trim() || !password) {
+      setError('Please enter your email and password.');
+      return;
+    }
     setError('');
     setBusy(true);
     try {
-      await login(email, password);
+      await login(email.trim(), password);
       finish();
     } catch (err) {
       setError(getAuthErrorMessage(err));
@@ -38,55 +57,112 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 16 }]}>
-      <Text style={styles.logo}>Prysym</Text>
-      <Text style={styles.title}>Sign in</Text>
-      <Text style={styles.sub}>Use your Prysym account or continue with a provider</Text>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Email" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" keyboardType="email-address" />
-      <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="Password" placeholderTextColor={colors.mutedForeground} secureTextEntry />
-      <Button label={busy ? 'Signing in…' : 'Sign in'} onPress={() => void handleLogin()} disabled={busy} />
-      {isMobileOAuthConfigured() ? (
-        <OAuthSignInButtons
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 24 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/welcome'))}
+          style={styles.back}
+          hitSlop={12}
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={24} color={colors.foreground} />
+        </Pressable>
+
+        <Text style={styles.title}>Sign in</Text>
+
+        <View style={styles.form}>
+          <AuthErrorBox message={error} />
+
+          <AuthFormField
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Email"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+            editable={!busy}
+          />
+          <AuthFormField
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Password"
+            secureTextEntry
+            autoComplete="password"
+            editable={!busy}
+          />
+
+          <Pressable
+            onPress={() => router.push('/(auth)/forgot-password')}
+            disabled={busy}
+            style={styles.forgotLink}
+          >
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </Pressable>
+
+          <Button
+            label={busy ? 'Signing in…' : 'Sign in'}
+            onPress={() => void handleLogin()}
+            disabled={busy}
+            size="lg"
+          />
+        </View>
+
+        <View style={styles.oauth}>
+          <OAuthSignInButtons
+            disabled={busy}
+            onGoogleCredential={oauth.onGoogleCredential}
+            onAppleCredential={oauth.onAppleCredential}
+            onError={oauth.onOAuthError}
+            showDivider
+            dividerPosition="above"
+            dividerLabel="or continue with"
+          />
+        </View>
+
+        <Pressable
+          onPress={() => router.replace('/(auth)/register')}
           disabled={busy}
-          onGoogleCredential={async (idToken) => {
-            setError('');
-            setBusy(true);
-            try {
-              await loginWithGoogle(idToken);
-              finish();
-            } catch (err) {
-              setError(getAuthErrorMessage(err));
-            } finally {
-              setBusy(false);
-            }
-          }}
-          onAppleCredential={async (identityToken, authorizationCode) => {
-            setError('');
-            setBusy(true);
-            try {
-              await loginWithApple(identityToken, authorizationCode);
-              finish();
-            } catch (err) {
-              setError(getAuthErrorMessage(err));
-            } finally {
-              setBusy(false);
-            }
-          }}
-          onError={(message) => setError(message)}
-        />
-      ) : null}
-      <Button label="Create account" variant="ghost" onPress={() => router.replace('/(auth)/register')} />
-      <Button label="Forgot password?" variant="ghost" onPress={() => router.push('/(auth)/forgot-password')} />
-    </View>
+          style={styles.registerRow}
+        >
+          <Text style={styles.registerMuted}>New here? </Text>
+          <Text style={styles.registerLink}>Create an account</Text>
+        </Pressable>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 24, gap: 12 },
-  logo: { fontSize: 28, fontWeight: '900', color: colors.primary, marginBottom: 8 },
-  title: { ...typography.h1, color: colors.foreground },
-  sub: { color: colors.mutedForeground, marginBottom: 12 },
-  error: { color: colors.destructive, fontSize: 14 },
-  input: { backgroundColor: colors.secondary, borderRadius: radius.md, paddingHorizontal: 16, paddingVertical: 14, color: colors.foreground, fontSize: 15 },
+  flex: { flex: 1 },
+  screen: { flex: 1, backgroundColor: colors.background },
+  content: { paddingHorizontal: spacing.page },
+  back: { alignSelf: 'flex-start', marginBottom: 20 },
+  title: {
+    ...typography.h1,
+    color: colors.foreground,
+    fontSize: 28,
+    marginBottom: 20,
+  },
+  form: { gap: 12 },
+  oauth: { marginTop: 20 },
+  forgotLink: { alignSelf: 'flex-end', marginTop: -4 },
+  forgotText: { color: colors.primary, fontSize: 14, fontWeight: '600' },
+  registerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 28,
+    paddingVertical: 8,
+  },
+  registerMuted: { color: colors.mutedForeground, fontSize: 14 },
+  registerLink: { color: colors.primary, fontSize: 14, fontWeight: '700' },
 });

@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   pad: { paddingHorizontal: 16 },
   sub: { color: colors.mutedForeground, fontSize: 13, marginBottom: 16 },
   row: { justifyContent: 'space-between', paddingHorizontal: 16 },
-  list: { paddingBottom: 100 },
+  list: { paddingBottom: 0 },
   card: { width: '48%', marginBottom: 20 },
   poster: { width: '100%', aspectRatio: 2 / 3, borderRadius: radius.md, backgroundColor: colors.secondary },
   title: { ...typography.h3, color: colors.foreground, fontSize: 14, marginTop: 8 },

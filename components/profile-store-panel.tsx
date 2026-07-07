@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { notify } from "@/lib/site-notifications"
 import {
   StoreProductForm,
   EMPTY_PRODUCT_FORM,
@@ -31,6 +32,7 @@ import {
   type StoreProduct,
 } from "@/lib/api/stores"
 import { useAuth } from "@/contexts/auth-context"
+import { useConfirm } from "@/contexts/confirm-context"
 import {
   creatorPath,
   creatorStoreProductPath,
@@ -49,6 +51,7 @@ function statusBadgeClass(status: string) {
 
 export function ProfileStorePanel() {
   const { user } = useAuth()
+  const confirm = useConfirm()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -180,14 +183,23 @@ export function ProfileStorePanel() {
   }
 
   const removeProduct = async (id: string) => {
-    if (!confirm("Delete this product? This cannot be undone.")) return
+    const ok = await confirm({
+      title: "Delete product?",
+      description: "This cannot be undone.",
+      confirmLabel: "Delete",
+      variant: "destructive",
+    })
+    if (!ok) return
     setBusy(true)
     try {
       await deleteMyStoreProduct(id)
       setProducts((prev) => prev.filter((p) => p.id !== id))
       if (editingId === id) closeForm()
+      notify.success("Product deleted")
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete product")
+      const message = e instanceof Error ? e.message : "Failed to delete product"
+      setError(message)
+      notify.error(message)
     } finally {
       setBusy(false)
     }

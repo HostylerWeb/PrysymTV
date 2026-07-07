@@ -1,9 +1,12 @@
 import { Controller, Get, Req } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { CREATOR_SUB_PLANS } from '../billing/creator-sub-plans';
 import { resolveRequestGeo } from '../common/geo/request-geo';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
+import { PushService } from '../notifications/push.service';
+import { buildPublicOAuthConfig } from './oauth-public.config';
 
 /** Public, cache-friendly config for consumer apps (no secrets). */
 @Controller('config')
@@ -11,6 +14,8 @@ export class ConfigController {
   constructor(
     private readonly platformSettings: PlatformSettingsService,
     private readonly analytics: AnalyticsService,
+    private readonly config: ConfigService,
+    private readonly push: PushService,
   ) {}
 
   @Get('viewer-geo')
@@ -63,6 +68,11 @@ export class ConfigController {
         moviePrerollSkipSeconds: ads.moviePrerollSkipSeconds,
         impressionRevenueCpmUsd: ads.impressionRevenueCpmUsd,
         placements: ads.placements,
+      },
+      auth: buildPublicOAuthConfig(this.config),
+      push: {
+        enabled: this.push.isEnabled(),
+        publicKey: this.push.getPublicKey(),
       },
     };
   }

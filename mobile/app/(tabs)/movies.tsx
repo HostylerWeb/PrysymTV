@@ -24,7 +24,6 @@ import { SectionHeader } from '@/components/home/SectionHeader';
 import { FilterChip } from '@/components/ui/FilterChip';
 import { FilterSelect } from '@/components/ui/FilterSelect';
 import { Button } from '@/components/ui/Button';
-import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { mockMovies } from '@/mocks';
 import { colors, radius, withAlpha } from '@/theme/tokens';
 import { formatDuration, formatViewCount } from '@/utils/format-media';
@@ -52,7 +51,6 @@ const GENRE_LABELS: Record<string, string> = {
 export default function MoviesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const tabInset = useTabBarInset();
   const { width } = useWindowDimensions();
   const [genre, setGenre] = useState('all');
   const [year, setYear] = useState<(typeof YEARS)[number]>('All Years');
@@ -94,7 +92,6 @@ export default function MoviesScreen() {
     <>
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={{ paddingBottom: tabInset + 24 }}
       showsVerticalScrollIndicator={false}
     >
       <View style={[styles.headerPad, { paddingTop: insets.top }]}>

@@ -22,13 +22,36 @@ export type PublicChannelMembershipTier = {
   label: string;
 };
 
+export type PublicOAuthConfig = {
+  google: {
+    enabled: boolean;
+    webClientId: string | null;
+    iosClientId: string | null;
+    androidClientId: string | null;
+  };
+  apple: {
+    enabled: boolean;
+    webClientId: string | null;
+    iosClientId: string | null;
+  };
+};
+
+export type PublicPushConfig = {
+  enabled: boolean;
+  publicKey: string | null;
+};
+
+export type PublicAppConfig = {
+  ads: PublicAdsConfig;
+  membership: PublicMembershipConfig;
+  channelMembership: {
+    basic: PublicChannelMembershipTier;
+    premium: PublicChannelMembershipTier;
+  };
+  auth: PublicOAuthConfig;
+  push: PublicPushConfig;
+};
+
 export function fetchPublicConfig() {
-  return apiRequest<{
-    ads: PublicAdsConfig;
-    membership: PublicMembershipConfig;
-    channelMembership: {
-      basic: PublicChannelMembershipTier;
-      premium: PublicChannelMembershipTier;
-    };
-  }>("/config/public", { auth: false });
+  return apiRequest<PublicAppConfig>("/config/public", { auth: false });
 }

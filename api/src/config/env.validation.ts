@@ -207,6 +207,19 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   APPLE_CLIENT_ID?: string;
+
+  /** Web Push (VAPID) — generate with: npx web-push generate-vapid-keys */
+  @IsOptional()
+  @IsString()
+  VAPID_PUBLIC_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  VAPID_PRIVATE_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  VAPID_SUBJECT?: string;
 }
 
 const WEAK_SECRET_MARKERS = [

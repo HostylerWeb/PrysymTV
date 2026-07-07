@@ -14,6 +14,8 @@ import {
   deleteVerticalEpisode,
   updateVerticalEpisode,
 } from "@/lib/api/verticals-admin"
+import { notify } from "@/lib/site-notifications"
+import { useConfirm } from "@/contexts/confirm-context"
 
 type EpisodeRow = {
   id: string
@@ -39,6 +41,7 @@ export function VerticalSeriesEpisodesPanel({
   series,
   onChanged,
 }: VerticalSeriesEpisodesPanelProps) {
+  const confirm = useConfirm()
   const [editing, setEditing] = useState<EpisodeRow | null>(null)
   const [episodeNumber, setEpisodeNumber] = useState("")
   const [title, setTitle] = useState("")
@@ -88,19 +91,20 @@ export function VerticalSeriesEpisodesPanel({
   }
 
   const removeEpisode = async (ep: EpisodeRow) => {
-    if (
-      !window.confirm(
-        `Delete episode ${ep.episodeNumber} (“${ep.title}”)? This cannot be undone.`,
-      )
-    ) {
-      return
-    }
+    const ok = await confirm({
+      title: `Delete episode ${ep.episodeNumber}?`,
+      description: `“${ep.title}” will be removed permanently.`,
+      confirmLabel: "Delete",
+      variant: "destructive",
+    })
+    if (!ok) return
     setBusy(true)
     try {
       await deleteVerticalEpisode(ep.id)
       onChanged()
+      notify.success("Episode deleted")
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Could not delete episode.")
+      notify.error(e instanceof Error ? e.message : "Could not delete episode.")
     } finally {
       setBusy(false)
     }

@@ -46,6 +46,12 @@ import {
   fetchNotificationPreferences,
   updateNotificationPreference,
 } from "@/lib/api/notifications"
+import { fetchPushSubscriptionStatus } from "@/lib/api/push"
+import {
+  isWebPushSupported,
+  subscribeToWebPush,
+  unsubscribeFromWebPush,
+} from "@/lib/web-push"
 import { mapHistoryToSettingsItems, type SettingsHistoryItem } from "@/lib/map-history"
 import { fetchMyVerticalSeries } from "@/lib/api/verticals-admin"
 import { VerticalSeriesWizard } from "@/components/vertical-series-wizard"
@@ -205,6 +211,11 @@ export function ProfileSettingsSheet({
   const [historyItems, setHistoryItems] = useState<SettingsHistoryItem[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [notifLoading, setNotifLoading] = useState(false)
+  const [pushSupported] = useState(() => isWebPushSupported())
+  const [pushSubscribed, setPushSubscribed] = useState(false)
+  const [pushServerEnabled, setPushServerEnabled] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushError, setPushError] = useState<string | null>(null)
   const [streamKey, setStreamKey] = useState<string | null>(null)
   const [streamId, setStreamId] = useState<string | null>(null)
   const [rtmpUrl, setRtmpUrl] = useState(() => getRtmpIngestUrl())
@@ -371,19 +382,27 @@ export function ProfileSettingsSheet({
   useEffect(() => {
     if (!isOpen || screen !== "notifications") return
     setNotifLoading(true)
-    void fetchNotificationPreferences()
-      .then((prefs) => {
+    setPushError(null)
+    void Promise.all([
+      fetchNotificationPreferences(),
+      pushSupported ? fetchPushSubscriptionStatus() : Promise.resolve(null),
+    ])
+      .then(([prefs, pushStatus]) => {
         const next = Object.fromEntries(NOTIFICATION_PREFS.map((p) => [p.id, true]))
         for (const pref of prefs) {
           next[pref.type] = pref.enabled
         }
         setNotifSettings(next)
+        if (pushStatus) {
+          setPushSubscribed(pushStatus.subscribed)
+          setPushServerEnabled(pushStatus.enabled)
+        }
       })
       .catch(() => {
         /* keep defaults */
       })
       .finally(() => setNotifLoading(false))
-  }, [isOpen, screen])
+  }, [isOpen, screen, pushSupported])
 
   useEffect(() => {
     if (!isOpen || screen !== "shipping") return
@@ -485,6 +504,30 @@ export function ProfileSettingsSheet({
             <NotificationsPanel
               settings={notifSettings}
               loading={notifLoading}
+              pushSupported={pushSupported}
+              pushSubscribed={pushSubscribed}
+              pushServerEnabled={pushServerEnabled}
+              pushBusy={pushBusy}
+              pushError={pushError}
+              onPushToggle={async (enabled) => {
+                setPushBusy(true)
+                setPushError(null)
+                try {
+                  if (enabled) {
+                    await subscribeToWebPush()
+                    setPushSubscribed(true)
+                  } else {
+                    await unsubscribeFromWebPush()
+                    setPushSubscribed(false)
+                  }
+                } catch (e) {
+                  setPushError(
+                    e instanceof Error ? e.message : "Could not update browser push.",
+                  )
+                } finally {
+                  setPushBusy(false)
+                }
+              }}
               onToggle={(id, enabled) => {
                 setNotifSettings((s) => ({ ...s, [id]: enabled }))
                 void updateNotificationPreference(id, enabled).catch(() => {
@@ -1075,10 +1118,22 @@ function MenuPanel({
 function NotificationsPanel({
   settings,
   loading,
+  pushSupported,
+  pushSubscribed,
+  pushServerEnabled,
+  pushBusy,
+  pushError,
+  onPushToggle,
   onToggle,
 }: {
   settings: Record<string, boolean>
   loading: boolean
+  pushSupported: boolean
+  pushSubscribed: boolean
+  pushServerEnabled: boolean
+  pushBusy: boolean
+  pushError: string | null
+  onPushToggle: (enabled: boolean) => void | Promise<void>
   onToggle: (id: string, enabled: boolean) => void
 }) {
   return (
@@ -1086,6 +1141,36 @@ function NotificationsPanel({
       <p className="text-sm md:text-base text-muted-foreground mb-4 md:mb-6">
         Choose what you want to be notified about.
       </p>
+
+      {pushSupported && (
+        <div className="mb-4 md:mb-6 p-3 md:p-4 rounded-xl bg-primary/10 border border-primary/20">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium text-sm md:text-base">Browser push notifications</p>
+              <p className="text-xs md:text-sm text-muted-foreground">
+                {pushServerEnabled
+                  ? "Get alerts in this browser even when Prysym TV is in the background."
+                  : "Server push is not configured yet. In-app notifications still work."}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={loading || pushBusy || !pushServerEnabled}
+              onClick={() => void onPushToggle(!pushSubscribed)}
+              className={cn(
+                "w-11 h-6 rounded-full flex items-center px-0.5 shrink-0 transition-colors disabled:opacity-50",
+                pushSubscribed ? "bg-primary justify-end" : "bg-muted justify-start",
+              )}
+            >
+              <div className="w-5 h-5 rounded-full bg-white shadow-sm" />
+            </button>
+          </div>
+          {pushError ? (
+            <p className="text-xs text-destructive mt-2">{pushError}</p>
+          ) : null}
+        </div>
+      )}
+
       {loading ? (
         <p className="text-sm text-muted-foreground text-center py-8">Loading preferences…</p>
       ) : (

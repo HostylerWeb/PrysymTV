@@ -33,7 +33,8 @@ export function PageFooter() {
 const styles = StyleSheet.create({
   wrap: {
     marginTop: spacing.xl,
-    paddingVertical: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
     paddingHorizontal: spacing.page,
     borderTopWidth: 1,
     borderTopColor: colors.border,

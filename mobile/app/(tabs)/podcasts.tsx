@@ -13,7 +13,6 @@ import { PodcastMiniPlayer } from '@/components/podcasts/PodcastMiniPlayer';
 import { usePodcastPlayer } from '@/context/PodcastPlayerContext';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
-import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { mockPodcastEpisodes, mockPodcastShows } from '@/mocks';
 import type { PodcastShow } from '@/types/api';
 import { colors, radius, typography, withAlpha } from '@/theme/tokens';
@@ -40,10 +39,9 @@ function ShowRail({ title, shows, onShowPress }: { title: string; shows: Podcast
 
 export default function PodcastsScreen() {
   const router = useRouter();
-  const tabInset = useTabBarInset();
   const { requireAuth } = useMockAuth();
   const { trigger, flowHost } = useCreateFlow();
-  const { playEpisode } = usePodcastPlayer();
+  const { playEpisode, episode: playingEpisode } = usePodcastPlayer();
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('All');
 
   const featuredShow = mockPodcastShows[0];
@@ -68,7 +66,7 @@ export default function PodcastsScreen() {
         nestedScrollEnabled
         data={filteredEpisodes}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: tabInset + 120 }}
+        contentContainerStyle={{ paddingBottom: playingEpisode ? 72 : 0 }}
         ListHeaderComponent={
           <View style={styles.pad}>
             <AppHeader

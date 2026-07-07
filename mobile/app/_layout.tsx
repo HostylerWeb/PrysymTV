@@ -14,6 +14,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { MockAuthProvider } from '@/context/MockAuthContext';
+import { OAuthConfigProvider } from '@/context/OAuthConfigContext';
 import { PodcastPlayerProvider } from '@/context/PodcastPlayerContext';
 import { AuthPromptSheet } from '@/components/auth/AuthPromptSheet';
 import { StoreCartProvider } from '@/context/StoreCartContext';
@@ -42,6 +43,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaProvider>
+        <OAuthConfigProvider>
         <MockAuthProvider>
           <PodcastPlayerProvider>
           <StoreCartProvider>
@@ -99,6 +101,7 @@ export default function RootLayout() {
           </StoreCartProvider>
           </PodcastPlayerProvider>
         </MockAuthProvider>
+        </OAuthConfigProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

@@ -14,7 +14,6 @@ import { LiveStreamCard } from '@/components/feed/LiveStreamCard';
 import { VideoCardTile } from '@/components/feed/VideoCardTile';
 import { FilterChip } from '@/components/ui/FilterChip';
 import { Button } from '@/components/ui/Button';
-import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { mockLiveStreams, mockVideos } from '@/mocks';
@@ -25,7 +24,6 @@ const MODES = ['All', 'Videos', 'Live'] as const;
 const SORTS = ['Popular', 'Newest'] as const;
 
 export default function VideosScreen() {
-  const tabInset = useTabBarInset();
   const { requireAuth } = useMockAuth();
   const { trigger, flowHost } = useCreateFlow();
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('All');
@@ -59,7 +57,6 @@ export default function VideosScreen() {
   return (
     <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={{ paddingBottom: tabInset + 16 }}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.filterBar}>
