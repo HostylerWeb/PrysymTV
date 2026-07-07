@@ -37,7 +37,6 @@ export function shouldUseMockOAuthSignIn(options: {
   googleIosClientId?: string | null;
   googleAndroidClientId?: string | null;
   appleClientId?: string | null;
-  facebookAppId?: string | null;
 }): boolean {
   if (options.preferMock) return true;
 
@@ -51,7 +50,6 @@ export function shouldUseMockOAuthSignIn(options: {
     googleIds.length === 0 ||
     googleIds.every((id) => isPlaceholderGoogleClientId(id));
   const appleIsPlaceholder = isPlaceholderAppleClientId(options.appleClientId);
-  const facebookIsPlaceholder = isPlaceholderFacebookAppId(options.facebookAppId);
 
-  return googleIsPlaceholder && appleIsPlaceholder && facebookIsPlaceholder;
+  return googleIsPlaceholder && appleIsPlaceholder;
 }

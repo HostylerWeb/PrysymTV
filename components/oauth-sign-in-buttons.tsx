@@ -17,7 +17,6 @@ import {
 } from "@/lib/facebook-oauth"
 import {
   canUseFacebookWebLogin,
-  isPlaceholderFacebookAppId,
 } from "@/lib/oauth-mock"
 
 const envGoogleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim()
@@ -281,10 +280,6 @@ function FacebookSignInButton({
 
   useEffect(() => {
     if (!appId) return
-    if (isPlaceholderFacebookAppId(appId)) {
-      setReady(true)
-      return
-    }
 
     let cancelled = false
     void prepareFacebookSignIn(appId)
@@ -302,13 +297,6 @@ function FacebookSignInButton({
 
   const handleFacebookSignIn = useCallback(async () => {
     if (!appId) return
-
-    if (isPlaceholderFacebookAppId(appId)) {
-      onError?.(
-        "Facebook sign-in is not configured yet. Add FACEBOOK_APP_ID and FACEBOOK_APP_SECRET to api/.env.",
-      )
-      return
-    }
 
     if (!canUseFacebookWebLogin()) {
       onError?.(

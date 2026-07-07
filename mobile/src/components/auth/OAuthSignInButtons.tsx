@@ -214,7 +214,6 @@ export function OAuthSignInButtons({
     googleIosClientId,
     googleAndroidClientId,
     appleClientId,
-    facebookAppId,
   });
   const canUseGoogleHook =
     !useMockSignIn &&
