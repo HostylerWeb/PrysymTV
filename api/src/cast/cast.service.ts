@@ -5,7 +5,6 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { getStorageSettings } from '../config/storage-env';
 
 const DEMO_CAST_HOSTS = new Set(['commondatastorage.googleapis.com']);
 
@@ -24,24 +23,20 @@ export class CastService {
 
   private getAllowedHosts(): Set<string> {
     const hosts = new Set<string>(DEMO_CAST_HOSTS);
-    const settings = getStorageSettings(this.config);
-
-    for (const base of [
-      settings.s3?.publicBaseUrl,
-      settings.local?.publicBaseUrl,
-    ]) {
-      if (!base) continue;
-      try {
-        hosts.add(new URL(base).hostname);
-      } catch {
-        /* ignore invalid base */
-      }
-    }
 
     const mediamtx = this.config.get<string>('MEDIAMTX_HLS_PUBLIC_URL')?.trim();
     if (mediamtx) {
       try {
         hosts.add(new URL(mediamtx).hostname);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const frontend = this.config.get<string>('FRONTEND_URL')?.trim();
+    if (frontend) {
+      try {
+        hosts.add(new URL(frontend).hostname);
       } catch {
         /* ignore */
       }

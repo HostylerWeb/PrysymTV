@@ -36,6 +36,8 @@ export function inferCastContentType(url: string): string {
 function needsCastProxy(url: string): boolean {
   try {
     const parsed = new URL(url)
+    const apiBase = getApiBaseUrl()
+    if (url.startsWith(`${apiBase}/playback/`)) return false
     return !CAST_DIRECT_ORIGINS.has(parsed.origin)
   } catch {
     return true

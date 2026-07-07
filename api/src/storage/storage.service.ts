@@ -16,7 +16,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createReadStream, createWriteStream, existsSync, mkdirSync } from 'fs';
-import { copyFile, mkdir, rm, stat, unlink, writeFile } from 'fs/promises';
+import { copyFile, mkdir, readFile, rm, stat, unlink, writeFile } from 'fs/promises';
 import { randomUUID } from 'crypto';
 import { dirname, join, resolve } from 'path';
 import { pipeline } from 'stream/promises';
@@ -463,6 +463,47 @@ export class StorageService implements OnModuleInit {
     return null;
   }
 
+  /** Resolve a DB field that may be an object key or a legacy public URL. */
+  resolveMediaObjectKey(stored: string | null | undefined): string | null {
+    if (!stored?.trim()) return null;
+    const trimmed = stored.trim();
+    if (!/^https?:\/\//i.test(trimmed)) {
+      return trimmed.replace(/^\/+/, '');
+    }
+    return this.objectKeyFromPublicUrl(trimmed);
+  }
+
+  resolveVideoHlsMasterKey(
+    stored: string | null | undefined,
+    videoId: string,
+  ): string | null {
+    const key = this.resolveMediaObjectKey(stored);
+    if (key) return key;
+    if (stored?.trim()) return null;
+    return this.buildHlsMasterKey(videoId);
+  }
+
+  async getObjectBytes(objectKey: string): Promise<{
+    body: Buffer;
+    contentType: string | null;
+  }> {
+    const key = objectKey.replace(/^\/+/, '');
+    if (this.settings.driver === 's3' && this.s3 && this.settings.s3) {
+      const res = await this.s3.send(
+        new GetObjectCommand({
+          Bucket: this.settings.s3.bucket,
+          Key: key,
+        }),
+      );
+      if (!res.Body) throw new Error('Empty object body');
+      const body = Buffer.from(await res.Body.transformToByteArray());
+      return { body, contentType: res.ContentType ?? null };
+    }
+    const abs = this.getLocalAbsolutePath(key);
+    const body = await readFile(abs);
+    return { body, contentType: null };
+  }
+
   async deleteObjectIfExists(objectKey: string): Promise<void> {
     const key = objectKey.replace(/^\/+/, '');
     try {
@@ -531,7 +572,7 @@ export class StorageService implements OnModuleInit {
       await this.deleteObjectIfExists(video.rawObjectKey);
     }
 
-    const hlsKey = this.objectKeyFromPublicUrl(video.hlsMasterUrl);
+    const hlsKey = this.resolveMediaObjectKey(video.hlsMasterUrl);
     if (hlsKey?.endsWith('.m3u8')) {
       const prefix = hlsKey.replace(/\/[^/]+\.m3u8$/, '');
       if (prefix !== this.buildHlsPrefix(video.id)) {
@@ -555,7 +596,7 @@ export class StorageService implements OnModuleInit {
   async purgePublicMediaUrl(
     publicUrl: string | null | undefined,
   ): Promise<void> {
-    const key = this.objectKeyFromPublicUrl(publicUrl);
+    const key = this.resolveMediaObjectKey(publicUrl);
     if (!key) return;
     if (key.endsWith('.m3u8')) {
       await this.deletePrefix(key.replace(/\/[^/]+\.m3u8$/, ''));

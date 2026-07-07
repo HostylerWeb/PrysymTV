@@ -13,13 +13,19 @@ import {
   VerticalSeriesStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
+import { PlaybackService } from '../playback/playback.service';
 import { AttachEpisodeVideoDto } from './dto/attach-episode-video.dto';
 import { CreateVerticalEpisodeDto } from './dto/create-vertical-episode.dto';
 import { CreateVerticalSeriesDto } from './dto/create-vertical-series.dto';
 
 @Injectable()
 export class VerticalsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+    private readonly playback: PlaybackService,
+  ) {}
 
   private async assertVerticalCreatorApproved(creatorId: string) {
     const user = await this.prisma.user.findUnique({
@@ -138,6 +144,10 @@ export class VerticalsService {
       seriesSaved = !!seriesSave;
     }
 
+    const playback = await this.playback.buildStoredMediaPlaybackUrls(
+      episode.videoUrl,
+    );
+
     return {
       series: {
         id: series.id,
@@ -151,7 +161,7 @@ export class VerticalsService {
         id: episode.id,
         episodeNumber: episode.episodeNumber,
         title: episode.title,
-        videoUrl: episode.videoUrl,
+        videoUrl: playback.videoUrl,
         durationSeconds: episode.durationSeconds,
         cliffhanger: episode.cliffhanger,
         viewsCount: episode.viewsCount,
@@ -490,7 +500,9 @@ export class VerticalsService {
     return this.prisma.verticalEpisode.update({
       where: { id: episodeId },
       data: {
-        videoUrl: video.hlsMasterUrl,
+        videoUrl:
+          this.storage.resolveVideoHlsMasterKey(video.hlsMasterUrl, video.id) ??
+          video.hlsMasterUrl,
         thumbnailUrl: video.thumbnailUrl ?? episode.thumbnailUrl,
         status: video.status === ContentStatus.ready ? ContentStatus.ready : ContentStatus.processing,
       },

@@ -65,12 +65,12 @@ export async function probeMedia(
   };
 }
 
-/** Ladder heights capped by source (no upscale). */
+/** Ladder heights capped by source (no upscale). Movies/videos: 720p + 1080p only. */
 export function pickTranscodeHeights(sourceHeight: number): number[] {
-  const candidates = [360, 480, 720, 1080];
+  const candidates = [720, 1080];
   const cap = sourceHeight > 0 ? sourceHeight : 720;
   const picked = candidates.filter((h) => h <= cap);
-  return picked.length > 0 ? picked : [Math.min(360, cap)];
+  return picked.length > 0 ? picked : [Math.min(720, cap)];
 }
 
 /** Shorts: one stream, capped at maxHeight (default 720p), never upscale. */
@@ -189,7 +189,7 @@ export async function transcodeToHls(
 
   const args: string[] = ['-y', '-i', inputPath, '-filter_complex', filterComplex];
 
-  const bitrates = ['800k', '2500k', '5000k', '8000k'];
+  const bitrates = ['5000k', '8000k'];
   for (let i = 0; i < n; i++) {
     args.push('-map', `[out${i}]`);
     if (probe.hasAudio) args.push('-map', '0:a:0');

@@ -12,9 +12,9 @@ import {
   VerticalCreatorStatus,
 } from '@prisma/client';
 import {
-  mapVideoCard,
   VIDEO_CARD_SELECT,
 } from '../common/mappers/content.mapper';
+import { PlaybackService } from '../playback/playback.service';
 import { normalizeUsername } from '../common/utils/username.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -40,6 +40,7 @@ export class UsersService {
     private readonly config: ConfigService,
     private readonly billing: BillingService,
     private readonly playlists: PlaylistsService,
+    private readonly playback: PlaybackService,
   ) {}
 
   async getMe(userId: string) {
@@ -422,7 +423,7 @@ export class UsersService {
     ]);
 
     return {
-      items: items.map(mapVideoCard),
+      items: await this.playback.mapVideoCardsWithPlayback(items),
       meta: { page, limit, total },
     };
   }

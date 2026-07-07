@@ -19,6 +19,7 @@ import { join } from 'path';
 import { probeMedia } from '../queue/ffmpeg.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { PlaybackService } from '../playback/playback.service';
 import { CreatePodcastEpisodeDto } from './dto/create-episode.dto';
 import { CreatePodcastShowDto } from './dto/create-show.dto';
 import { PodcastUploadCompleteDto } from './dto/podcast-upload-complete.dto';
@@ -30,7 +31,22 @@ export class PodcastsService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly config: ConfigService,
+    private readonly playback: PlaybackService,
   ) {}
+
+  private async mapEpisodeMedia<T extends { audioUrl: string | null; videoUrl: string | null }>(
+    episode: T,
+  ): Promise<T> {
+    const [audio, video] = await Promise.all([
+      this.playback.buildStoredMediaPlaybackUrls(episode.audioUrl),
+      this.playback.buildStoredMediaPlaybackUrls(episode.videoUrl),
+    ]);
+    return {
+      ...episode,
+      audioUrl: audio.audioUrl,
+      videoUrl: video.videoUrl,
+    };
+  }
 
   async listShows(page = 1, limit = 20) {
     const skip = (page - 1) * limit;
@@ -363,7 +379,6 @@ export class PodcastsService {
       await rm(workRoot, { recursive: true, force: true });
     }
 
-    const mediaUrl = this.storage.getPublicUrl(objectKey);
     const isVideoUpload = objectKey.includes('/video');
     const updated = await this.prisma.podcastEpisode.update({
       where: { id: episodeId },
@@ -371,21 +386,21 @@ export class PodcastsService {
         status: ContentStatus.ready,
         mediaType: isVideoUpload ? PodcastMediaType.video : PodcastMediaType.audio,
         ...(isVideoUpload
-          ? { videoUrl: mediaUrl, audioUrl: null }
-          : { audioUrl: mediaUrl, videoUrl: null }),
+          ? { videoUrl: objectKey, audioUrl: null }
+          : { audioUrl: objectKey, videoUrl: null }),
         durationSeconds,
         publishedAt: new Date(),
       },
     });
 
-    return {
+    return this.mapEpisodeMedia({
       episodeId: updated.id,
       status: updated.status,
       mediaType: updated.mediaType,
       audioUrl: updated.audioUrl,
       videoUrl: updated.videoUrl,
       durationSeconds: updated.durationSeconds,
-    };
+    });
   }
 
   async episodesFeed(page = 1, limit = 20, viewerId?: string) {
@@ -431,11 +446,13 @@ export class PodcastsService {
     }
 
     return {
-      items: items.map((e) => ({
-        ...e,
-        liked: likedIds.has(e.id),
-        saved: savedIds.has(e.id),
-      })),
+      items: await Promise.all(
+        items.map(async (e) => ({
+          ...(await this.mapEpisodeMedia(e)),
+          liked: likedIds.has(e.id),
+          saved: savedIds.has(e.id),
+        })),
+      ),
       meta: { page, limit, total },
     };
   }
@@ -485,7 +502,7 @@ export class PodcastsService {
       saved = !!save;
     }
 
-    return { ...episode, liked, saved };
+    return this.mapEpisodeMedia({ ...episode, liked, saved });
   }
 
   async recordPlay(id: string) {

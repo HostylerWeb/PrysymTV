@@ -34,7 +34,8 @@ import { StorageService } from '../storage/storage.service';
 import { StreamsService } from '../streams/streams.service';
 import { VIDEO_PROCESSING_QUEUE } from '../queue/queue.constants';
 import type { VideoProcessingJobData } from '../queue/video-processing.processor';
-import { mapVideoCard, VIDEO_CARD_SELECT } from '../common/mappers/content.mapper';
+import { VIDEO_CARD_SELECT } from '../common/mappers/content.mapper';
+import { PlaybackService } from '../playback/playback.service';
 import { verticalFromCategorySlug, categorySlugsForVertical } from '../common/utils/category-vertical.util';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { UploadCompleteDto } from './dto/upload-complete.dto';
@@ -49,6 +50,7 @@ export class VideosService {
     private readonly notifications: NotificationsService,
     private readonly streams: StreamsService,
     private readonly playlists: PlaylistsService,
+    private readonly playback: PlaybackService,
     @InjectQueue(VIDEO_PROCESSING_QUEUE) private readonly videoQueue: Queue,
   ) {}
 
@@ -354,7 +356,7 @@ export class VideosService {
 
     const { cast, ...rest } = video;
     return {
-      ...this.toPublicVideo(rest),
+      ...(await this.toPublicVideo(rest)),
       ...flags,
       isFollowing,
       dislikesCount: video.dislikesCount,
@@ -368,7 +370,7 @@ export class VideosService {
     };
   }
 
-  toPublicVideo(
+  async toPublicVideo(
     video: {
       id: string;
       title: string;
@@ -397,10 +399,14 @@ export class VideosService {
       };
     },
   ) {
+    const { hlsMasterUrl, ...publicVideo } = video;
+    const urls = await this.playback.buildVideoPlaybackUrls({
+      id: video.id,
+      hlsMasterUrl,
+    });
     return {
-      ...video,
-      playbackUrl: video.hlsMasterUrl,
-      videoUrl: video.hlsMasterUrl,
+      ...publicVideo,
+      ...urls,
     };
   }
 
@@ -560,15 +566,17 @@ export class VideosService {
     ]);
 
     return {
-      items: page.map((v) => {
-        const card = mapVideoCard(v);
-        const f = flags.get(v.id) ?? { liked: false, saved: false, disliked: false };
-        return {
-          ...card,
-          ...f,
-          isFollowing: followByCreator.get(v.creator.id) ?? false,
-        };
-      }),
+      items: await Promise.all(
+        page.map(async (v) => {
+          const card = await this.playback.mapVideoCardWithPlayback(v);
+          const f = flags.get(v.id) ?? { liked: false, saved: false, disliked: false };
+          return {
+            ...card,
+            ...f,
+            isFollowing: followByCreator.get(v.creator.id) ?? false,
+          };
+        }),
+      ),
       nextCursor: hasMore ? String(skip + limit) : null,
     };
   }
@@ -587,7 +595,10 @@ export class VideosService {
         where: { type: VideoType.movie, status: ContentStatus.ready },
       }),
     ]);
-    return { items: items.map(mapVideoCard), meta: { page, limit, total } };
+    return {
+      items: await this.playback.mapVideoCardsWithPlayback(items),
+      meta: { page, limit, total },
+    };
   }
 
   async featuredMovie() {
@@ -596,7 +607,9 @@ export class VideosService {
       orderBy: { viewsCount: 'desc' },
       select: VIDEO_CARD_SELECT,
     });
-    return { item: item ? mapVideoCard(item) : null };
+    return {
+      item: item ? await this.playback.mapVideoCardWithPlayback(item) : null,
+    };
   }
 
   async videosBrowseFeed(params: {
@@ -660,7 +673,7 @@ export class VideosService {
     }
 
     const emptyVideos = {
-      items: [] as ReturnType<typeof mapVideoCard>[],
+      items: [] as Awaited<ReturnType<PlaybackService['mapVideoCardWithPlayback']>>[],
       meta: { page, limit, total: 0 },
     };
     const emptyLive = { items: [] as Array<Record<string, unknown>> };
@@ -705,7 +718,7 @@ export class VideosService {
       ]);
       return {
         videos: {
-          items: items.map(mapVideoCard),
+          items: await this.playback.mapVideoCardsWithPlayback(items),
           meta: { page, limit, total },
         },
         live: emptyLive,
@@ -741,7 +754,7 @@ export class VideosService {
 
     return {
       videos: {
-        items: videoItems.map(mapVideoCard),
+        items: await this.playback.mapVideoCardsWithPlayback(videoItems),
         meta: { page, limit, total: videoTotal },
       },
       live: { items: streams.map((s) => this.mapLiveBrowseItem(s)) },

@@ -136,7 +136,7 @@ export class VideoProcessingProcessor extends WorkerHost {
       where: { id: videoId },
       data: {
         status: ContentStatus.ready,
-        hlsMasterUrl: rawUrl,
+        hlsMasterUrl: objectKey,
         thumbnailUrl,
         durationSeconds,
       },
@@ -250,7 +250,7 @@ export class VideoProcessingProcessor extends WorkerHost {
         where: { id: videoId },
         data: {
           status: ContentStatus.ready,
-          hlsMasterUrl: this.storage.getPublicUrl(masterKey),
+          hlsMasterUrl: masterKey,
           thumbnailUrl,
           durationSeconds: probe.durationSeconds,
         },

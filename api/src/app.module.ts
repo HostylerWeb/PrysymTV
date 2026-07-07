@@ -36,6 +36,7 @@ import { ReportsModule } from './reports/reports.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { StoresModule } from './stores/stores.module';
 import { CastModule } from './cast/cast.module';
+import { PlaybackModule } from './playback/playback.module';
 
 @Module({
   imports: [
@@ -109,6 +110,7 @@ import { CastModule } from './cast/cast.module';
     MediaModule,
     StoresModule,
     CastModule,
+    PlaybackModule,
   ],
   providers: [
     {

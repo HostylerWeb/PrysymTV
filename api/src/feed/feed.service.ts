@@ -2,13 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { AnalyticsEventType, ContentStatus, StreamStatus, VideoType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StreamsService } from '../streams/streams.service';
-import { mapVideoCard, VIDEO_CARD_SELECT } from '../common/mappers/content.mapper';
+import { VIDEO_CARD_SELECT } from '../common/mappers/content.mapper';
+import { PlaybackService } from '../playback/playback.service';
 
 @Injectable()
 export class FeedService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly streams: StreamsService,
+    private readonly playback: PlaybackService,
   ) {}
 
   async home(userId?: string) {
@@ -80,6 +82,16 @@ export class FeedService {
         ? 'trending'
         : null;
 
+    const [trending, newReleases, moviesCards, featuredMovieCard] =
+      await Promise.all([
+        this.playback.mapVideoCardsWithPlayback(videos),
+        this.playback.mapVideoCardsWithPlayback(newReleaseMovies),
+        this.playback.mapVideoCardsWithPlayback(movies),
+        heroMovie
+          ? this.playback.mapVideoCardWithPlayback(heroMovie)
+          : Promise.resolve(null),
+      ]);
+
     return {
       liveNow: liveStreams.map((s) => ({
         id: s.id,
@@ -107,10 +119,10 @@ export class FeedService {
             viewerCount: liveStreams[0].viewerCount,
           }
         : null,
-      trending: videos.map(mapVideoCard),
-      newReleases: newReleaseMovies.map(mapVideoCard),
-      movies: movies.map(mapVideoCard),
-      featuredMovie: heroMovie ? mapVideoCard(heroMovie) : null,
+      trending,
+      newReleases,
+      movies: moviesCards,
+      featuredMovie: featuredMovieCard,
       heroMovieReason,
     };
   }
@@ -237,10 +249,11 @@ export class FeedService {
         select: VIDEO_CARD_SELECT,
       });
       const byId = new Map(videos.map((video) => [video.id, video]));
-      const items = pageIds
-        .map((id) => byId.get(id))
-        .filter((video): video is NonNullable<typeof video> => !!video)
-        .map(mapVideoCard);
+      const items = await this.playback.mapVideoCardsWithPlayback(
+        pageIds
+          .map((id) => byId.get(id))
+          .filter((video): video is NonNullable<typeof video> => !!video),
+      );
 
       return {
         items,
@@ -261,7 +274,7 @@ export class FeedService {
       }),
     ]);
     return {
-      items: items.map(mapVideoCard),
+      items: await this.playback.mapVideoCardsWithPlayback(items),
       meta: { page, limit, total },
     };
   }
