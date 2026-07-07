@@ -35,6 +35,7 @@ import { PublicConfigModule } from './config/config.module';
 import { ReportsModule } from './reports/reports.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { StoresModule } from './stores/stores.module';
+import { CastModule } from './cast/cast.module';
 
 @Module({
   imports: [
@@ -107,6 +108,7 @@ import { StoresModule } from './stores/stores.module';
     AdminModule,
     MediaModule,
     StoresModule,
+    CastModule,
   ],
   providers: [
     {

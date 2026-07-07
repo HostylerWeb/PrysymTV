@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from "@/lib/api-client"
+
 export type CastableMedia = {
   title: string
   subtitle?: string
@@ -7,6 +9,11 @@ export type CastableMedia = {
   /** Use LIVE stream type for live HLS (e.g. broadcasts). */
   isLive?: boolean
 }
+
+/** Public CDNs that already send CORS headers for Chromecast receivers. */
+const CAST_DIRECT_ORIGINS = new Set([
+  "https://commondatastorage.googleapis.com",
+])
 
 export function toAbsoluteCastUrl(url: string): string {
   const trimmed = url.trim()
@@ -24,6 +31,53 @@ export function inferCastContentType(url: string): string {
   if (path.endsWith(".mp3")) return "audio/mpeg"
   if (path.endsWith(".m4a") || path.endsWith(".aac")) return "audio/mp4"
   return "application/x-mpegURL"
+}
+
+function needsCastProxy(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return !CAST_DIRECT_ORIGINS.has(parsed.origin)
+  } catch {
+    return true
+  }
+}
+
+/** Route media through the API cast proxy so the receiver gets CORS-safe URLs. */
+export function resolveCastStreamUrl(streamUrl: string): string {
+  const absolute = toAbsoluteCastUrl(streamUrl)
+  if (!absolute || !needsCastProxy(absolute)) return absolute
+
+  if (typeof window === "undefined") return absolute
+
+  try {
+    const apiBase = getApiBaseUrl()
+    return `${apiBase}/cast/proxy?url=${encodeURIComponent(absolute)}`
+  } catch {
+    return absolute
+  }
+}
+
+function castErrorMessage(code: unknown): string {
+  const normalized = String(code ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/-/g, "_")
+
+  switch (normalized) {
+    case "LOAD_FAILED":
+      return "The TV could not load this video. Try again or use a different video."
+    case "LOAD_CANCELLED":
+      return "Cast was cancelled."
+    case "INVALID_REQUEST":
+      return "This video cannot be cast in its current format."
+    case "SESSION_ERROR":
+      return "Lost connection to the Cast device."
+    case "TIMEOUT":
+      return "Timed out connecting to the Cast device."
+    default:
+      if (normalized) return `Cast error: ${normalized}`
+      return "Failed to load media on Cast device"
+  }
 }
 
 let sdkLoadPromise: Promise<void> | null = null
@@ -99,25 +153,78 @@ export function getCastState(): cast.framework.CastState | "unavailable" {
   return window.cast.framework.CastContext.getInstance().getCastState()
 }
 
-export async function castMedia(media: CastableMedia): Promise<void> {
-  const url = toAbsoluteCastUrl(media.streamUrl ?? "")
-  if (!url) throw new Error("No stream URL to cast")
-
+async function ensureCastSession(): Promise<cast.framework.CastSession> {
   await loadCastSdk()
   const context = window.cast!.framework.CastContext.getInstance()
-  let session = context.getCurrentSession()
-  if (!session) {
-    session = await context.requestSession()
-  }
+
+  const existing = context.getCurrentSession()
+  if (existing) return existing
+
+  const { CastContextEventType, SessionState } = window.cast!.framework
+
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup()
+      reject(new Error("Timed out connecting to Cast device"))
+    }, 60_000)
+
+    const onSessionState = (event: { sessionState?: cast.framework.SessionState }) => {
+      if (
+        event.sessionState === SessionState.SESSION_STARTED ||
+        event.sessionState === SessionState.SESSION_RESUMED
+      ) {
+        const session = context.getCurrentSession()
+        if (session) {
+          cleanup()
+          resolve(session)
+        }
+        return
+      }
+      if (event.sessionState === SessionState.SESSION_START_FAILED) {
+        cleanup()
+        reject(new Error("Could not connect to Cast device"))
+      }
+    }
+
+    const cleanup = () => {
+      window.clearTimeout(timeout)
+      context.removeEventListener(CastContextEventType.SESSION_STATE_CHANGED, onSessionState)
+    }
+
+    context.addEventListener(CastContextEventType.SESSION_STATE_CHANGED, onSessionState)
+
+    void context
+      .requestSession()
+      .then(() => {
+        const session = context.getCurrentSession()
+        if (session) {
+          cleanup()
+          resolve(session)
+        }
+      })
+      .catch(() => {
+        cleanup()
+        reject(new Error("Cast was cancelled or no device was selected"))
+      })
+  })
+}
+
+export async function castMedia(media: CastableMedia): Promise<void> {
+  const url = resolveCastStreamUrl(media.streamUrl ?? "")
+  if (!url) throw new Error("No stream URL to cast")
+
+  const castSession = await ensureCastSession()
 
   const contentType = inferCastContentType(url)
   const mediaInfo = new chrome.cast.media.MediaInfo(url, contentType)
+  mediaInfo.contentId = url
   mediaInfo.streamType =
-    media.isLive || url.includes("/live/")
+    media.isLive || media.streamUrl.includes("/live/")
       ? chrome.cast.media.StreamType.LIVE
       : chrome.cast.media.StreamType.BUFFERED
 
   const metadata = new chrome.cast.media.GenericMediaMetadata()
+  metadata.metadataType = chrome.cast.media.MetadataType.GENERIC
   metadata.title = media.title
   if (media.subtitle) metadata.subtitle = media.subtitle
   const poster = media.posterUrl?.trim()
@@ -131,17 +238,20 @@ export async function castMedia(media: CastableMedia): Promise<void> {
   mediaInfo.metadata = metadata
 
   const request = new chrome.cast.media.LoadRequest(mediaInfo)
+  request.autoplay = true
   if (media.currentTime != null && media.currentTime > 0) {
     request.currentTime = media.currentTime
   }
 
-  await new Promise<void>((resolve, reject) => {
-    session!.loadMedia(
-      request,
-      () => resolve(),
-      (err) => reject(err ?? new Error("Failed to load media on Cast device")),
-    )
-  })
+  try {
+    const errorCode = await castSession.loadMedia(request)
+    if (errorCode != null && errorCode !== "") {
+      throw new Error(castErrorMessage(errorCode))
+    }
+  } catch (err) {
+    if (err instanceof Error) throw err
+    throw new Error(castErrorMessage(err))
+  }
 }
 
 export function subscribeCastState(
