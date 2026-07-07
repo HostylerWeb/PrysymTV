@@ -19,6 +19,8 @@ import { ReportModal } from "@/components/report-modal"
 import { AddToPlaylistSheet } from "@/components/add-to-playlist-sheet"
 import { ShareSheet } from "@/components/share-sheet"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
+import { VideoQualityMenu } from "@/components/video-quality-menu"
+import type { HlsQualityControl } from "@/lib/hls-quality"
 import { useAuth } from "@/contexts/auth-context"
 import { useConfirm } from "@/contexts/confirm-context"
 import {
@@ -51,6 +53,7 @@ import {
   WATCH_COMMENTS_MOBILE_PLAYER_VH,
 } from "@/components/watch-comments-panel"
 import { CastMediaButton } from "@/components/cast-media-button"
+import { cn } from "@/lib/utils"
 
 type WatchVideo = {
   id: string
@@ -129,6 +132,7 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [isPlaylistOpen, setIsPlaylistOpen] = useState(false)
   const [isGiftOpen, setIsGiftOpen] = useState(false)
+  const [qualityControl, setQualityControl] = useState<HlsQualityControl | null>(null)
   const progressSent = useRef(0)
   const viewRecorded = useRef(false)
   useWatchAnalytics(video?.id, { creatorId: video?.creatorId })
@@ -457,6 +461,7 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
             controls={false}
             disableNativeFullscreen
             onNativeFullscreenBlocked={toggleImmersive}
+            onQualityControlReady={setQualityControl}
             muted={isMuted}
             videoRef={videoRef}
             onPlay={() => {
@@ -550,6 +555,7 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
                   >
                     <Volume2 className="w-5 h-5" />
                   </button>
+                  <VideoQualityMenu control={qualityControl} variant="compact" />
                 </div>
                 <button
                   type="button"

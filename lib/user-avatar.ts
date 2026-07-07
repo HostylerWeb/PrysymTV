@@ -1,3 +1,5 @@
+import { proxyMediaAssetUrl } from "@/lib/format-media";
+
 /** Stock photos previously used as defaults — treat as missing so users get initials. */
 const LEGACY_STOCK_AVATAR_MARKERS = [
   "photo-1472099645785",
@@ -24,6 +26,9 @@ export function userAvatarUrl(
   seed: string,
 ): string {
   const trimmed = avatarUrl?.trim();
-  if (trimmed && !isLegacyStockAvatar(trimmed)) return trimmed;
+  if (trimmed && !isLegacyStockAvatar(trimmed)) {
+    if (/\.r2\.dev\//i.test(trimmed)) return proxyMediaAssetUrl(trimmed);
+    return trimmed;
+  }
   return defaultAvatarUrl(seed);
 }

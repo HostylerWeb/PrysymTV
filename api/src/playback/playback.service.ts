@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SignJWT, jwtVerify } from 'jose';
+import { isPublicAssetKey } from '../common/media-asset.util';
 import { StorageService } from '../storage/storage.service';
 import type { VideoWithCreator } from '../common/mappers/content.mapper';
 
@@ -71,6 +72,17 @@ export class PlaybackService {
     return `${this.apiBase}/playback/${encoded}/${fileName}`;
   }
 
+  /** Rewrite R2/S3 public URLs to the API assets proxy (thumbnails, posters, avatars). */
+  resolvePublicAssetUrl(stored: string | null | undefined): string | null {
+    if (!stored?.trim()) return null;
+    const trimmed = stored.trim();
+    const key = this.storage.resolveMediaObjectKey(trimmed);
+    if (!key || !isPublicAssetKey(key)) {
+      return trimmed;
+    }
+    return `${this.apiBase}/assets/${key}`;
+  }
+
   async buildPlaybackUrlsFromObjectKey(
     objectKey: string | null,
   ): Promise<{ playbackUrl: string | null; videoUrl: string | null }> {
@@ -119,8 +131,8 @@ export class PlaybackService {
     return {
       id: v.id,
       title: v.title,
-      thumbnailUrl: v.thumbnailUrl,
-      posterUrl: v.posterUrl,
+      thumbnailUrl: this.resolvePublicAssetUrl(v.thumbnailUrl),
+      posterUrl: this.resolvePublicAssetUrl(v.posterUrl),
       durationSeconds: v.durationSeconds,
       viewsCount: v.viewsCount,
       likesCount: v.likesCount,

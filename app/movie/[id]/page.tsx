@@ -13,6 +13,8 @@ import { ReportModal } from "@/components/report-modal"
 import { ShareSheet } from "@/components/share-sheet"
 import { Footer } from "@/components/footer"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
+import { VideoQualityMenu } from "@/components/video-quality-menu"
+import type { HlsQualityControl } from "@/lib/hls-quality"
 import { useAuth } from "@/contexts/auth-context"
 import { genreLabel, fetchMovieGenres } from "@/lib/api/categories"
 import { fetchVideo, recordVideoView, toggleVideoLike, toggleVideoSave } from "@/lib/api/videos-feed"
@@ -108,6 +110,7 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
   const [prerollLoading, setPrerollLoading] = useState(false)
   const [isReportOpen, setIsReportOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
+  const [qualityControl, setQualityControl] = useState<HlsQualityControl | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const isMobile = useIsMobile()
   const {
@@ -252,6 +255,7 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
                 className="w-full h-full object-contain"
                 autoPlay
                 controls
+                onQualityControlReady={setQualityControl}
                 disableNativeFullscreen={isMobile}
                 onNativeFullscreenBlocked={toggleImmersive}
                 playsInline
@@ -287,7 +291,8 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
                   )}
                 </button>
               )}
-              <div className="absolute top-4 right-4 z-[110]">
+              <div className="absolute top-4 right-4 z-[110] flex items-center gap-2">
+                <VideoQualityMenu control={qualityControl} variant="on-video" />
                 <CastMediaButton
                   variant="on-video"
                   media={

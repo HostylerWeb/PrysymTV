@@ -2,6 +2,23 @@ import { userAvatarUrl } from "@/lib/user-avatar";
 
 const DEFAULT_PLACEHOLDER_THUMB = "/placeholder.svg";
 
+/** Legacy R2 public dev URLs → API assets proxy (bucket is private). */
+export function proxyMediaAssetUrl(url: string): string {
+  const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+  if (!apiBase) return url;
+
+  const r2Match = url.match(/^https?:\/\/[^/]+\.r2\.dev\/(.+)$/i);
+  if (r2Match?.[1]) {
+    return `${apiBase}/assets/${r2Match[1]}`;
+  }
+
+  if (url.startsWith(`${apiBase}/assets/`)) {
+    return url;
+  }
+
+  return url;
+}
+
 function placeholderThumb(): string {
   const fromEnv = process.env.NEXT_PUBLIC_MEDIA_PLACEHOLDER_URL?.trim();
   if (fromEnv) return fromEnv;
@@ -33,7 +50,12 @@ export function formatViewCount(count: number): string {
 
 export function videoThumbnail(url: string | null | undefined): string {
   const trimmed = url?.trim();
-  if (trimmed) return trimmed;
+  if (trimmed) {
+    if (/\.r2\.dev\//i.test(trimmed)) {
+      return proxyMediaAssetUrl(trimmed);
+    }
+    return trimmed;
+  }
   return placeholderThumb();
 }
 

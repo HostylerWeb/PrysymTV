@@ -1,7 +1,13 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import Hls from "hls.js"
+import { VideoQualityMenu } from "@/components/video-quality-menu"
+import {
+  labelForHeight,
+  type HlsQualityControl,
+  type HlsQualityLevel,
+} from "@/lib/hls-quality"
 
 type HlsVideoPlayerProps = {
   src: string | null | undefined
@@ -16,6 +22,8 @@ type HlsVideoPlayerProps = {
   live?: boolean
   /** LL-HLS fallback when WebRTC is unavailable (~2–4s). */
   liveLowLatency?: boolean
+  /** Show manual quality picker when multiple HLS renditions exist (VOD). */
+  showQualitySelector?: boolean
   onPlay?: () => void
   onTimeUpdate?: (currentTime: number, duration: number) => void
   onEnded?: () => void
@@ -24,6 +32,8 @@ type HlsVideoPlayerProps = {
   disableNativeFullscreen?: boolean
   /** Called when native fullscreen was blocked so the app can enter CSS immersive mode. */
   onNativeFullscreenBlocked?: () => void
+  /** Exposes quality API for custom player chrome (e.g. watch page controls). */
+  onQualityControlReady?: (control: HlsQualityControl | null) => void
 }
 
 export function HlsVideoPlayer({
@@ -37,15 +47,62 @@ export function HlsVideoPlayer({
   loop = false,
   live = false,
   liveLowLatency = false,
+  showQualitySelector = false,
   onPlay,
   onTimeUpdate,
   onEnded,
   videoRef: externalRef,
   disableNativeFullscreen = false,
   onNativeFullscreenBlocked,
+  onQualityControlReady,
 }: HlsVideoPlayerProps) {
   const internalRef = useRef<HTMLVideoElement>(null)
   const videoRef = externalRef ?? internalRef
+  const hlsRef = useRef<Hls | null>(null)
+  const [qualityControl, setQualityControl] = useState<HlsQualityControl | null>(
+    null,
+  )
+
+  const publishQualityControl = useCallback(
+    (control: HlsQualityControl | null) => {
+      setQualityControl(control)
+      onQualityControlReady?.(control)
+    },
+    [onQualityControlReady],
+  )
+
+  const buildLevels = useCallback((hls: Hls): HlsQualityLevel[] => {
+    return hls.levels
+      .map((level, index) => ({
+        index,
+        height: level.height,
+        label: labelForHeight(level.height),
+      }))
+      .filter((level) => level.height > 0)
+      .sort((a, b) => b.height - a.height)
+  }, [])
+
+  const syncQualityControl = useCallback(
+    (hls: Hls) => {
+      const levels = buildLevels(hls)
+      if (levels.length <= 1) {
+        publishQualityControl(null)
+        return
+      }
+
+      publishQualityControl({
+        levels,
+        currentLevel: hls.currentLevel,
+        setLevel: (levelIndex: number) => {
+          const instance = hlsRef.current
+          if (!instance) return
+          instance.currentLevel = levelIndex
+          syncQualityControl(instance)
+        },
+      })
+    },
+    [buildLevels, publishQualityControl],
+  )
 
   useEffect(() => {
     const el = videoRef.current
@@ -62,6 +119,8 @@ export function HlsVideoPlayer({
         if (err instanceof DOMException && err.name === "AbortError") return
       })
     }
+
+    publishQualityControl(null)
 
     if (isHls && Hls.isSupported()) {
       hls = new Hls({
@@ -91,13 +150,18 @@ export function HlsVideoPlayer({
                 backBufferLength: 30,
               }),
       })
+      hlsRef.current = hls
       hls.attachMedia(el)
       hls.on(Hls.Events.MEDIA_ATTACHED, () => {
         hls?.loadSource(src)
       })
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         if (live || liveLowLatency) hls?.startLoad(-1)
+        if (hls && !live && !liveLowLatency) syncQualityControl(hls)
         tryPlay()
+      })
+      hls.on(Hls.Events.LEVEL_SWITCHED, () => {
+        if (hls && !live && !liveLowLatency) syncQualityControl(hls)
       })
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!hls || data.fatal === false) return
@@ -112,16 +176,28 @@ export function HlsVideoPlayer({
     } else if (isHls && el.canPlayType("application/vnd.apple.mpegurl")) {
       el.src = src
       el.addEventListener("loadedmetadata", tryPlay, { once: true })
+      publishQualityControl(null)
     } else {
       el.src = src
       tryPlay()
+      publishQualityControl(null)
     }
 
     return () => {
       cancelled = true
+      hlsRef.current = null
       hls?.destroy()
+      publishQualityControl(null)
     }
-  }, [src, autoPlay, live, liveLowLatency, videoRef])
+  }, [
+    src,
+    autoPlay,
+    live,
+    liveLowLatency,
+    videoRef,
+    syncQualityControl,
+    publishQualityControl,
+  ])
 
   useEffect(() => {
     const el = videoRef.current
@@ -174,17 +250,27 @@ export function HlsVideoPlayer({
     )
   }
 
+  const showBuiltInQuality =
+    showQualitySelector && !onQualityControlReady && qualityControl
+
   return (
-    <video
-      ref={videoRef}
-      className={className ?? "w-full h-full object-contain"}
-      poster={poster ?? undefined}
-      controls={controls}
-      controlsList={disableNativeFullscreen ? "nofullscreen noremoteplayback" : undefined}
-      disablePictureInPicture={disableNativeFullscreen}
-      muted={muted}
-      playsInline={playsInline}
-      loop={loop}
-    />
+    <div className="relative w-full h-full">
+      <video
+        ref={videoRef}
+        className={className ?? "w-full h-full object-contain"}
+        poster={poster ?? undefined}
+        controls={controls}
+        controlsList={disableNativeFullscreen ? "nofullscreen noremoteplayback" : undefined}
+        disablePictureInPicture={disableNativeFullscreen}
+        muted={muted}
+        playsInline={playsInline}
+        loop={loop}
+      />
+      {showBuiltInQuality ? (
+        <div className="absolute bottom-12 right-3 z-20 pointer-events-auto">
+          <VideoQualityMenu control={qualityControl} variant="overlay" />
+        </div>
+      ) : null}
+    </div>
   )
 }

@@ -92,16 +92,20 @@ export class FeedService {
           : Promise.resolve(null),
       ]);
 
+    const asset = (url: string | null | undefined) =>
+      this.playback.resolvePublicAssetUrl(url);
+
     return {
       liveNow: liveStreams.map((s) => ({
         id: s.id,
         slug: s.creator.username,
         title: s.title,
-        thumbnailUrl: s.thumbnailUrl ?? s.creator.avatarUrl,
+        thumbnailUrl:
+          asset(s.thumbnailUrl) ?? asset(s.creator.avatarUrl),
         hlsPlaybackUrl: s.hlsPlaybackUrl,
         streamer: s.creator.displayName ?? s.creator.username,
         streamerSlug: s.creator.username,
-        streamerAvatar: s.creator.avatarUrl,
+        streamerAvatar: asset(s.creator.avatarUrl),
         viewers: s.viewerCount,
         category: s.category,
       })),
@@ -112,10 +116,11 @@ export class FeedService {
             slug: liveStreams[0].creator.username,
             title: liveStreams[0].title,
             thumbnailUrl:
-              liveStreams[0].thumbnailUrl ?? liveStreams[0].creator.avatarUrl,
+              asset(liveStreams[0].thumbnailUrl) ??
+              asset(liveStreams[0].creator.avatarUrl),
             hlsPlaybackUrl: liveStreams[0].hlsPlaybackUrl,
             streamer: liveStreams[0].creator.displayName ?? liveStreams[0].creator.username,
-            streamerAvatar: liveStreams[0].creator.avatarUrl,
+            streamerAvatar: asset(liveStreams[0].creator.avatarUrl),
             viewerCount: liveStreams[0].viewerCount,
           }
         : null,
@@ -191,7 +196,7 @@ export class FeedService {
             progressSeconds: r.progressSeconds,
             completed: r.completed,
             title: v.title,
-            thumbnailUrl: v.thumbnailUrl,
+            thumbnailUrl: this.playback.resolvePublicAssetUrl(v.thumbnailUrl),
             durationSeconds: v.durationSeconds,
             videoType: v.type,
           };
@@ -205,7 +210,9 @@ export class FeedService {
             progressSeconds: r.progressSeconds,
             completed: r.completed,
             title: ep.title,
-            thumbnailUrl: ep.thumbnailUrl ?? ep.series.posterUrl,
+            thumbnailUrl:
+              this.playback.resolvePublicAssetUrl(ep.thumbnailUrl) ??
+              this.playback.resolvePublicAssetUrl(ep.series.posterUrl),
             durationSeconds: ep.durationSeconds,
             subtitle: `${ep.series.title} · Ep ${ep.episodeNumber}`,
             seriesSlug: ep.series.slug,

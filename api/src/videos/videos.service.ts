@@ -365,7 +365,7 @@ export class VideosService {
       cast: cast.map((m) => ({
         name: m.name,
         role: m.role,
-        imageUrl: m.imageUrl,
+        imageUrl: this.playback.resolvePublicAssetUrl(m.imageUrl),
       })),
     };
   }
@@ -406,6 +406,12 @@ export class VideosService {
     });
     return {
       ...publicVideo,
+      thumbnailUrl: this.playback.resolvePublicAssetUrl(publicVideo.thumbnailUrl),
+      posterUrl: this.playback.resolvePublicAssetUrl(publicVideo.posterUrl),
+      creator: {
+        ...publicVideo.creator,
+        avatarUrl: this.playback.resolvePublicAssetUrl(publicVideo.creator.avatarUrl),
+      },
       ...urls,
     };
   }

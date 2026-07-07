@@ -112,7 +112,7 @@ validate_api_env() {
 
 write_api_env() {
   local jwt_access jwt_refresh
-  local s3_region stripe_key stripe_wh
+  local s3_region stripe_key stripe_wh playback_ttl
 
   jwt_access="$(resolve_api_secret JWT_ACCESS_SECRET "$(grep ^JWT_ACCESS_SECRET= "$API_ENV_TEMPLATE" | cut -d= -f2-)")"
   jwt_refresh="$(resolve_api_secret JWT_REFRESH_SECRET "$(grep ^JWT_REFRESH_SECRET= "$API_ENV_TEMPLATE" | cut -d= -f2-)")"
@@ -121,6 +121,9 @@ write_api_env() {
   s3_region="$(resolve_api_secret S3_REGION "${S3_REGION:-auto}")"
   stripe_key="$(resolve_api_secret STRIPE_SECRET_KEY "${STRIPE_SECRET_KEY:-}")"
   stripe_wh="$(resolve_api_secret STRIPE_WEBHOOK_SECRET "${STRIPE_WEBHOOK_SECRET:-}")"
+
+  playback_ttl="$(read_env_file "$API_ENV" PLAYBACK_TOKEN_TTL_SECONDS)"
+  [[ -z "$playback_ttl" ]] && playback_ttl=14400
 
   if [[ -f "$API_ENV" ]] && [[ -s "$API_ENV" ]]; then
     log "Updating api/.env in place (preserving existing secrets)..."
@@ -179,7 +182,8 @@ write_api_env() {
     SMTP_PASS "$(resolve_api_secret SMTP_PASS "$SMTP_PASS")" \
     SMTP_FROM "$(resolve_api_secret SMTP_FROM "$SMTP_FROM")" \
     THROTTLE_TTL_MS 60000 \
-    THROTTLE_LIMIT 1000
+    THROTTLE_LIMIT 1000 \
+    PLAYBACK_TOKEN_TTL_SECONDS "$playback_ttl"
 
   validate_api_env
   log "api/.env OK ($(wc -l <"$API_ENV") lines, backup at ${API_ENV_BACKUP})"
