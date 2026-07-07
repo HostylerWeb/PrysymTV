@@ -4,6 +4,13 @@ declare namespace chrome.cast {
     ORIGIN_SCOPED = "origin_scoped",
   }
 
+  class Image {
+    constructor(url: string)
+    url: string
+    height?: number
+    width?: number
+  }
+
   namespace media {
     const DEFAULT_MEDIA_RECEIVER_APP_ID: string
 
@@ -12,15 +19,10 @@ declare namespace chrome.cast {
       LIVE = "LIVE",
     }
 
-    class Image {
-      constructor(url: string)
-      url: string
-    }
-
     class GenericMediaMetadata {
       title?: string
       subtitle?: string
-      images?: Image[]
+      images?: chrome.cast.Image[]
     }
 
     class MediaInfo {

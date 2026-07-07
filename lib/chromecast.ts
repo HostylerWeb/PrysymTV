@@ -122,7 +122,11 @@ export async function castMedia(media: CastableMedia): Promise<void> {
   if (media.subtitle) metadata.subtitle = media.subtitle
   const poster = media.posterUrl?.trim()
   if (poster) {
-    metadata.images = [new chrome.cast.media.Image(toAbsoluteCastUrl(poster))]
+    const posterUrl = toAbsoluteCastUrl(poster)
+    metadata.images =
+      typeof chrome.cast.Image === "function"
+        ? [new chrome.cast.Image(posterUrl)]
+        : [{ url: posterUrl }]
   }
   mediaInfo.metadata = metadata
 

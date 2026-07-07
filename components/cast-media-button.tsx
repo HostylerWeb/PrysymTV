@@ -77,7 +77,9 @@ export function CastMediaButton({
         err instanceof Error ? err.message : "Could not cast to your TV"
       setError(message)
       notify.error(message, {
-        description: "Make sure your TV or Chromecast is on and connected to the same Wi‑Fi network.",
+        description: /network|device|session|timeout|unavailable/i.test(message)
+          ? "Make sure your TV or Chromecast is on and connected to the same Wi‑Fi network."
+          : undefined,
       })
     } finally {
       setBusy(false)
