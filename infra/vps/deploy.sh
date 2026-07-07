@@ -112,7 +112,7 @@ validate_api_env() {
 
 write_api_env() {
   local jwt_access jwt_refresh
-  local s3_region stripe_key stripe_wh playback_ttl google_oauth apple_oauth facebook_app_id facebook_app_secret
+  local s3_region stripe_key stripe_wh playback_ttl google_oauth apple_oauth facebook_app_id facebook_app_secret vapid_public vapid_private vapid_subject
 
   jwt_access="$(resolve_api_secret JWT_ACCESS_SECRET "$(grep ^JWT_ACCESS_SECRET= "$API_ENV_TEMPLATE" | cut -d= -f2-)")"
   jwt_refresh="$(resolve_api_secret JWT_REFRESH_SECRET "$(grep ^JWT_REFRESH_SECRET= "$API_ENV_TEMPLATE" | cut -d= -f2-)")"
@@ -129,6 +129,9 @@ write_api_env() {
   apple_oauth="$(resolve_api_secret APPLE_CLIENT_ID "")"
   facebook_app_id="$(resolve_api_secret FACEBOOK_APP_ID "")"
   facebook_app_secret="$(resolve_api_secret FACEBOOK_APP_SECRET "")"
+  vapid_public="$(resolve_api_secret VAPID_PUBLIC_KEY "")"
+  vapid_private="$(resolve_api_secret VAPID_PRIVATE_KEY "")"
+  vapid_subject="$(resolve_api_secret VAPID_SUBJECT "mailto:support@prysym.tv")"
 
   if [[ -f "$API_ENV" ]] && [[ -s "$API_ENV" ]]; then
     log "Updating api/.env in place (preserving existing secrets)..."
@@ -201,6 +204,15 @@ write_api_env() {
   fi
   if [[ -n "$facebook_app_secret" ]]; then
     upsert_env_file "$API_ENV" FACEBOOK_APP_SECRET "$facebook_app_secret"
+  fi
+  if [[ -n "$vapid_public" ]]; then
+    upsert_env_file "$API_ENV" VAPID_PUBLIC_KEY "$vapid_public"
+  fi
+  if [[ -n "$vapid_private" ]]; then
+    upsert_env_file "$API_ENV" VAPID_PRIVATE_KEY "$vapid_private"
+  fi
+  if [[ -n "$vapid_subject" ]]; then
+    upsert_env_file "$API_ENV" VAPID_SUBJECT "$vapid_subject"
   fi
 
   validate_api_env

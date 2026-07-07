@@ -412,7 +412,11 @@ export class AnalyticsService {
           })
         : Promise.resolve([]),
       this.prisma.gafLedgerEntry.aggregate({
-        where: { direction: 'inflow', createdAt: { gte: since30d } },
+        where: {
+          direction: 'inflow',
+          createdAt: { gte: since30d },
+          revenueBatch: { creatorId },
+        },
         _sum: { amountUsd: true },
       }),
     ]);

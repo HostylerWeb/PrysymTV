@@ -2,7 +2,7 @@
 
 import { Suspense, use, useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ChevronLeft, Share2, Play, Users, Video, Bell, BellOff, Check, Gift, ShoppingBag } from "lucide-react"
+import { ChevronLeft, Share2, Play, Users, Video, Bell, BellOff, Check, Gift, ShoppingBag, Crown } from "lucide-react"
 import { GiftSheet } from "@/components/gift-sheet"
 import { PageLoadingSkeleton } from "@/components/content-skeletons"
 import { Button } from "@/components/ui/button"
@@ -27,6 +27,8 @@ import {
 import { fetchPodcastShows } from "@/lib/api/podcasts"
 import { fetchCreatorPlaylists } from "@/lib/api/playlists"
 import { fetchCreatorStore, type CreatorStoreSummary, type PublicStoreProduct } from "@/lib/api/stores"
+import { createCreatorSubscriptionCheckout } from "@/lib/api/billing-monetization"
+import { fetchPublicConfig } from "@/lib/api/config"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
 import { userAvatarUrl } from "@/lib/user-avatar"
 import { normalizeUsernameSlug } from "@/lib/username-slug"
@@ -79,6 +81,10 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
     creatorUsername?: string
   } | null>(null)
   const [storeLoading, setStoreLoading] = useState(false)
+  const [isChannelMember, setIsChannelMember] = useState(false)
+  const [membershipBusy, setMembershipBusy] = useState(false)
+  const [membershipError, setMembershipError] = useState<string | null>(null)
+  const [membershipPrice, setMembershipPrice] = useState(4.99)
 
   useEffect(() => {
     if (rawSlug === slug) return
@@ -107,6 +113,7 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
       setProfile(p)
       setIsFollowing(p?.isFollowing ?? false)
       setNotificationsOn(p?.liveAlertsOn ?? false)
+      setIsChannelMember(p?.isChannelMember ?? false)
       setVideos(
         v.items.map((item) => ({
           id: item.id,
@@ -154,6 +161,20 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
       cancelled = true
     }
   }, [slug])
+
+  useEffect(() => {
+    void fetchPublicConfig()
+      .then((cfg) => setMembershipPrice(cfg.channelMembership.basic.priceUsd))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const checkout = searchParams.get("checkout")
+    if (checkout === "success" && profile) {
+      setIsChannelMember(true)
+      setMembershipError(null)
+    }
+  }, [searchParams, profile])
 
   useEffect(() => {
     const tab = searchParams.get("tab")
@@ -233,6 +254,31 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
     })
   }
 
+  const handleMembership = () => {
+    requireAuth(() => {
+      setMembershipBusy(true)
+      setMembershipError(null)
+      void createCreatorSubscriptionCheckout(profile.id, "basic")
+        .then((res) => {
+          if (res.checkoutUrl) {
+            window.location.href = res.checkoutUrl
+            return
+          }
+          if (res.devMode || res.success) {
+            setIsChannelMember(true)
+            return
+          }
+          throw new Error("Could not start membership checkout")
+        })
+        .catch((err) => {
+          setMembershipError(
+            err instanceof Error ? err.message : "Could not start membership checkout",
+          )
+        })
+        .finally(() => setMembershipBusy(false))
+    })
+  }
+
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <div className="max-w-6xl mx-auto w-full">
@@ -290,7 +336,25 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
             >
               <Gift className="w-4 h-4" /> Tip
             </Button>
+            {isChannelMember ? (
+              <Button variant="secondary" className="rounded-full gap-2" disabled>
+                <Crown className="w-4 h-4" /> Member
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                className="rounded-full gap-2"
+                disabled={membershipBusy}
+                onClick={handleMembership}
+              >
+                <Crown className="w-4 h-4" />
+                {membershipBusy ? "Starting…" : `Join — $${membershipPrice.toFixed(2)}/mo`}
+              </Button>
+            )}
           </div>
+          {membershipError ? (
+            <p className="text-sm text-destructive px-4 md:px-8 -mt-4 mb-2">{membershipError}</p>
+          ) : null}
         </div>
 
         <div className="px-4 md:px-8 mb-8 md:max-w-3xl">

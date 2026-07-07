@@ -1,13 +1,17 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Menu, Search } from "lucide-react"
 import { useState } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { ADMIN_NAV } from "@/lib/admin/nav"
 import { useAdminBadges } from "@/lib/admin/use-admin-badges"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/contexts/auth-context"
+import { fetchAdminUsers } from "@/lib/api/admin"
+
+const ADMIN_UI_PREVIEW = process.env.NEXT_PUBLIC_ADMIN_UI_PREVIEW === "true"
 
 function isActive(pathname: string, href: string) {
   if (href === "/admin") return pathname === "/admin"
@@ -16,8 +20,33 @@ function isActive(pathname: string, href: string) {
 
 export function AdminTopbar({ title }: { title?: string }) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { user } = useAuth()
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const [searchBusy, setSearchBusy] = useState(false)
   const badges = useAdminBadges(pathname)
+  const showPreviewBadge = ADMIN_UI_PREVIEW && user?.role !== "admin"
+
+  const runSearch = async () => {
+    const q = query.trim()
+    if (!q || searchBusy) return
+    setSearchBusy(true)
+    try {
+      const res = await fetchAdminUsers({ q, limit: 5, page: 1 })
+      const first = res.items[0]
+      if (first) {
+        router.push(`/admin/users/${first.id}`)
+        setQuery("")
+        return
+      }
+      router.push(`/admin/users?q=${encodeURIComponent(q)}`)
+    } catch {
+      router.push(`/admin/users?q=${encodeURIComponent(q)}`)
+    } finally {
+      setSearchBusy(false)
+    }
+  }
 
   return (
     <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b border-border bg-background/95 backdrop-blur px-4 md:px-6">
@@ -76,22 +105,30 @@ export function AdminTopbar({ title }: { title?: string }) {
         {title && <p className="font-semibold text-sm md:text-base truncate">{title}</p>}
       </div>
 
-      <div className="hidden sm:flex items-center gap-2 max-w-xs flex-1">
+      <form
+        className="hidden sm:flex items-center gap-2 max-w-xs flex-1"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void runSearch()
+        }}
+      >
         <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="search"
             placeholder="Search users…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             className="w-full h-9 pl-9 pr-3 rounded-lg bg-secondary/60 border border-border text-sm"
-            disabled
-            title="Coming soon"
           />
         </div>
-      </div>
+      </form>
 
-      <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
-        UI preview
-      </span>
+      {showPreviewBadge ? (
+        <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+          UI preview
+        </span>
+      ) : null}
     </header>
   )
 }

@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { Suspense, useState } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminPagination } from "@/components/admin/admin-pagination"
 import { AdminStatusPill } from "@/components/admin/admin-status-pill"
@@ -28,7 +29,16 @@ import {
 import { Button } from "@/components/ui/button"
 
 export default function AdminUsersPage() {
-  const [q, setQ] = useState("")
+  return (
+    <Suspense fallback={null}>
+      <AdminUsersPageContent />
+    </Suspense>
+  )
+}
+
+function AdminUsersPageContent() {
+  const searchParams = useSearchParams()
+  const [q, setQ] = useState(() => searchParams.get("q") ?? "")
   const [role, setRole] = useState("all")
   const [status, setStatus] = useState("all")
   const [page, setPage] = useState(1)

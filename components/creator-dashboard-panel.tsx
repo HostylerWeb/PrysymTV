@@ -331,10 +331,14 @@ export function CreatorDashboardPanel({ className }: { className?: string }) {
             )}
           </div>
           <div className="p-4 rounded-xl border border-primary/20 bg-primary/5">
-            <p className="text-sm font-semibold">Community impact</p>
+            <p className="text-sm font-semibold">Community impact (GAF)</p>
             <p className="text-xs text-muted-foreground mt-1">
               {data.communityImpact.jobsSupported} jobs · {data.communityImpact.businessesFunded}{" "}
-              businesses · {fmtUsd(data.communityImpact.dollarsInvested)} invested
+              businesses · {fmtUsd(data.communityImpact.dollarsInvested)} to the Global Advancement Fund
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              A share of your monetization (gifts, memberships, store sales) funds community programs.
+              Impact metrics are updated from your earnings and admin-verified outcomes.
             </p>
           </div>
         </div>

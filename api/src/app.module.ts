@@ -28,7 +28,6 @@ import { QueueModule } from './queue/queue.module';
 import { StorageModule } from './storage/storage.module';
 import { RevenueModule } from './revenue/revenue.module';
 import { VerticalsModule } from './verticals/verticals.module';
-import { ProgramsModule } from './programs/programs.module';
 import { CategoriesModule } from './categories/categories.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { PublicConfigModule } from './config/config.module';
@@ -103,7 +102,6 @@ import { PlaybackModule } from './playback/playback.module';
     AdvertisersModule,
     AnalyticsModule,
     VerticalsModule,
-    ProgramsModule,
     CategoriesModule,
     ReportsModule,
     AdminModule,

@@ -1,5 +1,3 @@
-import type { ProgramItem } from "@/lib/api/programs";
-
 export type VideoCategory = {
   slug: string;
   label: string;
@@ -28,18 +26,6 @@ export const FALLBACK_VIDEO_CATEGORIES: VideoCategory[] = [
 
 export type VideoBrowseMode = "all" | "videos" | "live";
 export type VideoBrowseSort = "views" | "newest";
-
-export function buildVideoCategories(programs: ProgramItem[]): VideoCategory[] {
-  return [
-    { slug: "all", label: "All", vertical: null },
-    { slug: "general", label: "General", vertical: "general" },
-    ...programs.map((p) => ({
-      slug: p.slug,
-      label: p.label,
-      vertical: p.vertical,
-    })),
-  ];
-}
 
 export function verticalForCategorySlug(
   slug: string,
