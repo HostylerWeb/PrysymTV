@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/contexts/auth-context'
 import { ConfirmProvider } from '@/contexts/confirm-context'
 import { OAuthConfigProvider } from '@/contexts/oauth-config-context'
+import { ThemeProvider } from '@/components/theme-provider'
 import { WebPushRegistrar } from '@/components/web-push-registrar'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
@@ -32,17 +33,19 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="bg-background" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased" suppressHydrationWarning>
-        <OAuthConfigProvider>
-          <AuthProvider>
-            <ConfirmProvider>
-              <WebPushRegistrar />
-              {children}
-              <Toaster />
-            </ConfirmProvider>
-          </AuthProvider>
-        </OAuthConfigProvider>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="prysym-theme">
+          <OAuthConfigProvider>
+            <AuthProvider>
+              <ConfirmProvider>
+                <WebPushRegistrar />
+                {children}
+                <Toaster />
+              </ConfirmProvider>
+            </AuthProvider>
+          </OAuthConfigProvider>
+        </ThemeProvider>
         {process.env.VERCEL === "1" && <Analytics />}
       </body>
     </html>

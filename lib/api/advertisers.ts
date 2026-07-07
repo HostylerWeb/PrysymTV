@@ -10,6 +10,52 @@ export type AdvertiserAccount = {
   _count?: { campaigns: number };
 };
 
+export type AdvertiserCampaign = {
+  id: string;
+  title: string;
+  placement: string;
+  status: string;
+  targetImpressions: number;
+  deliveredImpressions: number;
+  clicks: number;
+  budgetUsd: string | number;
+  startsAt: string;
+  endsAt: string;
+};
+
+export type AdvertiserAccountDetail = AdvertiserAccount & {
+  campaigns: AdvertiserCampaign[];
+};
+
+export type AdvertiserCampaignAnalytics = {
+  campaign: {
+    id: string;
+    title: string;
+    placement: string;
+    status: string;
+    targetImpressions: number;
+    deliveredImpressions: number;
+    clicks: number;
+    budgetUsd: number;
+    spentUsd: number;
+    startsAt: string;
+    endsAt: string;
+  };
+  summary: {
+    servedImpressions: number;
+    targetImpressions: number;
+    deliveryPercent: number;
+    clicks: number;
+    ctrPercent: number;
+    trackedImpressions: number;
+    trackedClicks: number;
+    budgetUsd: number;
+    spentUsd: number;
+    budgetRemainingUsd: number;
+    cpmUsd: number;
+  };
+};
+
 export function registerAdvertiserAccount(body: {
   companyName: string;
   contactEmail: string;
@@ -26,8 +72,15 @@ export function fetchMyAdvertiserAccounts() {
 }
 
 export function fetchMyAdvertiserAccount(id: string) {
-  return apiRequest<AdvertiserAccount & { campaigns: unknown[] }>(
-    `/advertisers/me/${id}`,
+  return apiRequest<AdvertiserAccountDetail>(`/advertisers/me/${id}`);
+}
+
+export function fetchAdvertiserCampaignAnalytics(
+  accountId: string,
+  campaignId: string,
+) {
+  return apiRequest<AdvertiserCampaignAnalytics>(
+    `/advertisers/me/${accountId}/campaigns/${campaignId}/analytics`,
   );
 }
 

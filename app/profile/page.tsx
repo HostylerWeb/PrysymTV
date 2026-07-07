@@ -121,7 +121,6 @@ function ProfilePageContent() {
   >(["live"])
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
-  const [darkModeEnabled, setDarkModeEnabled] = useState(true)
   const [savedItems, setSavedItems] = useState<SavedItemRecord[]>([])
   const [likedItems, setLikedItems] = useState<LikedItemRecord[]>([])
   const [watchHistory, setWatchHistory] = useState<HistoryItemRecord[]>([])
@@ -745,8 +744,6 @@ function ProfilePageContent() {
         isOpen={showSettings}
         onClose={closeSettingsPanel}
         user={user}
-        darkModeEnabled={darkModeEnabled}
-        onDarkModeToggle={() => setDarkModeEnabled(!darkModeEnabled)}
         onCoinsClick={() => {
           closeSettingsPanel()
           setIsCoinsModalOpen(true)

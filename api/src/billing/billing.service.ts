@@ -63,6 +63,9 @@ export class BillingService {
     if (dto.productType === 'premium') {
       return this.createPremiumCheckout(userId, dto.packageId);
     }
+    if (dto.productType === 'insider') {
+      return this.createInsiderCheckout(userId);
+    }
     return this.createCoinCheckout(userId, dto.packageId);
   }
 
@@ -150,6 +153,79 @@ export class BillingService {
     });
 
     return { checkoutUrl: session.url, sessionId: session.id };
+  }
+
+  private async resolveInsiderPriceUsd() {
+    const economy = await this.platformSettings.getEconomy();
+    return economy.insiderPriceUsd;
+  }
+
+  private async createInsiderCheckout(userId: string) {
+    const priceUsd = await this.resolveInsiderPriceUsd();
+    const frontend = this.config.get<string>('FRONTEND_URL', 'http://localhost:3001');
+
+    if (!this.stripe) {
+      if (this.config.get<string>('BILLING_DEV_GRANTS') === 'true') {
+        await this.grantInsider(userId, priceUsd);
+        const insider = await this.prisma.platformInsiderSubscription.findUnique({
+          where: { userId },
+          select: { currentPeriodEnd: true, status: true },
+        });
+        return {
+          success: true,
+          devMode: true,
+          insiderActive: insider?.status === 'active',
+          insiderPeriodEnd: insider?.currentPeriodEnd,
+        };
+      }
+      throw new ServiceUnavailableException(
+        'Platform Insider requires Stripe. Set STRIPE_SECRET_KEY in the API environment.',
+      );
+    }
+
+    const session = await this.stripe.checkout.sessions.create({
+      mode: 'payment',
+      success_url: `${frontend}/profile?checkout=success&session_id={CHECKOUT_SESSION_ID}&product=insider`,
+      cancel_url: `${frontend}/profile?checkout=cancelled`,
+      metadata: {
+        userId,
+        productType: 'insider',
+        packageId: 'insider',
+      },
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: Math.round(priceUsd * 100),
+            product_data: {
+              name: 'Platform Insider — 30 days',
+            },
+          },
+        },
+      ],
+    });
+
+    await this.prisma.transaction.create({
+      data: {
+        userId,
+        type: TransactionType.subscription,
+        provider: PaymentProvider.stripe,
+        providerTransactionId: session.id,
+        amountUsd: priceUsd,
+        status: TransactionStatus.pending,
+      },
+    });
+
+    return { checkoutUrl: session.url, sessionId: session.id };
+  }
+
+  async isActiveInsider(userId: string) {
+    const row = await this.prisma.platformInsiderSubscription.findUnique({
+      where: { userId },
+    });
+    if (!row || row.status !== 'active') return false;
+    return row.currentPeriodEnd.getTime() > Date.now();
   }
 
   async listMySubscriptions(subscriberId: string) {
@@ -451,6 +527,9 @@ export class BillingService {
         plan?.priceUsd ?? prices.premium,
         sessionId,
       );
+    } else if (productType === 'insider') {
+      const priceUsd = await this.resolveInsiderPriceUsd();
+      await this.grantInsider(userId, priceUsd, sessionId);
     } else if (productType === 'store') {
       const orderId = session.metadata?.orderId;
       if (!orderId) throw new BadRequestException('Invalid store metadata');
@@ -487,14 +566,88 @@ export class BillingService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { coinsBalance: true, premiumTier: true, premiumExpiresAt: true },
+      select: {
+        coinsBalance: true,
+        premiumTier: true,
+        premiumExpiresAt: true,
+        insiderSubscription: {
+          select: { status: true, currentPeriodEnd: true },
+        },
+      },
     });
+    const insiderActive =
+      user?.insiderSubscription?.status === 'active' &&
+      (user.insiderSubscription.currentPeriodEnd.getTime() > Date.now());
     return {
       success: true,
       coinsBalance: user?.coinsBalance ?? 0,
       premiumTier: user?.premiumTier,
       premiumExpiresAt: user?.premiumExpiresAt,
+      insiderActive,
+      insiderPeriodEnd: user?.insiderSubscription?.currentPeriodEnd ?? null,
     };
+  }
+
+  private async grantInsider(
+    userId: string,
+    amountUsd: number,
+    providerTransactionId?: string,
+  ) {
+    const periodEnd = new Date();
+    periodEnd.setDate(periodEnd.getDate() + PREMIUM_DURATION_DAYS);
+
+    await this.prisma.platformInsiderSubscription.upsert({
+      where: { userId },
+      create: {
+        userId,
+        status: 'active',
+        currentPeriodEnd: periodEnd,
+        stripeSubscriptionId: providerTransactionId,
+      },
+      update: {
+        status: 'active',
+        currentPeriodEnd: periodEnd,
+        stripeSubscriptionId: providerTransactionId,
+      },
+    });
+
+    const txId =
+      providerTransactionId ?? `dev-insider-${Date.now()}`;
+
+    let tx = providerTransactionId
+      ? await this.prisma.transaction.findFirst({
+          where: { providerTransactionId },
+        })
+      : null;
+
+    if (!tx) {
+      tx = await this.prisma.transaction.create({
+        data: {
+          userId,
+          type: TransactionType.subscription,
+          provider: PaymentProvider.stripe,
+          providerTransactionId: txId,
+          amountUsd,
+          status: TransactionStatus.completed,
+        },
+      });
+    }
+
+    const batchExists = await this.prisma.revenueLedgerBatch.findFirst({
+      where: {
+        sourceId: tx.id,
+        sourceType: RevenueSourceType.insider_membership,
+      },
+    });
+    if (!batchExists) {
+      await this.revenueSplit.distributeAndPersist({
+        ruleKey: 'insider_membership',
+        sourceType: RevenueSourceType.insider_membership,
+        sourceId: tx.id,
+        grossAmountUsd: amountUsd,
+        metadata: { product: 'platform_insider' },
+      });
+    }
   }
 
   private async grantPremium(

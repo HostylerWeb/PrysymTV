@@ -23,6 +23,19 @@ export class AdvertisersController {
     return this.advertisers.listMine(user.id);
   }
 
+  @Get('me/:accountId/campaigns/:campaignId/analytics')
+  campaignAnalytics(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('accountId') accountId: string,
+    @Param('campaignId') campaignId: string,
+  ) {
+    return this.advertisers.getCampaignAnalytics(
+      user.id,
+      accountId,
+      campaignId,
+    );
+  }
+
   @Get('me/:id')
   getMine(@CurrentUser() user: AuthUserPayload, @Param('id') id: string) {
     return this.advertisers.getMine(user.id, id);

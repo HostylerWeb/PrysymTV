@@ -51,6 +51,16 @@ export class ConfigController {
           'Skip movie preroll ads',
         ],
       },
+      insider: {
+        priceUsd: economy.insiderPriceUsd,
+        label: 'Platform Insider',
+        perks: [
+          'Product roadmaps and early previews',
+          'Insider town halls with the Prysym team',
+          'Vote on platform priorities',
+          'Exclusive insider community access',
+        ],
+      },
       channelMembership: {
         basic: {
           priceUsd: CREATOR_SUB_PLANS.basic.priceUsd,

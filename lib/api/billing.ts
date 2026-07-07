@@ -36,6 +36,8 @@ export type CheckoutResult = {
   coinsBalance?: number;
   premiumTier?: string;
   premiumExpiresAt?: string | null;
+  insiderActive?: boolean;
+  insiderPeriodEnd?: string | null;
   sessionId?: string;
   success?: boolean;
 };
@@ -51,6 +53,13 @@ export function createPremiumCheckout(tierId: string) {
   return apiRequest<CheckoutResult>("/billing/stripe/create-checkout", {
     method: "POST",
     body: { packageId: tierId, productType: "premium" },
+  });
+}
+
+export function createInsiderCheckout() {
+  return apiRequest<CheckoutResult>("/billing/stripe/create-checkout", {
+    method: "POST",
+    body: { packageId: "insider", productType: "insider" },
   });
 }
 

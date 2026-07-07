@@ -29,6 +29,8 @@ export type MeResponse = {
   coinsBalance: number;
   premiumTier: string;
   premiumExpiresAt: string | null;
+  insiderActive?: boolean;
+  insiderPeriodEnd?: string | null;
   createdAt: string;
   buyerFullName?: string | null;
   buyerPhone?: string | null;

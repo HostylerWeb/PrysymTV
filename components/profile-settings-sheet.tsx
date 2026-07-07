@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useTheme } from "next-themes"
 import {
   X,
   ChevronLeft,
@@ -31,15 +32,17 @@ import {
   Link2,
   Users,
   Truck,
+  Sparkles,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { User } from "@/contexts/auth-context"
 import { uploadVideoFlow, pollVideoUntilReady, getVideoUploadMaxBytes } from "@/lib/api/videos"
 import { fetchStreamIngestHealth, initStream, getRtmpIngestUrl } from "@/lib/api/streams"
-import { createPremiumCheckout } from "@/lib/api/billing"
+import { createPremiumCheckout, createInsiderCheckout } from "@/lib/api/billing"
 import { fetchPublicConfig, type PublicMembershipConfig } from "@/lib/api/config"
 import { isPremiumActive } from "@/lib/premium"
+import { isInsiderActive } from "@/lib/insider"
 import { ApiError } from "@/lib/api-client"
 import { clearHistory, deleteHistoryItem, fetchHistory } from "@/lib/api/history"
 import {
@@ -104,6 +107,7 @@ export type ProfileSettingsScreen =
   | "dashboard"
   | "help"
   | "premium"
+  | "insider"
   | "history"
   | "go-live"
   | "upload"
@@ -136,6 +140,17 @@ const FAQS = [
   { q: "How do I report content?", a: "Use the flag icon on any video, movie, or live stream page." },
 ]
 
+const DEFAULT_INSIDER: PublicMembershipConfig = {
+  priceUsd: 4.99,
+  label: "Platform Insider",
+  perks: [
+    "Product roadmaps and early previews",
+    "Insider town halls with the Prysym team",
+    "Vote on platform priorities",
+    "Exclusive insider community access",
+  ],
+}
+
 const DEFAULT_MEMBERSHIP: PublicMembershipConfig = {
   priceUsd: 4.99,
   label: "Prysym Membership",
@@ -161,6 +176,7 @@ const SCREEN_TITLES: Record<Exclude<ProfileSettingsScreen, "menu">, string> = {
   dashboard: "Performance & Revenue",
   help: "Help & Support",
   premium: "Premium",
+  insider: "Platform Insider",
   history: "Watch History",
   "go-live": "Go Live",
   upload: "Upload",
@@ -175,8 +191,6 @@ interface ProfileSettingsSheetProps {
   isOpen: boolean
   onClose: () => void
   user: User | null
-  darkModeEnabled: boolean
-  onDarkModeToggle: () => void
   onCoinsClick: () => void
   onStreamerApply: () => void
   onVerticalCreatorApply: () => void
@@ -190,8 +204,6 @@ export function ProfileSettingsSheet({
   isOpen,
   onClose,
   user,
-  darkModeEnabled,
-  onDarkModeToggle,
   onCoinsClick,
   onStreamerApply,
   onVerticalCreatorApply,
@@ -208,6 +220,10 @@ export function ProfileSettingsSheet({
   const [premiumActive, setPremiumActive] = useState(false)
   const [premiumBusy, setPremiumBusy] = useState(false)
   const [premiumError, setPremiumError] = useState<string | null>(null)
+  const [insiderPlan, setInsiderPlan] = useState<PublicMembershipConfig>(DEFAULT_INSIDER)
+  const [insiderActive, setInsiderActive] = useState(false)
+  const [insiderBusy, setInsiderBusy] = useState(false)
+  const [insiderError, setInsiderError] = useState<string | null>(null)
   const [historyItems, setHistoryItems] = useState<SettingsHistoryItem[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [notifLoading, setNotifLoading] = useState(false)
@@ -370,6 +386,7 @@ export function ProfileSettingsSheet({
   useEffect(() => {
     if (!user) return
     setPremiumActive(isPremiumActive(user.premiumTier, user.premiumExpiresAt))
+    setInsiderActive(isInsiderActive(user.insiderActive, user.insiderPeriodEnd))
   }, [user, isOpen])
 
   useEffect(() => {
@@ -377,6 +394,13 @@ export function ProfileSettingsSheet({
     void fetchPublicConfig()
       .then((cfg) => setMembership(cfg.membership ?? DEFAULT_MEMBERSHIP))
       .catch(() => setMembership(DEFAULT_MEMBERSHIP))
+  }, [isOpen, screen])
+
+  useEffect(() => {
+    if (!isOpen || screen !== "insider") return
+    void fetchPublicConfig()
+      .then((cfg) => setInsiderPlan(cfg.insider ?? DEFAULT_INSIDER))
+      .catch(() => setInsiderPlan(DEFAULT_INSIDER))
   }, [isOpen, screen])
 
   useEffect(() => {
@@ -484,9 +508,8 @@ export function ProfileSettingsSheet({
               user={user}
               isStreamer={isStreamer}
               premiumActive={premiumActive}
+              insiderActive={insiderActive}
               showCreatorDashboard={canAccessCreatorDashboard(user)}
-              darkModeEnabled={darkModeEnabled}
-              onDarkModeToggle={onDarkModeToggle}
               onCoinsClick={onCoinsClick}
               onNavigate={goTo}
               onStreamerApply={() => {
@@ -577,6 +600,40 @@ export function ProfileSettingsSheet({
                   )
                 } finally {
                   setPremiumBusy(false)
+                }
+              }}
+            />
+          )}
+
+          {screen === "insider" && (
+            <InsiderPanel
+              plan={insiderPlan}
+              subscribed={insiderActive}
+              busy={insiderBusy}
+              error={insiderError}
+              onSubscribe={async () => {
+                setInsiderBusy(true)
+                setInsiderError(null)
+                try {
+                  const res = await createInsiderCheckout()
+                  if (res.devMode) {
+                    setInsiderActive(true)
+                    await onRefreshUser?.()
+                    return
+                  }
+                  if (res.checkoutUrl) {
+                    window.location.href = res.checkoutUrl
+                  }
+                } catch (e) {
+                  setInsiderError(
+                    e instanceof ApiError
+                      ? e.message
+                      : e instanceof Error
+                        ? e.message
+                        : "Could not start checkout",
+                  )
+                } finally {
+                  setInsiderBusy(false)
                 }
               }}
             />
@@ -964,9 +1021,8 @@ function MenuPanel({
   user,
   isStreamer,
   premiumActive,
+  insiderActive,
   showCreatorDashboard,
-  darkModeEnabled,
-  onDarkModeToggle,
   onCoinsClick,
   onNavigate,
   onStreamerApply,
@@ -975,14 +1031,15 @@ function MenuPanel({
   user: User | null
   isStreamer: boolean
   premiumActive: boolean
+  insiderActive: boolean
   showCreatorDashboard: boolean
-  darkModeEnabled: boolean
-  onDarkModeToggle: () => void
   onCoinsClick: () => void
   onNavigate: (screen: ProfileSettingsScreen) => void
   onStreamerApply: () => void
   onLogout: () => void
 }) {
+  const { theme, setTheme } = useTheme()
+  const darkModeEnabled = theme !== "light"
   const items: {
     icon: typeof Crown
     label: string
@@ -1001,6 +1058,15 @@ function MenuPanel({
         ? "Ad-free viewing and exclusive perks active"
         : "Ad-free viewing & exclusive perks",
       screen: "premium" as const,
+      accent: "premium" as const,
+    },
+    {
+      icon: Sparkles,
+      label: insiderActive ? "Platform Insider" : "Join Platform Insider",
+      description: insiderActive
+        ? "Roadmaps, town halls, and insider perks active"
+        : "Roadmaps, town halls & platform voice",
+      screen: "insider" as const,
       accent: "premium" as const,
     },
     isStreamer
@@ -1033,7 +1099,7 @@ function MenuPanel({
       description: darkModeEnabled ? "Currently enabled" : "Currently disabled",
       toggle: true,
       isEnabled: darkModeEnabled,
-      action: onDarkModeToggle,
+      action: () => setTheme(darkModeEnabled ? "light" : "dark"),
     },
     { icon: HelpCircle, label: "Help & Support", description: "FAQs and contact", screen: "help" },
     { icon: LogOut, label: "Sign Out", description: "Log out of your account", action: onLogout, danger: true },
@@ -1300,6 +1366,68 @@ function PremiumPanel({
         {busy ? "Starting checkout…" : `Subscribe — ${priceLabel}`}
       </Button>
       <ChannelMembershipsPanel />
+    </div>
+  )
+}
+
+function InsiderPanel({
+  plan,
+  subscribed,
+  busy,
+  error,
+  onSubscribe,
+}: {
+  plan: PublicMembershipConfig
+  subscribed: boolean
+  busy?: boolean
+  error?: string | null
+  onSubscribe: () => void | Promise<void>
+}) {
+  const priceLabel = `$${plan.priceUsd.toFixed(2)}/mo`
+
+  if (subscribed) {
+    return (
+      <div className="py-8 space-y-6">
+        <div className="text-center">
+          <Check className="w-12 h-12 text-primary mx-auto mb-3" />
+          <p className="font-bold text-lg">You&apos;re a Platform Insider!</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            You&apos;ll get early access to roadmaps, town halls, and insider-only updates. This is separate from Premium (ad-free viewing).
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="pt-2 md:pt-3 space-y-4 md:space-y-6">
+      {error && (
+        <p className="text-sm text-destructive text-center">{error}</p>
+      )}
+      <p className="text-sm md:text-base text-muted-foreground text-center">
+        Shape the future of Prysym TV — separate from ad-free Premium membership.
+      </p>
+      <div className="rounded-xl border border-primary bg-primary/5 p-5 md:p-6">
+        <div className="flex items-center justify-between mb-2">
+          <span className="font-bold text-lg">{plan.label}</span>
+          <span className="font-black text-lg">{priceLabel}</span>
+        </div>
+        <ul className="mt-3 space-y-1.5">
+          {plan.perks.map((p) => (
+            <li key={p} className="text-sm text-muted-foreground flex gap-1.5">
+              <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+              {p}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <Button
+        onClick={() => void onSubscribe()}
+        disabled={busy}
+        className="w-full rounded-full h-11 md:h-12 md:text-base"
+      >
+        {busy ? "Starting checkout…" : `Join Insider — ${priceLabel}`}
+      </Button>
     </div>
   )
 }

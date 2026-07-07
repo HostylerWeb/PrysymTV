@@ -1,5 +1,6 @@
 import type { User } from "@/contexts/auth-context";
 import type { MeResponse } from "@/lib/api/types";
+import { isInsiderActive } from "@/lib/insider";
 import { userAvatarUrl } from "@/lib/user-avatar";
 
 export function mapMeToUser(me: MeResponse): User {
@@ -17,6 +18,8 @@ export function mapMeToUser(me: MeResponse): User {
     coins: me.coinsBalance,
     premiumTier: me.premiumTier ?? "none",
     premiumExpiresAt: me.premiumExpiresAt,
+    insiderActive: isInsiderActive(me.insiderActive, me.insiderPeriodEnd),
+    insiderPeriodEnd: me.insiderPeriodEnd ?? null,
     isStreamer: status === "approved",
     streamerStatus: status,
     isVerticalCreator: verticalStatus === "approved",

@@ -1,0 +1,31 @@
+Prysym TV — Website missing features & gaps
+Last updated: 2026-07-07
+
+=== COMPLETED (this session) ===
+- Advertiser portal — /advertise/portal/[accountId] with campaigns + analytics
+- Platform Insider ($4.99) — separate checkout, settings screen, API fulfillment
+- Dark mode — next-themes wired; light/dark CSS variables
+- Creator profile VIP tier — Member ($4.99) + VIP ($9.99) buttons
+- Shorts deep links on creator profiles → /shorts?start={id}
+- Public GAF transparency page — /impact + GET /gaf/public
+
+=== NEEDS CREDENTIALS (code exists, env required) ===
+- OAuth (Google / Apple / Facebook) — placeholder client IDs in api/.env
+- Stripe — channel membership + Premium + Insider checkout on live
+- SMTP — password reset emails
+
+=== PHASE 2 / STAKEHOLDER ROADMAP (not built) ===
+- Live events / tickets / PPV (sports, concerts, community events hubs)
+- Super Chat & fiat tips/donations (Tip button opens coin gifts only)
+- Automated payouts, tax docs (1099/W-9), fraud queue
+- Sponsorship marketplace (creator store covers physical/digital products)
+
+=== INTENTIONALLY OUT OF SCOPE ===
+- Cast on shorts
+- Public Programs hub (removed; categories via /categories/videos)
+- Mobile app (mock/prototype; web is the real product)
+
+=== MINOR POLISH (optional) ===
+- Shorts quality picker (long-form has it; shorts do not)
+- fetchCreatorBalance API client unused on web
+- Retention rate on creator dashboard often null

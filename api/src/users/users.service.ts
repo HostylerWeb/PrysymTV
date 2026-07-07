@@ -50,6 +50,9 @@ export class UsersService {
         socialLinks: { orderBy: { sortOrder: 'asc' } },
         notificationPrefs: true,
         programVerticals: { select: { vertical: true } },
+        insiderSubscription: {
+          select: { status: true, currentPeriodEnd: true },
+        },
         _count: {
           select: {
             followers: true,
@@ -811,6 +814,10 @@ export class UsersService {
     coinsBalance: number;
     premiumTier: string;
     premiumExpiresAt: Date | null;
+    insiderSubscription?: {
+      status: string;
+      currentPeriodEnd: Date;
+    } | null;
     createdAt: Date;
     buyerFullName?: string | null;
     buyerPhone?: string | null;
@@ -843,6 +850,10 @@ export class UsersService {
       coinsBalance: user.coinsBalance,
       premiumTier: user.premiumTier,
       premiumExpiresAt: user.premiumExpiresAt,
+      insiderActive:
+        user.insiderSubscription?.status === 'active' &&
+        user.insiderSubscription.currentPeriodEnd.getTime() > Date.now(),
+      insiderPeriodEnd: user.insiderSubscription?.currentPeriodEnd ?? null,
       createdAt: user.createdAt,
       buyerFullName: user.buyerFullName ?? null,
       buyerPhone: user.buyerPhone ?? null,

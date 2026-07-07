@@ -48,6 +48,7 @@ export type PublicPushConfig = {
 export type PublicAppConfig = {
   ads: PublicAdsConfig;
   membership: PublicMembershipConfig;
+  insider: PublicMembershipConfig;
   channelMembership: {
     basic: PublicChannelMembershipTier;
     premium: PublicChannelMembershipTier;

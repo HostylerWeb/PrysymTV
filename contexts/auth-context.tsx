@@ -29,6 +29,8 @@ export interface User {
   coins: number
   premiumTier: string
   premiumExpiresAt: string | null
+  insiderActive: boolean
+  insiderPeriodEnd: string | null
   isStreamer: boolean
   streamerStatus: "none" | "pending" | "approved" | "rejected"
   isVerticalCreator: boolean

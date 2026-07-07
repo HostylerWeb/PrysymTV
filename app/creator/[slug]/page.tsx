@@ -85,6 +85,7 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
   const [membershipBusy, setMembershipBusy] = useState(false)
   const [membershipError, setMembershipError] = useState<string | null>(null)
   const [membershipPrice, setMembershipPrice] = useState(4.99)
+  const [membershipVipPrice, setMembershipVipPrice] = useState(9.99)
 
   useEffect(() => {
     if (rawSlug === slug) return
@@ -164,7 +165,10 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
 
   useEffect(() => {
     void fetchPublicConfig()
-      .then((cfg) => setMembershipPrice(cfg.channelMembership.basic.priceUsd))
+      .then((cfg) => {
+        setMembershipPrice(cfg.channelMembership.basic.priceUsd)
+        setMembershipVipPrice(cfg.channelMembership.premium.priceUsd)
+      })
       .catch(() => {})
   }, [])
 
@@ -254,11 +258,11 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
     })
   }
 
-  const handleMembership = () => {
+  const handleMembership = (tierKey: "basic" | "premium" = "basic") => {
     requireAuth(() => {
       setMembershipBusy(true)
       setMembershipError(null)
-      void createCreatorSubscriptionCheckout(profile.id, "basic")
+      void createCreatorSubscriptionCheckout(profile.id, tierKey)
         .then((res) => {
           if (res.checkoutUrl) {
             window.location.href = res.checkoutUrl
@@ -341,15 +345,26 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
                 <Crown className="w-4 h-4" /> Member
               </Button>
             ) : (
-              <Button
-                variant="secondary"
-                className="rounded-full gap-2"
-                disabled={membershipBusy}
-                onClick={handleMembership}
-              >
-                <Crown className="w-4 h-4" />
-                {membershipBusy ? "Starting…" : `Join — $${membershipPrice.toFixed(2)}/mo`}
-              </Button>
+              <>
+                <Button
+                  variant="secondary"
+                  className="rounded-full gap-2"
+                  disabled={membershipBusy}
+                  onClick={() => handleMembership("basic")}
+                >
+                  <Crown className="w-4 h-4" />
+                  {membershipBusy ? "Starting…" : `Member — $${membershipPrice.toFixed(2)}/mo`}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="rounded-full gap-2 border-primary/40"
+                  disabled={membershipBusy}
+                  onClick={() => handleMembership("premium")}
+                >
+                  <Crown className="w-4 h-4 text-primary" />
+                  {membershipBusy ? "Starting…" : `VIP — $${membershipVipPrice.toFixed(2)}/mo`}
+                </Button>
+              </>
             )}
           </div>
           {membershipError ? (
@@ -404,7 +419,7 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
           {activeTab === "shorts" && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {(shortsList.length ? shortsList : videos).map((v) => (
-                <Link key={v.id} href={`/watch/${v.id}`} className="aspect-[9/16] rounded-xl overflow-hidden relative">
+                <Link key={v.id} href={`/shorts?start=${v.id}`} className="aspect-[9/16] rounded-xl overflow-hidden relative">
                   <img src={v.thumbnail} alt="" className="w-full h-full object-cover" />
                   <Play className="absolute bottom-3 left-3 w-4 h-4 text-white fill-white" />
                 </Link>

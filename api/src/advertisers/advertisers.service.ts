@@ -5,11 +5,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class AdvertisersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly platformSettings: PlatformSettingsService,
+  ) {}
 
   async register(ownerUserId: string, body: {
     companyName: string;
@@ -155,5 +160,70 @@ export class AdvertisersService {
       if (!row) throw new ForbiddenException('Not your advertiser account');
       return row;
     });
+  }
+
+  async getCampaignAnalytics(
+    ownerUserId: string,
+    accountId: string,
+    campaignId: string,
+  ) {
+    await this.assertOwner(accountId, ownerUserId);
+    const campaign = await this.prisma.adCampaign.findFirst({
+      where: { id: campaignId, advertiserAccountId: accountId },
+    });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+
+    const adsConfig = await this.platformSettings.getAds();
+    const cpmUsd = adsConfig.impressionRevenueCpmUsd;
+    const spentUsd = Number(
+      new Prisma.Decimal(cpmUsd).div(1000).mul(campaign.deliveredImpressions),
+    );
+    const budgetUsd = Number(campaign.budgetUsd);
+    const deliveryPct =
+      campaign.targetImpressions > 0
+        ? (campaign.deliveredImpressions / campaign.targetImpressions) * 100
+        : 0;
+
+    const [trackedImpressions, trackedClicks] = await Promise.all([
+      this.prisma.contentAdEvent.count({
+        where: { campaignId, eventType: 'ad_impression' },
+      }),
+      this.prisma.contentAdEvent.count({
+        where: { campaignId, eventType: 'ad_click' },
+      }),
+    ]);
+
+    const servedImpressions = campaign.deliveredImpressions;
+    const clickCount = campaign.clicks;
+
+    return {
+      campaign: {
+        id: campaign.id,
+        title: campaign.title,
+        placement: campaign.placement,
+        status: campaign.status,
+        targetImpressions: campaign.targetImpressions,
+        deliveredImpressions: servedImpressions,
+        clicks: clickCount,
+        budgetUsd,
+        spentUsd,
+        startsAt: campaign.startsAt.toISOString(),
+        endsAt: campaign.endsAt.toISOString(),
+      },
+      summary: {
+        servedImpressions,
+        targetImpressions: campaign.targetImpressions,
+        deliveryPercent: deliveryPct,
+        clicks: clickCount,
+        ctrPercent:
+          servedImpressions > 0 ? (clickCount / servedImpressions) * 100 : 0,
+        trackedImpressions,
+        trackedClicks,
+        budgetUsd,
+        spentUsd,
+        budgetRemainingUsd: Math.max(0, budgetUsd - spentUsd),
+        cpmUsd,
+      },
+    };
   }
 }

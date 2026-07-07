@@ -238,7 +238,13 @@ function AdvertisePageInner() {
                   <AdvertiserAccountStatus
                     key={a.id}
                     account={a}
-                    onOpenPortal={() => setIsRegisterOpen(true)}
+                    onOpenPortal={() => {
+                      if (a.isVerified) {
+                        router.push(`/advertise/portal/${a.id}`)
+                        return
+                      }
+                      setIsRegisterOpen(true)
+                    }}
                   />
                 ))}
               </div>
