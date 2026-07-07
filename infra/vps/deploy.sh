@@ -112,7 +112,7 @@ validate_api_env() {
 
 write_api_env() {
   local jwt_access jwt_refresh
-  local s3_region stripe_key stripe_wh playback_ttl
+  local s3_region stripe_key stripe_wh playback_ttl google_oauth apple_oauth
 
   jwt_access="$(resolve_api_secret JWT_ACCESS_SECRET "$(grep ^JWT_ACCESS_SECRET= "$API_ENV_TEMPLATE" | cut -d= -f2-)")"
   jwt_refresh="$(resolve_api_secret JWT_REFRESH_SECRET "$(grep ^JWT_REFRESH_SECRET= "$API_ENV_TEMPLATE" | cut -d= -f2-)")"
@@ -124,6 +124,9 @@ write_api_env() {
 
   playback_ttl="$(read_env_file "$API_ENV" PLAYBACK_TOKEN_TTL_SECONDS)"
   [[ -z "$playback_ttl" ]] && playback_ttl=14400
+
+  google_oauth="$(resolve_api_secret GOOGLE_CLIENT_ID "")"
+  apple_oauth="$(resolve_api_secret APPLE_CLIENT_ID "")"
 
   if [[ -f "$API_ENV" ]] && [[ -s "$API_ENV" ]]; then
     log "Updating api/.env in place (preserving existing secrets)..."
@@ -184,6 +187,13 @@ write_api_env() {
     THROTTLE_TTL_MS 60000 \
     THROTTLE_LIMIT 1000 \
     PLAYBACK_TOKEN_TTL_SECONDS "$playback_ttl"
+
+  if [[ -n "$google_oauth" ]]; then
+    upsert_env_file "$API_ENV" GOOGLE_CLIENT_ID "$google_oauth"
+  fi
+  if [[ -n "$apple_oauth" ]]; then
+    upsert_env_file "$API_ENV" APPLE_CLIENT_ID "$apple_oauth"
+  fi
 
   validate_api_env
   log "api/.env OK ($(wc -l <"$API_ENV") lines, backup at ${API_ENV_BACKUP})"

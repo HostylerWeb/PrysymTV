@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Loader2 } from "lucide-react"
-import {
-  GoogleLogin,
-  type CredentialResponse,
-  useGoogleOAuth,
-} from "@react-oauth/google"
 import { cn } from "@/lib/utils"
 import { useOAuthConfig } from "@/contexts/oauth-config-context"
+import {
+  mountGoogleButton,
+  prepareAppleSignIn,
+  prepareGoogleSignIn,
+  signInWithApple,
+  subscribeGoogleCredential,
+} from "@/lib/oauth-clients"
 
 const envGoogleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim()
 const envAppleClientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID?.trim()
@@ -19,24 +21,6 @@ const OAUTH_BUTTON_VISUAL =
 
 const OAUTH_BUTTON_INTERACTIVE =
   `${OAUTH_BUTTON_VISUAL} cursor-pointer hover:bg-[#1f1f1f] disabled:cursor-not-allowed`
-
-declare global {
-  interface Window {
-    AppleID?: {
-      auth: {
-        init: (config: {
-          clientId: string
-          scope: string
-          redirectURI: string
-          usePopup: boolean
-        }) => void
-        signIn: () => Promise<{
-          authorization: { id_token: string; code: string }
-        }>
-      }
-    }
-  }
-}
 
 type OAuthSignInButtonsProps = {
   disabled?: boolean
@@ -117,13 +101,14 @@ function GoogleSignInButton({
 }: {
   disabled?: boolean
   busy?: boolean
-  onSuccess: (response: CredentialResponse) => void
+  onSuccess: (credential: string) => void
   onError: () => void
   clientId: string | null
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const buttonHostRef = useRef<HTMLDivElement>(null)
+  const [ready, setReady] = useState(false)
   const [width, setWidth] = useState(0)
-  const { scriptLoadedSuccessfully } = useGoogleOAuth()
 
   useEffect(() => {
     const el = containerRef.current
@@ -140,6 +125,34 @@ function GoogleSignInButton({
     return () => observer.disconnect()
   }, [])
 
+  useEffect(() => {
+    if (!clientId) return
+
+    let cancelled = false
+    void prepareGoogleSignIn(clientId)
+      .then(() => {
+        if (!cancelled) setReady(true)
+      })
+      .catch(() => {
+        if (!cancelled) onError()
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [clientId, onError])
+
+  useEffect(() => {
+    if (!clientId || !ready || !buttonHostRef.current || width <= 0) return
+    if (disabled || busy) return
+    mountGoogleButton(buttonHostRef.current, width)
+  }, [clientId, ready, width, disabled, busy])
+
+  useEffect(() => {
+    if (!clientId || !ready) return
+    return subscribeGoogleCredential(onSuccess)
+  }, [clientId, ready, onSuccess])
+
   if (!clientId) return null
 
   return (
@@ -147,32 +160,20 @@ function GoogleSignInButton({
       ref={containerRef}
       className={cn(
         "group relative h-12 w-full",
-        (disabled || busy || !scriptLoadedSuccessfully) && "opacity-50",
+        (disabled || busy || !ready) && "opacity-50",
       )}
     >
       <OAuthButtonFace
-        busy={busy || !scriptLoadedSuccessfully}
+        busy={busy || !ready}
         icon={<GoogleLogoIcon className="h-5 w-5 shrink-0" />}
         label="Continue with Google"
       />
 
-      {!disabled && !busy && scriptLoadedSuccessfully && width > 0 ? (
-        <div className="absolute inset-0 z-10 overflow-hidden opacity-[0.011]">
-          <GoogleLogin
-            onSuccess={onSuccess}
-            onError={onError}
-            theme="filled_black"
-            size="large"
-            shape="pill"
-            text="continue_with"
-            width={width}
-            locale="en"
-            containerProps={{
-              className: "flex h-12 w-full items-center justify-center",
-              style: { height: 48, width: "100%" },
-            }}
-          />
-        </div>
+      {!disabled && !busy && ready && width > 0 ? (
+        <div
+          ref={buttonHostRef}
+          className="absolute inset-0 z-10 overflow-hidden opacity-[0.011]"
+        />
       ) : null}
     </div>
   )
@@ -192,45 +193,26 @@ function AppleSignInButton({
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    if (!clientId || typeof window === "undefined") return
+    if (!clientId) return
 
-    const initApple = () => {
-      window.AppleID?.auth.init({
-        clientId,
-        scope: "name email",
-        redirectURI: window.location.origin,
-        usePopup: true,
+    let cancelled = false
+    void prepareAppleSignIn(clientId)
+      .then(() => {
+        if (!cancelled) setReady(true)
       })
-      setReady(true)
-    }
+      .catch(() => {
+        if (!cancelled) onError?.("Failed to load Apple Sign In")
+      })
 
-    if (window.AppleID?.auth) {
-      initApple()
-      return
+    return () => {
+      cancelled = true
     }
-
-    const script = document.createElement("script")
-    script.src =
-      "https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js"
-    script.async = true
-    script.onload = initApple
-    script.onerror = () => onError?.("Failed to load Apple Sign In")
-    document.head.appendChild(script)
   }, [clientId, onError])
 
   const handleAppleSignIn = useCallback(async () => {
-    if (!window.AppleID?.auth) {
-      onError?.("Apple Sign In is not available")
-      return
-    }
     setBusy(true)
     try {
-      const response = await window.AppleID.auth.signIn()
-      const identityToken = response.authorization.id_token
-      const authorizationCode = response.authorization.code
-      if (!identityToken) {
-        throw new Error("Apple did not return a sign-in token")
-      }
+      const { identityToken, authorizationCode } = await signInWithApple()
       await onAppleCredential(identityToken, authorizationCode)
     } catch (err) {
       const message =
@@ -279,12 +261,7 @@ export function OAuthSignInButtons({
   const [googleBusy, setGoogleBusy] = useState(false)
 
   const handleGoogleSuccess = useCallback(
-    async (response: CredentialResponse) => {
-      const credential = response.credential
-      if (!credential) {
-        onError?.("Google sign-in did not return a token")
-        return
-      }
+    async (credential: string) => {
       setGoogleBusy(true)
       try {
         await onGoogleCredential(credential)
@@ -315,17 +292,17 @@ export function OAuthSignInButtons({
       </div>
 
       <div className="flex flex-col gap-3">
-      {googleClientId ? (
+        {googleClientId ? (
           <GoogleSignInButton
             clientId={googleClientId}
             disabled={disabled}
             busy={googleBusy}
-            onSuccess={(response) => void handleGoogleSuccess(response)}
+            onSuccess={(credential) => void handleGoogleSuccess(credential)}
             onError={() => onError?.("Google sign-in failed")}
           />
-      ) : null}
+        ) : null}
 
-      {appleClientId ? (
+        {appleClientId ? (
           <AppleSignInButton
             clientId={appleClientId}
             disabled={disabled}
@@ -333,7 +310,7 @@ export function OAuthSignInButtons({
             onAppleCredential={onAppleCredential}
             onError={onError}
           />
-      ) : null}
+        ) : null}
       </div>
     </div>
   )
@@ -341,4 +318,9 @@ export function OAuthSignInButtons({
 
 export function isOAuthConfigured(): boolean {
   return Boolean(envGoogleClientId || envAppleClientId)
+}
+
+export function useOAuthButtonsAvailable(): boolean {
+  const { isOAuthAvailable } = useOAuthConfig()
+  return isOAuthAvailable || isOAuthConfigured()
 }
