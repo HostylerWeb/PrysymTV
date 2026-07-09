@@ -1,53 +1,114 @@
 import { apiRequest } from './client';
-import type { PaginatedMeta, VideoCardDetail } from '@/types/api';
+import { uploadPickedFile, type FileUploadInit } from './profile-upload';
+import type { VideoDetail } from '@/types/api';
+
+export type UploadInitBody = {
+  type: 'short' | 'video' | 'podcast' | 'movie';
+  title: string;
+  description?: string;
+  category?: string;
+  visibility?: 'public' | 'private' | 'unlisted';
+  tags?: string;
+  mimeType: string;
+  fileName?: string;
+  verticalEpisodeId?: string;
+};
+
+export type UploadInitResponse = FileUploadInit & {
+  videoId: string;
+  status: string;
+  maxUploadBytes: number;
+};
+
+export type UploadCompleteResponse = {
+  videoId: string;
+  status: string;
+  message: string;
+};
 
 export function fetchVideo(id: string) {
-  return apiRequest<VideoCardDetail & { description?: string | null; hlsMasterUrl?: string | null }>(
-    `/videos/${id}`,
-  );
+  return apiRequest<VideoDetail>(`/videos/${id}`);
 }
 
 export function postVideoView(id: string) {
-  return apiRequest<{ viewsCount: number }>(`/videos/${id}/view`, { method: 'POST' });
-}
-
-export function toggleVideoLike(id: string) {
-  return apiRequest<{ liked: boolean; likesCount: number }>(`/videos/${id}/like`, {
+  return apiRequest<{ success?: boolean; viewsCount: number }>(`/videos/${id}/view`, {
     method: 'POST',
+    auth: false,
   });
 }
 
+export function toggleVideoLike(id: string) {
+  return apiRequest<{ liked: boolean; likesCount?: number; disliked?: boolean }>(
+    `/videos/${id}/like`,
+    { method: 'POST' },
+  );
+}
+
 export function toggleVideoDislike(id: string) {
-  return apiRequest<{ disliked: boolean }>(`/videos/${id}/dislike`, { method: 'POST' });
+  return apiRequest<{ disliked: boolean; liked?: boolean }>(`/videos/${id}/dislike`, {
+    method: 'POST',
+  });
 }
 
 export function toggleVideoSave(id: string) {
   return apiRequest<{ saved: boolean }>(`/videos/${id}/save`, { method: 'POST' });
 }
 
-export function fetchVideoComments(id: string, page = 1, limit = 20) {
-  return apiRequest<{ items: unknown[]; meta: PaginatedMeta }>(
-    `/videos/${id}/comments?page=${page}&limit=${limit}`,
-  );
-}
-
-export function postVideoComment(id: string, body: string, parentId?: string) {
-  return apiRequest<unknown>(`/videos/${id}/comments`, {
-    method: 'POST',
-    body: { body, ...(parentId ? { parentId } : {}) },
-  });
-}
-
-export function initVideoUpload(body: Record<string, unknown>) {
-  return apiRequest<Record<string, unknown>>('/videos/upload/init', {
+export function initVideoUpload(body: UploadInitBody) {
+  return apiRequest<UploadInitResponse>('/videos/upload/init', {
     method: 'POST',
     body,
   });
 }
 
 export function completeVideoUpload(body: { videoId: string; objectKey?: string }) {
-  return apiRequest<Record<string, unknown>>('/videos/upload/complete', {
+  return apiRequest<UploadCompleteResponse>('/videos/upload/complete', {
     method: 'POST',
     body,
   });
+}
+
+export async function uploadVideoFile(
+  init: UploadInitResponse,
+  file: { uri: string; name?: string | null; mimeType?: string | null },
+) {
+  await uploadPickedFile(init, file);
+}
+
+export async function runVideoUpload(params: {
+  type: 'short' | 'video' | 'movie';
+  title: string;
+  description?: string;
+  category?: string;
+  visibility?: 'public' | 'private' | 'unlisted';
+  tags?: string;
+  file: { uri: string; name?: string | null; mimeType?: string | null };
+}) {
+  const mimeType = params.file.mimeType || 'video/mp4';
+  const init = await initVideoUpload({
+    type: params.type,
+    title: params.title,
+    description: params.description,
+    category: params.category,
+    visibility: params.visibility,
+    tags: params.tags,
+    mimeType,
+    fileName: params.file.name ?? 'video.mp4',
+  });
+  await uploadVideoFile(init, params.file);
+  return completeVideoUpload({ videoId: init.videoId, objectKey: init.objectKey });
+}
+
+export function updateMyVideo(videoId: string, body: { title?: string; description?: string }) {
+  return apiRequest<{
+    id: string;
+    title: string;
+    description: string | null;
+    type: string;
+    status: string;
+  }>(`/videos/${videoId}`, { method: 'PATCH', body });
+}
+
+export function deleteMyVideo(videoId: string) {
+  return apiRequest<{ success: boolean }>(`/videos/${videoId}`, { method: 'DELETE' });
 }

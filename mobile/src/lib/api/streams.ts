@@ -1,15 +1,39 @@
 import { apiRequest } from './client';
 
+export type StreamDetail = {
+  id: string;
+  slug: string;
+  title: string;
+  thumbnail: string | null;
+  streamer: string;
+  streamerSlug: string;
+  streamerAvatar: string | null;
+  viewers: string;
+  viewerCount: number;
+  category: string;
+  status: string;
+  startedAgo: string;
+  description?: string | null;
+  hlsPlaybackUrl?: string | null;
+  webrtcPlaybackUrl?: string | null;
+  creatorId: string;
+};
+
 export function fetchLiveStreams() {
-  return apiRequest<unknown[]>('/streams/live', { auth: false });
+  return apiRequest<{ items: StreamDetail[] }>('/streams/live', { auth: false });
 }
 
 export function fetchStream(idOrUsername: string) {
-  return apiRequest<Record<string, unknown>>(`/streams/${idOrUsername}`);
+  return apiRequest<StreamDetail>(`/streams/${idOrUsername}`);
 }
 
 export function initStream(body: { title: string; category?: string }) {
-  return apiRequest<Record<string, unknown>>('/streams/init', { method: 'POST', body });
+  return apiRequest<{
+    streamId: string;
+    streamKey: string;
+    rtmpUrl: string;
+    status: string;
+  }>('/streams/init', { method: 'POST', body });
 }
 
 export function endStream(id: string) {

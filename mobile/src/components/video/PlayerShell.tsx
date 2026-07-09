@@ -3,35 +3,55 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { CastMediaButton } from '@/components/video/CastMediaButton';
+import { HlsPlayer } from '@/components/video/HlsPlayer';
 import { colors, radius, withAlpha } from '@/theme/tokens';
 
 type Props = {
   title: string;
   thumbnailUrl: string | null;
+  playbackUrl?: string | null;
   subtitle?: string;
   badge?: string;
   showCast?: boolean;
   onShare?: () => void;
   onReport?: () => void;
   hideMeta?: boolean;
+  contentFit?: 'contain' | 'cover' | 'fill';
+  onProgress?: (seconds: number, duration: number) => void;
 };
 
-/** Placeholder player area until HLS is wired in Phase C */
 export function PlayerShell({
   title,
   thumbnailUrl,
+  playbackUrl,
   subtitle,
   badge,
   showCast = false,
   onShare,
   onReport,
   hideMeta = false,
+  contentFit = 'contain',
+  onProgress,
 }: Props) {
   const showTopActions = showCast || onShare || onReport;
 
   return (
     <View style={styles.wrap}>
-      <Image source={{ uri: thumbnailUrl ?? '' }} style={styles.video} contentFit="cover" />
+      {playbackUrl ? (
+        <HlsPlayer
+          source={playbackUrl}
+          contentFit={contentFit}
+          onProgress={onProgress}
+        />
+      ) : (
+        <>
+          <Image source={{ uri: thumbnailUrl ?? '' }} style={styles.video} contentFit="cover" />
+          <View style={styles.overlay}>
+            <Ionicons name="play-circle" size={72} color={withAlpha(colors.onVideo, 0.85)} />
+            <Text style={styles.mock}>No playback URL</Text>
+          </View>
+        </>
+      )}
       {showTopActions ? (
         <View style={styles.topActions}>
           {onReport ? (
@@ -47,10 +67,6 @@ export function PlayerShell({
           {showCast ? <CastMediaButton variant="on-video" /> : null}
         </View>
       ) : null}
-      <View style={styles.overlay}>
-        <Ionicons name="play-circle" size={72} color={withAlpha(colors.onVideo, 0.85)} />
-        <Text style={styles.mock}>Tap to play</Text>
-      </View>
       {badge ? (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{badge}</Text>

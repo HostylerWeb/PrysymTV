@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { PageFooter } from '@/components/layout/PageFooter';
@@ -15,21 +15,18 @@ import { VideoCardTile } from '@/components/feed/VideoCardTile';
 import { Screen } from '@/components/ui/Screen';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { HeroSkeleton, RowSkeleton } from '@/components/ui/ContentSkeleton';
+import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
 import { AdBanner } from '@/components/ads/AdBanner';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { Image } from 'expo-image';
-import {
-  mockContinueWatching,
-  mockLiveStreams,
-  mockMovies,
-  mockPodcastEpisodes,
-  mockShorts,
-  mockVerticals,
-  mockVideos,
-} from '@/mocks';
+import { useHomeFeed } from '@/hooks/api/useHomeFeed';
+import { useVerticalsList } from '@/hooks/api/useVerticalsList';
+import { usePodcastsCatalog } from '@/hooks/api/usePodcastsCatalog';
+import { flattenShortsPages, useShortsFeed } from '@/hooks/api/useShortsFeed';
 import { useTheme } from '@/theme/ThemeProvider';
 import { colors, radius, spacing, withAlpha } from '@/theme/tokens';
+import type { VideoCard } from '@/types/api';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -37,38 +34,90 @@ export default function HomeScreen() {
   const { requireAuth } = useMockAuth();
   const [category, setCategory] = useState<HomeCategory>('all');
   const { trigger, flowHost } = useCreateFlow();
-  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 450);
-    return () => clearTimeout(t);
-  }, []);
+  const homeQuery = useHomeFeed();
+  const verticalsQuery = useVerticalsList();
+  const podcastsQuery = usePodcastsCatalog(1, 12);
+  const shortsQuery = useShortsFeed(8);
+
+  const feed = homeQuery.data;
+  const verticals = verticalsQuery.data ?? [];
+  const podcastEpisodes = podcastsQuery.data?.episodes ?? [];
+  const shorts = flattenShortsPages(shortsQuery.data?.pages);
+
+  const heroSlides = useMemo(() => {
+    if (!feed) return [];
+    const slides: Array<VideoCard & { reason: 'new_release' | 'trending' }> = [];
+    if (feed.featuredMovie) {
+      slides.push({
+        ...feed.featuredMovie,
+        reason: feed.heroMovieReason ?? 'trending',
+      });
+    }
+    for (const movie of feed.movies.slice(0, 3)) {
+      if (slides.some((s) => s.id === movie.id)) continue;
+      slides.push({
+        ...movie,
+        reason: slides.length === 0 ? 'new_release' : 'trending',
+      });
+    }
+    if (slides.length === 0) {
+      return feed.newReleases.slice(0, 4).map((m, i) => ({
+        ...m,
+        reason: (i === 0 ? 'new_release' : 'trending') as 'new_release' | 'trending',
+      }));
+    }
+    return slides.slice(0, 4);
+  }, [feed]);
+
+  const featuredLive = feed?.featuredLive ?? feed?.liveNow[0] ?? null;
+  const liveStreams = feed?.liveNow ?? [];
+  const trendingVideos = feed?.trending ?? [];
+  const movies = feed?.movies ?? [];
 
   const showLive = category === 'all' || category === 'live';
   const showMovies = category === 'all' || category === 'movies';
   const showVideos = category === 'all' || category === 'videos' || category === 'trending';
   const showSeries = category === 'all' || category === 'series';
 
-  const heroSlides = mockMovies.slice(0, 4).map((m, i) => ({
-    ...m,
-    reason: (i === 0 ? 'new_release' : 'trending') as 'new_release' | 'trending',
-  }));
+  const isLoading = homeQuery.isLoading && !feed;
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([
+      homeQuery.refetch(),
+      verticalsQuery.refetch(),
+      podcastsQuery.refetch(),
+      shortsQuery.refetch(),
+    ]);
+    setRefreshing(false);
+  };
 
   return (
     <>
-      <Screen>
+      <Screen
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />
+        }
+      >
         <AppHeader showCreate onCreatePress={() => requireAuth(() => trigger('menu'))} />
 
-        {loading ? (
+        {isLoading ? (
           <>
             <HeroSkeleton />
             <RowSkeleton />
             <RowSkeleton itemWidth={100} itemHeight={150} />
           </>
+        ) : homeQuery.isError ? (
+          <FeedQueryState
+            isError
+            error={homeQuery.error}
+            onRetry={() => void homeQuery.refetch()}
+          />
         ) : (
           <>
-            <HomeHero slides={heroSlides} />
-            {mockLiveStreams[0] && <LiveStreamCard stream={mockLiveStreams[0]} featured />}
+            {heroSlides.length > 0 ? <HomeHero slides={heroSlides} /> : null}
+            {featuredLive ? <LiveStreamCard stream={featuredLive} featured /> : null}
             <Pressable
               style={[
                 styles.promoCard,
@@ -104,21 +153,25 @@ export default function HomeScreen() {
               </View>
             </Pressable>
             <CategoryTabs active={category} onChange={setCategory} />
-            <ContinueWatchingRow items={mockContinueWatching} />
+            <ContinueWatchingRow items={feed?.continueWatching ?? []} />
 
             {category === 'all' && (
               <>
-                <HomeTrendingRail items={mockVideos} />
-                <HomeEditorialGrid spotlight={mockVideos[0]} verticals={mockVerticals} />
-                <HomeDualSpotlight shorts={mockShorts} podcasts={mockPodcastEpisodes} />
+                {trendingVideos.length > 0 ? <HomeTrendingRail items={trendingVideos} /> : null}
+                {trendingVideos[0] && verticals[0] ? (
+                  <HomeEditorialGrid spotlight={trendingVideos[0]} verticals={verticals} />
+                ) : null}
+                {(shorts.length > 0 || podcastEpisodes.length > 0) && (
+                  <HomeDualSpotlight shorts={shorts} podcasts={podcastEpisodes} />
+                )}
               </>
             )}
 
             <AdBanner />
 
-            {showLive && (
+            {showLive && liveStreams.length > 0 && (
               <ContentRow title="Live now" actionLabel="View all" onAction={() => router.push('/live')} bordered={false}>
-                {mockLiveStreams.map((s) => (
+                {liveStreams.map((s) => (
                   <Pressable key={s.id} onPress={() => router.push(`/live/${s.id}`)} style={{ width: 200 }}>
                     <LiveStreamCard stream={s} />
                   </Pressable>
@@ -126,9 +179,9 @@ export default function HomeScreen() {
               </ContentRow>
             )}
 
-            {showSeries && (
+            {showSeries && verticals.length > 0 && (
               <ContentRow title="Micro-dramas & series" actionLabel="View all" onAction={() => router.push('/(tabs)/verticals')}>
-                {mockVerticals.slice(0, 5).map((s) => (
+                {verticals.slice(0, 5).map((s) => (
                   <Pressable key={s.slug} onPress={() => router.push(`/verticals/${s.slug}`)}>
                     <Image source={{ uri: s.posterUrl ?? '' }} style={styles.poster} contentFit="cover" />
                     <ThemedText variant="caption" style={styles.posterLabel} numberOfLines={1}>
@@ -139,9 +192,9 @@ export default function HomeScreen() {
               </ContentRow>
             )}
 
-            {category === 'all' && (
+            {category === 'all' && shorts.length > 0 && (
               <ContentRow title="Shorts" actionLabel="View all" onAction={() => router.push('/(tabs)/shorts')}>
-                {mockShorts.slice(0, 5).map((v) => (
+                {shorts.slice(0, 5).map((v) => (
                   <Pressable
                     key={v.id}
                     onPress={() => router.push({ pathname: '/(tabs)/shorts', params: { start: v.id } })}
@@ -152,9 +205,9 @@ export default function HomeScreen() {
               </ContentRow>
             )}
 
-            {category === 'all' && (
+            {category === 'all' && podcastEpisodes.length > 0 && (
               <ContentRow title="Podcasts" actionLabel="View all" onAction={() => router.push('/(tabs)/podcasts')}>
-                {mockPodcastEpisodes.slice(0, 5).map((ep) => (
+                {podcastEpisodes.slice(0, 5).map((ep) => (
                   <Pressable key={ep.id} onPress={() => router.push(`/podcast/${ep.id}`)} style={styles.podCard}>
                     <Image source={{ uri: ep.coverUrl ?? '' }} style={styles.podCover} contentFit="cover" />
                     <ThemedText variant="caption" style={styles.posterLabel} numberOfLines={2}>
@@ -165,13 +218,13 @@ export default function HomeScreen() {
               </ContentRow>
             )}
 
-            {showVideos && (
+            {showVideos && trendingVideos.length > 0 && (
               <ContentRow
                 title={category === 'trending' ? 'Trending' : 'Videos'}
                 actionLabel="View all"
                 onAction={() => router.push('/(tabs)/videos')}
               >
-                {mockVideos.slice(0, 6).map((v) => (
+                {trendingVideos.slice(0, 6).map((v) => (
                   <View key={v.id} style={{ width: 200 }}>
                     <VideoCardTile video={v} variant="grid" />
                   </View>
@@ -179,24 +232,24 @@ export default function HomeScreen() {
               </ContentRow>
             )}
 
-            {showMovies && (
+            {showMovies && movies.length > 0 && (
               <>
                 <ContentRow title="New releases">
-                  {mockMovies.slice(0, 4).map((m) => (
+                  {movies.slice(0, 4).map((m) => (
                     <VideoCardTile key={m.id} video={m} variant="poster" />
                   ))}
                 </ContentRow>
                 <ContentRow title="Top movies" actionLabel="View all" onAction={() => router.push('/(tabs)/movies')}>
-                  {mockMovies.slice(4, 8).map((m) => (
+                  {movies.slice(0, 8).map((m) => (
                     <VideoCardTile key={m.id} video={m} variant="poster" />
                   ))}
                 </ContentRow>
               </>
             )}
 
-            {category === 'all' && (
+            {category === 'all' && trendingVideos.length > 2 && (
               <ContentRow title="Recommended">
-                {mockVideos.slice(2, 6).map((v) => (
+                {trendingVideos.slice(2, 6).map((v) => (
                   <View key={v.id} style={{ width: 200 }}>
                     <VideoCardTile video={v} variant="grid" />
                   </View>

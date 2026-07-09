@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -24,7 +26,8 @@ import { SectionHeader } from '@/components/home/SectionHeader';
 import { FilterChip } from '@/components/ui/FilterChip';
 import { FilterSelect } from '@/components/ui/FilterSelect';
 import { Button } from '@/components/ui/Button';
-import { mockMovies } from '@/mocks';
+import { FeedQueryState } from '@/components/ui/FeedQueryState';
+import { useMoviesFeed } from '@/hooks/api/useMoviesFeed';
 import { radius, withAlpha } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -63,13 +66,16 @@ export default function MoviesScreen() {
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [infoOpen, setInfoOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const featured = mockMovies[0];
-  const trending = mockMovies.slice(0, 3);
-  const newReleases = mockMovies.slice(0, 4);
+  const moviesQuery = useMoviesFeed();
+  const allMovies = moviesQuery.data?.items ?? [];
+  const featured = moviesQuery.data?.featured ?? allMovies[0];
+  const trending = allMovies.slice(0, 3);
+  const newReleases = allMovies.slice(0, 4);
 
   const filtered = useMemo(() => {
-    let list = [...mockMovies];
+    let list = [...allMovies];
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((m) => m.title.toLowerCase().includes(q));
@@ -88,16 +94,55 @@ export default function MoviesScreen() {
       list.sort((a, b) => a.title.localeCompare(b.title));
     }
     return list;
-  }, [search, genre, year, sort]);
+  }, [allMovies, search, genre, year, sort]);
 
   const posterWidth = Math.floor((width - 32 - 24) / 3);
-  const featuredGenre = GENRE_LABELS[featured.category ?? 'drama'] ?? 'Drama';
+  const featuredGenre = featured ? (GENRE_LABELS[featured.category ?? 'drama'] ?? 'Drama') : 'Drama';
+  const isLoading = moviesQuery.isLoading && !moviesQuery.data;
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await moviesQuery.refetch();
+    setRefreshing(false);
+  };
+
+  if (isLoading) {
+    return (
+      <View style={[styles.screen, styles.center]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (moviesQuery.isError) {
+    return (
+      <View style={styles.screen}>
+        <FeedQueryState isError error={moviesQuery.error} onRetry={() => void moviesQuery.refetch()} />
+      </View>
+    );
+  }
+
+  if (!featured) {
+    return (
+      <View style={styles.screen}>
+        <FeedQueryState
+          isEmpty
+          emptyTitle="No movies yet"
+          emptyMessage="Movies will appear here when they are published."
+          onRetry={() => void moviesQuery.refetch()}
+        />
+      </View>
+    );
+  }
 
   return (
     <>
     <ScrollView
       style={styles.screen}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />
+      }
     >
       <View style={[styles.headerPad, { paddingTop: insets.top }]}>
         <AppHeader title="Movies" searchScope="movie" showNotifications={false} edgeToEdge />
@@ -255,6 +300,7 @@ export default function MoviesScreen() {
 function createMoviesStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
+    center: { alignItems: 'center', justifyContent: 'center' },
     headerPad: { paddingHorizontal: 16 },
     hero: { aspectRatio: 16 / 10, backgroundColor: colors.muted },
     heroGradBottom: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.heroScrim },

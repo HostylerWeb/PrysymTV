@@ -1,34 +1,45 @@
 import React, { useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/Button';
+import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { ShareModal } from '@/components/modals/ShareModal';
 import { ReportModal } from '@/components/modals/ReportModal';
-import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
-import { getMockVertical } from '@/mocks';
+import { useVerticalSeriesDetail } from '@/hooks/api/useVerticalSeriesDetail';
+import { toggleVerticalSeriesSave } from '@/lib/api/verticals';
 import { radius } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useThemedStyles } from '@/theme/useThemedStyles';
-
-const EPISODE_PROGRESS: Record<number, number> = { 1: 1, 2: 0.65, 3: 0.2 };
 
 export default function VerticalSeriesScreen() {
   const styles = useThemedStyles(createStyles);
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
-  const series = getMockVertical(slug ?? '') ?? getMockVertical('series-1')!;
-  const episodes = Array.from({ length: 8 }, (_, i) => i + 1);
+  const seriesQuery = useVerticalSeriesDetail(slug);
+  const series = seriesQuery.data;
   const [shareOpen, setShareOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
-  const [saveOpen, setSaveOpen] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const resumeEp = episodes.find((n) => {
-    const p = EPISODE_PROGRESS[n];
-    return p !== undefined && p > 0 && p < 1;
-  }) ?? 1;
+  if (seriesQuery.isLoading) {
+    return (
+      <View style={[styles.screen, styles.center]}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (seriesQuery.isError || !series) {
+    return (
+      <View style={styles.screen}>
+        <FeedQueryState isError error={seriesQuery.error} onRetry={() => void seriesQuery.refetch()} />
+      </View>
+    );
+  }
+
+  const resumeEp = series.episodes[0]?.episodeNumber ?? 1;
 
   return (
     <>
@@ -36,55 +47,53 @@ export default function VerticalSeriesScreen() {
         <View style={styles.pad}>
           <AppHeader showBack title={series.title} showSearch={false} showNotifications={false} />
         </View>
-        <Image source={{ uri: series.posterUrl ?? '' }} style={styles.hero} contentFit="cover" />
+        <Image source={{ uri: series.bannerUrl ?? series.posterUrl ?? '' }} style={styles.hero} contentFit="cover" />
         <View style={styles.body}>
-          <Text style={styles.desc}>{series.description}</Text>
-          <Button label={`Resume episode ${resumeEp}`} onPress={() => router.push(`/verticals/watch/${series.slug}/${resumeEp}`)} />
-          <Button label="Play episode 1" variant="outline" onPress={() => router.push(`/verticals/watch/${series.slug}/1`)} />
+          <Text style={styles.desc}>{series.description ?? series.tagline}</Text>
+          <Button
+            label={`Play episode ${resumeEp}`}
+            onPress={() => router.push(`/verticals/watch/${series.slug}/${resumeEp}`)}
+          />
           <View style={styles.row}>
-            <Button label={saved ? 'Saved' : 'Save series'} variant="outline" style={styles.flex} onPress={() => { setSaved(!saved); setSaveOpen(true); }} />
+            <Button
+              label={saved ? 'Saved' : 'Save series'}
+              variant="outline"
+              style={styles.flex}
+              onPress={async () => {
+                const res = await toggleVerticalSeriesSave(series.id);
+                setSaved(res.saved);
+              }}
+            />
             <Button label="Share" variant="secondary" style={styles.flex} onPress={() => setShareOpen(true)} />
             <Button label="Report" variant="ghost" onPress={() => setReportOpen(true)} />
           </View>
-          <Text style={styles.section}>Episodes</Text>
+          <Text style={styles.section}>Episodes ({series.episodes.length})</Text>
         </View>
         <FlatList
-          data={episodes}
-          keyExtractor={(n) => String(n)}
+          data={series.episodes}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => {
-            const progress = EPISODE_PROGRESS[item] ?? 0;
-            const watched = progress >= 1;
-            return (
-              <Pressable style={styles.ep} onPress={() => router.push(`/verticals/watch/${series.slug}/${item}`)}>
-                <View style={styles.epThumb}>
-                  <Image source={{ uri: series.posterUrl ?? '' }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                  {progress > 0 && progress < 1 ? (
-                    <View style={styles.progressTrack}>
-                      <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
-                    </View>
-                  ) : null}
-                  {watched ? (
-                    <View style={styles.watchedBadge}>
-                      <Text style={styles.watchedText}>Watched</Text>
-                    </View>
-                  ) : null}
-                </View>
-                <View style={styles.epMeta}>
-                  <Text style={styles.epNum}>Ep {item}</Text>
-                  <Text style={styles.epTitle}>Episode {item}</Text>
-                  {progress > 0 && progress < 1 ? (
-                    <Text style={styles.epProgress}>{Math.round(progress * 100)}% watched</Text>
-                  ) : null}
-                </View>
-              </Pressable>
-            );
-          }}
+          renderItem={({ item }) => (
+            <Pressable
+              style={styles.ep}
+              onPress={() => router.push(`/verticals/watch/${series.slug}/${item.episodeNumber}`)}
+            >
+              <View style={styles.epThumb}>
+                <Image source={{ uri: item.thumbnailUrl ?? series.posterUrl ?? '' }} style={StyleSheet.absoluteFill} contentFit="cover" />
+              </View>
+              <View style={styles.epMeta}>
+                <Text style={styles.epNum}>Ep {item.episodeNumber}</Text>
+                <Text style={styles.epTitle}>{item.title}</Text>
+                {item.cliffhanger ? (
+                  <Text style={styles.epProgress} numberOfLines={1}>{item.cliffhanger}</Text>
+                ) : null}
+              </View>
+            </Pressable>
+          )}
         />
       </View>
       <ShareModal visible={shareOpen} onClose={() => setShareOpen(false)} title={series.title} />
-      <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} />
-      <AddToPlaylistSheet visible={saveOpen} onClose={() => setSaveOpen(false)} contentTitle={series.title} />
+      <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetType="vertical_series" targetId={series.id} />
     </>
   );
 }
@@ -92,6 +101,7 @@ export default function VerticalSeriesScreen() {
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
+  center: { alignItems: 'center', justifyContent: 'center' },
   pad: { paddingHorizontal: 16 },
   hero: { width: '100%', height: 220, backgroundColor: colors.secondary },
   body: { padding: 16, gap: 12 },
@@ -108,18 +118,6 @@ const createStyles = (colors: ThemeColors) =>
     overflow: 'hidden',
     backgroundColor: colors.secondary,
   },
-  progressTrack: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 3, backgroundColor: colors.border },
-  progressFill: { height: '100%', backgroundColor: colors.primary },
-  watchedBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: colors.primary + 'CC',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  watchedText: { color: colors.primaryForeground, fontSize: 8, fontWeight: '800' },
   epMeta: { flex: 1 },
   epNum: { color: colors.primary, fontWeight: '800', fontSize: 12 },
   epTitle: { color: colors.foreground, fontSize: 15, marginTop: 2 },

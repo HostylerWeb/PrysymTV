@@ -8,7 +8,6 @@ import { VerticalSeriesWizard } from '@/components/modals/VerticalSeriesWizard';
 import { UnlockFeaturesModal, type CreatorVerificationContext } from '@/components/modals/UnlockFeaturesModal';
 import { StreamerApplicationModal } from '@/components/modals/StreamerApplicationModal';
 import { CreatorUploadSheet, type CreatorUploadKind } from '@/components/modals/CreatorUploadSheet';
-import { mockUser } from '@/mocks';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import type { ThemeColors } from '@/theme/tokens';
@@ -44,7 +43,10 @@ export function CreateMenuModal({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { user, requireAuth } = useMockAuth();
-  const profile = user ?? mockUser;
+  if (!user) {
+    // Guest — requireAuth handles prompts when tapping items
+  }
+  const profile = user;
   const [wizardOpen, setWizardOpen] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [streamerOpen, setStreamerOpen] = useState(false);
@@ -52,8 +54,8 @@ export function CreateMenuModal({
   const [unlockFeature, setUnlockFeature] = useState<'vertical' | 'live' | 'store'>('vertical');
   const [verifyContext, setVerifyContext] = useState<CreatorVerificationContext | null>(null);
 
-  const canVertical = profile.verticalCreatorStatus === 'approved';
-  const canLive = profile.streamerStatus === 'approved';
+  const canVertical = profile?.verticalCreatorStatus === 'approved';
+  const canLive = profile?.streamerStatus === 'approved';
 
   const openUnlock = (feature: 'vertical' | 'live' | 'store') => {
     setUnlockFeature(feature);
@@ -137,33 +139,37 @@ export function CreateMenuModal({
         onClose={() => setWizardOpen(false)}
         onComplete={() => router.push('/settings/verticals')}
       />
-      <UnlockFeaturesModal
-        visible={unlockOpen}
-        user={profile}
-        preselect={unlockFeature}
-        onClose={() => setUnlockOpen(false)}
-        onNeedVerification={(ctx) => {
-          setVerifyContext(ctx);
-          setUnlockOpen(false);
-          setStreamerOpen(true);
-        }}
-      />
-      <StreamerApplicationModal
-        visible={streamerOpen}
-        user={profile}
-        onClose={() => {
-          setStreamerOpen(false);
-          setVerifyContext(null);
-        }}
-        features={
-          verifyContext?.features.includes('live') && verifyContext?.features.includes('vertical')
-            ? ['live', 'vertical']
-            : verifyContext?.features.includes('vertical')
-              ? ['vertical']
-              : ['live', 'vertical']
-        }
-        initialDescription={verifyContext?.description}
-      />
+      {profile ? (
+        <UnlockFeaturesModal
+          visible={unlockOpen}
+          user={profile}
+          preselect={unlockFeature}
+          onClose={() => setUnlockOpen(false)}
+          onNeedVerification={(ctx) => {
+            setVerifyContext(ctx);
+            setUnlockOpen(false);
+            setStreamerOpen(true);
+          }}
+        />
+      ) : null}
+      {profile ? (
+        <StreamerApplicationModal
+          visible={streamerOpen}
+          user={profile}
+          onClose={() => {
+            setStreamerOpen(false);
+            setVerifyContext(null);
+          }}
+          features={
+            verifyContext?.features.includes('live') && verifyContext?.features.includes('vertical')
+              ? ['live', 'vertical']
+              : verifyContext?.features.includes('vertical')
+                ? ['vertical']
+                : ['live', 'vertical']
+          }
+          initialDescription={verifyContext?.description}
+        />
+      ) : null}
       {uploadKind && (
         <CreatorUploadSheet visible={!!uploadKind} kind={uploadKind} onClose={() => setUploadKind(null)} />
       )}

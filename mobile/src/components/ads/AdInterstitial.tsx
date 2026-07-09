@@ -2,38 +2,92 @@ import React, { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { MockServedAd } from '@/components/ads/mock-ad-data';
-import { MOCK_SHORTS_AD } from '@/components/ads/mock-ad-data';
-import { colors, radius } from '@/theme/tokens';
+import {
+  buildAdAttribution,
+  fetchServedAd,
+  trackAdClick,
+  trackAdImpression,
+  type ServedAd,
+} from '@/lib/api/ads';
+import { useMockAuth } from '@/context/MockAuthContext';
+import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
+import { useShouldShowAds } from '@/hooks/useShouldShowAds';
+import { resolveAdMediaUrl } from '@/lib/ad-media';
+import { radius } from '@/theme/tokens';
 
 type Props = {
   visible: boolean;
-  ad?: MockServedAd;
+  videoId?: string;
+  creatorId?: string;
   onClose: () => void;
 };
 
-export function AdInterstitial({ visible, ad = MOCK_SHORTS_AD, onClose }: Props) {
+export function AdInterstitial({ visible, videoId, creatorId, onClose }: Props) {
   const insets = useSafeAreaInsets();
-  const [countdown, setCountdown] = useState(ad.skipAfterSeconds);
+  const shouldShow = useShouldShowAds();
+  const { user } = useMockAuth();
+  const { platformCreatorId } = usePublicAdsConfig();
+  const [ad, setAd] = useState<ServedAd | null>(null);
+  const [countdown, setCountdown] = useState(5);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
-    setCountdown(ad.skipAfterSeconds);
     setReady(false);
-  }, [visible, ad.skipAfterSeconds]);
+    if (!shouldShow) {
+      onClose();
+      return;
+    }
+    void fetchServedAd('shorts_interstitial').then((served) => {
+      if (!served) {
+        onClose();
+        return;
+      }
+      setAd(served);
+      setCountdown(served.skipAfterSeconds);
+      void trackAdImpression(
+        buildAdAttribution({
+          campaignId: served.id,
+          placement: 'shorts_interstitial',
+          creatorId,
+          platformCreatorId,
+          videoId,
+          viewerUserId: user?.id,
+        }),
+      );
+    });
+  }, [visible, shouldShow, creatorId, videoId, platformCreatorId, user?.id, onClose]);
 
   useEffect(() => {
-    if (!visible || !ready || countdown <= 0) return;
+    if (!visible || !ad || !ready || countdown <= 0) return;
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
-  }, [visible, ready, countdown]);
+  }, [visible, ad, ready, countdown]);
+
+  if (!visible || !ad) return null;
+
+  const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
+  if (!mediaUrl) return null;
+
+  const openAd = () => {
+    void trackAdClick(
+      buildAdAttribution({
+        campaignId: ad.id,
+        placement: 'shorts_interstitial',
+        creatorId,
+        platformCreatorId,
+        videoId,
+        viewerUserId: user?.id,
+      }),
+    );
+    void Linking.openURL(ad.clickThroughUrl);
+  };
 
   return (
     <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.screen}>
         <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-          <Pressable onPress={() => void Linking.openURL(ad.clickThroughUrl)}>
+          <Pressable onPress={openAd}>
             <Text style={styles.sponsor} numberOfLines={1}>Sponsored · {ad.title}</Text>
           </Pressable>
           {ready && countdown <= 0 ? (
@@ -47,7 +101,7 @@ export function AdInterstitial({ visible, ad = MOCK_SHORTS_AD, onClose }: Props)
           )}
         </View>
         <Image
-          source={{ uri: ad.mediaUrl }}
+          source={{ uri: mediaUrl }}
           style={styles.media}
           contentFit="cover"
           onLoad={() => setReady(true)}

@@ -16,6 +16,7 @@ import {
   applyVerticalCreator as applyVerticalCreatorApi,
 } from "@/lib/api/users"
 import { mapMeToUser } from "@/lib/api/map-user"
+import type { UserGenderValue } from "@/lib/user-gender"
 
 export interface User {
   id: string
@@ -39,6 +40,8 @@ export interface User {
   followersCount: number
   followingCount: number
   videosCount: number
+  gender: string | null
+  birthDate: string | null
   streamerApplication?: {
     description: string
     idPhotoUrl: string
@@ -51,7 +54,12 @@ interface AuthContextType {
   isAuthenticated: boolean
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (name: string, email: string, password: string) => Promise<void>
+  register: (
+    name: string,
+    email: string,
+    password: string,
+    gender: UserGenderValue,
+  ) => Promise<void>
   loginWithGoogle: (idToken: string) => Promise<void>
   loginWithApple: (
     identityToken: string,
@@ -121,13 +129,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(mapMeToUser(me))
   }
 
-  const register = async (name: string, email: string, password: string) => {
+  const register = async (
+    name: string,
+    email: string,
+    password: string,
+    gender: UserGenderValue,
+  ) => {
     const username = authApi.deriveUsername(name, email)
     await authApi.register({
       email,
       username,
       password,
       displayName: name,
+      gender,
     })
     const me = await fetchMe()
     setUser(mapMeToUser(me))

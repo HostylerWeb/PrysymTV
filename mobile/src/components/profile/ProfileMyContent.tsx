@@ -1,10 +1,13 @@
-import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { VideoCardTile } from '@/components/feed/VideoCardTile';
 import { Button } from '@/components/ui/Button';
-import { mockPodcastShows, mockShorts, mockVerticals, mockVideos } from '@/mocks';
+import { FeedQueryState } from '@/components/ui/FeedQueryState';
+import { useMyCreatorContent } from '@/hooks/api/useMyCreatorContent';
+import { deleteMyVideo } from '@/lib/api/videos';
 import type { VideoCard } from '@/types/api';
 import type { ThemeColors } from '@/theme/tokens';
 import { radius, spacing } from '@/theme/tokens';
@@ -27,19 +30,11 @@ type Props = {
 
 export function ProfileMyContent({ onOpenVerticalUpload, onOpenPodcastUpload }: Props) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [tab, setTab] = useState<ContentTab>('videos');
-  const [deletedVideoIds, setDeletedVideoIds] = useState<string[]>([]);
-
-  const videos = useMemo(
-    () => mockVideos.slice(0, 6).filter((v) => !deletedVideoIds.includes(v.id)),
-    [deletedVideoIds],
-  );
-  const shorts = useMemo(
-    () => mockShorts.slice(0, 4).filter((v) => !deletedVideoIds.includes(v.id)),
-    [deletedVideoIds],
-  );
+  const contentQuery = useMyCreatorContent();
 
   const confirmDelete = (video: VideoCard) => {
     Alert.alert('Delete content', `Delete "${video.title}"? This cannot be undone.`, [
@@ -47,7 +42,16 @@ export function ProfileMyContent({ onOpenVerticalUpload, onOpenPodcastUpload }: 
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => setDeletedVideoIds((prev) => [...prev, video.id]),
+        onPress: () => {
+          void (async () => {
+            try {
+              await deleteMyVideo(video.id);
+              void queryClient.invalidateQueries({ queryKey: ['profile', 'my-content'] });
+            } catch (e) {
+              Alert.alert('Error', e instanceof Error ? e.message : 'Could not delete video');
+            }
+          })();
+        },
       },
     ]);
   };
@@ -66,6 +70,26 @@ export function ProfileMyContent({ onOpenVerticalUpload, onOpenPodcastUpload }: 
     </View>
   );
 
+  if (contentQuery.isLoading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (contentQuery.isError) {
+    return (
+      <FeedQueryState
+        isError
+        error={contentQuery.error}
+        onRetry={() => void contentQuery.refetch()}
+      />
+    );
+  }
+
+  const data = contentQuery.data!;
+
   return (
     <View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
@@ -83,40 +107,61 @@ export function ProfileMyContent({ onOpenVerticalUpload, onOpenPodcastUpload }: 
         })}
       </ScrollView>
 
-      {tab === 'videos' && renderGrid(videos)}
-      {tab === 'shorts' && renderGrid(shorts)}
+      {tab === 'videos' && (
+        data.videos.length === 0 ? (
+          <Text style={styles.empty}>No videos uploaded yet.</Text>
+        ) : (
+          renderGrid(data.videos)
+        )
+      )}
+
+      {tab === 'shorts' && (
+        data.shorts.length === 0 ? (
+          <Text style={styles.empty}>No shorts uploaded yet.</Text>
+        ) : (
+          renderGrid(data.shorts)
+        )
+      )}
 
       {tab === 'verticals' && (
         <View style={styles.list}>
-          {mockVerticals.map((s) => (
-            <Pressable
-              key={s.slug}
-              style={styles.seriesRow}
-              onPress={() => router.push(`/verticals/${s.slug}`)}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rowTitle}>{s.title}</Text>
-                <Text style={styles.rowMeta}>{s.episodeCount} episodes</Text>
-              </View>
-              <Button label="Manage" variant="outline" size="sm" onPress={onOpenVerticalUpload} />
-            </Pressable>
-          ))}
+          {data.verticals.length === 0 ? (
+            <Text style={styles.empty}>No vertical series yet.</Text>
+          ) : (
+            data.verticals.map((s) => (
+              <Pressable
+                key={s.slug}
+                style={styles.seriesRow}
+                onPress={() => router.push(`/verticals/${s.slug}`)}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowTitle}>{s.title}</Text>
+                  <Text style={styles.rowMeta}>{s.episodeCount} episodes</Text>
+                </View>
+                <Button label="Manage" variant="outline" size="sm" onPress={onOpenVerticalUpload} />
+              </Pressable>
+            ))
+          )}
           <Button label="Upload vertical episode" variant="ghost" onPress={onOpenVerticalUpload} />
         </View>
       )}
 
       {tab === 'podcasts' && (
         <View style={styles.list}>
-          {mockPodcastShows.map((s) => (
-            <Pressable key={s.id} style={styles.seriesRow} onPress={() => router.push('/settings/podcasts')}>
-              <Ionicons name="mic-outline" size={20} color={colors.primary} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rowTitle}>{s.title}</Text>
-                <Text style={styles.rowMeta}>{s.episodeCount} episodes</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
-            </Pressable>
-          ))}
+          {data.podcasts.length === 0 ? (
+            <Text style={styles.empty}>No podcast shows yet.</Text>
+          ) : (
+            data.podcasts.map((s) => (
+              <Pressable key={s.id} style={styles.seriesRow} onPress={() => router.push('/settings/podcasts')}>
+                <Ionicons name="mic-outline" size={20} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowTitle}>{s.title}</Text>
+                  <Text style={styles.rowMeta}>{s.episodeCount} episodes</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+              </Pressable>
+            ))
+          )}
           <Button label="Upload podcast episode" variant="ghost" onPress={onOpenPodcastUpload} />
         </View>
       )}
@@ -126,6 +171,7 @@ export function ProfileMyContent({ onOpenVerticalUpload, onOpenPodcastUpload }: 
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
+    center: { paddingVertical: spacing.xl, alignItems: 'center' },
     tabs: { gap: spacing.sm, marginBottom: spacing.lg },
     chip: {
       paddingHorizontal: spacing.lg,
@@ -167,5 +213,6 @@ function createStyles(colors: ThemeColors) {
     },
     rowTitle: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
     rowMeta: { color: colors.mutedForeground, fontSize: 12, marginTop: 2 },
+    empty: { color: colors.mutedForeground, textAlign: 'center', paddingVertical: spacing.lg },
   });
 }

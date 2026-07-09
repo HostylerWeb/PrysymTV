@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   Modal,
   Pressable,
@@ -12,55 +13,50 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useMockAuth } from '@/context/MockAuthContext';
-import { mockComments } from '@/mocks';
+import { useVideoComments } from '@/hooks/api/useVideoComments';
 import { radius, spacing, withAlpha } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
-import { formatViewCount } from '@/utils/format-media';
-
-const MINI_PLAYER_VH = 32;
-
-type Comment = {
-  id: string;
-  author: string;
-  body: string;
-  likes: number;
-  liked: boolean;
-};
+import { formatRelativeTime, formatViewCount } from '@/utils/format-media';
 
 type Props = {
+  videoId: string;
   count?: number;
   videoTitle?: string;
   thumbnailUrl?: string | null;
 };
 
-export function WatchCommentsPanel({ count, videoTitle, thumbnailUrl }: Props) {
+export function WatchCommentsPanel({ videoId, count, videoTitle, thumbnailUrl }: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const { isAuthenticated, requireAuth, user } = useMockAuth();
   const [open, setOpen] = useState(false);
-  const [comments, setComments] = useState<Comment[]>(mockComments);
-  const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [text, setText] = useState('');
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
-  const total = count ?? comments.length;
+
+  const { data, isLoading, postComment, likeComment } = useVideoComments(videoId);
+  const comments = data?.items ?? [];
+  const total = count ?? data?.meta.total ?? comments.length;
   const topComment = comments[0];
+
+  const countLabel = total > 0 ? formatViewCount(total) : null;
 
   const submit = () => {
     if (!requireAuth()) return;
     const body = text.trim();
     if (!body) return;
-    setComments((prev) => [
-      { id: `new-${Date.now()}`, author: user?.username ?? 'you', body, likes: 0, liked: false },
-      ...prev,
-    ]);
-    setText('');
-    setReplyingTo(null);
+    postComment.mutate(
+      { body, parentId: replyingTo ?? undefined },
+      {
+        onSuccess: () => {
+          setText('');
+          setReplyingTo(null);
+        },
+      },
+    );
   };
-
-  const countLabel = total > 0 ? formatViewCount(total) : null;
 
   return (
     <>
@@ -73,13 +69,17 @@ export function WatchCommentsPanel({ count, videoTitle, thumbnailUrl }: Props) {
               <Ionicons name="chevron-down" size={18} color={colors.mutedForeground} />
             </View>
           </View>
-          {topComment ? (
+          {isLoading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : topComment ? (
             <View style={styles.previewRow}>
               <View style={styles.previewAvatar}>
-                <Text style={styles.previewAvatarLetter}>{topComment.author[0]?.toUpperCase()}</Text>
+                <Text style={styles.previewAvatarLetter}>
+                  {topComment.user.username[0]?.toUpperCase()}
+                </Text>
               </View>
               <Text style={styles.previewSnippet} numberOfLines={2}>
-                <Text style={styles.previewAuthor}>@{topComment.author}</Text>
+                <Text style={styles.previewAuthor}>@{topComment.user.username}</Text>
                 <Text style={styles.previewBody}> {topComment.body}</Text>
               </Text>
             </View>
@@ -141,7 +141,7 @@ export function WatchCommentsPanel({ count, videoTitle, thumbnailUrl }: Props) {
                     <Pressable
                       style={[styles.sendBtn, !text.trim() && styles.sendBtnOff]}
                       onPress={submit}
-                      disabled={!text.trim()}
+                      disabled={!text.trim() || postComment.isPending}
                     >
                       <Ionicons name="send" size={16} color={colors.primaryForeground} />
                     </Pressable>
@@ -160,43 +160,55 @@ export function WatchCommentsPanel({ count, videoTitle, thumbnailUrl }: Props) {
               contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
               showsVerticalScrollIndicator={false}
             >
-              {comments.map((c) => (
-                <View key={c.id} style={styles.comment}>
-                  <View style={styles.commentAvatar}>
-                    <Text style={styles.commentAvatarLetter}>{c.author[0]?.toUpperCase()}</Text>
-                  </View>
-                  <View style={styles.commentBody}>
-                    <View style={styles.commentMeta}>
-                      <Text style={styles.commentAuthor}>@{c.author}</Text>
-                      <Text style={styles.commentTime}>2w ago</Text>
+              {isLoading ? (
+                <ActivityIndicator style={{ marginTop: 24 }} color={colors.primary} />
+              ) : comments.length === 0 ? (
+                <Text style={styles.previewEmpty}>No comments yet. Be the first!</Text>
+              ) : (
+                comments.map((c) => (
+                  <View key={c.id} style={styles.comment}>
+                    <View style={styles.commentAvatar}>
+                      <Text style={styles.commentAvatarLetter}>
+                        {c.user.username[0]?.toUpperCase()}
+                      </Text>
                     </View>
-                    <Text style={styles.commentText}>{c.body}</Text>
-                    <View style={styles.commentActions}>
-                      <Pressable
-                        style={styles.actionBtn}
-                        onPress={() => requireAuth(() => setLiked((p) => ({ ...p, [c.id]: !p[c.id] })))}
-                      >
-                        <Ionicons
-                          name={liked[c.id] || c.liked ? 'thumbs-up' : 'thumbs-up-outline'}
-                          size={16}
-                          color={liked[c.id] || c.liked ? colors.primary : colors.mutedForeground}
-                        />
-                        {(c.likes > 0 || liked[c.id]) && (
-                          <Text style={[styles.actionLabel, (liked[c.id] || c.liked) && styles.actionOn]}>
-                            {formatViewCount(c.likes + (liked[c.id] ? 1 : 0))}
-                          </Text>
-                        )}
-                      </Pressable>
-                      <Pressable
-                        style={styles.actionBtn}
-                        onPress={() => requireAuth(() => setReplyingTo(c.author))}
-                      >
-                        <Text style={styles.actionLabel}>Reply</Text>
-                      </Pressable>
+                    <View style={styles.commentBody}>
+                      <View style={styles.commentMeta}>
+                        <Text style={styles.commentAuthor}>@{c.user.username}</Text>
+                        <Text style={styles.commentTime}>
+                          {formatRelativeTime(c.createdAt)}
+                        </Text>
+                      </View>
+                      <Text style={styles.commentText}>{c.body}</Text>
+                      <View style={styles.commentActions}>
+                        <Pressable
+                          style={styles.actionBtn}
+                          onPress={() =>
+                            requireAuth(() => likeComment.mutate(c.id))
+                          }
+                        >
+                          <Ionicons
+                            name={c.liked ? 'thumbs-up' : 'thumbs-up-outline'}
+                            size={16}
+                            color={c.liked ? colors.primary : colors.mutedForeground}
+                          />
+                          {c.likesCount > 0 ? (
+                            <Text style={[styles.actionLabel, c.liked && styles.actionOn]}>
+                              {formatViewCount(c.likesCount)}
+                            </Text>
+                          ) : null}
+                        </Pressable>
+                        <Pressable
+                          style={styles.actionBtn}
+                          onPress={() => requireAuth(() => setReplyingTo(c.user.username))}
+                        >
+                          <Text style={styles.actionLabel}>Reply</Text>
+                        </Pressable>
+                      </View>
                     </View>
                   </View>
-                </View>
-              ))}
+                ))
+              )}
             </ScrollView>
           </View>
         </View>

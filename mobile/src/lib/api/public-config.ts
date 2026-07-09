@@ -1,5 +1,26 @@
 import { apiRequest } from './client';
-import { getApiBaseUrl } from './config';
+import type { AdPlacement } from './ads';
+
+export type PublicAdsConfig = {
+  shortsInterstitialEveryNSwipes: number;
+  shortsInterstitialEnabled: boolean;
+  shortsSkipSeconds: number;
+  moviePrerollSkipSeconds: number;
+  impressionRevenueCpmUsd: number;
+  platformCreatorId: string | null;
+  placements: Record<AdPlacement, boolean>;
+};
+
+export type PublicMembershipConfig = {
+  priceUsd: number;
+  label: string;
+  perks: string[];
+};
+
+export type PublicChannelMembershipTier = {
+  priceUsd: number;
+  label: string;
+};
 
 export type PublicOAuthConfig = {
   google: {
@@ -19,18 +40,23 @@ export type PublicOAuthConfig = {
   };
 };
 
-export type PublicAppConfig = {
-  auth: PublicOAuthConfig;
-  push: {
-    enabled: boolean;
-    publicKey: string | null;
-  };
+export type PublicPushConfig = {
+  enabled: boolean;
+  publicKey: string | null;
 };
 
-export async function fetchPublicConfig(): Promise<PublicAppConfig> {
-  return apiRequest<PublicAppConfig>('/config/public', { auth: false });
-}
+export type PublicAppConfig = {
+  ads: PublicAdsConfig;
+  membership: PublicMembershipConfig;
+  insider: PublicMembershipConfig;
+  channelMembership: {
+    basic: PublicChannelMembershipTier;
+    premium: PublicChannelMembershipTier;
+  };
+  auth: PublicOAuthConfig;
+  push: PublicPushConfig;
+};
 
-export function getApiUrlForConfig(): string {
-  return getApiBaseUrl();
+export function fetchPublicConfig() {
+  return apiRequest<PublicAppConfig>('/config/public', { auth: false });
 }

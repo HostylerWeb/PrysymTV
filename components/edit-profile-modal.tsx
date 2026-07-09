@@ -5,11 +5,14 @@ import { X, Loader2, Camera } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth, getAuthErrorMessage } from "@/contexts/auth-context"
 import { updateMe } from "@/lib/api/users"
+import { GenderField } from "@/components/gender-field"
+import type { UserGenderValue } from "@/lib/user-gender"
 import {
   initAvatarUpload,
   initBannerUpload,
   uploadProfileImage,
 } from "@/lib/api/profile-upload"
+import { withUploadVersion } from "@/lib/user-avatar"
 interface EditProfileModalProps {
   isOpen: boolean
   onClose: () => void
@@ -19,6 +22,8 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
   const { user, refreshUser } = useAuth()
   const [name, setName] = useState("")
   const [bio, setBio] = useState("")
+  const [gender, setGender] = useState<UserGenderValue | "">("")
+  const [birthDate, setBirthDate] = useState("")
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [bannerPreview, setBannerPreview] = useState<string | null>(null)
   const [pendingAvatarUrl, setPendingAvatarUrl] = useState<string | null>(null)
@@ -34,6 +39,8 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
     if (isOpen && user) {
       setName(user.name)
       setBio(user.bio ?? "")
+      setGender((user.gender as UserGenderValue | null) ?? "")
+      setBirthDate(user.birthDate ?? "")
       setAvatarPreview(user.avatar)
       setBannerPreview(user.bannerUrl)
       setPendingAvatarUrl(null)
@@ -73,8 +80,8 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
           ? await initAvatarUpload(file)
           : await initBannerUpload(file)
       const publicUrl = await uploadProfileImage(init, file)
-      if (kind === "avatar") setPendingAvatarUrl(publicUrl)
-      else setPendingBannerUrl(publicUrl)
+      if (kind === "avatar") setPendingAvatarUrl(withUploadVersion(publicUrl))
+      else setPendingBannerUrl(withUploadVersion(publicUrl))
     } catch (err) {
       setError(getAuthErrorMessage(err))
       if (kind === "avatar") setAvatarPreview(user?.avatar ?? null)
@@ -98,6 +105,8 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
       await updateMe({
         displayName,
         bio: bio.trim() || undefined,
+        ...(gender ? { gender } : {}),
+        ...(birthDate ? { birthDate } : {}),
         ...(pendingAvatarUrl ? { avatarUrl: pendingAvatarUrl } : {}),
         ...(pendingBannerUrl ? { bannerUrl: pendingBannerUrl } : {}),
       })
@@ -162,6 +171,19 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
             <p className="text-xs text-muted-foreground mt-1 text-right">
               {bio.length}/500
             </p>
+          </div>
+          <GenderField value={gender} onChange={setGender} />
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1 block">
+              Birth date
+            </label>
+            <input
+              type="date"
+              value={birthDate}
+              onChange={(e) => setBirthDate(e.target.value)}
+              max={new Date().toISOString().slice(0, 10)}
+              className="w-full h-12 px-4 rounded-xl bg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+            />
           </div>
           <div>
             <label className="text-sm font-medium text-foreground mb-1 block">

@@ -15,6 +15,8 @@ import { Button } from '@/components/ui/Button';
 import { AuthErrorBox, AuthFormField } from '@/components/auth/AuthFormField';
 import { OAuthSignInButtons } from '@/components/auth/OAuthSignInButtons';
 import { useOAuthAuthHandlers } from '@/components/auth/useOAuthAuthHandlers';
+import { GenderField } from '@/components/auth/GenderField';
+import type { UserGenderValue } from '@/lib/user-gender';
 import { useMockAuth, getAuthErrorMessage } from '@/context/MockAuthContext';
 import { colors, spacing, typography } from '@/theme/tokens';
 
@@ -32,6 +34,7 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [gender, setGender] = useState<UserGenderValue | ''>('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -60,6 +63,10 @@ export default function RegisterScreen() {
       setError('Password must be at least 8 characters.');
       return;
     }
+    if (!gender) {
+      setError('Please select your gender.');
+      return;
+    }
     setError('');
     setBusy(true);
     try {
@@ -68,6 +75,7 @@ export default function RegisterScreen() {
         email.trim(),
         password,
         resolvedUsername,
+        gender,
       );
       finish();
     } catch (err) {
@@ -135,6 +143,8 @@ export default function RegisterScreen() {
             autoComplete="new-password"
             editable={!busy}
           />
+
+          <GenderField value={gender} onChange={setGender} />
 
           <Button
             label={busy ? 'Creating account…' : 'Create account'}

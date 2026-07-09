@@ -1,22 +1,35 @@
-import React from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { PageFooter } from '@/components/layout/PageFooter';
-import { SectionHeader } from '@/components/home/SectionHeader';
+import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
-import { mockVerticals } from '@/mocks';
+import { useVerticalsList } from '@/hooks/api/useVerticalsList';
 import { radius, typography } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useThemedStyles } from '@/theme/useThemedStyles';
+import { useTheme } from '@/theme/ThemeProvider';
 
 export default function VerticalsScreen() {
   const styles = useThemedStyles(createVerticalsStyles);
+  const { colors } = useTheme();
   const router = useRouter();
   const { requireAuth } = useMockAuth();
   const { trigger, flowHost } = useCreateFlow();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const verticalsQuery = useVerticalsList();
+  const verticals = verticalsQuery.data ?? [];
+  const isLoading = verticalsQuery.isLoading && !verticalsQuery.data;
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await verticalsQuery.refetch();
+    setRefreshing(false);
+  };
 
   return (
     <View style={styles.screen}>
@@ -29,21 +42,38 @@ export default function VerticalsScreen() {
         />
         <Text style={styles.sub}>Micro-drama series - swipe up episodes</Text>
       </View>
-      <FlatList
-        data={mockVerticals}
-        keyExtractor={(item) => item.slug}
-        numColumns={2}
-        columnWrapperStyle={styles.row}
-        contentContainerStyle={styles.list}
-        ListFooterComponent={<PageFooter />}
-        renderItem={({ item }) => (
-          <Pressable style={styles.card} onPress={() => router.push(`/verticals/${item.slug}`)}>
-            <Image source={{ uri: item.posterUrl ?? '' }} style={styles.poster} contentFit="cover" />
-            <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
-            <Text style={styles.meta}>{item.episodeCount} episodes · {item.genre}</Text>
-          </Pressable>
-        )}
-      />
+      {isLoading ? (
+        <ActivityIndicator style={{ marginTop: 32 }} color={colors.primary} />
+      ) : verticalsQuery.isError ? (
+        <FeedQueryState isError error={verticalsQuery.error} onRetry={() => void verticalsQuery.refetch()} />
+      ) : (
+        <FlatList
+          data={verticals}
+          keyExtractor={(item) => item.slug}
+          numColumns={2}
+          columnWrapperStyle={styles.row}
+          contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />
+          }
+          ListEmptyComponent={
+            <FeedQueryState
+              isEmpty
+              emptyTitle="No series yet"
+              emptyMessage="Vertical micro-dramas will show up here when published."
+              onRetry={() => void verticalsQuery.refetch()}
+            />
+          }
+          ListFooterComponent={<PageFooter />}
+          renderItem={({ item }) => (
+            <Pressable style={styles.card} onPress={() => router.push(`/verticals/${item.slug}`)}>
+              <Image source={{ uri: item.posterUrl ?? '' }} style={styles.poster} contentFit="cover" />
+              <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
+              <Text style={styles.meta}>{item.episodeCount} episodes · {item.genre}</Text>
+            </Pressable>
+          )}
+        />
+      )}
       {flowHost}
     </View>
   );

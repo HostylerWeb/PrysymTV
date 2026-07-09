@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
   StyleSheet,
@@ -18,15 +19,15 @@ import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { GiftModal } from '@/components/modals/GiftModal';
 import { AdInterstitial } from '@/components/ads/AdInterstitial';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Button } from '@/components/ui/Button';
+import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
-import { mockShorts } from '@/mocks';
+import { flattenShortsPages, useShortsFeed } from '@/hooks/api/useShortsFeed';
+import { toggleVideoLike } from '@/lib/api/videos';
 import { colors, radius, withAlpha } from '@/theme/tokens';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
+import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
 import { formatViewCount } from '@/utils/format-media';
-
-const AD_EVERY_N_SWIPES = 5;
 
 export default function ShortsScreen() {
   const insets = useSafeAreaInsets();
@@ -36,8 +37,12 @@ export default function ShortsScreen() {
   const { requireAuth } = useMockAuth();
   const { trigger, flowHost } = useCreateFlow();
   const [feedHeight, setFeedHeight] = useState(0);
-  const startIndex = start ? Math.max(0, mockShorts.findIndex((s) => s.id === start)) : 0;
-  const [index, setIndex] = useState(startIndex >= 0 ? startIndex : 0);
+
+  const shortsQuery = useShortsFeed();
+  const shorts = useMemo(() => flattenShortsPages(shortsQuery.data?.pages), [shortsQuery.data?.pages]);
+
+  const startIndex = start ? Math.max(0, shorts.findIndex((s) => s.id === start)) : 0;
+  const [index, setIndex] = useState(0);
   const listRef = useRef<FlatList>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -49,26 +54,45 @@ export default function ShortsScreen() {
   const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [adOpen, setAdOpen] = useState(false);
   const swipeCount = useRef(0);
-  const current = mockShorts[index];
+  const current = shorts[index];
 
   useEffect(() => {
-    if (!start || feedHeight <= 0) return;
-    const i = mockShorts.findIndex((s) => s.id === start);
+    if (!shorts.length) return;
+    const i = start ? Math.max(0, shorts.findIndex((s) => s.id === start)) : 0;
+    setIndex(i >= 0 ? i : 0);
+  }, [start, shorts.length]);
+
+  useEffect(() => {
+    if (!start || feedHeight <= 0 || shorts.length === 0) return;
+    const i = shorts.findIndex((s) => s.id === start);
     if (i < 0) return;
     setIndex(i);
     requestAnimationFrame(() => {
       listRef.current?.scrollToIndex({ index: i, animated: false });
     });
-  }, [start, feedHeight]);
+  }, [start, feedHeight, shorts]);
+
+  const { shortsInterstitialEveryNSwipes, shortsInterstitialEnabled } = usePublicAdsConfig();
+  const adEveryRef = useRef(shortsInterstitialEveryNSwipes);
+  const adsEnabledRef = useRef(shortsInterstitialEnabled);
+  adEveryRef.current = shortsInterstitialEveryNSwipes;
+  adsEnabledRef.current = shortsInterstitialEnabled;
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const next = viewableItems[0]?.index;
     if (next == null || next === index) return;
     swipeCount.current += 1;
-    if (swipeCount.current > 0 && swipeCount.current % AD_EVERY_N_SWIPES === 0) {
+    if (
+      adsEnabledRef.current &&
+      swipeCount.current > 0 &&
+      swipeCount.current % adEveryRef.current === 0
+    ) {
       setAdOpen(true);
     }
     setIndex(next);
+    if (next >= shorts.length - 3 && shortsQuery.hasNextPage && !shortsQuery.isFetchingNextPage) {
+      void shortsQuery.fetchNextPage();
+    }
   }).current;
 
   const getItemLayout = useCallback(
@@ -80,13 +104,32 @@ export default function ShortsScreen() {
     [feedHeight],
   );
 
+  const isLoading = shortsQuery.isLoading && shorts.length === 0;
+
   return (
     <>
       <View style={styles.screen} onLayout={(e) => setFeedHeight(e.nativeEvent.layout.height)}>
-        {feedHeight > 0 && (
+        {isLoading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : shortsQuery.isError ? (
+          <FeedQueryState
+            isError
+            error={shortsQuery.error}
+            onRetry={() => void shortsQuery.refetch()}
+          />
+        ) : shorts.length === 0 ? (
+          <FeedQueryState
+            isEmpty
+            emptyTitle="No shorts yet"
+            emptyMessage="Check back soon for new short-form videos."
+            onRetry={() => void shortsQuery.refetch()}
+          />
+        ) : feedHeight > 0 ? (
           <FlatList
             ref={listRef}
-            data={mockShorts}
+            data={shorts}
             keyExtractor={(item) => item.id}
             initialScrollIndex={startIndex > 0 ? startIndex : undefined}
             onScrollToIndexFailed={() => {}}
@@ -133,7 +176,10 @@ export default function ShortsScreen() {
                   <Action
                     icon={liked[item.id] ? 'heart' : 'heart-outline'}
                     label={formatViewCount(item.likesCount ?? 0)}
-                    onPress={() => requireAuth(() => setLiked((p) => ({ ...p, [item.id]: !p[item.id] })))}
+                    onPress={() => requireAuth(async () => {
+                      const res = await toggleVideoLike(item.id);
+                      setLiked((p) => ({ ...p, [item.id]: res.liked }));
+                    })}
                   />
                   <Action icon="chatbubble-outline" label="128" onPress={() => setCommentsOpen(true)} />
                   <Action icon="gift-outline" label="Gift" onPress={() => requireAuth(() => setGiftOpen(true))} />
@@ -160,14 +206,31 @@ export default function ShortsScreen() {
               </View>
             )}
           />
-        )}
+        ) : null}
       </View>
-      <AdInterstitial visible={adOpen} onClose={() => setAdOpen(false)} />
-      <CommentsSheet visible={commentsOpen} onClose={() => setCommentsOpen(false)} videoTitle={current?.title} />
+      <AdInterstitial
+        visible={adOpen}
+        onClose={() => setAdOpen(false)}
+        videoId={current?.id}
+        creatorId={current?.creatorId}
+      />
+      <CommentsSheet visible={commentsOpen} onClose={() => setCommentsOpen(false)} videoId={current?.id} videoTitle={current?.title} />
       <ShareModal visible={shareOpen} onClose={() => setShareOpen(false)} title={current?.title ?? 'Short'} />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} />
-      <GiftModal visible={giftOpen} onClose={() => setGiftOpen(false)} />
-      <AddToPlaylistSheet visible={playlistOpen} onClose={() => setPlaylistOpen(false)} contentTitle={current?.title} />
+      <GiftModal
+        visible={giftOpen}
+        onClose={() => setGiftOpen(false)}
+        receiverId={current?.creatorId}
+        receiverName={current?.channel}
+        videoId={current?.id}
+      />
+      <AddToPlaylistSheet
+        visible={playlistOpen}
+        onClose={() => setPlaylistOpen(false)}
+        contentTitle={current?.title}
+        itemType="video"
+        itemId={current?.id}
+      />
       {flowHost}
     </>
   );
@@ -186,6 +249,7 @@ function Action({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.videoBackground },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   videoScrim: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
   topBar: {
     position: 'absolute',

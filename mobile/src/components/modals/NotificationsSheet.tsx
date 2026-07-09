@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -14,17 +16,17 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { useMockAuth } from '@/context/MockAuthContext';
-import { mockNotifications } from '@/mocks';
-import { MOCK_IMAGES } from '@/lib/mock-images';
-import type { NotificationItem } from '@/types/api';
+import {
+  useNotificationActions,
+  useNotifications,
+} from '@/hooks/api/useNotifications';
+import type { NotificationListItem } from '@/lib/map-notifications';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import type { ThemeColors } from '@/theme/tokens';
 import { radius, spacing, typography } from '@/theme/tokens';
 
 type Props = { visible: boolean; onClose: () => void };
-
-const AVATAR_POOL = MOCK_IMAGES.avatar;
 
 function iconFor(type: string, colors: ThemeColors): { name: keyof typeof Ionicons.glyphMap; color: string } {
   switch (type) {
@@ -38,26 +40,14 @@ function iconFor(type: string, colors: ThemeColors): { name: keyof typeof Ionico
   }
 }
 
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const h = Math.floor(diff / 3600000);
-  if (h < 1) return 'Just now';
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
-
-function avatarFor(item: NotificationItem, index: number) {
-  if (item.type === 'system') return null;
-  return AVATAR_POOL[index % AVATAR_POOL.length];
-}
-
 export function NotificationsSheet({ visible, onClose }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(createNotificationStyles);
   const { isAuthenticated } = useMockAuth();
-  const [items, setItems] = useState<NotificationItem[]>(mockNotifications);
+  const notificationsQuery = useNotifications(visible && isAuthenticated);
+  const actions = useNotificationActions();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const slide = React.useRef(new Animated.Value(1)).current;
 
@@ -69,18 +59,16 @@ export function NotificationsSheet({ visible, onClose }: Props) {
     }
   }, [visible, slide]);
 
+  const items = notificationsQuery.data ?? [];
   const unreadCount = items.filter((n) => !n.isRead).length;
   const filtered = filter === 'unread' ? items.filter((n) => !n.isRead) : items;
 
-  const markAllRead = () => setItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
-  const clearAll = () => setItems([]);
-
-  const openItem = (item: NotificationItem) => {
-    setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)));
+  const openItem = async (item: NotificationListItem) => {
+    if (!item.isRead) await actions.markRead(item.id);
     onClose();
-    if (item.actorUsername) router.push(`/creator/${item.actorUsername}`);
-    else if (item.type === 'live') router.push('/live/live-1');
-    else router.push('/watch/video-1');
+    if (!item.navTarget) return;
+    if (typeof item.navTarget === 'string') router.push(item.navTarget as never);
+    else router.push(item.navTarget as never);
   };
 
   return (
@@ -127,7 +115,7 @@ export function NotificationsSheet({ visible, onClose }: Props) {
             </Pressable>
             <View style={{ flex: 1 }} />
             {unreadCount > 0 ? (
-              <Pressable onPress={markAllRead} style={styles.markAll}>
+              <Pressable onPress={() => void actions.markAllRead()} style={styles.markAll}>
                 <Ionicons name="checkmark" size={16} color={colors.primary} />
                 <Text style={styles.markAllText}>Mark all read</Text>
               </Pressable>
@@ -141,6 +129,8 @@ export function NotificationsSheet({ visible, onClose }: Props) {
               <Text style={styles.emptySub}>Get alerts when creators you follow go live, like your content, and more.</Text>
               <Button label="Sign in" onPress={() => { onClose(); router.push('/(auth)/login'); }} />
             </View>
+          ) : notificationsQuery.isLoading ? (
+            <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 32 }} />
           ) : (
             <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
               {filtered.length === 0 ? (
@@ -156,14 +146,13 @@ export function NotificationsSheet({ visible, onClose }: Props) {
                   </Text>
                 </View>
               ) : (
-                filtered.map((item, index) => {
+                filtered.map((item) => {
                   const icon = iconFor(item.type, colors);
-                  const avatar = avatarFor(item, index);
                   return (
                     <Pressable
                       key={item.id}
                       style={[styles.row, !item.isRead && styles.rowUnread]}
-                      onPress={() => openItem(item)}
+                      onPress={() => void openItem(item)}
                     >
                       <View style={styles.avatarWrap}>
                         {item.type === 'system' ? (
@@ -171,7 +160,7 @@ export function NotificationsSheet({ visible, onClose }: Props) {
                             <Text style={styles.systemLetter}>P</Text>
                           </View>
                         ) : (
-                          <Image source={{ uri: avatar ?? '' }} style={styles.avatar} contentFit="cover" />
+                          <Image source={{ uri: item.avatar }} style={styles.avatar} contentFit="cover" />
                         )}
                         <View style={styles.typeBadge}>
                           <Ionicons name={icon.name} size={12} color={icon.color} />
@@ -184,7 +173,7 @@ export function NotificationsSheet({ visible, onClose }: Props) {
                           ) : null}
                           <Text style={styles.msgBody}>{item.message}</Text>
                         </Text>
-                        <Text style={styles.time}>{timeAgo(item.createdAt)}</Text>
+                        <Text style={styles.time}>{item.time}</Text>
                       </View>
                       {!item.isRead ? <View style={styles.dot} /> : null}
                     </Pressable>
@@ -192,7 +181,7 @@ export function NotificationsSheet({ visible, onClose }: Props) {
                 })
               )}
               {items.length > 0 ? (
-                <Pressable style={styles.clearAll} onPress={clearAll}>
+                <Pressable style={styles.clearAll} onPress={() => void actions.clearAll()}>
                   <Ionicons name="trash-outline" size={16} color={colors.mutedForeground} />
                   <Text style={styles.clearAllText}>Clear all notifications</Text>
                 </Pressable>

@@ -2,38 +2,92 @@ import React, { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { MockServedAd } from '@/components/ads/mock-ad-data';
-import { MOCK_VERTICAL_AD } from '@/components/ads/mock-ad-data';
-import { colors, radius } from '@/theme/tokens';
+import {
+  buildAdAttribution,
+  fetchServedAd,
+  trackAdClick,
+  trackAdImpression,
+  type ServedAd,
+} from '@/lib/api/ads';
+import { useMockAuth } from '@/context/MockAuthContext';
+import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
+import { useShouldShowAds } from '@/hooks/useShouldShowAds';
+import { resolveAdMediaUrl } from '@/lib/ad-media';
+import { radius } from '@/theme/tokens';
 
 type Props = {
   visible: boolean;
-  ad?: MockServedAd;
+  videoId?: string;
+  creatorId?: string;
   onComplete: () => void;
 };
 
-export function VerticalEpisodeAdGate({ visible, ad = MOCK_VERTICAL_AD, onComplete }: Props) {
+export function VerticalEpisodeAdGate({ visible, videoId, creatorId, onComplete }: Props) {
   const insets = useSafeAreaInsets();
-  const [countdown, setCountdown] = useState(ad.skipAfterSeconds);
+  const shouldShow = useShouldShowAds();
+  const { user } = useMockAuth();
+  const { platformCreatorId } = usePublicAdsConfig();
+  const [ad, setAd] = useState<ServedAd | null>(null);
+  const [countdown, setCountdown] = useState(5);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
-    setCountdown(ad.skipAfterSeconds);
     setReady(false);
-  }, [visible, ad.skipAfterSeconds]);
+    if (!shouldShow) {
+      onComplete();
+      return;
+    }
+    void fetchServedAd('vertical_episode', { peek: true }).then((served) => {
+      if (!served) {
+        onComplete();
+        return;
+      }
+      setAd(served);
+      setCountdown(served.skipAfterSeconds);
+      void trackAdImpression(
+        buildAdAttribution({
+          campaignId: served.id,
+          placement: 'vertical_episode',
+          creatorId,
+          platformCreatorId,
+          videoId,
+          viewerUserId: user?.id,
+        }),
+      );
+    });
+  }, [visible, shouldShow, creatorId, videoId, platformCreatorId, user?.id, onComplete]);
 
   useEffect(() => {
-    if (!visible || !ready || countdown <= 0) return;
+    if (!visible || !ad || !ready || countdown <= 0) return;
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
-  }, [visible, ready, countdown]);
+  }, [visible, ad, ready, countdown]);
+
+  if (!visible || !ad) return null;
+
+  const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
+  if (!mediaUrl) return null;
+
+  const openAd = () => {
+    void trackAdClick(
+      buildAdAttribution({
+        campaignId: ad.id,
+        placement: 'vertical_episode',
+        creatorId,
+        platformCreatorId,
+        videoId,
+        viewerUserId: user?.id,
+      }),
+    );
+    void Linking.openURL(ad.clickThroughUrl);
+  };
 
   return (
     <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={() => countdown <= 0 && onComplete()}>
       <View style={styles.screen}>
         <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-          <Pressable onPress={() => void Linking.openURL(ad.clickThroughUrl)}>
+          <Pressable onPress={openAd}>
             <Text style={styles.sponsor} numberOfLines={1}>Sponsored · {ad.title}</Text>
           </Pressable>
           {ready && countdown <= 0 ? (
@@ -46,7 +100,7 @@ export function VerticalEpisodeAdGate({ visible, ad = MOCK_VERTICAL_AD, onComple
             <Text style={styles.countdown}>Loading…</Text>
           )}
         </View>
-        <Image source={{ uri: ad.mediaUrl }} style={styles.media} contentFit="cover" onLoad={() => setReady(true)} />
+        <Image source={{ uri: mediaUrl }} style={styles.media} contentFit="cover" onLoad={() => setReady(true)} />
       </View>
     </Modal>
   );

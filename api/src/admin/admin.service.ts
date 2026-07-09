@@ -466,6 +466,7 @@ export class AdminService {
           streamerStatus: true,
           partnerTier: true,
           coinsBalance: true,
+          gender: true,
           createdAt: true,
         },
       }),
@@ -484,6 +485,7 @@ export class AdminService {
         streamerStatus: u.streamerStatus,
         partnerTier: u.partnerTier,
         coins: u.coinsBalance,
+        gender: u.gender,
         joinedAt: u.createdAt.toISOString().slice(0, 10),
       })),
       meta: { page, limit, total },
@@ -681,6 +683,10 @@ export class AdminService {
       bio: user.bio,
       avatarUrl: user.avatarUrl,
       premiumTier: user.premiumTier,
+      gender: user.gender,
+      birthDate: user.birthDate
+        ? user.birthDate.toISOString().slice(0, 10)
+        : null,
       joinedAt: user.createdAt.toISOString().slice(0, 10),
       socialLinks: user.socialLinks.map((l) => ({
         label: l.label,

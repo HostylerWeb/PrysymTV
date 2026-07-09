@@ -32,3 +32,15 @@ export function userAvatarUrl(
   }
   return defaultAvatarUrl(seed);
 }
+
+export function profileBannerUrl(bannerUrl: string | null | undefined): string | null {
+  const trimmed = bannerUrl?.trim();
+  if (!trimmed) return null;
+  if (/\.r2\.dev\//i.test(trimmed)) return proxyMediaAssetUrl(trimmed);
+  return trimmed;
+}
+
+export function withUploadVersion(publicUrl: string): string {
+  const base = publicUrl.split("?")[0];
+  return `${base}?v=${Date.now()}`;
+}

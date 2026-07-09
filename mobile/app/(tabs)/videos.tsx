@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,9 +16,11 @@ import { LiveStreamCard } from '@/components/feed/LiveStreamCard';
 import { VideoCardTile } from '@/components/feed/VideoCardTile';
 import { FilterChip } from '@/components/ui/FilterChip';
 import { Button } from '@/components/ui/Button';
+import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
 import { useMockAuth } from '@/context/MockAuthContext';
-import { mockLiveStreams, mockVideos } from '@/mocks';
+import { useVideosFeed } from '@/hooks/api/useVideosFeed';
+import type { VideoCard } from '@/types/api';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, typography } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
@@ -25,6 +29,11 @@ import { useThemedStyles } from '@/theme/useThemedStyles';
 const CATEGORIES = ['All', 'Gaming', 'Music', 'Talk', 'Education', 'Sports'] as const;
 const MODES = ['All', 'Videos', 'Live'] as const;
 const SORTS = ['Popular', 'Newest'] as const;
+
+const CATEGORY_VERTICAL: Partial<Record<(typeof CATEGORIES)[number], string>> = {
+  Education: 'education',
+  Sports: 'sports',
+};
 
 export default function VideosScreen() {
   const styles = useThemedStyles(createVideosStyles);
@@ -35,34 +44,67 @@ export default function VideosScreen() {
   const [mode, setMode] = useState<(typeof MODES)[number]>('All');
   const [sort, setSort] = useState<(typeof SORTS)[number]>('Popular');
   const [search, setSearch] = useState('');
-  const [visibleCount, setVisibleCount] = useState(6);
+  const [page, setPage] = useState(1);
+  const [allVideos, setAllVideos] = useState<VideoCard[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    setVisibleCount(6);
+    setPage(1);
+    setAllVideos([]);
   }, [search, category, mode, sort]);
 
-  const videos = useMemo(() => {
-    let list = [...mockVideos];
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((v) => v.title.toLowerCase().includes(q) || v.channel.toLowerCase().includes(q));
-    }
-    if (category !== 'All') {
-      list = list.filter((_, i) => i % CATEGORIES.length === CATEGORIES.indexOf(category));
-    }
-    if (sort === 'Newest') list = [...list].reverse();
-    return list;
-  }, [search, sort, category]);
+  const browseMode = mode === 'Live' ? 'live' : mode === 'Videos' ? 'videos' : 'all';
 
+  const feedQuery = useVideosFeed({
+    page,
+    limit: 24,
+    vertical: CATEGORY_VERTICAL[category],
+    sort: sort === 'Newest' ? 'newest' : 'views',
+    mode: browseMode,
+    q: search,
+  });
+
+  useEffect(() => {
+    const batch = feedQuery.data?.videos;
+    if (!batch) return;
+    setAllVideos((prev) => {
+      if (page === 1) return batch;
+      const ids = new Set(prev.map((v) => v.id));
+      return [...prev, ...batch.filter((v) => !ids.has(v.id))];
+    });
+  }, [feedQuery.data?.videos, page]);
+
+  const videos = useMemo(() => {
+    let list = allVideos;
+    if (category !== 'All' && !CATEGORY_VERTICAL[category]) {
+      const label = category.toLowerCase();
+      list = list.filter((v) => v.category?.toLowerCase().includes(label));
+    }
+    return list;
+  }, [allVideos, category]);
+
+  const liveStreams = feedQuery.data?.live ?? [];
   const showLive = mode !== 'Videos';
   const showVideos = mode !== 'Live';
-  const visibleVideos = videos.slice(0, visibleCount);
-  const hasMore = visibleCount < videos.length;
+  const meta = feedQuery.data?.meta;
+  const hasMore = meta ? page * meta.limit < meta.total : false;
+  const isLoading = feedQuery.isLoading && !feedQuery.data;
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    setPage(1);
+    setAllVideos([]);
+    await feedQuery.refetch();
+    setRefreshing(false);
+  };
 
   return (
     <View style={styles.screen}>
       <ScrollView
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />
+        }
       >
         <View style={styles.filterBar}>
           <View style={styles.headerPad}>
@@ -127,49 +169,57 @@ export default function VideosScreen() {
         </View>
 
         <View style={styles.content}>
-          {showLive && (
-            <View style={styles.section}>
-              <View style={styles.sectionTitleRow}>
-                <View style={styles.livePulse} />
-                <Text style={styles.sectionTitle}>Live now</Text>
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.liveRow}>
-                {mockLiveStreams.map((stream) => (
-                  <View key={stream.id} style={styles.liveCardWrap}>
-                    <LiveStreamCard stream={stream} />
+          {isLoading ? (
+            <ActivityIndicator style={{ marginVertical: 32 }} color={colors.primary} />
+          ) : feedQuery.isError ? (
+            <FeedQueryState isError error={feedQuery.error} onRetry={() => void feedQuery.refetch()} />
+          ) : (
+            <>
+              {showLive && liveStreams.length > 0 && (
+                <View style={styles.section}>
+                  <View style={styles.sectionTitleRow}>
+                    <View style={styles.livePulse} />
+                    <Text style={styles.sectionTitle}>Live now</Text>
                   </View>
-                ))}
-              </ScrollView>
-            </View>
-          )}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.liveRow}>
+                    {liveStreams.map((stream) => (
+                      <View key={stream.id} style={styles.liveCardWrap}>
+                        <LiveStreamCard stream={stream} />
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
 
-          {showVideos && (
-            <View style={styles.section}>
-              {videos.length === 0 ? (
-                <View style={styles.empty}>
-                  <Ionicons name="videocam-off-outline" size={36} color={colors.mutedForeground} />
-                  <Text style={styles.emptyTitle}>No videos found</Text>
-                  <Text style={styles.emptySub}>Try a different category or clear your search.</Text>
-                  {search.length > 0 && (
-                    <Button label="Clear search" variant="outline" onPress={() => setSearch('')} />
+              {showVideos && (
+                <View style={styles.section}>
+                  {videos.length === 0 ? (
+                    <View style={styles.empty}>
+                      <Ionicons name="videocam-off-outline" size={36} color={colors.mutedForeground} />
+                      <Text style={styles.emptyTitle}>No videos found</Text>
+                      <Text style={styles.emptySub}>Try a different category or clear your search.</Text>
+                      {search.length > 0 && (
+                        <Button label="Clear search" variant="outline" onPress={() => setSearch('')} />
+                      )}
+                    </View>
+                  ) : (
+                    <>
+                      {videos.map((video) => (
+                        <VideoCardTile key={video.id} video={video} variant="grid" />
+                      ))}
+                      {hasMore ? (
+                        <Button
+                          label={feedQuery.isFetching ? 'Loading…' : 'Load more'}
+                          variant="outline"
+                          onPress={() => setPage((p) => p + 1)}
+                          style={styles.loadMore}
+                        />
+                      ) : null}
+                    </>
                   )}
                 </View>
-              ) : (
-                <>
-                  {visibleVideos.map((video) => (
-                    <VideoCardTile key={video.id} video={video} variant="grid" />
-                  ))}
-                  {hasMore ? (
-                    <Button
-                      label="Load more"
-                      variant="outline"
-                      onPress={() => setVisibleCount((n) => n + 6)}
-                      style={styles.loadMore}
-                    />
-                  ) : null}
-                </>
               )}
-            </View>
+            </>
           )}
         </View>
         <PageFooter />

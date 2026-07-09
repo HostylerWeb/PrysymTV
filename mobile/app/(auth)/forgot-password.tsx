@@ -5,6 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
 import { AuthErrorBox, AuthFormField } from '@/components/auth/AuthFormField';
+import { getAuthErrorMessage } from '@/lib/api/client';
+import { forgotPassword } from '@/lib/api/auth';
 import { colors, spacing, typography } from '@/theme/tokens';
 
 export default function ForgotPasswordScreen() {
@@ -23,9 +25,10 @@ export default function ForgotPasswordScreen() {
     setError('');
     setBusy(true);
     try {
-      // UI-only — API wiring in next phase (POST /auth/forgot-password)
-      await new Promise((r) => setTimeout(r, 600));
+      await forgotPassword(email.trim());
       setSent(true);
+    } catch (err) {
+      setError(getAuthErrorMessage(err));
     } finally {
       setBusy(false);
     }

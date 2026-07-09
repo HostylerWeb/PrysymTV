@@ -1,12 +1,23 @@
-import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Button } from '@/components/ui/Button';
 import { BottomSheet } from '@/components/ui/BottomSheet';
+import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { ThemedText } from '@/components/ui/ThemedText';
-import { mockStoreProducts } from '@/mocks';
 import { useMockAuth } from '@/context/MockAuthContext';
+import { useMyStore } from '@/hooks/api/useMyStore';
+import {
+  createMyStoreProduct,
+  deleteMyStoreProduct,
+  stockLabel,
+  updateMyStore,
+  updateMyStoreProduct,
+  uploadStoreProductImage,
+} from '@/lib/api/stores';
 import { colors, radius, spacing, withAlpha } from '@/theme/tokens';
 
 type ProductForm = {
@@ -14,6 +25,7 @@ type ProductForm = {
   priceUsd: string;
   productType: 'merchandise' | 'digital';
   description: string;
+  imageUrl: string;
 };
 
 const EMPTY_FORM: ProductForm = {
@@ -21,6 +33,7 @@ const EMPTY_FORM: ProductForm = {
   priceUsd: '',
   productType: 'merchandise',
   description: '',
+  imageUrl: '',
 };
 
 const inputStyle = {
@@ -33,60 +46,194 @@ const inputStyle = {
 
 export function ProfileStorePanel() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useMockAuth();
+  const storeQuery = useMyStore();
+
   const [formOpen, setFormOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ProductForm>(EMPTY_FORM);
   const [settings, setSettings] = useState({
-    displayName: 'Prysym Creator Store',
-    description: 'Official merch and digital downloads.',
+    displayName: '',
+    description: '',
     shippingFree: true,
     shippingFeeUsd: '5.99',
   });
+  const [busy, setBusy] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!storeQuery.data) return;
+    setSettings({
+      displayName: storeQuery.data.store.displayName,
+      description: storeQuery.data.store.description ?? '',
+      shippingFree: storeQuery.data.store.shippingFree,
+      shippingFeeUsd: storeQuery.data.store.shippingFree
+        ? '5.99'
+        : String(storeQuery.data.store.shippingFeeUsd ?? 0),
+    });
+  }, [storeQuery.data]);
+
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: ['store', 'me'] });
 
   const openCreate = () => {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setError(null);
     setFormOpen(true);
   };
 
   const openEdit = (id: string) => {
-    const p = mockStoreProducts.find((x) => x.id === id);
+    const p = storeQuery.data?.products.find((x) => x.id === id);
     if (!p) return;
     setEditingId(id);
     setForm({
       title: p.title,
-      priceUsd: p.priceUsd,
-      productType: p.productType ?? 'merchandise',
+      priceUsd: String(p.priceUsd),
+      productType: p.productType === 'digital' ? 'digital' : 'merchandise',
       description: p.description ?? '',
+      imageUrl: p.imageUrl ?? '',
     });
+    setError(null);
     setFormOpen(true);
   };
 
-  const save = () => {
-    Alert.alert('Saved (mock)', editingId ? 'Product updated.' : 'Product created.');
-    setFormOpen(false);
+  const pickImage = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow photo library access to add a product image.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.9,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    setUploadingImage(true);
+    setError(null);
+    try {
+      const imageUrl = await uploadStoreProductImage({
+        uri: asset.uri,
+        mimeType: asset.mimeType,
+        name: asset.fileName ?? 'product.jpg',
+      });
+      setForm((f) => ({ ...f, imageUrl }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Image upload failed');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const save = async () => {
+    const price = parseFloat(form.priceUsd);
+    if (!form.title.trim() || !Number.isFinite(price) || price <= 0) {
+      setError('Enter a title and valid price.');
+      return;
+    }
+    if (!form.imageUrl.trim()) {
+      setError('Add a product image.');
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      if (editingId) {
+        await updateMyStoreProduct(editingId, {
+          title: form.title.trim(),
+          description: form.description.trim() || undefined,
+          priceUsd: price,
+          imageUrl: form.imageUrl,
+        });
+      } else {
+        await createMyStoreProduct({
+          productType: form.productType,
+          title: form.title.trim(),
+          description: form.description.trim() || undefined,
+          priceUsd: price,
+          imageUrl: form.imageUrl,
+          inventoryUnlimited: form.productType === 'digital',
+        });
+      }
+      refresh();
+      setFormOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save product');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const deleteProduct = (id: string, title: string) => {
     Alert.alert('Delete product', `Remove "${title}" from your store?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => Alert.alert('Deleted (mock)', 'Product removed.') },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            try {
+              await deleteMyStoreProduct(id);
+              refresh();
+            } catch (e) {
+              Alert.alert('Error', e instanceof Error ? e.message : 'Could not delete product');
+            }
+          })();
+        },
+      },
     ]);
   };
 
-  const saveSettings = () => {
-    Alert.alert('Saved (mock)', 'Store settings updated.');
-    setSettingsOpen(false);
+  const saveSettings = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateMyStore({
+        displayName: settings.displayName.trim() || undefined,
+        description: settings.description.trim() || undefined,
+        shippingFree: settings.shippingFree,
+        shippingFeeUsd: settings.shippingFree ? 0 : parseFloat(settings.shippingFeeUsd) || 0,
+      });
+      refresh();
+      setSettingsOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save store settings');
+    } finally {
+      setBusy(false);
+    }
   };
+
+  if (storeQuery.isLoading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (storeQuery.isError) {
+    return (
+      <FeedQueryState
+        isError
+        error={storeQuery.error}
+        onRetry={() => void storeQuery.refetch()}
+      />
+    );
+  }
+
+  const products = storeQuery.data?.products ?? [];
 
   return (
     <>
       <View style={styles.wrap}>
         <ThemedText variant="h3">My store</ThemedText>
         <ThemedText variant="caption" muted style={styles.sub}>
-          Create and edit products - same fields as the web Profile Store tab
+          {storeQuery.data?.store.displayName ?? 'Creator store'}
         </ThemedText>
 
         <View style={styles.actions}>
@@ -99,31 +246,45 @@ export function ProfileStorePanel() {
           onPress={() => router.push(`/creator/${user?.username ?? 'creator'}`)}
         />
 
-        {mockStoreProducts.map((p) => (
-          <View key={p.id} style={styles.product}>
-            <Image source={{ uri: p.imageUrl ?? '' }} style={styles.img} contentFit="cover" />
-            <View style={styles.info}>
-              <ThemedText variant="bodyMedium">{p.title}</ThemedText>
-              <ThemedText variant="caption" primary>
-                ${p.priceUsd}
-              </ThemedText>
-              <ThemedText variant="micro" muted>
-                {p.productType === 'digital' ? 'Digital' : 'Physical'} ·{' '}
-                {p.inStock ? 'In stock' : 'Out of stock'}
-              </ThemedText>
+        {products.length === 0 ? (
+          <ThemedText variant="bodyMedium" muted>
+            No products yet. Add your first listing.
+          </ThemedText>
+        ) : (
+          products.map((p) => (
+            <View key={p.id} style={styles.product}>
+              <Image source={{ uri: p.imageDisplayUrl ?? '' }} style={styles.img} contentFit="cover" />
+              <View style={styles.info}>
+                <ThemedText variant="bodyMedium">{p.title}</ThemedText>
+                <ThemedText variant="caption" primary>
+                  ${p.priceUsd.toFixed(2)}
+                </ThemedText>
+                <ThemedText variant="micro" muted>
+                  {p.productType === 'digital' ? 'Digital' : 'Physical'} ·{' '}
+                  {stockLabel({
+                    productType: p.productType,
+                    inventory: p.inventory,
+                    inventoryUnlimited: p.inventoryUnlimited,
+                    inStock:
+                      p.productType === 'digital' ||
+                      p.inventoryUnlimited ||
+                      (p.inventory ?? 0) > 0,
+                  })}
+                </ThemedText>
+              </View>
+              <Pressable onPress={() => openEdit(p.id)}>
+                <ThemedText variant="bodyMedium" primary>
+                  Edit
+                </ThemedText>
+              </Pressable>
+              <Pressable onPress={() => deleteProduct(p.id, p.title)}>
+                <ThemedText variant="bodyMedium" style={{ color: colors.destructive }}>
+                  Delete
+                </ThemedText>
+              </Pressable>
             </View>
-            <Pressable onPress={() => openEdit(p.id)}>
-              <ThemedText variant="bodyMedium" primary>
-                Edit
-              </ThemedText>
-            </Pressable>
-            <Pressable onPress={() => deleteProduct(p.id, p.title)}>
-              <ThemedText variant="bodyMedium" style={{ color: colors.destructive }}>
-                Delete
-              </ThemedText>
-            </Pressable>
-          </View>
-        ))}
+          ))
+        )}
       </View>
 
       <BottomSheet
@@ -168,13 +329,24 @@ export function ProfileStorePanel() {
             onChangeText={(description) => setForm((f) => ({ ...f, description }))}
             multiline
           />
-          <ThemedText variant="caption" muted>
-            Add a product image from your photo library or camera roll.
-          </ThemedText>
+          {form.imageUrl ? (
+            <Image source={{ uri: form.imageUrl }} style={styles.previewImg} contentFit="cover" />
+          ) : null}
           <Button
-            label={editingId ? 'Save changes' : 'Create product'}
-            onPress={save}
-            disabled={!form.title.trim() || !form.priceUsd.trim()}
+            label={uploadingImage ? 'Uploading…' : form.imageUrl ? 'Change image' : 'Add product image'}
+            variant="outline"
+            onPress={() => void pickImage()}
+            disabled={uploadingImage}
+          />
+          {error ? (
+            <ThemedText variant="caption" style={{ color: colors.destructive }}>
+              {error}
+            </ThemedText>
+          ) : null}
+          <Button
+            label={busy ? 'Saving…' : editingId ? 'Save changes' : 'Create product'}
+            onPress={() => void save()}
+            disabled={busy || !form.title.trim() || !form.priceUsd.trim()}
           />
         </View>
       </BottomSheet>
@@ -194,7 +366,6 @@ export function ProfileStorePanel() {
             placeholderTextColor={colors.mutedForeground}
             value={settings.description}
             onChangeText={(description) => setSettings((s) => ({ ...s, description }))}
-            multiline
           />
           <View style={styles.typeRow}>
             <Pressable
@@ -224,7 +395,12 @@ export function ProfileStorePanel() {
               keyboardType="decimal-pad"
             />
           )}
-          <Button label="Save store settings" onPress={saveSettings} />
+          {error ? (
+            <ThemedText variant="caption" style={{ color: colors.destructive }}>
+              {error}
+            </ThemedText>
+          ) : null}
+          <Button label={busy ? 'Saving…' : 'Save store settings'} onPress={() => void saveSettings()} disabled={busy} />
         </View>
       </BottomSheet>
     </>
@@ -234,6 +410,7 @@ export function ProfileStorePanel() {
 const styles = StyleSheet.create({
   wrap: { paddingVertical: spacing.sm, gap: spacing.md },
   sub: { marginBottom: spacing.sm },
+  center: { paddingVertical: spacing.xl, alignItems: 'center' },
   actions: { flexDirection: 'row', gap: spacing.sm },
   flex: { flex: 1 },
   product: {
@@ -247,6 +424,7 @@ const styles = StyleSheet.create({
     borderColor: withAlpha(colors.border, 0.8),
   },
   img: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.muted },
+  previewImg: { width: '100%', height: 160, borderRadius: radius.lg, backgroundColor: colors.muted },
   info: { flex: 1, gap: 2 },
   form: { gap: spacing.md },
   typeRow: {

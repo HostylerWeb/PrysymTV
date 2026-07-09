@@ -77,6 +77,7 @@ export type AdminUserListItem = {
   streamerStatus: string;
   partnerTier: string;
   coins: number;
+  gender: string | null;
   joinedAt: string;
 };
 
@@ -84,6 +85,7 @@ export type AdminUserDetail = AdminUserListItem & {
   bio: string | null;
   avatarUrl: string | null;
   premiumTier: string;
+  birthDate: string | null;
   socialLinks: Array<{ label: string; url: string }>;
   counts: {
     videos: number;

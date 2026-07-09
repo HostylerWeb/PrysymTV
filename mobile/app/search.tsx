@@ -1,121 +1,30 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  mockVideos,
-  mockCreatorProfile,
-  mockPodcastShows,
-  mockPodcastEpisodes,
-  mockMovies,
-  mockLiveStreams,
-  mockShorts,
-  mockVerticals,
-} from '@/mocks';
-import {
   SEARCH_SCOPE_CONFIG,
   isSearchScope,
   type SearchScope,
 } from '@/lib/search-scope';
+import { useSearch, type SearchResultTab } from '@/hooks/api/useSearch';
 import { radius } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
-import { formatViewCount } from '@/utils/format-media';
 
 const SUGGESTIONS = ['studio tour', 'live', 'podcast', 'city lights'];
-const TABS = ['All', 'Videos', 'Creators', 'Podcasts', 'Movies', 'Live', 'Shorts', 'Verticals'] as const;
+const TABS: SearchResultTab[] = ['All', 'Videos', 'Creators', 'Podcasts', 'Movies', 'Live', 'Shorts', 'Verticals'];
 
-type Tab = (typeof TABS)[number];
-
-type SearchResult = {
-  type: Tab;
-  title: string;
-  subtitle?: string;
-  thumb?: string;
-  id: string;
-  route: string;
+const SCOPE_TAB: Partial<Record<SearchScope, SearchResultTab>> = {
+  short: 'Shorts',
+  video: 'Videos',
+  vertical: 'Verticals',
+  podcast: 'Podcasts',
+  movie: 'Movies',
 };
-
-function buildFullCatalog(): SearchResult[] {
-  return [
-    ...mockVideos.map((v) => ({
-      type: 'Videos' as const,
-      title: v.title,
-      subtitle: `${v.channel} · ${formatViewCount(v.viewsCount ?? 0)} views`,
-      thumb: v.thumbnailUrl ?? undefined,
-      id: v.id,
-      route: `/watch/${v.id}`,
-    })),
-    ...mockShorts.map((v) => ({
-      type: 'Shorts' as const,
-      title: v.title,
-      subtitle: `${v.channel} · ${formatViewCount(v.viewsCount ?? 0)} views`,
-      thumb: v.thumbnailUrl ?? undefined,
-      id: v.id,
-      route: `/shorts/${v.id}`,
-    })),
-    ...mockVerticals.map((s) => ({
-      type: 'Verticals' as const,
-      title: s.title,
-      subtitle: `${s.episodeCount} episodes · ${s.genre ?? 'Drama'}`,
-      thumb: s.posterUrl ?? undefined,
-      id: s.slug,
-      route: `/verticals/${s.slug}`,
-    })),
-    {
-      type: 'Creators',
-      title: mockCreatorProfile.displayName ?? mockCreatorProfile.username,
-      subtitle: `@${mockCreatorProfile.username} · ${mockCreatorProfile.followersCount} followers`,
-      thumb: mockCreatorProfile.avatarUrl ?? undefined,
-      id: mockCreatorProfile.username,
-      route: `/creator/${mockCreatorProfile.username}`,
-    },
-    ...mockPodcastShows.map((p) => ({
-      type: 'Podcasts' as const,
-      title: p.title,
-      subtitle: `${p.creatorName} · ${p.episodeCount} episodes`,
-      thumb: p.coverUrl ?? undefined,
-      id: p.id,
-      route: `/podcast/${mockPodcastEpisodes.find((e) => e.showTitle === p.title)?.id ?? 'podcast-ep-1'}`,
-    })),
-    ...mockMovies.map((m) => ({
-      type: 'Movies' as const,
-      title: m.title,
-      subtitle: `${m.releaseYear ?? ''} · ${formatViewCount(m.viewsCount ?? 0)} views`,
-      thumb: m.thumbnailUrl ?? undefined,
-      id: m.id,
-      route: `/movie/${m.id}`,
-    })),
-    ...mockLiveStreams.map((s) => ({
-      type: 'Live' as const,
-      title: s.title,
-      subtitle: `${s.streamer} · ${formatViewCount(s.viewerCount)} watching`,
-      thumb: s.thumbnailUrl ?? undefined,
-      id: s.id,
-      route: `/live/${s.id}`,
-    })),
-  ];
-}
-
-function catalogForScope(scope: SearchScope): SearchResult[] {
-  switch (scope) {
-    case 'short':
-      return buildFullCatalog().filter((r) => r.type === 'Shorts');
-    case 'video':
-      return buildFullCatalog().filter((r) => r.type === 'Videos');
-    case 'vertical':
-      return buildFullCatalog().filter((r) => r.type === 'Verticals');
-    case 'podcast':
-      return buildFullCatalog().filter((r) => r.type === 'Podcasts');
-    case 'movie':
-      return buildFullCatalog().filter((r) => r.type === 'Movies');
-    default:
-      return buildFullCatalog();
-  }
-}
 
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
@@ -127,45 +36,32 @@ export default function SearchScreen() {
   const scopeConfig = scope ? SEARCH_SCOPE_CONFIG[scope] : null;
 
   const [q, setQ] = useState('');
-  const [tab, setTab] = useState<Tab>('All');
+  const [tab, setTab] = useState<SearchResultTab>(scope ? (SCOPE_TAB[scope] ?? 'All') : 'All');
   const [recent, setRecent] = useState(['studio tour', 'democreator', 'midnight signal']);
 
-  const catalog = useMemo(() => (scope ? catalogForScope(scope) : buildFullCatalog()), [scope]);
-
-  const visibleTabs = useMemo<Tab[]>(() => {
+  const visibleTabs = useMemo<SearchResultTab[]>(() => {
     if (scope === 'short') return ['Shorts'];
     if (scope === 'video') return ['Videos'];
     if (scope === 'vertical') return ['Verticals'];
     if (scope === 'podcast') return ['Podcasts'];
     if (scope === 'movie') return ['Movies'];
-    return [...TABS];
+    return TABS;
   }, [scope]);
 
-  const results = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    let list = catalog;
-    if (query) {
-      list = list.filter(
-        (r) =>
-          r.title.toLowerCase().includes(query) ||
-          (r.subtitle?.toLowerCase().includes(query) ?? false),
-      );
-    }
-    if (!scope && tab !== 'All') list = list.filter((r) => r.type === tab);
-    return list;
-  }, [catalog, q, tab, scope]);
+  const { results, suggestions, isLoading, isError, refetch } = useSearch(q, tab, scope);
 
   const pickRecent = (term: string) => {
     setQ(term);
     setRecent((prev) => [term, ...prev.filter((r) => r !== term)].slice(0, 6));
   };
 
-  const openResult = (item: SearchResult) => {
+  const openResult = (route: string) => {
     if (q.trim()) pickRecent(q.trim());
-    router.push(item.route as never);
+    router.push(route as never);
   };
 
   const placeholder = scopeConfig?.placeholder ?? 'Search Prysym TV';
+  const suggestionItems = q.trim().length > 0 && suggestions.length > 0 ? suggestions : SUGGESTIONS;
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
@@ -216,7 +112,7 @@ export default function SearchScreen() {
           {!scope && (
             <>
               <Text style={[styles.label, { marginTop: 16 }]}>Suggestions</Text>
-              {SUGGESTIONS.map((s) => (
+              {suggestionItems.map((s) => (
                 <Pressable key={s} style={styles.recentRow} onPress={() => pickRecent(s)}>
                   <Ionicons name="trending-up" size={16} color={colors.primary} />
                   <Text style={styles.suggestItem}>{s}</Text>
@@ -236,29 +132,40 @@ export default function SearchScreen() {
               ))}
             </View>
           )}
-          <FlatList
-            data={results}
-            keyExtractor={(item) => `${item.type}-${item.id}`}
-            contentContainerStyle={styles.list}
-            ListEmptyComponent={<Text style={styles.noResults}>No results for "{q}"</Text>}
-            renderItem={({ item }) => (
-              <Pressable style={styles.result} onPress={() => openResult(item)}>
-                {item.thumb ? (
-                  <Image source={{ uri: item.thumb }} style={styles.thumb} />
-                ) : (
-                  <View style={[styles.thumb, styles.thumbPlaceholder]}>
-                    <Ionicons name="person" size={20} color={colors.mutedForeground} />
-                  </View>
-                )}
-                <View style={styles.resultBody}>
-                  <Text style={styles.resultType}>{item.type}</Text>
-                  <Text style={styles.resultTitle} numberOfLines={2}>{item.title}</Text>
-                  {item.subtitle ? <Text style={styles.resultSub} numberOfLines={1}>{item.subtitle}</Text> : null}
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+          {isLoading ? (
+            <ActivityIndicator style={{ marginTop: 32 }} color={colors.primary} />
+          ) : isError ? (
+            <View style={styles.errorWrap}>
+              <Text style={styles.noResults}>Search is unavailable. Check your connection.</Text>
+              <Pressable onPress={() => void refetch()}>
+                <Text style={styles.clear}>Try again</Text>
               </Pressable>
-            )}
-          />
+            </View>
+          ) : (
+            <FlatList
+              data={results}
+              keyExtractor={(item) => `${item.type}-${item.id}`}
+              contentContainerStyle={styles.list}
+              ListEmptyComponent={<Text style={styles.noResults}>No results for "{q}"</Text>}
+              renderItem={({ item }) => (
+                <Pressable style={styles.result} onPress={() => openResult(item.route)}>
+                  {item.thumb ? (
+                    <Image source={{ uri: item.thumb }} style={styles.thumb} />
+                  ) : (
+                    <View style={[styles.thumb, styles.thumbPlaceholder]}>
+                      <Ionicons name="person" size={20} color={colors.mutedForeground} />
+                    </View>
+                  )}
+                  <View style={styles.resultBody}>
+                    <Text style={styles.resultType}>{item.type}</Text>
+                    <Text style={styles.resultTitle} numberOfLines={2}>{item.title}</Text>
+                    {item.subtitle ? <Text style={styles.resultSub} numberOfLines={1}>{item.subtitle}</Text> : null}
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+                </Pressable>
+              )}
+            />
+          )}
         </>
       )}
     </View>
@@ -302,6 +209,7 @@ function createSearchStyles(colors: ThemeColors) {
     tabOnText: { color: colors.primary },
     list: { padding: 16, paddingBottom: 40 },
     noResults: { color: colors.mutedForeground, textAlign: 'center', paddingVertical: 32 },
+    errorWrap: { alignItems: 'center', padding: 24, gap: 8 },
     result: {
       flexDirection: 'row',
       alignItems: 'center',

@@ -1,10 +1,12 @@
 import {
   IsEmail,
+  IsIn,
   IsString,
   Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { USER_GENDER_VALUES } from '../../common/constants/user-gender';
 
 export class RegisterDto {
   @IsEmail()
@@ -27,4 +29,7 @@ export class RegisterDto {
   @MinLength(1)
   @MaxLength(80)
   displayName!: string;
+
+  @IsIn([...USER_GENDER_VALUES])
+  gender!: (typeof USER_GENDER_VALUES)[number];
 }

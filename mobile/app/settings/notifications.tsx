@@ -1,7 +1,18 @@
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { PushNotificationToggle } from '@/components/settings/PushNotificationToggle';
+import {
+  fetchNotificationPreferences,
+  updateNotificationPreference,
+} from '@/lib/api/notifications';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import type { ThemeColors } from '@/theme/tokens';
@@ -22,12 +33,46 @@ export default function NotificationSettingsScreen() {
   const [prefs, setPrefs] = useState<Record<string, boolean>>(
     Object.fromEntries(PREFS.map((p) => [p.key, true])),
   );
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const apiPrefs = await fetchNotificationPreferences();
+        if (cancelled) return;
+        const next = Object.fromEntries(PREFS.map((p) => [p.key, true]));
+        for (const pref of apiPrefs) {
+          next[pref.type] = pref.enabled;
+        }
+        setPrefs(next);
+      } catch {
+        /* keep defaults */
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const togglePref = (key: string, enabled: boolean) => {
+    setPrefs((prev) => ({ ...prev, [key]: enabled }));
+    void updateNotificationPreference(key, enabled).catch(() => {
+      setPrefs((prev) => ({ ...prev, [key]: !enabled }));
+    });
+  };
 
   return (
     <ScrollView style={styles.screen}>
       <View style={styles.pad}>
         <AppHeader showBack title="Notifications" showSearch={false} showNotifications={false} />
         <Text style={styles.sub}>Choose what you want to be notified about.</Text>
+
+        {loading ? (
+          <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
+        ) : null}
 
         <PushNotificationToggle featured />
 
@@ -40,12 +85,13 @@ export default function NotificationSettingsScreen() {
             </View>
             <Switch
               value={prefs[p.key] ?? true}
-              onValueChange={(v) => setPrefs((prev) => ({ ...prev, [p.key]: v }))}
+              onValueChange={(v) => togglePref(p.key, v)}
               trackColor={{ true: colors.primary }}
+              disabled={loading}
             />
           </View>
         ))}
-        <Text style={styles.hint}>Preferences sync when you sign in on this device.</Text>
+        <Text style={styles.hint}>Changes save automatically.</Text>
       </View>
     </ScrollView>
   );

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { X, Mail, Lock, User, Eye, EyeOff, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth, getAuthErrorMessage } from "@/contexts/auth-context"
+import { GenderField } from "@/components/gender-field"
+import type { UserGenderValue } from "@/lib/user-gender"
 import { forgotPassword } from "@/lib/api/auth"
 import {
   OAuthSignInButtons,
@@ -33,6 +35,7 @@ export function AuthModal({
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [gender, setGender] = useState<UserGenderValue | "">("")
 
   const { login, register, loginWithGoogle, loginWithApple, loginWithFacebook } = useAuth()
   const { isOAuthAvailable } = useOAuthConfig()
@@ -69,7 +72,11 @@ export function AuthModal({
           setError("Password must be at least 8 characters")
           return
         }
-        await register(name, email, password)
+        if (!gender) {
+          setError("Please select your gender")
+          return
+        }
+        await register(name, email, password, gender)
         onClose()
         resetForm()
         onSuccess?.()
@@ -92,6 +99,7 @@ export function AuthModal({
     setName("")
     setEmail("")
     setPassword("")
+    setGender("")
     setError("")
     setMode(initialMode)
   }
@@ -161,16 +169,19 @@ export function AuthModal({
             )}
 
             {mode === "register" && (
-              <div className="relative">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Full name"
-                  className="w-full h-12 pl-12 pr-4 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
+              <>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Full name"
+                    className="w-full h-12 pl-12 pr-4 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <GenderField value={gender} onChange={setGender} required />
+              </>
             )}
 
             {(mode === "login" || mode === "register" || mode === "forgot_email") && (

@@ -56,6 +56,7 @@ type MockAuthContextValue = {
     email?: string,
     password?: string,
     username?: string,
+    gender?: string,
   ) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
   loginWithApple: (
@@ -185,6 +186,7 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
       email = 'demo@prysym.tv',
       password = 'password',
       username?: string,
+      gender?: string,
     ) => {
       if (isApiEnabled()) {
         try {
@@ -192,11 +194,15 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
             username?.trim() ||
             email.split('@')[0].replace(/[^a-z0-9_]/g, '') ||
             'user';
+          if (!gender) {
+            throw new Error('Gender is required.');
+          }
           await authApi.register({
             email,
             username: derived,
             password,
             displayName: name,
+            gender,
           });
           const me = await fetchMe();
           setUser(me);

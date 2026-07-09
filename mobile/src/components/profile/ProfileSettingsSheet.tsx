@@ -151,9 +151,9 @@ export function ProfileSettingsSheet({
             onUnlockFeatures?.();
           },
         },
-    { icon: 'cube-outline', label: 'Shipping & checkout', description: 'Address for store purchases', screen: 'shipping' },
+    { icon: 'cube-outline', label: 'Shipping & checkout', description: 'Address for store purchases', route: '/settings/shipping' },
     { icon: 'list-outline', label: 'Playlists', description: 'Create and manage playlists', screen: 'playlists' },
-    { icon: 'link-outline', label: 'Social Links', description: 'Links on your creator profile', screen: 'social' },
+    { icon: 'link-outline', label: 'Social Links', description: 'Links on your creator profile', route: '/settings/social' },
     ...(showDashboard
       ? [{
           icon: 'bar-chart-outline' as const,
@@ -162,7 +162,7 @@ export function ProfileSettingsSheet({
           screen: 'dashboard' as const,
         }]
       : []),
-    { icon: 'notifications-outline', label: 'Notifications', description: 'Email & push preferences', screen: 'notifications' },
+    { icon: 'notifications-outline', label: 'Notifications', description: 'Email & push preferences', route: '/settings/notifications' },
     {
       icon: 'moon-outline',
       label: 'Dark Mode',

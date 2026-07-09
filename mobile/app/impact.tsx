@@ -1,10 +1,10 @@
-import React from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { Card } from '@/components/ui/Card';
 import { PageFooter } from '@/components/layout/PageFooter';
-import { mockGafTransparency } from '@/mocks/monetization';
+import { fetchPublicGafTransparency, type PublicGafTransparency } from '@/lib/api/gaf';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, typography } from '@/theme/tokens';
 
@@ -21,7 +21,16 @@ function formatUsd(value: number) {
 
 export default function ImpactScreen() {
   const { colors } = useTheme();
-  const data = mockGafTransparency;
+  const [data, setData] = useState<PublicGafTransparency | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetchPublicGafTransparency()
+      .then(setData)
+      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load impact data'))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <ScrollView style={[styles.screen, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -38,68 +47,76 @@ export default function ImpactScreen() {
           economic development, workforce training, housing, and youth programs.
         </Text>
 
-        <View style={styles.summaryGrid}>
-          <Card style={styles.summaryCard}>
-            <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Total inflow</Text>
-            <Text style={[styles.summaryValue, { color: colors.foreground }]}>
-              {formatUsd(data.summary.totalInflowUsd)}
-            </Text>
-          </Card>
-          <Card style={styles.summaryCard}>
-            <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Deployed</Text>
-            <Text style={[styles.summaryValue, { color: colors.foreground }]}>
-              {formatUsd(data.summary.totalOutflowUsd)}
-            </Text>
-          </Card>
-          <Card style={[styles.summaryCard, styles.summaryHighlight, { borderColor: colors.primary + '40', backgroundColor: colors.primary + '10' }]}>
-            <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Fund balance</Text>
-            <Text style={[styles.summaryValue, { color: colors.primary }]}>
-              {formatUsd(data.summary.balanceUsd)}
-            </Text>
-          </Card>
-        </View>
-
-        <Text style={[styles.section, { color: colors.foreground }]}>Program areas</Text>
-        {data.programs.map((program) => (
-          <Card key={program.id} style={styles.programCard}>
-            <Text style={[styles.programCategory, { color: colors.primary }]}>
-              {CATEGORY_LABELS[program.category] ?? program.category}
-            </Text>
-            <Text style={[styles.programTitle, { color: colors.foreground }]}>{program.title}</Text>
-            <Text style={[styles.programDesc, { color: colors.mutedForeground }]}>{program.description}</Text>
-          </Card>
-        ))}
-
-        <Text style={[styles.section, { color: colors.foreground }]}>Funding by area</Text>
-        {data.fundingByCategory.map((row) => (
-          <View key={row.category} style={[styles.fundingRow, { borderColor: colors.border }]}>
-            <Text style={{ color: colors.foreground, fontSize: 14 }}>
-              {CATEGORY_LABELS[row.category] ?? row.category}
-            </Text>
-            <Text style={{ color: colors.foreground, fontWeight: '700' }}>{formatUsd(row.amountUsd)}</Text>
-          </View>
-        ))}
-
-        <Text style={[styles.section, { color: colors.foreground }]}>Recent grants</Text>
-        <Card>
-          {data.recentGrants.map((grant, i) => (
-            <View
-              key={grant.id}
-              style={[
-                styles.grantRow,
-                i < data.recentGrants.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
-              ]}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.foreground, fontWeight: '600' }}>{grant.programTitle}</Text>
-                <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>
-                  {new Date(grant.createdAt).toLocaleDateString()} · {CATEGORY_LABELS[grant.category]}
+        {loading ? (
+          <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
+        ) : error || !data ? (
+          <Text style={{ color: colors.destructive }}>{error ?? 'Impact data unavailable.'}</Text>
+        ) : (
+          <>
+            <View style={styles.summaryGrid}>
+              <Card style={styles.summaryCard}>
+                <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Total inflow</Text>
+                <Text style={[styles.summaryValue, { color: colors.foreground }]}>
+                  {formatUsd(data.summary.totalInflowUsd)}
                 </Text>
-              </View>
-              <Text style={{ color: colors.foreground, fontWeight: '700' }}>{formatUsd(grant.amountUsd)}</Text>
+              </Card>
+              <Card style={styles.summaryCard}>
+                <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Deployed</Text>
+                <Text style={[styles.summaryValue, { color: colors.foreground }]}>
+                  {formatUsd(data.summary.totalOutflowUsd)}
+                </Text>
+              </Card>
+              <Card style={[styles.summaryCard, styles.summaryHighlight, { borderColor: colors.primary + '40', backgroundColor: colors.primary + '10' }]}>
+                <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Fund balance</Text>
+                <Text style={[styles.summaryValue, { color: colors.primary }]}>
+                  {formatUsd(data.summary.balanceUsd)}
+                </Text>
+              </Card>
             </View>
-          ))}
-        </Card>
+
+            <Text style={[styles.section, { color: colors.foreground }]}>Program areas</Text>
+            {data.programs.map((program) => (
+              <Card key={program.id} style={styles.programCard}>
+                <Text style={[styles.programCategory, { color: colors.primary }]}>
+                  {CATEGORY_LABELS[program.category] ?? program.category}
+                </Text>
+                <Text style={[styles.programTitle, { color: colors.foreground }]}>{program.title}</Text>
+                <Text style={[styles.programDesc, { color: colors.mutedForeground }]}>{program.description}</Text>
+              </Card>
+            ))}
+
+            <Text style={[styles.section, { color: colors.foreground }]}>Funding by area</Text>
+            {data.fundingByCategory.map((row) => (
+              <View key={row.category ?? 'other'} style={[styles.fundingRow, { borderColor: colors.border }]}>
+                <Text style={{ color: colors.foreground, fontSize: 14 }}>
+                  {CATEGORY_LABELS[row.category ?? ''] ?? row.category ?? 'Other'}
+                </Text>
+                <Text style={{ color: colors.foreground, fontWeight: '700' }}>{formatUsd(row.amountUsd)}</Text>
+              </View>
+            ))}
+
+            <Text style={[styles.section, { color: colors.foreground }]}>Recent grants</Text>
+            <Card>
+              {data.recentGrants.map((grant, i) => (
+                <View
+                  key={grant.id}
+                  style={[
+                    styles.grantRow,
+                    i < data.recentGrants.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
+                  ]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.foreground, fontWeight: '600' }}>{grant.programTitle}</Text>
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>
+                      {new Date(grant.createdAt).toLocaleDateString()} · {CATEGORY_LABELS[grant.category ?? ''] ?? grant.category}
+                    </Text>
+                  </View>
+                  <Text style={{ color: colors.foreground, fontWeight: '700' }}>{formatUsd(grant.amountUsd)}</Text>
+                </View>
+              ))}
+            </Card>
+          </>
+        )}
 
         <Pressable
           style={[styles.learnMore, { borderColor: colors.border }]}

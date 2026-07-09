@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { StreamerApplicationModal } from '@/components/modals/StreamerApplicationModal';
 import { useMockAuth } from '@/context/MockAuthContext';
+import { endStream, fetchStreamIngestHealth, initStream } from '@/lib/api/streams';
 import { colors, radius } from '@/theme/tokens';
 
 type StreamMode = 'camera' | 'obs';
@@ -14,20 +15,69 @@ export default function GoLiveScreen() {
   const { user } = useMockAuth();
   const router = useRouter();
   const [applyOpen, setApplyOpen] = useState(false);
-  const [mode, setMode] = useState<StreamMode>('camera');
+  const [mode, setMode] = useState<StreamMode>('obs');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Gaming');
-  const [streamKey, setStreamKey] = useState('stream-key-mock-xxxx');
+  const [streamKey, setStreamKey] = useState('');
+  const [serverUrl, setServerUrl] = useState('');
+  const [activeStreamId, setActiveStreamId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [healthMsg, setHealthMsg] = useState<string | null>(null);
   const approved = user?.streamerStatus === 'approved';
-  const serverUrl = 'rtmp://mock.ingest.prysym.tv/live';
 
-  const regenerateKey = () => {
-    setStreamKey(`stream-key-${Math.random().toString(36).slice(2, 10)}`);
-    Alert.alert('Stream key regenerated', 'Update your encoder with the new key.');
+  const startStream = async () => {
+    if (!title.trim()) {
+      Alert.alert('Title required', 'Enter a stream title before going live.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await initStream({ title: title.trim(), category: category.trim() || undefined });
+      setActiveStreamId(res.streamId);
+      setStreamKey(res.streamKey);
+      setServerUrl(res.rtmpUrl);
+      Alert.alert('Stream ready', 'Use the server URL and stream key in OBS, then start your encoder.');
+    } catch (e) {
+      Alert.alert('Could not start', e instanceof Error ? e.message : 'Stream init failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const checkHealth = async () => {
+    setBusy(true);
+    try {
+      const health = await fetchStreamIngestHealth();
+      const message =
+        typeof health.message === 'string'
+          ? health.message
+          : health.ok
+            ? 'Ingest is reachable.'
+            : 'Ingest health check completed.';
+      setHealthMsg(message);
+    } catch (e) {
+      setHealthMsg(e instanceof Error ? e.message : 'Health check failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const finishStream = async () => {
+    if (!activeStreamId) return;
+    setBusy(true);
+    try {
+      await endStream(activeStreamId);
+      setActiveStreamId(null);
+      Alert.alert('Stream ended', 'Your broadcast has been stopped.');
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Could not end stream');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const copyIngest = () => {
-    Alert.alert('Copied (mock)', `${serverUrl}\n${streamKey}`);
+    Alert.alert('RTMP settings', `Server: ${serverUrl}\nStream key: ${streamKey}`);
   };
 
   return (
@@ -72,35 +122,54 @@ export default function GoLiveScreen() {
                   value={category}
                   onChangeText={setCategory}
                 />
-                <Text style={styles.hintBanner}>
-                  Stream health looks good. You&apos;re ready to go live.
-                </Text>
+                {healthMsg ? <Text style={styles.hintBanner}>{healthMsg}</Text> : null}
               </Card>
 
               <Card style={{ marginTop: 16 }}>
                 <Text style={styles.title}>{mode === 'camera' ? 'Live studio' : 'Encoder settings'}</Text>
                 {mode === 'camera' ? (
                   <>
-                    <View style={styles.preview}>
-                      <Text style={styles.previewText}>Camera preview placeholder</Text>
-                    </View>
-                    <Button label="Open Live Studio" style={{ marginTop: 12 }} />
-                    <Button label="Start broadcast (mock)" variant="secondary" style={{ marginTop: 8 }} />
+                    <Text style={styles.sub}>
+                      Mobile camera streaming uses the same RTMP ingest. Generate keys below and use a compatible encoder app.
+                    </Text>
+                    <Button label="Generate stream key" onPress={() => void startStream()} disabled={busy} style={{ marginTop: 12 }} />
                   </>
                 ) : (
                   <>
                     <Text style={styles.sub}>Copy these into OBS or your RTMP encoder:</Text>
-                    <Text style={styles.code}>{serverUrl}</Text>
-                    <Text style={styles.code}>{streamKey}</Text>
+                    {serverUrl ? <Text style={styles.code}>{serverUrl}</Text> : null}
+                    {streamKey ? <Text style={styles.code}>{streamKey}</Text> : (
+                      <Text style={styles.sub}>Generate a stream key to get RTMP credentials.</Text>
+                    )}
                     <View style={styles.row}>
-                      <Button label="Copy server & key" variant="secondary" onPress={copyIngest} style={styles.flex} />
-                      <Button label="Regenerate key" variant="outline" onPress={regenerateKey} style={styles.flex} />
+                      <Button
+                        label={busy ? 'Working…' : 'Generate key'}
+                        variant="secondary"
+                        onPress={() => void startStream()}
+                        disabled={busy}
+                        style={styles.flex}
+                      />
+                      <Button
+                        label="Copy"
+                        variant="outline"
+                        onPress={copyIngest}
+                        disabled={!streamKey}
+                        style={styles.flex}
+                      />
                     </View>
-                    <Button label="Check ingest health" variant="ghost" style={{ marginTop: 8 }} />
-                    <Button label="End stream" variant="outline" style={{ marginTop: 8 }} />
+                    <Button label="Check ingest health" variant="ghost" style={{ marginTop: 8 }} onPress={() => void checkHealth()} disabled={busy} />
+                    <Button
+                      label="End stream"
+                      variant="outline"
+                      style={{ marginTop: 8 }}
+                      onPress={() => void finishStream()}
+                      disabled={!activeStreamId || busy}
+                    />
                   </>
                 )}
               </Card>
+
+              {busy ? <ActivityIndicator color={colors.primary} style={{ marginTop: 16 }} /> : null}
 
               <Button
                 label="Open creator dashboard"
@@ -149,8 +218,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary,
   },
   code: { color: colors.primary, fontFamily: 'monospace', fontSize: 12, marginTop: 4 },
-  preview: { height: 160, backgroundColor: colors.secondary, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
-  previewText: { color: colors.mutedForeground, fontSize: 13 },
   row: { flexDirection: 'row', gap: 8, marginTop: 12 },
   flex: { flex: 1 },
 });

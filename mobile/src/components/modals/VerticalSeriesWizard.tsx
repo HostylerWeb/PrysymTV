@@ -10,6 +10,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
+import { createVerticalSeries } from '@/lib/api/verticals';
 import { colors, radius } from '@/theme/tokens';
 
 const GENRES = ['Drama', 'Romance', 'Thriller', 'Comedy', 'Fantasy', 'Action', 'Mystery'];
@@ -101,9 +102,23 @@ export function VerticalSeriesWizard({
 
   const submit = async () => {
     setBusy(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setBusy(false);
-    setMode('done');
+    try {
+      if (mode === 'series') {
+        if (!seriesTitle.trim() || !seriesSlug.trim()) return;
+        await createVerticalSeries({
+          slug: seriesSlug.trim(),
+          title: seriesTitle.trim(),
+          tagline: tagline.trim() || undefined,
+          description: description.trim() || undefined,
+          genre,
+        });
+      }
+      setMode('done');
+    } catch {
+      setMode('done');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const reset = () => {

@@ -29,6 +29,7 @@ export async function register(input: {
   username: string;
   password: string;
   displayName: string;
+  gender: string;
 }) {
   const data = await apiRequest<AuthSessionResponse>('/auth/register', {
     method: 'POST',
@@ -85,4 +86,20 @@ export async function logoutApi() {
     await setAccessToken(null);
     await setRefreshToken(null);
   }
+}
+
+export async function forgotPassword(email: string) {
+  return apiRequest<{ success?: boolean; message?: string }>('/auth/forgot-password', {
+    method: 'POST',
+    auth: false,
+    body: { email },
+  });
+}
+
+export async function resetPassword(token: string, newPassword: string) {
+  return apiRequest<{ success?: boolean; message?: string }>('/auth/reset-password', {
+    method: 'POST',
+    auth: false,
+    body: { token, newPassword },
+  });
 }

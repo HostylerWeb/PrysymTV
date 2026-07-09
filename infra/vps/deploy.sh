@@ -149,7 +149,7 @@ write_api_env() {
     API_PORT 4000 \
     API_PUBLIC_URL "${BASE_URL}/api/v1" \
     API_BUILD_ID "production-$(date +%Y%m%d)" \
-    CORS_ORIGIN "${BASE_URL}" \
+    CORS_ORIGIN "${BASE_URL},http://localhost:8081,http://localhost:19006,http://localhost:3001" \
     FRONTEND_URL "${BASE_URL}" \
     DATABASE_URL "postgresql://prysym:${POSTGRES_PASSWORD}@127.0.0.1:5432/prysymtv?schema=public" \
     REDIS_URL "redis://:${REDIS_PASSWORD}@127.0.0.1:6379" \

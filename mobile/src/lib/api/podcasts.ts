@@ -1,31 +1,89 @@
 import { apiRequest } from './client';
-import type { PaginatedMeta } from '@/types/api';
+import type { PaginatedMeta, PodcastEpisodeDetail, VerticalEpisodePlayback, VerticalSeriesDetail } from '@/types/api';
+
+type ApiPodcastShow = {
+  id: string;
+  title: string;
+  coverUrl?: string | null;
+  creator?: { username: string; displayName?: string | null };
+  _count?: { episodes: number };
+  episodes?: Array<{ id: string }>;
+};
 
 export function fetchPodcastShows(page = 1, limit = 24) {
-  return apiRequest<{ items: unknown[]; meta: PaginatedMeta }>(
+  return apiRequest<{ items: ApiPodcastShow[]; meta: PaginatedMeta }>(
     `/podcasts/shows?page=${page}&limit=${limit}`,
     { auth: false },
   );
 }
 
-export function fetchFeaturedPodcastShows() {
-  return apiRequest<unknown[]>('/podcasts/shows/featured', { auth: false });
+export function fetchFeaturedPodcastShow() {
+  return apiRequest<{ show: ApiPodcastShow | null }>('/podcasts/shows/featured', {
+    auth: false,
+  });
 }
 
 export function fetchTrendingPodcastShows(limit = 12) {
-  return apiRequest<unknown[]>(`/podcasts/shows/trending?limit=${limit}`, { auth: false });
+  return apiRequest<{ items: ApiPodcastShow[] }>(
+    `/podcasts/shows/trending?limit=${limit}`,
+    { auth: false },
+  );
 }
 
 export function fetchPodcastEpisodesFeed(page = 1, limit = 24) {
-  return apiRequest<{ items: unknown[]; meta: PaginatedMeta }>(
+  return apiRequest<{ items: PodcastEpisodeDetail[]; meta: PaginatedMeta }>(
     `/podcasts/episodes/feed?page=${page}&limit=${limit}`,
   );
 }
 
 export function fetchPodcastEpisode(id: string) {
-  return apiRequest<Record<string, unknown>>(`/podcasts/episodes/${id}`);
+  return apiRequest<PodcastEpisodeDetail>(`/podcasts/episodes/${id}`);
 }
 
 export function postPodcastEpisodePlay(id: string) {
   return apiRequest<unknown>(`/podcasts/episodes/${id}/play`, { method: 'POST', auth: false });
+}
+
+export function togglePodcastLike(id: string) {
+  return apiRequest<{ liked: boolean }>(`/podcasts/episodes/${id}/like`, { method: 'POST' });
+}
+
+export function togglePodcastDislike(id: string) {
+  return apiRequest<{ disliked: boolean }>(`/podcasts/episodes/${id}/dislike`, { method: 'POST' });
+}
+
+export function togglePodcastSave(id: string) {
+  return apiRequest<{ saved: boolean }>(`/podcasts/episodes/${id}/save`, { method: 'POST' });
+}
+
+export type MyPodcastShow = {
+  id: string;
+  title: string;
+  description: string | null;
+  coverUrl: string | null;
+  category: string | null;
+  _count: { episodes: number };
+};
+
+export function fetchMyPodcastShows() {
+  return apiRequest<{ items: MyPodcastShow[] }>('/podcasts/shows/me');
+}
+
+export function createPodcastShow(body: {
+  title: string;
+  description?: string;
+  coverUrl?: string;
+  category?: string;
+}) {
+  return apiRequest<{ id: string }>('/podcasts/shows', { method: 'POST', body });
+}
+
+export function createPodcastEpisode(
+  showId: string,
+  body: { title: string; description?: string; coverUrl?: string },
+) {
+  return apiRequest<{ id: string }>(`/podcasts/shows/${showId}/episodes`, {
+    method: 'POST',
+    body,
+  });
 }

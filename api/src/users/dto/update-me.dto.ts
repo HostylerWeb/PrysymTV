@@ -1,4 +1,5 @@
-import { IsOptional, IsString, Length, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, Length, Matches, MaxLength, MinLength } from 'class-validator';
+import { USER_GENDER_VALUES } from '../../common/constants/user-gender';
 
 export class UpdateMeDto {
   @IsOptional()
@@ -21,6 +22,16 @@ export class UpdateMeDto {
   @IsString()
   @MaxLength(2048)
   bannerUrl?: string;
+
+  @IsOptional()
+  @IsIn([...USER_GENDER_VALUES])
+  gender?: (typeof USER_GENDER_VALUES)[number];
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'birthDate must be YYYY-MM-DD',
+  })
+  birthDate?: string;
 
   @IsOptional()
   @IsString()

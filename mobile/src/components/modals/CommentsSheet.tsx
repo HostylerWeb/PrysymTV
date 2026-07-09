@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,47 +13,41 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { useMockAuth } from '@/context/MockAuthContext';
-import { mockComments } from '@/mocks';
+import { useVideoComments } from '@/hooks/api/useVideoComments';
 import { radius, spacing, withAlpha } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
-import { formatViewCount } from '@/utils/format-media';
+import { formatRelativeTime, formatViewCount } from '@/utils/format-media';
 
 type Props = {
   visible: boolean;
   onClose: () => void;
+  videoId?: string;
   count?: number;
   videoTitle?: string;
 };
 
-export function CommentsSheet({ visible, onClose, count, videoTitle }: Props) {
+export function CommentsSheet({ visible, onClose, videoId, count, videoTitle }: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { isAuthenticated, requireAuth, user } = useMockAuth();
-  const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [text, setText] = useState('');
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
-  const [comments, setComments] = useState(mockComments);
-  const total = count ?? comments.length;
+  const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
+
+  const { data, isLoading, postComment, likeComment } = useVideoComments(visible ? videoId : undefined);
+  const comments = data?.items ?? [];
+  const total = count ?? data?.meta.total ?? comments.length;
   const countLabel = total > 0 ? formatViewCount(total) : null;
 
   const submit = () => {
     if (!requireAuth()) return;
     const body = text.trim();
-    if (!body) return;
-    setComments((prev) => [
-      {
-        id: `new-${Date.now()}`,
-        author: user?.username ?? 'you',
-        body,
-        likes: 0,
-        liked: false,
-      },
-      ...prev,
-    ]);
-    setText('');
-    setReplyingTo(null);
+    if (!body || !videoId) return;
+    void postComment.mutateAsync({ body, parentId: replyingTo?.id }).then(() => {
+      setText('');
+      setReplyingTo(null);
+    });
   };
 
   return (
@@ -64,95 +59,108 @@ export function CommentsSheet({ visible, onClose, count, videoTitle }: Props) {
       scroll={false}
     >
       <View style={styles.sheetBody}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.flex}
-      >
-        {videoTitle ? (
-          <Text style={styles.videoTitle} numberOfLines={1}>{videoTitle}</Text>
-        ) : null}
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+          {videoTitle ? (
+            <Text style={styles.videoTitle} numberOfLines={1}>{videoTitle}</Text>
+          ) : null}
 
-        <View style={styles.composer}>
-          {isAuthenticated ? (
-            <>
-              {replyingTo ? (
-                <View style={styles.replyBar}>
-                  <Text style={styles.replyText}>Replying to @{replyingTo}</Text>
-                  <Pressable onPress={() => setReplyingTo(null)}>
-                    <Text style={styles.replyCancel}>Cancel</Text>
-                  </Pressable>
-                </View>
-              ) : null}
-              <View style={styles.inputRow}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarLetter}>
-                    {(user?.username ?? 'Y')[0]?.toUpperCase()}
-                  </Text>
-                </View>
-                <TextInput
-                  style={styles.input}
-                  placeholder={replyingTo ? 'Add a reply…' : 'Add a comment…'}
-                  placeholderTextColor={colors.mutedForeground}
-                  value={text}
-                  onChangeText={setText}
-                />
-                <Pressable
-                  style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
-                  onPress={submit}
-                  disabled={!text.trim()}
-                >
-                  <Ionicons name="send" size={16} color={colors.primaryForeground} />
-                </Pressable>
-              </View>
-            </>
+          {!videoId ? (
+            <Text style={styles.empty}>Comments are not available for this content yet.</Text>
           ) : (
-            <Pressable style={styles.signInRow} onPress={() => requireAuth()}>
-              <View style={styles.avatar} />
-              <Text style={styles.signInText}>Add a comment…</Text>
-            </Pressable>
-          )}
-        </View>
+            <>
+              <View style={styles.composer}>
+                {isAuthenticated ? (
+                  <>
+                    {replyingTo ? (
+                      <View style={styles.replyBar}>
+                        <Text style={styles.replyText}>Replying to @{replyingTo.username}</Text>
+                        <Pressable onPress={() => setReplyingTo(null)}>
+                          <Text style={styles.replyCancel}>Cancel</Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
+                    <View style={styles.inputRow}>
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarLetter}>
+                          {(user?.username ?? 'Y')[0]?.toUpperCase()}
+                        </Text>
+                      </View>
+                      <TextInput
+                        style={styles.input}
+                        placeholder={replyingTo ? 'Add a reply…' : 'Add a comment…'}
+                        placeholderTextColor={colors.mutedForeground}
+                        value={text}
+                        onChangeText={setText}
+                      />
+                      <Pressable
+                        style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
+                        onPress={submit}
+                        disabled={!text.trim() || postComment.isPending}
+                      >
+                        <Ionicons name="send" size={16} color={colors.primaryForeground} />
+                      </Pressable>
+                    </View>
+                  </>
+                ) : (
+                  <Pressable style={styles.signInRow} onPress={() => requireAuth()}>
+                    <View style={styles.avatar} />
+                    <Text style={styles.signInText}>Add a comment…</Text>
+                  </Pressable>
+                )}
+              </View>
 
-        <ScrollView style={styles.listScroll} showsVerticalScrollIndicator={false}>
-          {comments.map((c) => (
-            <View key={c.id} style={styles.comment}>
-              <View style={styles.commentAvatar}>
-                <Text style={styles.commentAvatarLetter}>{c.author[0]?.toUpperCase()}</Text>
-              </View>
-              <View style={styles.commentBody}>
-                <View style={styles.commentHeader}>
-                  <Text style={styles.author}>@{c.author}</Text>
-                  <Text style={styles.time}>2w ago</Text>
-                </View>
-                <Text style={styles.body}>{c.body}</Text>
-                <View style={styles.commentActions}>
-                  <Pressable
-                    style={styles.commentAction}
-                    onPress={() => requireAuth(() => setLiked((p) => ({ ...p, [c.id]: !p[c.id] })))}
-                  >
-                    <Ionicons
-                      name={liked[c.id] || c.liked ? 'thumbs-up' : 'thumbs-up-outline'}
-                      size={16}
-                      color={liked[c.id] || c.liked ? colors.primary : colors.mutedForeground}
-                    />
-                    {(c.likes > 0 || liked[c.id]) && (
-                      <Text style={[styles.actionLabel, (liked[c.id] || c.liked) && styles.actionOn]}>
-                        {formatViewCount(c.likes + (liked[c.id] ? 1 : 0))}
-                      </Text>
-                    )}
-                  </Pressable>
-                  <Pressable
-                    style={styles.commentAction}
-                    onPress={() => requireAuth(() => setReplyingTo(c.author))}
-                  >
-                    <Text style={styles.actionLabel}>Reply</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          ))}
-        </ScrollView>
-      </KeyboardAvoidingView>
+              {isLoading ? (
+                <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
+              ) : (
+                <ScrollView style={styles.listScroll} showsVerticalScrollIndicator={false}>
+                  {comments.length === 0 ? (
+                    <Text style={styles.empty}>No comments yet. Be the first.</Text>
+                  ) : (
+                    comments.map((c) => (
+                      <View key={c.id} style={styles.comment}>
+                        <View style={styles.commentAvatar}>
+                          <Text style={styles.commentAvatarLetter}>
+                            {c.user.username[0]?.toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.commentBody}>
+                          <View style={styles.commentHeader}>
+                            <Text style={styles.author}>@{c.user.username}</Text>
+                            <Text style={styles.time}>{formatRelativeTime(c.createdAt)}</Text>
+                          </View>
+                          <Text style={styles.body}>{c.body}</Text>
+                          <View style={styles.commentActions}>
+                            <Pressable
+                              style={styles.commentAction}
+                              onPress={() => requireAuth(() => void likeComment.mutate(c.id))}
+                            >
+                              <Ionicons
+                                name={c.liked ? 'thumbs-up' : 'thumbs-up-outline'}
+                                size={16}
+                                color={c.liked ? colors.primary : colors.mutedForeground}
+                              />
+                              {c.likesCount > 0 ? (
+                                <Text style={[styles.actionLabel, c.liked && styles.actionOn]}>
+                                  {formatViewCount(c.likesCount)}
+                                </Text>
+                              ) : null}
+                            </Pressable>
+                            <Pressable
+                              style={styles.commentAction}
+                              onPress={() => requireAuth(() => setReplyingTo({ id: c.id, username: c.user.username }))}
+                            >
+                              <Text style={styles.actionLabel}>Reply</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      </View>
+                    ))
+                  )}
+                </ScrollView>
+              )}
+            </>
+          )}
+        </KeyboardAvoidingView>
       </View>
     </BottomSheet>
   );
@@ -168,6 +176,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: spacing.sm,
       paddingHorizontal: 4,
     },
+    empty: { color: colors.mutedForeground, fontSize: 14, marginTop: 16, textAlign: 'center' },
     composer: {
       borderBottomWidth: 1,
       borderBottomColor: colors.border,

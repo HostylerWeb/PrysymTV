@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
-import type { MockAdvertiserAccount } from '@/mocks/monetization';
+import type { AdvertiserAccount } from '@/lib/api/advertisers';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/tokens';
 
@@ -10,7 +10,7 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   hasPending?: boolean;
-  pendingAccount?: MockAdvertiserAccount | null;
+  pendingAccount?: AdvertiserAccount | null;
   onSubmitted?: (data: { companyName: string; contactEmail: string; billingEmail?: string }) => void;
   onCancelPending?: () => void;
 };

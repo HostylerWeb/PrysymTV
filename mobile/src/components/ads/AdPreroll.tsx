@@ -3,40 +3,95 @@ import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import type { MockServedAd } from '@/components/ads/mock-ad-data';
-import { MOCK_MOVIE_PREROLL_AD } from '@/components/ads/mock-ad-data';
-import { colors, radius } from '@/theme/tokens';
+import {
+  buildAdAttribution,
+  fetchServedAd,
+  trackAdClick,
+  trackAdImpression,
+  type ServedAd,
+} from '@/lib/api/ads';
+import { useMockAuth } from '@/context/MockAuthContext';
+import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
+import { useShouldShowAds } from '@/hooks/useShouldShowAds';
+import { resolveAdMediaUrl } from '@/lib/ad-media';
+import { radius } from '@/theme/tokens';
 
 type Props = {
   visible: boolean;
-  ad?: MockServedAd;
+  videoId?: string;
+  creatorId?: string;
   onComplete: () => void;
 };
 
-export function AdPreroll({ visible, ad = MOCK_MOVIE_PREROLL_AD, onComplete }: Props) {
+export function AdPreroll({ visible, videoId, creatorId, onComplete }: Props) {
   const insets = useSafeAreaInsets();
-  const [countdown, setCountdown] = useState(ad.skipAfterSeconds);
+  const shouldShow = useShouldShowAds();
+  const { user } = useMockAuth();
+  const { platformCreatorId } = usePublicAdsConfig();
+  const [ad, setAd] = useState<ServedAd | null>(null);
+  const [countdown, setCountdown] = useState(5);
   const [ready, setReady] = useState(false);
-  const canSkip = ready && countdown <= 0;
 
   useEffect(() => {
     if (!visible) return;
-    setCountdown(ad.skipAfterSeconds);
     setReady(false);
-  }, [visible, ad.skipAfterSeconds]);
+    if (!shouldShow) {
+      onComplete();
+      return;
+    }
+    void fetchServedAd('movie_preroll').then((served) => {
+      if (!served) {
+        onComplete();
+        return;
+      }
+      setAd(served);
+      setCountdown(served.skipAfterSeconds);
+      void trackAdImpression(
+        buildAdAttribution({
+          campaignId: served.id,
+          placement: 'movie_preroll',
+          creatorId,
+          platformCreatorId,
+          videoId,
+          viewerUserId: user?.id,
+        }),
+      );
+    });
+  }, [visible, shouldShow, creatorId, videoId, platformCreatorId, user?.id, onComplete]);
 
   useEffect(() => {
-    if (!visible || !ready || countdown <= 0) return;
+    if (!visible || !ad || !ready || countdown <= 0) return;
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
-  }, [visible, ready, countdown]);
+  }, [visible, ad, ready, countdown]);
+
+  if (!visible || !ad) return null;
+
+  const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
+  if (!mediaUrl) return null;
+
+  const canSkip = ready && countdown <= 0;
+
+  const openAd = () => {
+    void trackAdClick(
+      buildAdAttribution({
+        campaignId: ad.id,
+        placement: 'movie_preroll',
+        creatorId,
+        platformCreatorId,
+        videoId,
+        viewerUserId: user?.id,
+      }),
+    );
+    void Linking.openURL(ad.clickThroughUrl);
+  };
 
   return (
     <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={() => canSkip && onComplete()}>
       <View style={[styles.screen, { paddingTop: insets.top }]}>
         <View style={styles.player}>
           <Image
-            source={{ uri: ad.mediaUrl }}
+            source={{ uri: mediaUrl }}
             style={styles.media}
             contentFit="contain"
             onLoad={() => setReady(true)}
@@ -52,7 +107,7 @@ export function AdPreroll({ visible, ad = MOCK_MOVIE_PREROLL_AD, onComplete }: P
             </View>
           ) : null}
           {ready && ad.title ? (
-            <Pressable style={styles.adLink} onPress={() => void Linking.openURL(ad.clickThroughUrl)}>
+            <Pressable style={styles.adLink} onPress={openAd}>
               <Text style={styles.adLinkText}>{ad.title}</Text>
             </Pressable>
           ) : null}

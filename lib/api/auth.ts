@@ -16,6 +16,7 @@ export async function register(input: {
   username: string;
   password: string;
   displayName: string;
+  gender: import("./user-gender").UserGenderValue;
 }) {
   const data = await apiRequest<AuthSessionResponse>("/auth/register", {
     method: "POST",

@@ -14,6 +14,14 @@ enum UserRole {
   admin
 }
 
+enum UserGender {
+  male
+  female
+  non_binary
+  transgender
+  prefer_not_to_say
+}
+
 enum StreamerStatus {
   none
   pending
@@ -423,6 +431,8 @@ model User {
   googleId          String?        @unique @map("google_id")
   appleId           String?        @unique @map("apple_id")
   facebookId        String?        @unique @map("facebook_id")
+  gender            UserGender?    @map("gender")
+  birthDate         DateTime?      @map("birth_date") @db.Date
   createdAt         DateTime       @default(now()) @map("created_at")
   updatedAt         DateTime       @updatedAt @map("updated_at")
 

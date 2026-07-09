@@ -54,8 +54,8 @@
 
 | Area | Source |
 |------|--------|
-| All tab feeds (home, videos, shorts, movies, verticals, podcasts) | `@/mocks` |
-| Search | Client filter over mocks |
+| All tab feeds (home, videos, shorts, movies, verticals, podcasts) | Production API via TanStack Query hooks |
+| Search | `GET /search`, `GET /search/suggest` |
 | Watch, movie, shorts, podcast, vertical, live players | `@/mocks` |
 | Creator profiles, store, cart | `@/mocks` + `StoreCartContext` |
 | Comments, notifications | `mockComments`, `mockNotifications` |
@@ -127,11 +127,31 @@
 | 1.8 | `settings/notifications.tsx` | `GET/PUT /users/me/notification-preferences` |
 | 1.9 | OAuth buttons | `POST /auth/oauth/google`, `/apple`, `/facebook` (already in `auth.ts`) |
 
+- [x] **1.1** Forgot password screen → `POST /auth/forgot-password`
+- [x] **1.2** Reset password screen → `POST /auth/reset-password`
+- [x] **1.3** Edit profile → `PUT /users/me`
+- [x] **1.4** Avatar upload in `EditProfileModal`
+- [x] **1.5** Banner upload in `EditProfileModal`
+- [x] **1.6** Social links settings
+- [x] **1.7** Shipping / buyer details settings
+- [x] **1.8** Notification preferences settings
+- [x] **1.9** OAuth (completed in Phase 0)
+
 **Exit criteria:** Full account settings round-trip on production API; OAuth works with client IDs from `GET /config/public`.
 
 ---
 
 ## Phase 2 — Home & discovery feeds
+
+- [x] **2.1** `(tabs)/home.tsx` — `GET /feed/home`
+- [x] **2.2** Home continue watching — feed payload
+- [x] **2.3** `(tabs)/videos.tsx` — `GET /videos/feed/videos`
+- [x] **2.4** `(tabs)/shorts.tsx` — `GET /videos/feed/shorts` (cursor)
+- [x] **2.5** `(tabs)/movies.tsx` — `GET /videos/feed/movies`, `/movies/featured`
+- [x] **2.6** `(tabs)/verticals.tsx` — `GET /verticals`
+- [x] **2.7** `(tabs)/podcasts.tsx` — shows, featured, trending, episodes feed
+- [x] **2.8** `search.tsx` — `GET /search`, `GET /search/suggest`
+- [x] **2.9** `live/index.tsx` — `GET /streams/live`
 
 | Task | Screen | Endpoints | Replaces |
 |------|--------|-----------|----------|
@@ -152,6 +172,22 @@
 ---
 
 ## Phase 3 — Content detail & playback
+
+- [x] **3.1** `watch/[id].tsx` — `GET /videos/:id`, `POST /videos/:id/view`
+- [x] **3.2** Watch progress — `POST /history/progress`
+- [x] **3.3** Watch engagement — like, dislike, save
+- [x] **3.4** Comments — `GET/POST /videos/:id/comments`, comment like
+- [x] **3.5** `movie/[id].tsx` — same as watch + preroll
+- [x] **3.6** `shorts/[id].tsx` + shorts tab — engagement + cursor feed
+- [x] **3.7** `podcast/[id].tsx` — episode detail + play
+- [x] **3.8** Podcast engagement — like, save
+- [x] **3.9** `verticals/[slug].tsx` — series detail
+- [x] **3.10** `verticals/watch/...` — episode playback
+- [x] **3.11** Vertical engagement — view, like, save, progress
+- [x] **3.12** `live/[id].tsx` — `GET /streams/:id` + HLS player
+- [x] **3.13** Live chat — Socket.IO join, message, history, gifts
+- [x] **3.14** `playlist/[id].tsx` — `GET /playlists/:id`
+- [x] **3.15** All players — `expo-video` HLS + `expo-av` audio
 
 | Task | Screen | Endpoints |
 |------|--------|-----------|
@@ -192,6 +228,17 @@
 | 4.9 | Cart + checkout | `POST /stores/checkout` → Stripe WebBrowser → `POST /billing/stripe/fulfill` |
 | 4.10 | Seller panel | `GET /stores/me`, product CRUD, image upload |
 
+- [x] **4.1** `creator/[username].tsx` — `GET /users/:username`, loading/error states
+- [x] **4.2** Videos + Shorts tabs — `GET /users/:username/videos`
+- [x] **4.3** Playlists tab — `GET /users/:username/playlists`
+- [x] **4.4** Follow / unfollow — `POST/DELETE /users/:username/follow`
+- [x] **4.5** Live alerts — `POST /users/:username/live-alerts` (`enabled` response)
+- [x] **4.6** Channel membership — `POST /billing/subscriptions/create` + WebBrowser fulfill
+- [x] **4.7** Store tab — `GET /users/:username/store`
+- [x] **4.8** Product detail — `GET /users/:username/store/products/:productId`
+- [x] **4.9** Cart + checkout — `POST /stores/checkout` → Stripe WebBrowser → fulfill
+- [x] **4.10** `ProfileStorePanel` — `GET /stores/me`, product CRUD, image upload
+
 **Exit criteria:** Follow a creator, view their videos, add store item to cart, complete Stripe checkout (or dev-mode grant).
 
 ---
@@ -214,6 +261,18 @@
 
 **Exit criteria:** Profile library matches web profile; notifications deep-link to correct screens.
 
+- [x] **5.1** `profile.tsx` — `GET /users/me` via auth context + refresh on focus
+- [x] **5.2** Continue watching — `GET /history` filtered for in-progress items
+- [x] **5.3** Saved / liked — `GET /users/me/saved`, `/users/me/liked`
+- [x] **5.4** My videos — `GET /users/me/videos` in `ProfileMyContent`
+- [x] **5.5** Playlists tab — `GET /playlists/me`
+- [x] **5.6** `history.tsx` — `GET /history`, delete item, clear all
+- [x] **5.7** Notifications — `GET /users/me/notifications`, mark read, read-all, delete; `AppHeader` badge
+- [x] **5.8** Notification taps — `notification-target.ts` deep links to watch/movie/shorts/live/creator/podcast/vertical
+- [x] **5.9** `AddToPlaylistSheet` — `GET /playlists/me`, `POST /playlists/:id/items`
+- [x] **5.10** `settings/playlists.tsx` — create + delete playlists
+- [x] **5.11** `ProfileMyContent` — real videos, shorts, verticals, podcasts from API
+
 ---
 
 ## Phase 6 — Monetization & billing
@@ -232,6 +291,16 @@
 
 **Exit criteria:** Purchase coins on production (or dev-mode grant); send a gift; creator dashboard shows real stats.
 
+- [x] **6.1** `CoinsModal` — `GET /billing/products`, `POST /billing/stripe/create-checkout` (`coins`)
+- [x] **6.2** `premium.tsx` — `create-checkout` (`premium`) + subscription status from `GET /users/me`
+- [x] **6.3** `insider.tsx` — `create-checkout` (`insider`) + insider status from `GET /users/me`
+- [x] **6.4** `GiftModal`, `LiveGiftPanel` — `GET /billing/gifts/catalog`, `POST /billing/gifts/send` (all callers pass `receiverId`)
+- [x] **6.5** Memberships UI — `GET /billing/subscriptions/me`, `DELETE …/:id`
+- [x] **6.6** Stripe flow — `expo-web-browser` → `POST /billing/stripe/fulfill` via `runBillingCheckout`
+- [x] **6.7** `creator-dashboard.tsx`, `settings/dashboard.tsx` — `GET /analytics/creators/me/dashboard`
+- [x] **6.8** Payout settings — `GET /billing/creators/balance`, `POST /billing/creators/payouts/request`
+- [x] **6.9** `impact.tsx` — `GET /gaf/public`
+
 ---
 
 ## Phase 7 — Ads
@@ -247,6 +316,14 @@
 | 7.7 | Premium ad-free | Bearer on serve → skip when `adFree: true` |
 
 **Exit criteria:** Delete `mock-ad-data.ts`; ads load from API or gracefully hide when `ad: null`.
+
+- [x] **7.1** Config — `GET /config/public` → `ads` via `usePublicAdsConfig`
+- [x] **7.2** `AdBanner` — `GET /ads/serve?placement=home_banner`
+- [x] **7.3** `AdPreroll` — `placement=movie_preroll` (+ podcast)
+- [x] **7.4** `AdInterstitial` — `placement=shorts_interstitial` with config swipe interval
+- [x] **7.5** `VerticalEpisodeAdGate` — `placement=vertical_episode&peek=1`
+- [x] **7.6** Tracking — `POST /ads/track/impression`, `/track/click`
+- [x] **7.7** Premium ad-free — Bearer on serve + `useShouldShowAds`
 
 ---
 
@@ -266,6 +343,16 @@
 
 **Exit criteria:** Approved creator can upload a video and go live against production ingest URLs.
 
+- [x] **8.1** `go-live.tsx` — `POST /streams/init`, `GET /streams/ingest/health`
+- [x] **8.2** End stream — `POST /streams/:id/end`
+- [x] **8.3** Video upload — `POST /videos/upload/init` → upload → `complete` via `runVideoUpload`
+- [x] **8.4** Movie poster — supported via video upload flow (poster step on web; mobile uses upload API)
+- [x] **8.5** `settings/upload.tsx` — real publish flow for short/video/movie
+- [x] **8.6** `settings/verticals.tsx` — `GET /verticals/me/series`, create series via wizard
+- [x] **8.7** `settings/podcasts.tsx` — `GET /podcasts/shows/me`, `POST /podcasts/shows`
+- [x] **8.8** Store product images — already wired in Phase 4 `ProfileStorePanel`
+- [x] **8.9** `CreateMenuModal` — gates on `streamerStatus`, `verticalCreatorStatus` from auth user
+
 ---
 
 ## Phase 9 — Advertisers (B2B)
@@ -277,6 +364,10 @@
 | 9.3 | `advertise/portal/[accountId].tsx` | `GET /advertisers/me/:id` |
 
 **Exit criteria:** Register advertiser account; view campaigns when verified.
+
+- [x] **9.1** `advertise.tsx` — `POST /advertisers/register`, `GET /advertisers/me`
+- [x] **9.2** Cancel pending — `DELETE /advertisers/me/:id`
+- [x] **9.3** `advertise/portal/[accountId].tsx` — `GET /advertisers/me/:id`
 
 ---
 

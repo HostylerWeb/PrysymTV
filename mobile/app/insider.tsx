@@ -3,19 +3,44 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { useMockAuth } from '@/context/MockAuthContext';
+import { createInsiderCheckout } from '@/lib/api/billing';
+import { runBillingCheckout } from '@/lib/billing-checkout';
+import { isInsiderActive } from '@/lib/premium';
 import { INSIDER_PERKS, MEMBERSHIP_PRICES } from '@/mocks/monetization';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, typography } from '@/theme/tokens';
 
 export default function InsiderScreen() {
   const { colors } = useTheme();
-  const [subscribed, setSubscribed] = useState(false);
+  const { user, requireAuth, refreshUser } = useMockAuth();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const subscribed = isInsiderActive(user?.insiderActive, user?.insiderPeriodEnd);
   const priceLabel = `$${MEMBERSHIP_PRICES.insider.toFixed(2)}/mo`;
+
+  const join = () => {
+    requireAuth(async () => {
+      setBusy(true);
+      setError(null);
+      try {
+        const res = await createInsiderCheckout();
+        const result = await runBillingCheckout(res, () => refreshUser());
+        if (!result.ok) setError(result.error ?? 'Checkout failed');
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Checkout failed');
+      } finally {
+        setBusy(false);
+      }
+    });
+  };
 
   return (
     <ScrollView style={[styles.screen, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={styles.pad}>
         <AppHeader showBack title="Platform Insider" showSearch={false} showNotifications={false} />
+        {error ? <Text style={{ color: colors.destructive, marginTop: 8 }}>{error}</Text> : null}
 
         {subscribed ? (
           <Card style={[styles.hero, { borderColor: colors.primary + '40', backgroundColor: colors.primary + '10' }]}>
@@ -26,6 +51,11 @@ export default function InsiderScreen() {
             <Text style={[styles.heroSub, { color: colors.mutedForeground, textAlign: 'center' }]}>
               Early access to roadmaps, town halls, and insider-only updates. This is separate from Premium (ad-free viewing).
             </Text>
+            {user?.insiderPeriodEnd ? (
+              <Text style={{ color: colors.mutedForeground, textAlign: 'center', marginTop: 8, fontSize: 13 }}>
+                Active until {new Date(user.insiderPeriodEnd).toLocaleDateString()}
+              </Text>
+            ) : null}
           </Card>
         ) : (
           <>
@@ -48,9 +78,10 @@ export default function InsiderScreen() {
                 </Text>
               ))}
               <Button
-                label={`Join Insider — ${priceLabel}`}
+                label={busy ? 'Processing…' : `Join Insider — ${priceLabel}`}
                 style={{ marginTop: 16 }}
-                onPress={() => setSubscribed(true)}
+                disabled={busy}
+                onPress={join}
               />
             </Card>
 

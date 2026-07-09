@@ -15,6 +15,8 @@ import { Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { ThemedInput } from '@/components/ui/ThemedInput';
+import { fetchMyPodcastShows } from '@/lib/api/podcasts';
+import { runVideoUpload } from '@/lib/api/videos';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import type { ThemeColors } from '@/theme/tokens';
@@ -89,7 +91,7 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
   const [showCategory, setShowCategory] = useState('General');
   const [coverUri, setCoverUri] = useState<string | null>(null);
   const [podcastMediaType, setPodcastMediaType] = useState<'audio' | 'video'>('audio');
-  const [existingShows] = useState<Array<{ id: string; title: string }>>([]);
+  const [existingShows, setExistingShows] = useState<Array<{ id: string; title: string }>>([]);
   const [showId, setShowId] = useState('');
 
   useEffect(() => {
@@ -103,13 +105,23 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
     setDone(false);
     setBusy(false);
     setError(null);
-    setPodcastMode(existingShows.length ? 'existing' : 'new');
+    setPodcastMode('new');
     setShowTitle('');
     setShowDescription('');
     setShowCategory('General');
     setCoverUri(null);
     setPodcastMediaType('audio');
-  }, [visible, kind, existingShows.length]);
+    if (kind === 'podcast') {
+      void fetchMyPodcastShows()
+        .then((res) => {
+          const items = res.items.map((s) => ({ id: s.id, title: s.title }));
+          setExistingShows(items);
+          setPodcastMode(items.length ? 'existing' : 'new');
+          if (items[0]) setShowId(items[0].id);
+        })
+        .catch(() => setExistingShows([]));
+    }
+  }, [visible, kind]);
 
   const pickVideo = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -166,8 +178,20 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
     setBusy(true);
     setError(null);
     try {
-      // Upload API wired in Phase C — validate form then show success
-      await new Promise((r) => setTimeout(r, 800));
+      if (kind === 'short' || kind === 'video') {
+        await runVideoUpload({
+          type: kind,
+          title: title.trim(),
+          description: description.trim() || undefined,
+          category,
+          visibility,
+          tags: tags.trim() || undefined,
+          file,
+        });
+      } else {
+        setError('Podcast uploads: create a show in Settings → Podcasts, then use the web studio for episode media.');
+        return;
+      }
       setDone(true);
       onSuccess?.();
     } catch (e) {

@@ -22,9 +22,11 @@ export function ContinueWatchingRow({ items }: { items: ContinueWatchingItem[] }
             key={item.contentId}
             style={styles.card}
             onPress={() => {
-              if (item.contentType === 'video') router.push(`/watch/${item.contentId}`);
-              else if (item.contentType === 'podcast_episode') router.push(`/podcast/${item.contentId}`);
-              else router.push(`/verticals/watch/${item.seriesSlug ?? 'series-1'}/5`);
+              if (item.contentType === 'video') router.push(`/watch/${item.contentId}` as never);
+              else if (item.contentType === 'podcast_episode') router.push(`/podcast/${item.contentId}` as never);
+              else if (item.contentType === 'vertical_episode' && item.seriesSlug) {
+                router.push(`/verticals/watch/${item.seriesSlug}/${item.episodeNumber ?? 1}` as never);
+              }
             }}
           >
             <View style={styles.thumbWrap}>

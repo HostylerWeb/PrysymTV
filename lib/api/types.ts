@@ -31,6 +31,8 @@ export type MeResponse = {
   premiumExpiresAt: string | null;
   insiderActive?: boolean;
   insiderPeriodEnd?: string | null;
+  gender?: string | null;
+  birthDate?: string | null;
   createdAt: string;
   buyerFullName?: string | null;
   buyerPhone?: string | null;
@@ -148,6 +150,8 @@ export type UpdateMeBody = {
   bio?: string;
   avatarUrl?: string;
   bannerUrl?: string;
+  gender?: string;
+  birthDate?: string;
   buyerFullName?: string;
   buyerPhone?: string;
   buyerAddressLine1?: string;

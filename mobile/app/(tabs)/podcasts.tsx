@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -9,11 +9,12 @@ import { PageFooter } from '@/components/layout/PageFooter';
 import { SectionHeader } from '@/components/home/SectionHeader';
 import { FilterChip } from '@/components/ui/FilterChip';
 import { Button } from '@/components/ui/Button';
+import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { PodcastMiniPlayer } from '@/components/podcasts/PodcastMiniPlayer';
 import { usePodcastPlayer } from '@/context/PodcastPlayerContext';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
-import { mockPodcastEpisodes, mockPodcastShows } from '@/mocks';
+import { usePodcastsCatalog } from '@/hooks/api/usePodcastsCatalog';
 import type { PodcastShow } from '@/types/api';
 import { radius, typography, withAlpha } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
@@ -36,6 +37,7 @@ function ShowRail({
   onShowPress: (show: PodcastShow) => void;
   styles: PodcastStyles;
 }) {
+  if (!shows.length) return null;
   return (
     <View style={styles.railWrap}>
       <SectionHeader title={title} />
@@ -60,21 +62,50 @@ export default function PodcastsScreen() {
   const { trigger, flowHost } = useCreateFlow();
   const { playEpisode, episode: playingEpisode } = usePodcastPlayer();
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('All');
+  const [refreshing, setRefreshing] = useState(false);
 
-  const featuredShow = mockPodcastShows[0];
-  const featuredEpisode = mockPodcastEpisodes[0];
+  const catalogQuery = usePodcastsCatalog();
+  const catalog = catalogQuery.data;
+  const featuredShow = catalog?.featuredShow ?? catalog?.shows[0] ?? null;
+  const featuredEpisode = catalog?.episodes[0] ?? null;
 
   const filteredEpisodes = useMemo(() => {
-    if (category === 'All') return mockPodcastEpisodes;
+    const episodes = catalog?.episodes ?? [];
+    if (category === 'All') return episodes;
     const idx = CATEGORIES.indexOf(category) - 1;
-    return mockPodcastEpisodes.filter((_, i) => i % (CATEGORIES.length - 1) === idx);
-  }, [category]);
+    return episodes.filter((_, i) => i % (CATEGORIES.length - 1) === idx);
+  }, [catalog?.episodes, category]);
 
   const openShow = (show: PodcastShow) => {
-    const ep = mockPodcastEpisodes.find((e) => e.showTitle === show.title) ?? mockPodcastEpisodes[0];
+    const ep = catalog?.episodes.find((e) => e.showTitle === show.title) ?? catalog?.episodes[0];
+    if (!ep) return;
     playEpisode(ep);
     router.push(`/podcast/${ep.id}`);
   };
+
+  const isLoading = catalogQuery.isLoading && !catalog;
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await catalogQuery.refetch();
+    setRefreshing(false);
+  };
+
+  if (isLoading) {
+    return (
+      <View style={[styles.screen, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (catalogQuery.isError) {
+    return (
+      <View style={styles.screen}>
+        <FeedQueryState isError error={catalogQuery.error} onRetry={() => void catalogQuery.refetch()} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -84,6 +115,9 @@ export default function PodcastsScreen() {
         data={filteredEpisodes}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingBottom: playingEpisode ? 72 : 0 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />
+        }
         ListHeaderComponent={
           <View style={styles.pad}>
             <AppHeader
@@ -93,29 +127,31 @@ export default function PodcastsScreen() {
               onCreatePress={() => requireAuth(() => trigger('podcast'))}
             />
 
-            <Pressable
-              style={styles.hero}
-              onPress={() => {
-                playEpisode(featuredEpisode);
-                router.push(`/podcast/${featuredEpisode.id}`);
-              }}
-            >
-              <Image source={{ uri: featuredShow.coverUrl ?? '' }} style={StyleSheet.absoluteFill} contentFit="cover" />
-              <LinearGradient colors={['transparent', withAlpha(colors.background, 0.95)]} style={StyleSheet.absoluteFill} />
-              <View style={styles.heroContent}>
-                <Text style={styles.heroEyebrow}>Featured show</Text>
-                <Text style={styles.heroTitle}>{featuredShow.title}</Text>
-                <Text style={styles.heroSub}>{featuredShow.creatorName} · {featuredShow.episodeCount} episodes</Text>
-                <Button
-                  label="Play latest episode"
-                  size="sm"
-                  onPress={() => {
-                    playEpisode(featuredEpisode);
-                    router.push(`/podcast/${featuredEpisode.id}`);
-                  }}
-                />
-              </View>
-            </Pressable>
+            {featuredShow && featuredEpisode ? (
+              <Pressable
+                style={styles.hero}
+                onPress={() => {
+                  playEpisode(featuredEpisode);
+                  router.push(`/podcast/${featuredEpisode.id}`);
+                }}
+              >
+                <Image source={{ uri: featuredShow.coverUrl ?? '' }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                <LinearGradient colors={['transparent', withAlpha(colors.background, 0.95)]} style={StyleSheet.absoluteFill} />
+                <View style={styles.heroContent}>
+                  <Text style={styles.heroEyebrow}>Featured show</Text>
+                  <Text style={styles.heroTitle}>{featuredShow.title}</Text>
+                  <Text style={styles.heroSub}>{featuredShow.creatorName} · {featuredShow.episodeCount} episodes</Text>
+                  <Button
+                    label="Play latest episode"
+                    size="sm"
+                    onPress={() => {
+                      playEpisode(featuredEpisode);
+                      router.push(`/podcast/${featuredEpisode.id}`);
+                    }}
+                  />
+                </View>
+              </Pressable>
+            ) : null}
 
             <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
               {CATEGORIES.map((c) => (
@@ -123,11 +159,19 @@ export default function PodcastsScreen() {
               ))}
             </ScrollView>
 
-            <ShowRail title="Trending shows" shows={mockPodcastShows.slice(0, 3)} onShowPress={openShow} styles={styles} />
-            <ShowRail title="Featured shows" shows={mockPodcastShows} onShowPress={openShow} styles={styles} />
+            <ShowRail title="Trending shows" shows={catalog?.trendingShows.slice(0, 3) ?? []} onShowPress={openShow} styles={styles} />
+            <ShowRail title="Featured shows" shows={catalog?.shows ?? []} onShowPress={openShow} styles={styles} />
 
             <Text style={styles.section}>Latest episodes</Text>
           </View>
+        }
+        ListEmptyComponent={
+          <FeedQueryState
+            isEmpty
+            emptyTitle="No episodes yet"
+            emptyMessage="Podcast episodes will appear here when published."
+            onRetry={() => void catalogQuery.refetch()}
+          />
         }
         renderItem={({ item }) => (
           <Pressable

@@ -6,9 +6,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NotificationsSheet } from '@/components/modals/NotificationsSheet';
 import { useMockAuth } from '@/context/MockAuthContext';
-import { mockNotifications } from '@/mocks';
+import { useUnreadNotificationCount } from '@/hooks/api/useNotifications';
+import { resolveAvatarUrl } from '@/lib/media-url';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radius, shadows, spacing, typography, withAlpha } from '@/theme/tokens';
+import { radius, shadows, spacing, withAlpha } from '@/theme/tokens';
 import { commonStyles } from '@/theme/styles';
 
 import type { SearchScope } from '@/lib/search-scope';
@@ -43,8 +44,13 @@ export function AppHeader({
   const { colors } = useTheme();
   const { user, isAuthenticated } = useMockAuth();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const unread = mockNotifications.filter((n) => !n.isRead).length;
+  const { unread } = useUnreadNotificationCount(isAuthenticated);
   const topPad = edgeToEdge ? 0 : insets.top + spacing.sm;
+
+  const avatarUri =
+    isAuthenticated && user
+      ? resolveAvatarUrl(user.avatarUrl, user.username ?? user.displayName ?? 'user')
+      : null;
 
   return (
     <>
@@ -119,9 +125,9 @@ export function AppHeader({
               onPress={() => router.push('/profile')}
               style={styles.avatarBtn}
             >
-              {isAuthenticated && user?.avatarUrl ? (
+              {avatarUri ? (
                 <Image
-                  source={{ uri: user.avatarUrl }}
+                  source={{ uri: avatarUri }}
                   style={[
                     styles.avatarImage,
                     {
@@ -164,8 +170,10 @@ const styles = StyleSheet.create({
   logoBtn: { flexDirection: 'row', alignItems: 'center' },
   logoImage: { width: 120, height: 32 },
   title: {
-    ...typography.h2,
     flex: 1,
+    fontSize: 10,
+    fontWeight: '700',
+    lineHeight: 14,
   },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   createBtn: {

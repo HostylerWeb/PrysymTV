@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { formatUserGenderLabel } from "@/lib/user-gender"
 import {
   Table,
   TableBody,
@@ -102,6 +103,8 @@ export default function AdminUserDetailPage({
             </Button>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Field label="Gender" value={formatUserGenderLabel(user.gender)} />
+            <Field label="Birth date" value={user.birthDate ?? "Not set"} />
             <Field label="Role" value={user.role} />
             <Field label="Partner tier" value={user.partnerTier} />
             <Field label="Premium" value={user.premiumTier} />

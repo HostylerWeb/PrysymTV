@@ -1,0 +1,64 @@
+import { useQuery } from '@tanstack/react-query';
+import { fetchHistory } from '@/lib/api/history';
+import { mediaThumb } from '@/lib/api/map-content';
+import { fetchMyPlaylists, type ApiPlaylistSummary } from '@/lib/api/playlists';
+import { fetchMyLiked, fetchMySaved } from '@/lib/api/users';
+import { filterContinueWatchingHistory } from '@/lib/continue-watching';
+import {
+  mapHistoryToContinueWatching,
+  mapLikedItemCard,
+  mapSavedItemCard,
+  type ProfileItemCard,
+} from '@/lib/map-profile-items';
+import type { ContinueWatchingItem } from '@/types/api';
+
+export type ProfilePlaylistItem = {
+  id: string;
+  title: string;
+  itemCount: number;
+  coverUrl: string | null;
+};
+
+export type ProfileLibraryData = {
+  continueWatching: ContinueWatchingItem[];
+  saved: ProfileItemCard[];
+  liked: ProfileItemCard[];
+  playlists: ProfilePlaylistItem[];
+};
+
+function mapPlaylist(p: ApiPlaylistSummary): ProfilePlaylistItem {
+  return {
+    id: p.id,
+    title: p.title,
+    itemCount: p.itemCount,
+    coverUrl: mediaThumb(p.coverUrl),
+  };
+}
+
+export function useProfileLibrary(enabled = true) {
+  return useQuery({
+    queryKey: ['profile', 'library'],
+    enabled,
+    queryFn: async (): Promise<ProfileLibraryData> => {
+      const [savedRes, likedRes, historyRes, playlistsRes] = await Promise.all([
+        fetchMySaved(1, 24),
+        fetchMyLiked(1, 24),
+        fetchHistory(1, 12),
+        fetchMyPlaylists(),
+      ]);
+
+      return {
+        continueWatching: filterContinueWatchingHistory(historyRes.items)
+          .map(mapHistoryToContinueWatching)
+          .filter((item): item is ContinueWatchingItem => item != null),
+        saved: savedRes.items
+          .map(mapSavedItemCard)
+          .filter((item): item is ProfileItemCard => item != null),
+        liked: likedRes.items
+          .map(mapLikedItemCard)
+          .filter((item): item is ProfileItemCard => item != null),
+        playlists: playlistsRes.items.map(mapPlaylist),
+      };
+    },
+  });
+}

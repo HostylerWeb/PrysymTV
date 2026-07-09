@@ -3,18 +3,42 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
 import { useMockAuth } from '@/context/MockAuthContext';
+import { postReport } from '@/lib/api/reports';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import type { ThemeColors } from '@/theme/tokens';
 import { radius } from '@/theme/tokens';
 
 const REASONS = ['Spam', 'Harassment', 'Misinformation', 'Copyright', 'Other'];
 
-type Props = { visible: boolean; onClose: () => void };
+type Props = {
+  visible: boolean;
+  onClose: () => void;
+  targetType?: string;
+  targetId?: string;
+};
 
-export function ReportModal({ visible, onClose }: Props) {
+export function ReportModal({ visible, onClose, targetType = 'video', targetId }: Props) {
   const styles = useThemedStyles(createStyles);
   const { isAuthenticated, requireAuth } = useMockAuth();
   const [reason, setReason] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async () => {
+    if (!reason || !targetId) {
+      onClose();
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await postReport({ targetType, targetId, reason });
+      onClose();
+    } catch {
+      onClose();
+    } finally {
+      setSubmitting(false);
+      setReason(null);
+    }
+  };
 
   return (
     <BottomSheet visible={visible} onClose={onClose} title="Report">
@@ -35,7 +59,12 @@ export function ReportModal({ visible, onClose }: Props) {
               <Text style={[styles.rowText, reason === r && styles.rowTextOn]}>{r}</Text>
             </Pressable>
           ))}
-          <Button label="Submit report" disabled={!reason} onPress={onClose} style={{ marginTop: 16 }} />
+          <Button
+            label={submitting ? 'Submitting…' : 'Submit report'}
+            disabled={!reason || submitting || !targetId}
+            onPress={() => void submit()}
+            style={{ marginTop: 16 }}
+          />
         </>
       )}
     </BottomSheet>

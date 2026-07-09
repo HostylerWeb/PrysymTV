@@ -28,5 +28,7 @@ export function mapMeToUser(me: MeResponse): User {
     followersCount: me.followersCount,
     followingCount: me.followingCount,
     videosCount: me.videosCount,
+    gender: me.gender ?? null,
+    birthDate: me.birthDate ?? null,
   };
 }

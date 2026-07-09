@@ -52,6 +52,7 @@ export class AuthService {
         username: dto.username.toLowerCase(),
         displayName: dto.displayName,
         passwordHash,
+        gender: dto.gender,
         role: UserRole.user,
         notificationPrefs: {
           create: NOTIFICATION_TYPES.map((type) => ({ type, enabled: true })),

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/Button';
@@ -8,7 +9,12 @@ import { Card } from '@/components/ui/Card';
 import { AdvertiserRegisterModal } from '@/components/modals/AdvertiserRegisterModal';
 import { PageFooter } from '@/components/layout/PageFooter';
 import { useMockAuth } from '@/context/MockAuthContext';
-import { mockAdvertiserAccounts, mockAdvertiserPending } from '@/mocks/monetization';
+import {
+  cancelAdvertiserRegistration,
+  fetchMyAdvertiserAccounts,
+  registerAdvertiser,
+  type AdvertiserAccount,
+} from '@/lib/api/advertisers';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, typography } from '@/theme/tokens';
 
@@ -32,8 +38,15 @@ export default function AdvertiseScreen() {
   const { colors } = useTheme();
   const { isAuthenticated, requireAuth, user } = useMockAuth();
   const [modalOpen, setModalOpen] = useState(false);
-  const [pending, setPending] = useState<typeof mockAdvertiserPending | null>(null);
-  const [verified] = useState(mockAdvertiserAccounts);
+
+  const accountsQuery = useQuery({
+    queryKey: ['advertisers', 'me'],
+    queryFn: fetchMyAdvertiserAccounts,
+    enabled: isAuthenticated,
+  });
+
+  const verified = (accountsQuery.data ?? []).filter((a) => a.isVerified);
+  const pending = (accountsQuery.data ?? []).find((a) => !a.isVerified) ?? null;
 
   useEffect(() => {
     if (register === '1') setModalOpen(true);
@@ -41,6 +54,21 @@ export default function AdvertiseScreen() {
 
   const openRegister = () => {
     requireAuth(() => setModalOpen(true));
+  };
+
+  const submitRegistration = async (data: {
+    companyName: string;
+    contactEmail: string;
+    billingEmail?: string;
+  }) => {
+    await registerAdvertiser(data);
+    await accountsQuery.refetch();
+  };
+
+  const cancelPending = async () => {
+    if (!pending) return;
+    await cancelAdvertiserRegistration(pending.id);
+    await accountsQuery.refetch();
   };
 
   return (
@@ -66,28 +94,18 @@ export default function AdvertiseScreen() {
                   {user?.displayName ?? user?.username}
                 </Text>
               </Text>
+              {accountsQuery.isLoading ? (
+                <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} />
+              ) : null}
               {verified.map((account) => (
-                <Pressable
-                  key={account.id}
-                  onPress={() => router.push(`/advertise/portal/${account.id}`)}
-                  style={[styles.accountCard, { borderColor: colors.success + '40', backgroundColor: colors.success + '08' }]}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.foreground, fontWeight: '700' }}>{account.companyName}</Text>
-                    <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{account.contactEmail}</Text>
-                    <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 4 }}>
-                      {account.campaignCount} campaigns · Verified · View portal
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
-                </Pressable>
+                <AccountRow key={account.id} account={account} colors={colors} onPress={() => router.push(`/advertise/portal/${account.id}`)} verified />
               ))}
-              {pending && (
+              {pending ? (
                 <View style={[styles.accountCard, { borderColor: colors.warning + '40', backgroundColor: colors.warning + '08' }]}>
                   <Text style={{ color: colors.foreground, fontWeight: '700' }}>{pending.companyName}</Text>
                   <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>Under review</Text>
                 </View>
-              )}
+              ) : null}
             </Card>
           )}
 
@@ -137,10 +155,44 @@ export default function AdvertiseScreen() {
         onClose={() => setModalOpen(false)}
         hasPending={!!pending}
         pendingAccount={pending}
-        onSubmitted={(data) => setPending({ ...mockAdvertiserPending, companyName: data.companyName, contactEmail: data.contactEmail })}
-        onCancelPending={() => setPending(null)}
+        onSubmitted={(data) => void submitRegistration(data)}
+        onCancelPending={() => void cancelPending()}
       />
     </>
+  );
+}
+
+function AccountRow({
+  account,
+  colors,
+  onPress,
+  verified,
+}: {
+  account: AdvertiserAccount;
+  colors: ReturnType<typeof useTheme>['colors'];
+  onPress: () => void;
+  verified?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[
+        styles.accountCard,
+        {
+          borderColor: verified ? colors.success + '40' : colors.border,
+          backgroundColor: verified ? colors.success + '08' : colors.card,
+        },
+      ]}
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: colors.foreground, fontWeight: '700' }}>{account.companyName}</Text>
+        <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{account.contactEmail}</Text>
+        <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 4 }}>
+          {account._count?.campaigns ?? 0} campaigns · {verified ? 'Verified · View portal' : 'Pending'}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+    </Pressable>
   );
 }
 

@@ -28,7 +28,7 @@ import { StreamerApplicationModal } from "@/components/streamer-application-moda
 import { EditProfileModal } from "@/components/edit-profile-modal"
 import { ProfileSettingsSheet, type ProfileSettingsScreen } from "@/components/profile-settings-sheet"
 import { useAuth } from "@/contexts/auth-context"
-import { userAvatarUrl } from "@/lib/user-avatar"
+import { userAvatarUrl, profileBannerUrl } from "@/lib/user-avatar"
 import { useSearchParams, useRouter } from "next/navigation"
 import {
   fetchMySaved,
@@ -387,15 +387,30 @@ function ProfilePageContent() {
       </div>
 
       {/* Profile Info */}
-      <div className="px-4 py-6 md:py-10 max-w-5xl mx-auto">
+      <div className="max-w-5xl mx-auto w-full">
+        {profileBannerUrl(user?.bannerUrl) ? (
+          <div className="h-32 md:h-44 w-full overflow-hidden bg-secondary">
+            <img
+              key={profileBannerUrl(user?.bannerUrl) ?? "no-banner"}
+              src={profileBannerUrl(user?.bannerUrl) ?? ""}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          </div>
+        ) : (
+          <div className="h-24 md:h-32 w-full bg-gradient-to-r from-primary/20 via-secondary to-primary/10" />
+        )}
+
+        <div className="px-4 py-6 md:py-10 md:px-8">
         <div className="flex flex-col md:flex-row items-center md:items-start md:justify-between gap-8">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
             {/* Avatar */}
-            <div className="relative mb-4 md:mb-0">
+            <div className="relative -mt-14 md:-mt-16 mb-4 md:mb-0">
               <img
+                key={userAvatarUrl(user?.avatar, user?.username ?? user?.email ?? "user")}
                 src={userAvatarUrl(user?.avatar, user?.username ?? user?.email ?? "user")}
                 alt="Profile"
-                className="w-24 h-24 md:w-32 md:h-32 rounded-full object-cover ring-4 ring-primary/20"
+                className="w-24 h-24 md:w-32 md:h-32 rounded-full object-cover ring-4 ring-background"
               />
               <button className="absolute bottom-0 right-0 md:bottom-2 md:right-2 w-8 h-8 rounded-full bg-primary flex items-center justify-center hover:scale-105 transition-transform">
                 <Edit3 className="w-4 h-4 text-primary-foreground" />
@@ -491,6 +506,7 @@ function ProfilePageContent() {
               </div>
             </div>
           </div>
+        </div>
         </div>
       </div>
 

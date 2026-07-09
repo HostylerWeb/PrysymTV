@@ -74,6 +74,12 @@ export class UsersService {
         bio: dto.bio,
         avatarUrl: dto.avatarUrl,
         bannerUrl: dto.bannerUrl,
+        ...(dto.gender !== undefined && { gender: dto.gender }),
+        ...(dto.birthDate !== undefined && {
+          birthDate: dto.birthDate
+            ? new Date(`${dto.birthDate}T00:00:00.000Z`)
+            : null,
+        }),
         ...(dto.buyerFullName !== undefined && {
           buyerFullName: dto.buyerFullName.trim(),
         }),
@@ -827,6 +833,8 @@ export class UsersService {
     buyerState?: string | null;
     buyerPostalCode?: string | null;
     buyerCountryCode?: string | null;
+    gender?: string | null;
+    birthDate?: Date | null;
     socialLinks?: unknown[];
     notificationPrefs?: unknown[];
     _count?: { followers: number; following: number; videos: number };
@@ -863,6 +871,10 @@ export class UsersService {
       buyerState: user.buyerState ?? null,
       buyerPostalCode: user.buyerPostalCode ?? null,
       buyerCountryCode: user.buyerCountryCode ?? null,
+      gender: user.gender ?? null,
+      birthDate: user.birthDate
+        ? user.birthDate.toISOString().slice(0, 10)
+        : null,
       socialLinks: user.socialLinks,
       notificationPrefs: user.notificationPrefs,
       followersCount: user._count?.followers ?? 0,

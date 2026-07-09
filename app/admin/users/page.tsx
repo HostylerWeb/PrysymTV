@@ -9,6 +9,7 @@ import { AdminStatusPill } from "@/components/admin/admin-status-pill"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
 import { AdminDateRangePicker } from "@/components/admin/admin-date-range-picker"
 import { useAdminListDateFilter } from "@/components/admin/use-admin-list-date-filter"
+import { formatUserGenderLabel } from "@/lib/user-gender"
 import { fetchAdminUsers } from "@/lib/api/admin"
 import { Input } from "@/components/ui/input"
 import {
@@ -130,6 +131,7 @@ function AdminUsersPageContent() {
           <TableHeader>
             <TableRow>
               <TableHead>User</TableHead>
+              <TableHead>Gender</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Streamer</TableHead>
@@ -145,6 +147,9 @@ function AdminUsersPageContent() {
                     <p className="font-medium">{u.displayName ?? u.username}</p>
                     <p className="text-xs text-muted-foreground">@{u.username}</p>
                   </div>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {formatUserGenderLabel(u.gender)}
                 </TableCell>
                 <TableCell className="capitalize">{u.role}</TableCell>
                 <TableCell>

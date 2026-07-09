@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -7,14 +7,13 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { CreatorPermissionsCard } from '@/components/profile/CreatorPermissionsCard';
 import { ProfileMyContent } from '@/components/profile/ProfileMyContent';
 import { ProfileStorePanel } from '@/components/profile/ProfileStorePanel';
-import { VideoCardTile } from '@/components/feed/VideoCardTile';
 import { CoinsModal } from '@/components/modals/CoinsModal';
 import { EditProfileModal } from '@/components/modals/EditProfileModal';
 import { UnlockFeaturesModal, type CreatorVerificationContext } from '@/components/modals/UnlockFeaturesModal';
@@ -22,14 +21,17 @@ import { StreamerApplicationModal } from '@/components/modals/StreamerApplicatio
 import { useCreateFlow } from '@/hooks/useCreateFlow';
 import { ShareModal } from '@/components/modals/ShareModal';
 import { useMockAuth } from '@/context/MockAuthContext';
+import { useProfileLibrary } from '@/hooks/api/useProfileLibrary';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { ProfileSettingsSheet } from '@/components/profile/ProfileSettingsSheet';
-import { mockContinueWatching, mockPlaylists, mockUser, mockVideos } from '@/mocks';
+import { FeedQueryState } from '@/components/ui/FeedQueryState';
+import type { ProfileItemCard } from '@/lib/map-profile-items';
 import { radius, spacing, typography, withAlpha } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatDuration } from '@/utils/format-media';
+import { resolveAvatarUrl, resolveProfileMediaUrl } from '@/lib/media-url';
 
 const TABS = [
   { id: 'content', label: 'My content', icon: 'grid-outline' as const },
@@ -46,8 +48,9 @@ export default function ProfileScreen() {
   const { settings: settingsParam } = useLocalSearchParams<{ settings?: string }>();
   const insets = useSafeAreaInsets();
   const tabInset = useTabBarInset();
-  const { user, isAuthenticated, logout } = useMockAuth();
-  const profile = user ?? mockUser;
+  const { user, isAuthenticated, logout, refreshUser } = useMockAuth();
+  const libraryQuery = useProfileLibrary(isAuthenticated);
+  const profile = user;
   const [tab, setTab] = useState('content');
   const [settingsOpen, setSettingsOpen] = useState(!!settingsParam);
   const [settingsScreen, setSettingsScreen] = useState<string | undefined>(settingsParam);
@@ -59,7 +62,11 @@ export default function ProfileScreen() {
   const { trigger, flowHost } = useCreateFlow();
   const [shareOpen, setShareOpen] = useState(false);
 
-  const visibleTabs = TABS.filter((t) => t.id !== 'store' || profile.storeCreatorStatus === 'approved');
+  useFocusEffect(
+    useCallback(() => {
+      if (isAuthenticated) void refreshUser();
+    }, [isAuthenticated, refreshUser]),
+  );
 
   if (!isAuthenticated) {
     return (
@@ -88,6 +95,18 @@ export default function ProfileScreen() {
     );
   }
 
+  if (!profile) {
+    return (
+      <View style={[styles.screen, { backgroundColor: colors.background, flex: 1, alignItems: 'center', justifyContent: 'center' }]}>
+        <FeedQueryState isLoading />
+      </View>
+    );
+  }
+
+  const avatarUri = resolveAvatarUrl(profile.avatarUrl, profile.username);
+  const bannerUri = resolveProfileMediaUrl(profile.bannerUrl);
+  const visibleTabs = TABS.filter((t) => t.id !== 'store' || profile.storeCreatorStatus === 'approved');
+
   return (
     <>
       <ScrollView
@@ -113,8 +132,28 @@ export default function ProfileScreen() {
 
         {/* Profile hero */}
         <View style={styles.hero}>
+          <Pressable onPress={() => setEditOpen(true)}>
+            {bannerUri ? (
+              <Image
+                key={bannerUri}
+                source={{ uri: bannerUri }}
+                style={styles.banner}
+                contentFit="cover"
+                cachePolicy="none"
+              />
+            ) : (
+              <View style={[styles.banner, styles.bannerPlaceholder, { backgroundColor: colors.secondary }]} />
+            )}
+          </Pressable>
+
           <Pressable style={styles.avatarWrap} onPress={() => setEditOpen(true)}>
-            <Image source={{ uri: profile.avatarUrl ?? '' }} style={styles.avatar} contentFit="cover" />
+            <Image
+              key={avatarUri}
+              source={{ uri: avatarUri }}
+              style={styles.avatar}
+              contentFit="cover"
+              cachePolicy="none"
+            />
             <Pressable style={styles.editFab} onPress={() => setEditOpen(true)}>
               <Ionicons name="pencil" size={14} color={colors.primaryForeground} />
             </Pressable>
@@ -184,8 +223,10 @@ export default function ProfileScreen() {
             </Pressable>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.continueRow}>
-            {mockContinueWatching.map((item) => {
-              const pct = Math.round((item.progressSeconds / item.durationSeconds) * 100);
+            {(libraryQuery.data?.continueWatching ?? []).map((item) => {
+              const pct = item.durationSeconds
+                ? Math.round((item.progressSeconds / item.durationSeconds) * 100)
+                : 0;
               return (
                 <Pressable
                   key={item.contentId}
@@ -193,7 +234,9 @@ export default function ProfileScreen() {
                   onPress={() => {
                     if (item.contentType === 'video') router.push(`/watch/${item.contentId}`);
                     else if (item.contentType === 'podcast_episode') router.push(`/podcast/${item.contentId}`);
-                    else router.push(`/verticals/watch/${item.seriesSlug ?? 'series-1'}/5`);
+              else if (item.contentType === 'vertical_episode' && item.seriesSlug) {
+                      router.push(`/verticals/watch/${item.seriesSlug}/${item.episodeNumber ?? 1}`);
+                    }
                   }}
                 >
                   <View style={styles.continueThumb}>
@@ -203,10 +246,15 @@ export default function ProfileScreen() {
                     </View>
                   </View>
                   <Text style={styles.continueVidTitle} numberOfLines={1}>{item.title}</Text>
-                  <Text style={styles.continueMeta}>{formatDuration(item.durationSeconds - item.progressSeconds)} left</Text>
+                  <Text style={styles.continueMeta}>
+                    {formatDuration(Math.max(0, item.durationSeconds - item.progressSeconds))} left
+                  </Text>
                 </Pressable>
               );
             })}
+            {!libraryQuery.isLoading && (libraryQuery.data?.continueWatching.length ?? 0) === 0 && (
+              <Text style={styles.continueMeta}>Nothing in progress</Text>
+            )}
           </ScrollView>
         </View>
 
@@ -224,6 +272,10 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.tabContent}>
+          {libraryQuery.isLoading && tab !== 'content' && tab !== 'store' ? (
+            <FeedQueryState isLoading />
+          ) : null}
+
           {tab === 'content' && (
             <ProfileMyContent
               onOpenVerticalUpload={() => router.push('/settings/verticals')}
@@ -231,7 +283,7 @@ export default function ProfileScreen() {
             />
           )}
           {tab === 'playlists' && (
-            mockPlaylists.length === 0 ? (
+            (libraryQuery.data?.playlists.length ?? 0) === 0 ? (
               <View style={styles.emptyPlaylists}>
                 <Ionicons name="list-outline" size={32} color={colors.mutedForeground} />
                 <Text style={styles.emptyTitle}>No playlists yet</Text>
@@ -239,7 +291,7 @@ export default function ProfileScreen() {
                 <Button label="Manage playlists" variant="outline" onPress={() => router.push('/settings/playlists')} />
               </View>
             ) : (
-              mockPlaylists.map((p) => (
+              libraryQuery.data!.playlists.map((p) => (
                 <Pressable key={p.id} style={styles.playlist} onPress={() => router.push(`/playlist/${p.id}`)}>
                   <Ionicons name="list" size={20} color={colors.primary} />
                   <View style={{ flex: 1 }}>
@@ -251,12 +303,28 @@ export default function ProfileScreen() {
               ))
             )
           )}
-          {tab === 'saved' && mockVideos.slice(2, 6).map((v) => (
-            <VideoCardTile key={v.id} video={v} variant="grid" />
-          ))}
-          {tab === 'liked' && mockVideos.filter((v) => v.liked).map((v) => (
-            <VideoCardTile key={v.id} video={v} variant="grid" />
-          ))}
+          {tab === 'saved' && (
+            (libraryQuery.data?.saved.length ?? 0) === 0 ? (
+              <Text style={styles.emptySub}>No saved items yet.</Text>
+            ) : (
+              <View style={styles.contentGrid}>
+                {libraryQuery.data!.saved.map((item) => (
+                  <ProfileLibraryCard key={item.key} item={item} styles={styles} />
+                ))}
+              </View>
+            )
+          )}
+          {tab === 'liked' && (
+            (libraryQuery.data?.liked.length ?? 0) === 0 ? (
+              <Text style={styles.emptySub}>No liked items yet.</Text>
+            ) : (
+              <View style={styles.contentGrid}>
+                {libraryQuery.data!.liked.map((item) => (
+                  <ProfileLibraryCard key={item.key} item={item} styles={styles} />
+                ))}
+              </View>
+            )
+          )}
           {tab === 'store' && <ProfileStorePanel />}
         </View>
 
@@ -313,6 +381,29 @@ export default function ProfileScreen() {
       />
       {flowHost}
     </>
+  );
+}
+
+function ProfileLibraryCard({
+  item,
+  styles,
+}: {
+  item: ProfileItemCard;
+  styles: ReturnType<typeof createProfileStyles>;
+}) {
+  const router = useRouter();
+  return (
+    <Pressable
+      style={styles.gridHalf}
+      onPress={() => {
+        if (typeof item.route === 'string') router.push(item.route as never);
+        else router.push(item.route as never);
+      }}
+    >
+      <Image source={{ uri: item.thumbnailUrl ?? '' }} style={styles.libraryThumb} contentFit="cover" />
+      <Text style={styles.continueVidTitle} numberOfLines={2}>{item.title}</Text>
+      <Text style={styles.continueMeta}>{item.label}</Text>
+    </Pressable>
   );
 }
 
@@ -373,8 +464,21 @@ function createProfileStyles(colors: ThemeColors) {
   },
   topTitle: { ...typography.h3, color: colors.foreground, fontWeight: '700', flex: 1, textAlign: 'center' },
   topActions: { flexDirection: 'row', gap: 4 },
-  hero: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 8, alignItems: 'center' },
-  avatarWrap: { position: 'relative', marginBottom: 12 },
+  hero: { paddingBottom: 8 },
+  banner: {
+    width: '100%',
+    height: 140,
+  },
+  bannerPlaceholder: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  avatarWrap: {
+    position: 'relative',
+    alignSelf: 'center',
+    marginTop: -48,
+    marginBottom: 12,
+  },
   avatar: {
     width: 96,
     height: 96,
@@ -406,14 +510,14 @@ function createProfileStyles(colors: ThemeColors) {
     borderWidth: 2,
     borderColor: colors.background,
   },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'center', paddingHorizontal: 16 },
   name: { fontSize: 22, fontWeight: '800', color: colors.foreground },
   streamerBadge: { backgroundColor: colors.success + '1A', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   streamerBadgeText: { color: colors.success, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  handle: { color: colors.mutedForeground, fontSize: 14, marginTop: 2 },
-  bio: { color: colors.mutedForeground, fontSize: 13, textAlign: 'center', marginTop: 8, maxWidth: 320 },
-  actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16, justifyContent: 'center' },
-  creatorAccessWrap: { marginTop: 20 },
+  handle: { color: colors.mutedForeground, fontSize: 14, marginTop: 2, textAlign: 'center', paddingHorizontal: 16 },
+  bio: { color: colors.mutedForeground, fontSize: 13, textAlign: 'center', marginTop: 8, maxWidth: 320, alignSelf: 'center', paddingHorizontal: 16 },
+  actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16, justifyContent: 'center', paddingHorizontal: 16 },
+  creatorAccessWrap: { marginTop: 20, paddingHorizontal: 16 },
   actionBtn: { minWidth: 110 },
   goLiveBtn: { minWidth: 110, backgroundColor: colors.primary },
   coinsPill: {
@@ -471,6 +575,13 @@ function createProfileStyles(colors: ThemeColors) {
   tabContent: { paddingHorizontal: 16, paddingTop: 16 },
   contentGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   gridHalf: { width: '48%' },
+  libraryThumb: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: radius.lg,
+    backgroundColor: colors.muted,
+    marginBottom: 6,
+  },
   playlist: {
     flexDirection: 'row',
     alignItems: 'center',

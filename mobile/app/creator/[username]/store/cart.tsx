@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,23 +9,46 @@ import { Button } from '@/components/ui/Button';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { useStoreCart } from '@/context/StoreCartContext';
 import { useMockAuth } from '@/context/MockAuthContext';
+import { useCreatorStore } from '@/hooks/api/useCreatorStore';
+import { createStoreCartCheckout } from '@/lib/api/stores';
+import { completeMobileCheckout } from '@/lib/stripe-checkout';
+import { normalizeUsernameSlug } from '@/lib/username-slug';
 import { colors, radius, spacing, withAlpha } from '@/theme/tokens';
-import { EMPTY_BUYER_DETAILS, isBuyerDetailsComplete } from '@/types/buyer-details';
+import {
+  buyerDetailsFromUser,
+  EMPTY_BUYER_DETAILS,
+  isBuyerDetailsComplete,
+  shippingAddressFromBuyer,
+} from '@/types/buyer-details';
 
 export default function StoreCartScreen() {
   const { username } = useLocalSearchParams<{ username: string }>();
   const router = useRouter();
-  const { requireAuth } = useMockAuth();
+  const { requireAuth, user, isAuthenticated } = useMockAuth();
   const cart = useStoreCart();
-  const slug = username ?? cart.creatorUsername ?? 'creator';
+  const slug = normalizeUsernameSlug(username ?? cart.creatorUsername ?? '');
 
+  const storeQuery = useCreatorStore(slug, Boolean(slug));
   const [buyerDetails, setBuyerDetails] = useState(EMPTY_BUYER_DETAILS);
   const [saveBuyerDetails, setSaveBuyerDetails] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [purchaseDone, setPurchaseDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const hasPhysical = cart.lines.some((l) => l.productType === 'merchandise');
-  const shippingFee = hasPhysical ? 5.99 : 0;
+  const shippingFee =
+    hasPhysical && storeQuery.data && !storeQuery.data.store.shippingFree
+      ? storeQuery.data.store.shippingFeeUsd
+      : 0;
   const total = cart.subtotalUsd + shippingFee;
 
-  const checkout = () => {
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      setBuyerDetails(buyerDetailsFromUser(user));
+    }
+  }, [isAuthenticated, user]);
+
+  const checkout = async () => {
     if (!requireAuth()) return;
     if (!cart.lines.length) {
       Alert.alert('Cart is empty', 'Add products from the creator store first.');
@@ -35,12 +58,44 @@ export default function StoreCartScreen() {
       Alert.alert('Shipping required', 'Complete your shipping address.');
       return;
     }
-    Alert.alert(
-      'Order placed',
-      `Your order total is $${total.toFixed(2)}. You'll receive a confirmation email shortly.`,
-      [{ text: 'OK', onPress: () => cart.clearCart() }],
-    );
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await createStoreCartCheckout(
+        cart.lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
+        hasPhysical
+          ? { shippingAddress: shippingAddressFromBuyer(buyerDetails), saveBuyerDetails }
+          : undefined,
+      );
+      const result = await completeMobileCheckout(res);
+      if (result.ok) {
+        cart.clearCart();
+        setPurchaseDone(true);
+      } else {
+        setError(result.error ?? 'Checkout failed');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Checkout failed');
+    } finally {
+      setBusy(false);
+    }
   };
+
+  if (purchaseDone) {
+    return (
+      <View style={[styles.screen, styles.empty]}>
+        <View style={styles.pad}>
+          <AppHeader showBack title="Cart" showNotifications={false} />
+        </View>
+        <Ionicons name="bag-check-outline" size={48} color={colors.primary} />
+        <ThemedText variant="h2">Order placed</ThemedText>
+        <ThemedText variant="bodyMedium" muted style={{ textAlign: 'center' }}>
+          Thank you for your purchase from @{slug}.
+        </ThemedText>
+        <Button label="Back to store" onPress={() => router.push(`/creator/${slug}`)} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -108,11 +163,19 @@ export default function StoreCartScreen() {
 
           <View style={styles.summary}>
             <Row label="Subtotal" value={`$${cart.subtotalUsd.toFixed(2)}`} />
-            {hasPhysical && <Row label="Shipping" value={shippingFee ? `$${shippingFee.toFixed(2)}` : 'Free'} />}
+            {hasPhysical && (
+              <Row label="Shipping" value={shippingFee ? `$${shippingFee.toFixed(2)}` : 'Free'} />
+            )}
             <Row label="Total" value={`$${total.toFixed(2)}`} bold primary />
           </View>
 
-          <Button label="Checkout" onPress={checkout} />
+          {error ? (
+            <ThemedText variant="bodyMedium" style={{ color: colors.destructive }}>
+              {error}
+            </ThemedText>
+          ) : null}
+
+          <Button label={busy ? 'Processing…' : 'Checkout'} onPress={() => void checkout()} disabled={busy} />
           <Button label="Continue shopping" variant="outline" onPress={() => router.push(`/creator/${slug}`)} />
         </View>
       )}

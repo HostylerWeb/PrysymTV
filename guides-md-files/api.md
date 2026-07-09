@@ -311,7 +311,7 @@ This section documents patterns for building the PrysymTV mobile app with React 
 | `API_BASE_URL` | `https://srv1765056.hstgr.cloud/api/v1` | All REST paths below are relative to this |
 | `WS_URL` | `https://srv1765056.hstgr.cloud` | Socket.IO host — **no** `/api/v1` suffix |
 
-Use HTTPS in production. For local dev against a machine IP, ensure `CORS_ORIGIN` on the API includes your Expo dev origin if needed.
+Use HTTPS in production. **Expo web** runs at `http://localhost:8081` (or `19006`); the API `CORS_ORIGIN` must include that origin (comma-separated) or browser requests to a remote API will fail. Production deploy includes `http://localhost:8081` for local web dev. Alternatively, point the app at a local API: `EXPO_PUBLIC_API_BASE_URL=http://localhost:4000/api/v1` with `CORS_ORIGIN=http://localhost:8081` in `api/.env`.
 
 ### HTTP client setup
 
@@ -588,7 +588,7 @@ Register/login/OAuth responses include `accessToken`, `refreshToken`, `tokenType
 
 Returns the same session shape as login. Requires matching client IDs in `api/.env` (`GOOGLE_CLIENT_ID`, `APPLE_CLIENT_ID`, `FACEBOOK_APP_ID`). Public client IDs are exposed via `GET /config/public` → `auth` (no secrets).
 
-**Register body:** `{ email, username, password, displayName? }`  
+**Register body:** `{ email, username, password, displayName?, gender }` — `gender` is **required** on email/password signup. Values: `male` \| `female` \| `non_binary` \| `transgender` \| `prefer_not_to_say`. OAuth signups may leave `gender` unset until the user updates their profile.  
 **Login body:** `{ email, password }` (email field accepts username or email)  
 **Refresh body (optional):** `{ refreshToken }` — used when cookie is unavailable (React Native)  
 **Forgot password:** `{ email }` → always `{ success: true }` (no email enumeration)  
@@ -607,7 +607,7 @@ All `/users/me/*` routes require Bearer auth.
 | Route | Status | Notes |
 |-------|--------|-------|
 | `GET /users/me` | ✅ | Full profile — see [User type](#user-get-usersme) |
-| `PUT /users/me` | ✅ | `displayName`, `bio`, `avatarUrl`, `bannerUrl`, buyer shipping fields (`buyerFullName`, `buyerPhone`, `buyerAddressLine1`, `buyerAddressLine2`, `buyerCity`, `buyerState`, `buyerPostalCode`, `buyerCountryCode`) |
+| `PUT /users/me` | ✅ | `displayName`, `bio`, `avatarUrl`, `bannerUrl`, `gender`, `birthDate` (`YYYY-MM-DD`), buyer shipping fields (`buyerFullName`, `buyerPhone`, `buyerAddressLine1`, `buyerAddressLine2`, `buyerCity`, `buyerState`, `buyerPostalCode`, `buyerCountryCode`) |
 | `POST /users/me/avatar/upload` | ✅ | `{ mimeType, fileName? }` → `POST /media/profile-upload` (local + R2) |
 | `POST /users/me/banner/upload` | ✅ | Same as avatar |
 | `POST /users/me/streamer-id/upload` | ✅ | `{ mimeType, fileName? }` → `POST /media/profile-upload` with `uploads/streamer-ids/{userId}.*` key |
@@ -1465,6 +1465,8 @@ Returned by feed endpoints, `GET /videos/:id` (extended), shorts, movies browse.
   "avatarUrl": "https://…",
   "bannerUrl": "https://…",
   "bio": "…",
+  "gender": "female",
+  "birthDate": "1990-05-15",
   "role": "user",
   "isVerified": false,
   "streamerStatus": "none",
@@ -1486,6 +1488,10 @@ Returned by feed endpoints, `GET /videos/:id` (extended), shorts, movies browse.
 ```
 
 `streamerStatus` / `verticalCreatorStatus` / `storeCreatorStatus`: `none` \| `pending` \| `approved` \| `rejected`.
+
+`gender`: `male` \| `female` \| `non_binary` \| `transgender` \| `prefer_not_to_say` \| `null` (unset — common for OAuth until profile edit). `birthDate`: ISO date string `YYYY-MM-DD` or `null`.
+
+Admin `GET /admin/users` list items and `GET /admin/users/:id` detail include `gender` and `birthDate` for moderation and support.
 
 ### Public profile (`GET /users/:username`)
 

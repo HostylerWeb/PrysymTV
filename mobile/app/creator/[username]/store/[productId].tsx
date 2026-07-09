@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -13,45 +14,85 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { BuyerDetailsForm } from '@/components/forms/BuyerDetailsForm';
 import { Button } from '@/components/ui/Button';
+import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { useStoreCart } from '@/context/StoreCartContext';
 import { useMockAuth } from '@/context/MockAuthContext';
-import { getMockStoreProduct } from '@/mocks';
+import { useStoreProduct } from '@/hooks/api/useStoreProduct';
+import { stockLabel } from '@/lib/api/stores';
+import { normalizeUsernameSlug, usernamesMatch } from '@/lib/username-slug';
 import { colors, radius, spacing, withAlpha } from '@/theme/tokens';
 import { StoreCartLink } from '@/components/store/StoreCartLink';
-import { EMPTY_BUYER_DETAILS, isBuyerDetailsComplete } from '@/types/buyer-details';
+import {
+  buyerDetailsFromUser,
+  EMPTY_BUYER_DETAILS,
+  isBuyerDetailsComplete,
+} from '@/types/buyer-details';
 
 export default function StoreProductScreen() {
   const { username, productId } = useLocalSearchParams<{ username: string; productId: string }>();
   const router = useRouter();
-  const product = getMockStoreProduct(productId ?? '') ?? getMockStoreProduct('sp-1')!;
-  const slug = username ?? product.creatorUsername ?? 'creator';
+  const slug = normalizeUsernameSlug(username ?? '');
+  const productQuery = useStoreProduct(slug, productId);
   const { user, isAuthenticated, requireAuth } = useMockAuth();
   const cart = useStoreCart();
-  const isOwner = isAuthenticated && user?.username?.toLowerCase() === slug.toLowerCase();
+  const isOwner = isAuthenticated && usernamesMatch(user?.username, slug);
 
-  const images = useMemo(
-    () => [product.imageUrl, ...(product.galleryUrls ?? [])].filter(Boolean) as string[],
-    [product],
-  );
+  const product = productQuery.data?.product;
+  const store = productQuery.data?.store;
+
+  const images = useMemo(() => {
+    if (!product) return [] as string[];
+    return [product.imageDisplayUrl, ...product.galleryDisplayUrls].filter(Boolean) as string[];
+  }, [product]);
+
   const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [buyerDetails, setBuyerDetails] = useState(EMPTY_BUYER_DETAILS);
   const [saveBuyerDetails, setSaveBuyerDetails] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
 
-  const isPhysical = product.productType !== 'digital';
-  const price = parseFloat(product.priceUsd);
-  const shippingFee = isPhysical && !product.shippingFree ? (product.shippingFeeUsd ?? 0) : 0;
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      setBuyerDetails(buyerDetailsFromUser(user));
+    }
+  }, [isAuthenticated, user]);
+
+  if (productQuery.isLoading) {
+    return (
+      <View style={[styles.screen, styles.center]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (productQuery.isError || !product) {
+    return (
+      <View style={styles.screen}>
+        <View style={styles.pad}>
+          <AppHeader showBack title="Store" showNotifications={false} />
+        </View>
+        <FeedQueryState
+          isError
+          error={productQuery.error ?? new Error('Product not found')}
+          onRetry={() => void productQuery.refetch()}
+        />
+      </View>
+    );
+  }
+
+  const isPhysical = product.productType === 'merchandise';
+  const shippingFee =
+    isPhysical && product.shippingFree === false ? (product.shippingFeeUsd ?? store?.shippingFeeUsd ?? 0) : 0;
 
   const addToCart = () => {
     if (!requireAuth()) return;
     cart.addItem(slug, {
       productId: product.id,
       title: product.title,
-      priceUsd: price,
-      imageUrl: product.imageUrl,
-      productType: product.productType ?? 'merchandise',
+      priceUsd: product.priceUsd,
+      imageUrl: product.imageDisplayUrl,
+      productType: product.productType === 'digital' ? 'digital' : 'merchandise',
       quantity,
     });
     setMessage('Added to cart');
@@ -77,7 +118,7 @@ export default function StoreProductScreen() {
       </View>
 
       <View style={styles.gallery}>
-        <Image source={{ uri: images[activeImage] }} style={styles.heroImg} contentFit="cover" />
+        <Image source={{ uri: images[activeImage] ?? '' }} style={styles.heroImg} contentFit="cover" />
         {images.length > 1 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
             {images.map((url, i) => (
@@ -109,7 +150,10 @@ export default function StoreProductScreen() {
 
         <ThemedText variant="h1">{product.title}</ThemedText>
         <ThemedText variant="hero" primary style={styles.price}>
-          ${product.priceUsd}
+          ${product.priceUsd.toFixed(2)}
+        </ThemedText>
+        <ThemedText variant="caption" muted>
+          {stockLabel(product)}
         </ThemedText>
         {product.description ? (
           <ThemedText variant="bodyMedium" muted style={styles.desc}>
@@ -121,7 +165,7 @@ export default function StoreProductScreen() {
           <View style={styles.shippingCard}>
             <Ionicons name="cube-outline" size={18} color={colors.primary} />
             <ThemedText variant="bodyMedium">
-              {product.shippingFree
+              {product.shippingFree !== false
                 ? 'Free shipping on this item'
                 : `Flat shipping $${shippingFee.toFixed(2)} per order`}
             </ThemedText>
@@ -204,6 +248,7 @@ export default function StoreProductScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
+  center: { alignItems: 'center', justifyContent: 'center' },
   pad: { paddingHorizontal: spacing.page },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   gallery: { marginBottom: spacing.lg },
