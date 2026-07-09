@@ -354,10 +354,28 @@ Default in `api/.env`. Files land under `api/storage/` and are served at
 ```json
 [
   {
-    "AllowedOrigins": ["http://localhost:3001", "https://your-domain.com"],
-    "AllowedMethods": ["GET", "PUT", "HEAD"],
-    "AllowedHeaders": ["*"],
-    "ExposeHeaders": ["ETag"],
+    "AllowedOrigins": [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://localhost:4000",
+      "https://srv1765056.hstgr.cloud",
+      "https://www.gstatic.com",
+      "https://gstatic.com"
+    ],
+    "AllowedMethods": [
+      "GET",
+      "PUT",
+      "HEAD"
+    ],
+    "AllowedHeaders": [
+      "*"
+    ],
+    "ExposeHeaders": [
+      "ETag",
+      "Content-Length",
+      "Content-Type",
+      "Accept-Ranges"
+    ],
     "MaxAgeSeconds": 3600
   }
 ]

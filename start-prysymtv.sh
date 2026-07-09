@@ -3,7 +3,7 @@
 set -euo pipefail
 
 PROJECT_ROOT="/home/hostyler/Desktop/PROJECTS/PrysymTV"
-FRONTEND_PORT=3001
+FRONTEND_PORT=3000
 API_PORT=4000
 
 API_PID=""

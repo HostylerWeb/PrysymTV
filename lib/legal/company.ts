@@ -1,7 +1,7 @@
 /** Shared legal entity details — update contact emails if your production addresses differ. */
 export const LEGAL_ENTITY = "Prysym TV, Inc."
 export const PLATFORM_NAME = "Prysym TV"
-export const LAST_UPDATED = "May 31, 2026"
+export const LAST_UPDATED = "July 10, 2026"
 export const GOVERNING_STATE = "Delaware"
 export const COUNTRY = "United States"
 

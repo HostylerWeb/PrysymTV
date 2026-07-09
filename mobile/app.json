@@ -27,7 +27,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.webp"
+      "favicon": "./assets/favicon.png"
     },
     "extra": {
       "apiUrl": "https://srv1765056.hstgr.cloud/api/v1"
