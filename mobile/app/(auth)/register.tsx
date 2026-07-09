@@ -147,7 +147,6 @@ export default function RegisterScreen() {
         <View style={styles.oauth}>
           <OAuthSignInButtons
             disabled={busy}
-            preferMockSignIn
             onGoogleCredential={oauth.onGoogleCredential}
             onAppleCredential={oauth.onAppleCredential}
             onFacebookCredential={oauth.onFacebookCredential}

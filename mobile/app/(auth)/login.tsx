@@ -119,7 +119,6 @@ export default function LoginScreen() {
         <View style={styles.oauth}>
           <OAuthSignInButtons
             disabled={busy}
-            preferMockSignIn
             onGoogleCredential={oauth.onGoogleCredential}
             onAppleCredential={oauth.onAppleCredential}
             onFacebookCredential={oauth.onFacebookCredential}

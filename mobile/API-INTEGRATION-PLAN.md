@@ -91,23 +91,23 @@
 
 **Goal:** Reliable auth, shared data layer, API modules scaffold.
 
-- [ ] **0.1** Install dependencies:
+- [x] **0.1** Install dependencies:
   ```bash
   cd mobile
   npm install @tanstack/react-query socket.io-client
   npx expo install expo-secure-store
   ```
-- [ ] **0.2** Store tokens in `expo-secure-store` (access + refresh); keep AsyncStorage migration for existing users.
-- [ ] **0.3** Fix `client.ts` / `auth.ts`:
+- [x] **0.2** Store tokens in `expo-secure-store` (access + refresh); keep AsyncStorage migration for existing users.
+- [x] **0.3** Fix `client.ts` / `auth.ts`:
   - Persist `refreshToken` from login, register, OAuth, and refresh responses.
   - On 401: `POST /auth/refresh` with `{ refreshToken }`, retry once.
-- [ ] **0.4** Rename or split `MockAuthContext` → `AuthContext`; remove silent mock fallback (or gate behind `__DEV__ && EXPO_PUBLIC_MOCK_AUTH`).
-- [ ] **0.5** Remove `preferMockSignIn` from `login.tsx` / `register.tsx` when `GET /config/public` → `auth` has real client IDs.
-- [ ] **0.6** Add `QueryClientProvider` in `app/_layout.tsx`.
-- [ ] **0.7** Port shared types from `../lib/api/types.ts` into `mobile/src/types/api.ts`.
-- [ ] **0.8** Create API modules (stubs calling `apiRequest`) — see [API modules to add](#api-modules-to-add).
-- [ ] **0.9** Add `getWsUrl()` in `config.ts` (`EXPO_PUBLIC_WS_URL` or derive from API host).
-- [ ] **0.10** Create `src/lib/api/stream-chat.ts` — Socket.IO wrapper for `/streams` namespace.
+- [x] **0.4** Rename or split `MockAuthContext` → `AuthContext`; remove silent mock fallback (or gate behind `__DEV__ && EXPO_PUBLIC_MOCK_AUTH`).
+- [x] **0.5** Remove `preferMockSignIn` from `login.tsx` / `register.tsx` when `GET /config/public` → `auth` has real client IDs.
+- [x] **0.6** Add `QueryClientProvider` in `app/_layout.tsx`.
+- [x] **0.7** Port shared types from `../lib/api/types.ts` into `mobile/src/types/api.ts`.
+- [x] **0.8** Create API modules (stubs calling `apiRequest`) — see [API modules to add](#api-modules-to-add).
+- [x] **0.9** Add `getWsUrl()` in `config.ts` (`EXPO_PUBLIC_WS_URL` or derive from API host).
+- [x] **0.10** Create `src/lib/api/stream-chat.ts` — Socket.IO wrapper for `/streams` namespace.
 
 **Exit criteria:** Login with email/password on production API → `GET /users/me` succeeds → app restart restores session via refresh token.
 

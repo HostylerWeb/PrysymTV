@@ -14,6 +14,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { MockAuthProvider } from '@/context/MockAuthContext';
 import { OAuthConfigProvider } from '@/context/OAuthConfigContext';
+import { QueryProvider } from '@/providers/QueryProvider';
 import { PodcastPlayerProvider } from '@/context/PodcastPlayerContext';
 import { AuthPromptSheet } from '@/components/auth/AuthPromptSheet';
 import { ThemedStatusBar } from '@/components/layout/ThemedStatusBar';
@@ -108,15 +109,17 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
       <ThemeProvider>
         <SafeAreaProvider>
-          <OAuthConfigProvider>
-            <MockAuthProvider>
-              <PodcastPlayerProvider>
-                <StoreCartProvider>
-                  <RootStack />
-                </StoreCartProvider>
-              </PodcastPlayerProvider>
-            </MockAuthProvider>
-          </OAuthConfigProvider>
+          <QueryProvider>
+            <OAuthConfigProvider>
+              <MockAuthProvider>
+                <PodcastPlayerProvider>
+                  <StoreCartProvider>
+                    <RootStack />
+                  </StoreCartProvider>
+                </PodcastPlayerProvider>
+              </MockAuthProvider>
+            </OAuthConfigProvider>
+          </QueryProvider>
         </SafeAreaProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

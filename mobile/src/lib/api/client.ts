@@ -1,8 +1,18 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiBaseUrl } from './config';
+import { migrateLegacyTokens, secureStorage } from '@/lib/secure-storage';
 
-const TOKEN_KEY = 'prysymtv_access_token';
+const ACCESS_KEY = 'prysymtv_access_token';
 const REFRESH_KEY = 'prysymtv_refresh_token';
+
+let migrationPromise: Promise<void> | null = null;
+let accessToken: string | null = null;
+
+function ensureMigrated(): Promise<void> {
+  if (!migrationPromise) {
+    migrationPromise = migrateLegacyTokens(ACCESS_KEY, REFRESH_KEY);
+  }
+  return migrationPromise;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -15,27 +25,32 @@ export class ApiError extends Error {
   }
 }
 
-let accessToken: string | null = null;
-
 export async function loadStoredAccessToken(): Promise<string | null> {
+  await ensureMigrated();
   if (accessToken) return accessToken;
-  accessToken = await AsyncStorage.getItem(TOKEN_KEY);
+  accessToken = await secureStorage.getItem(ACCESS_KEY);
   return accessToken;
 }
 
 export async function setAccessToken(token: string | null) {
   accessToken = token;
-  if (token) await AsyncStorage.setItem(TOKEN_KEY, token);
-  else await AsyncStorage.removeItem(TOKEN_KEY);
+  if (token) await secureStorage.setItem(ACCESS_KEY, token);
+  else await secureStorage.deleteItem(ACCESS_KEY);
 }
 
 export async function setRefreshToken(token: string | null) {
-  if (token) await AsyncStorage.setItem(REFRESH_KEY, token);
-  else await AsyncStorage.removeItem(REFRESH_KEY);
+  if (token) await secureStorage.setItem(REFRESH_KEY, token);
+  else await secureStorage.deleteItem(REFRESH_KEY);
 }
 
 export async function loadStoredRefreshToken(): Promise<string | null> {
-  return AsyncStorage.getItem(REFRESH_KEY);
+  await ensureMigrated();
+  return secureStorage.getItem(REFRESH_KEY);
+}
+
+export async function clearSessionTokens() {
+  accessToken = null;
+  await Promise.all([setAccessToken(null), setRefreshToken(null)]);
 }
 
 async function refreshAccessToken(): Promise<string | null> {
@@ -52,8 +67,7 @@ async function refreshAccessToken(): Promise<string | null> {
   });
 
   if (!res.ok) {
-    await setAccessToken(null);
-    await setRefreshToken(null);
+    await clearSessionTokens();
     return null;
   }
 
@@ -75,6 +89,13 @@ function getRefreshOnce(): Promise<string | null> {
     });
   }
   return refreshPromise;
+}
+
+/** Restore session when access token is missing but refresh token exists. */
+export async function ensureAccessToken(): Promise<string | null> {
+  const existing = await loadStoredAccessToken();
+  if (existing) return existing;
+  return getRefreshOnce();
 }
 
 export type ApiRequestOptions = {
@@ -111,7 +132,7 @@ export async function apiRequest<T>(
   let token = auth ? await loadStoredAccessToken() : null;
   let res = await doFetch(token);
 
-  if (auth && res.status === 401 && token) {
+  if (auth && res.status === 401) {
     const next = await getRefreshOnce();
     if (next) {
       token = next;

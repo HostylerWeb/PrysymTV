@@ -18,8 +18,12 @@ import {
   fetchMe,
   requestCreatorAccess,
 } from '@/lib/api/users';
-import { getAuthErrorMessage, loadStoredAccessToken, setAccessToken } from '@/lib/api/client';
-import { isApiEnabled } from '@/lib/api/config';
+import {
+  clearSessionTokens,
+  ensureAccessToken,
+  getAuthErrorMessage,
+} from '@/lib/api/client';
+import { isApiEnabled, isMockAuthEnabled } from '@/lib/api/config';
 import { schedulePushPromptAfterLogin } from '@/lib/push-notifications';
 import {
   isPreviewOAuthToken,
@@ -91,12 +95,12 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
 
   const hydrateUser = useCallback(async () => {
     if (!isApiEnabled()) return null;
-    const token = await loadStoredAccessToken();
+    const token = await ensureAccessToken();
     if (!token) return null;
     try {
       return await fetchMe();
     } catch {
-      await setAccessToken(null);
+      await clearSessionTokens();
       return null;
     }
   }, []);
@@ -111,7 +115,14 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
         if (mode === 'user') {
           const me = await hydrateUser();
           if (cancelled) return;
-          setUser(me ?? mockUser);
+          if (me) {
+            setUser(me);
+          } else if (isMockAuthEnabled()) {
+            setUser(mockUser);
+          } else {
+            await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+            setHasSession(false);
+          }
         }
       } finally {
         if (!cancelled) setSessionReady(true);
@@ -154,9 +165,12 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
           await persistMode('user');
           finishAuth();
           return;
-        } catch {
-          /* fall through to mock */
+        } catch (err) {
+          if (!isMockAuthEnabled()) throw err;
         }
+      }
+      if (!isMockAuthEnabled()) {
+        throw new Error('API is not configured');
       }
       setUser(mockUser);
       await persistMode('user');
@@ -189,9 +203,12 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
           await persistMode('user');
           finishAuth();
           return;
-        } catch {
-          /* fall through */
+        } catch (err) {
+          if (!isMockAuthEnabled()) throw err;
         }
+      }
+      if (!isMockAuthEnabled()) {
+        throw new Error('API is not configured');
       }
       await login(email, password);
     },
@@ -207,20 +224,22 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithGoogle = useCallback(
     async (idToken: string) => {
-      if (isPreviewOAuthToken(idToken) || idToken === MOCK_GOOGLE_TOKEN) {
+      if (
+        isMockAuthEnabled() &&
+        (isPreviewOAuthToken(idToken) || idToken === MOCK_GOOGLE_TOKEN)
+      ) {
         setUser(mockUser);
         await persistMode('user');
         finishAuth();
         return;
       }
       if (isApiEnabled()) {
-        try {
-          await authApi.oauthGoogle(idToken);
-          await completeOAuthSession();
-          return;
-        } catch {
-          /* fall through to mock for UI testing */
-        }
+        await authApi.oauthGoogle(idToken);
+        await completeOAuthSession();
+        return;
+      }
+      if (!isMockAuthEnabled()) {
+        throw new Error('API is not configured');
       }
       setUser(mockUser);
       await persistMode('user');
@@ -232,8 +251,8 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
   const loginWithApple = useCallback(
     async (identityToken: string, authorizationCode?: string) => {
       if (
-        isPreviewOAuthToken(identityToken) ||
-        identityToken === MOCK_APPLE_TOKEN
+        isMockAuthEnabled() &&
+        (isPreviewOAuthToken(identityToken) || identityToken === MOCK_APPLE_TOKEN)
       ) {
         setUser(mockUser);
         await persistMode('user');
@@ -241,13 +260,12 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       if (isApiEnabled()) {
-        try {
-          await authApi.oauthApple(identityToken, authorizationCode);
-          await completeOAuthSession();
-          return;
-        } catch {
-          /* fall through to mock for UI testing */
-        }
+        await authApi.oauthApple(identityToken, authorizationCode);
+        await completeOAuthSession();
+        return;
+      }
+      if (!isMockAuthEnabled()) {
+        throw new Error('API is not configured');
       }
       setUser(mockUser);
       await persistMode('user');
@@ -258,20 +276,22 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithFacebook = useCallback(
     async (accessToken: string) => {
-      if (isPreviewOAuthToken(accessToken) || accessToken === MOCK_FACEBOOK_TOKEN) {
+      if (
+        isMockAuthEnabled() &&
+        (isPreviewOAuthToken(accessToken) || accessToken === MOCK_FACEBOOK_TOKEN)
+      ) {
         setUser(mockUser);
         await persistMode('user');
         finishAuth();
         return;
       }
       if (isApiEnabled()) {
-        try {
-          await authApi.oauthFacebook(accessToken);
-          await completeOAuthSession();
-          return;
-        } catch {
-          /* fall through to mock for UI testing */
-        }
+        await authApi.oauthFacebook(accessToken);
+        await completeOAuthSession();
+        return;
+      }
+      if (!isMockAuthEnabled()) {
+        throw new Error('API is not configured');
       }
       setUser(mockUser);
       await persistMode('user');
@@ -309,7 +329,9 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
         await applyStreamer(description, idPhotoUrl);
         await refreshUser();
       } catch (err) {
-        if (isApiEnabled()) throw new Error(getAuthErrorMessage(err));
+        if (isApiEnabled() && !isMockAuthEnabled()) {
+          throw new Error(getAuthErrorMessage(err));
+        }
         updateProfile({ streamerStatus: 'pending' });
       }
     },
@@ -322,7 +344,9 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
         await applyVerticalCreator(description, idDocumentUrl, portfolioUrl);
         await refreshUser();
       } catch (err) {
-        if (isApiEnabled()) throw new Error(getAuthErrorMessage(err));
+        if (isApiEnabled() && !isMockAuthEnabled()) {
+          throw new Error(getAuthErrorMessage(err));
+        }
         updateProfile({ verticalCreatorStatus: 'pending' });
       }
     },
@@ -340,7 +364,9 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
         await refreshUser();
         return res;
       } catch (err) {
-        if (isApiEnabled()) throw new Error(getAuthErrorMessage(err));
+        if (isApiEnabled() && !isMockAuthEnabled()) {
+          throw new Error(getAuthErrorMessage(err));
+        }
         const patch: Partial<MeResponse> = {};
         if (body.features.includes('live')) patch.streamerStatus = 'pending';
         if (body.features.includes('vertical')) patch.verticalCreatorStatus = 'pending';

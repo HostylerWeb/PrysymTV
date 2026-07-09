@@ -14,7 +14,7 @@ const FOOTER_LINKS = [
   { label: 'Community Guidelines', route: '/guidelines' },
 ] as const;
 
-const FOOTER_ROUTES = new Set(FOOTER_LINKS.map((link) => link.route));
+const FOOTER_ROUTES = new Set<string>(FOOTER_LINKS.map((link) => link.route));
 
 export function PageFooter() {
   const router = useRouter();
