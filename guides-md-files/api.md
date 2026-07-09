@@ -6,7 +6,7 @@
 **Auth:** Bearer access token in `Authorization: Bearer <accessToken>`. Refresh token in HttpOnly cookie `prysym_refresh` (path `/api/v1/auth`, 7-day TTL by default).  
 **Content-Type:** `application/json` unless noted (multipart for `/media/*` image uploads and local-storage upload fallbacks).
 
-> **React Native:** This doc includes a dedicated [React Native integration](#react-native-integration) section. The API is usable from mobile today; refresh tokens require cookie handling (see that section). There is no `refreshToken` field in JSON responses yet.
+> **React Native:** This doc includes a dedicated [React Native integration](#react-native-integration) section. Login/register/OAuth responses include `refreshToken` in the JSON body **and** set an HttpOnly `prysym_refresh` cookie. Mobile clients may send `{ refreshToken }` to `POST /auth/refresh` (recommended) or persist the cookie.
 
 **Status legend**
 
@@ -30,8 +30,9 @@
 | `POST` | `/auth/logout` | ✅ |
 | `POST` | `/auth/forgot-password` | ✅ |
 | `POST` | `/auth/reset-password` | ✅ |
-| `POST` | `/auth/oauth/google` | 📋 |
-| `POST` | `/auth/oauth/apple` | 📋 |
+| `POST` | `/auth/oauth/google` | ✅ `{ idToken }` — requires `GOOGLE_CLIENT_ID` in `api/.env` |
+| `POST` | `/auth/oauth/apple` | ✅ `{ identityToken, authorizationCode? }` — requires `APPLE_CLIENT_ID` |
+| `POST` | `/auth/oauth/facebook` | ✅ `{ accessToken }` — requires `FACEBOOK_APP_ID` + `FACEBOOK_APP_SECRET` |
 | `GET` | `/users/me` | ✅ |
 | `PUT` | `/users/me` | ✅ |
 | `GET` | `/users/me/notification-preferences` | ✅ |
@@ -92,7 +93,7 @@
 | `DELETE` | `/history/:contentType/:contentId` | ✅ |
 | `GET` | `/billing/products` | ✅ |
 | `GET` | `/billing/gifts/catalog` | ✅ |
-| `POST` | `/billing/stripe/create-checkout` | ✅ `productType: "coins"` or `"premium"`; dev mode grants without Stripe |
+| `POST` | `/billing/stripe/create-checkout` | ✅ `productType: "coins"` \| `"premium"` \| `"insider"`; dev mode grants without Stripe |
 | `POST` | `/billing/stripe/webhook` | ✅ Stripe-signed — `checkout.session.completed`, `async_payment_succeeded` |
 | `POST` | `/billing/stripe/fulfill` | ✅ Body `{ sessionId }` — verifies session `userId` |
 | `GET` | `/billing/stripe/fulfill` | ✅ `?session_id=` — redirect fallback |
@@ -179,7 +180,11 @@
 | `GET` | `/categories/videos` | ✅ Video upload/browse categories |
 | `GET` | `/categories/podcasts` | ✅ Podcast show categories |
 | `GET` | `/categories/movies` | ✅ Movie genre list (admin-managed) |
-| `GET` | `/config/public` | ✅ Public ads knobs — shorts frequency, placement toggles, skip seconds, `platformCreatorId` |
+| `GET` | `/config/public` | ✅ Ads, membership, insider, channel tiers, OAuth client IDs, push config |
+| `GET` | `/push/vapid-public-key` | ✅ Web push VAPID public key |
+| `GET` | `/users/me/push-subscription` | ✅ Bearer — `{ subscribed, enabled }` |
+| `POST` | `/users/me/push-subscription` | ✅ Bearer — register web push subscription |
+| `DELETE` | `/users/me/push-subscription` | ✅ Bearer — unregister by `endpoint` |
 | `GET` | `/config/viewer-geo` | ✅ Server-resolved viewer city/region/country from request IP (for ad analytics fallback) |
 | `GET` | `/admin/analytics/overview` | ✅ DAU, live, revenue today, pending queues |
 | `GET` | `/admin/analytics/timeseries` | ✅ `?range=7d\|30d\|90d` — DAU, signups, revenue, live hours, top content |
@@ -288,10 +293,10 @@
 |--------|---------|
 | `/events` | Live events — tickets, schedule |
 | `/support` | Tips, donations, super chats |
-| `/gaf` | GAF ledger (admin — `GET /admin/gaf/ledger` exists) |
-| `/insider` | Platform Insider $4.99/mo |
+| `/gaf` | Public GAF consumer API (admin ledger: `GET /admin/gaf/ledger` exists) |
+| `/insider` | Dedicated Insider namespace — **checkout today:** `POST /billing/stripe/create-checkout` with `productType: "insider"`; Insider perks/pricing also on `GET /config/public` |
 | `/sponsorships` | Brand ↔ creator deals |
-| `/revenue` | Ledger queries |
+| `/revenue` | Public ledger queries (creator/admin tooling partially exists) |
 
 ---
 
@@ -329,6 +334,7 @@ Login and register responses:
 ```json
 {
   "accessToken": "eyJ…",
+  "refreshToken": "opaque-refresh-token",
   "tokenType": "Bearer",
   "expiresIn": "15m",
   "user": {
@@ -340,27 +346,37 @@ Login and register responses:
 }
 ```
 
-The **refresh token is not in the JSON body**. The API sets an HttpOnly cookie:
+The API **also** sets an HttpOnly refresh cookie (web clients rely on this):
 
 | Cookie | Path | TTL (default) | Purpose |
 |--------|------|---------------|---------|
 | `prysym_refresh` | `/api/v1/auth` | `JWT_REFRESH_TTL` (`7d`) | Rotating refresh session |
 
-**Refresh flow:** `POST /auth/refresh` reads the cookie, revokes the old session, issues a new access token + new refresh cookie.
+**Refresh flow:** `POST /auth/refresh` with `{ refreshToken }` in the JSON body **or** the `prysym_refresh` cookie. Revokes the old session and returns a new `accessToken`, `refreshToken`, and refresh cookie.
 
-**Logout:** `POST /auth/logout` with the refresh cookie — revokes session server-side.
+**Logout:** `POST /auth/logout` with the `prysym_refresh` cookie (revokes session server-side). Native clients that only store `refreshToken` in secure storage should clear local tokens on logout; cookie-based logout requires sending the cookie.
 
-#### Cookie handling in React Native
+#### Refresh token handling in React Native (recommended)
 
-The API does **not** yet accept `{ refreshToken }` in the request body. Mobile clients must persist the refresh cookie:
+1. After `POST /auth/login`, `/auth/register`, or OAuth, store `refreshToken` from the JSON response in secure storage (`expo-secure-store`, Keychain).
+2. On `POST /auth/refresh`, send `{ refreshToken }` in the body (no cookie required).
+3. Replace the stored `refreshToken` when the response includes a new one.
+4. Optionally also persist the `prysym_refresh` cookie from `Set-Cookie` if your HTTP client exposes it.
 
-1. After `POST /auth/login` or `/auth/register`, read the `Set-Cookie` header and store `prysym_refresh` (e.g. `@react-native-cookies/cookies` `CookieManager.set`, or manual `Cookie` header on auth routes).
-2. On `POST /auth/refresh` and `POST /auth/logout`, send `Cookie: prysym_refresh=<value>`.
-3. After refresh, update stored cookie if the server rotates it (new `Set-Cookie`).
+Store **`accessToken`** in secure storage as well. Default access TTL is **15 minutes** (`JWT_ACCESS_TTL`).
 
-Store **`accessToken`** in secure storage (`expo-secure-store`, Keychain, EncryptedSharedPreferences). Default access TTL is **15 minutes** (`JWT_ACCESS_TTL`).
+#### OAuth client IDs (web + mobile)
 
-**Future improvement (not implemented):** return `refreshToken` in login JSON and accept it in `/auth/refresh` body for native clients. Until then, cookie persistence is required.
+Public OAuth client IDs are **not** frontend secrets. Configure them in **`api/.env`**:
+
+| Variable | Format | Purpose |
+|----------|--------|---------|
+| `GOOGLE_CLIENT_ID` | Comma-separated: `web,ios,android` | Google Sign-In audiences |
+| `APPLE_CLIENT_ID` | Comma-separated: `web,ios` | Apple Sign-In audiences |
+| `FACEBOOK_APP_ID` | App ID string | Facebook Login |
+| `FACEBOOK_APP_SECRET` | Secret string | Server-side Facebook token verification |
+
+Web and mobile fetch enabled providers and public client IDs from `GET /config/public` → `auth`. Optional web fallbacks: `NEXT_PUBLIC_GOOGLE_CLIENT_ID`, `NEXT_PUBLIC_APPLE_CLIENT_ID`, `NEXT_PUBLIC_FACEBOOK_APP_ID` in `.env.local` when the API is unreachable during local dev.
 
 ### Pagination conventions
 
@@ -492,7 +508,7 @@ Placements: `home_banner`, `movie_preroll`, `shorts_interstitial`, `vertical_epi
 
 `POST /billing/stripe/create-checkout` returns `{ url }` — open in **WebBrowser** / **SafariViewController** / Chrome Custom Tab. On success redirect, call `POST /billing/stripe/fulfill` with `{ sessionId }` or handle the `GET /billing/stripe/fulfill?session_id=` redirect.
 
-Dev mode (no `STRIPE_SECRET_KEY`): coins/premium grant instantly without Stripe.
+Dev mode (no `STRIPE_SECRET_KEY`): coins, premium, and insider grant instantly without Stripe.
 
 ### Rate limits
 
@@ -552,23 +568,35 @@ Returns a short welcome string (under global prefix `/api/v1`).
 |-------|--------|
 | `POST /auth/register` | ✅ |
 | `POST /auth/login` | ✅ |
-| `POST /auth/refresh` | ✅ Cookie `prysym_refresh` |
-| `POST /auth/logout` | ✅ |
+| `POST /auth/refresh` | ✅ Cookie `prysym_refresh` **or** body `{ refreshToken }` |
+| `POST /auth/logout` | ✅ Cookie `prysym_refresh` |
 | `POST /auth/forgot-password` | ✅ Email via SMTP |
 | `POST /auth/reset-password` | ✅ |
-| `POST /auth/oauth/google` | 📋 Not in codebase yet |
-| `POST /auth/oauth/apple` | 📋 Not in codebase yet |
+| `POST /auth/oauth/google` | ✅ Body `{ idToken }` — verifies Google ID token; creates/links user |
+| `POST /auth/oauth/apple` | ✅ Body `{ identityToken, authorizationCode? }` — verifies Apple identity token |
+| `POST /auth/oauth/facebook` | ✅ Body `{ accessToken }` — verifies Facebook access token |
 
-Register/login response includes `accessToken`, `tokenType`, `expiresIn`, `user`. Sets HttpOnly refresh cookie `prysym_refresh` (not returned in JSON — see [React Native integration](#react-native-integration)).
+Register/login/OAuth responses include `accessToken`, `refreshToken`, `tokenType`, `expiresIn`, `user`. Also sets HttpOnly refresh cookie `prysym_refresh` (web). See [React Native integration](#react-native-integration) for mobile token storage.
+
+**OAuth bodies:**
+
+| Route | Body |
+|-------|------|
+| `POST /auth/oauth/google` | `{ idToken }` |
+| `POST /auth/oauth/apple` | `{ identityToken, authorizationCode? }` |
+| `POST /auth/oauth/facebook` | `{ accessToken }` |
+
+Returns the same session shape as login. Requires matching client IDs in `api/.env` (`GOOGLE_CLIENT_ID`, `APPLE_CLIENT_ID`, `FACEBOOK_APP_ID`). Public client IDs are exposed via `GET /config/public` → `auth` (no secrets).
 
 **Register body:** `{ email, username, password, displayName? }`  
 **Login body:** `{ email, password }` (email field accepts username or email)  
+**Refresh body (optional):** `{ refreshToken }` — used when cookie is unavailable (React Native)  
 **Forgot password:** `{ email }` → always `{ success: true }` (no email enumeration)  
 **Reset password:** `{ token, newPassword }` — token from email link; revokes all refresh sessions
 
-**Refresh response:** same shape as login (`accessToken`, `expiresIn`, `user`) + new refresh cookie.
+**Refresh response:** same shape as login (`accessToken`, `refreshToken`, `expiresIn`, `user`) + new refresh cookie.
 
-**Auth rate limits (per IP):** register 5/min, login 10/min, refresh 30/min, forgot/reset 5/min.
+**Auth rate limits (per IP):** register 5/min, login 10/min, OAuth 10/min, refresh 30/min, forgot/reset 5/min.
 
 ---
 
@@ -778,7 +806,7 @@ Bearer required.
 | `GET /billing/products` | — | ✅ Coin packages from DB |
 | `GET /billing/gifts/catalog` | — | ✅ |
 | `POST /billing/gifts/send` | Bearer | ✅ Deducts coins, **`viewer_support`** split → creator balance; in-app `gift` notification to receiver |
-| `POST /billing/stripe/create-checkout` | Bearer | ✅ `{ packageId, productType: "coins" \| "premium" }` |
+| `POST /billing/stripe/create-checkout` | Bearer | ✅ `{ packageId?, productType: "coins" \| "premium" \| "insider" }` |
 | `POST /billing/stripe/webhook` | Stripe signature | ✅ `checkout.session.completed` + `async_payment_succeeded` |
 | `POST` / `GET /billing/stripe/fulfill` | Bearer | ✅ Redirect fallback; verifies session `userId` |
 | `POST /billing/subscriptions/create` | Bearer | ✅ `{ creatorId, tier: "basic" \| "premium" }` — 30-day channel membership ($4.99 / $9.99) |
@@ -1276,10 +1304,21 @@ Long-form video browse (`type = video`). Returns live streams when `mode` includ
 
 | Route | Notes |
 |-------|--------|
-| `GET /config/public` | `{ platformCreatorId, membership, ads: { shortsInterstitialEveryNSwipes, shortsInterstitialEnabled, shortsSkipSeconds, moviePrerollSkipSeconds, impressionRevenueCpmUsd, placements } }` — consumed by `/shorts` and ad UI |
+| `GET /config/public` | `{ platformCreatorId, membership, insider, channelMembership, ads: { … }, auth: { google, apple, facebook }, push: { enabled, publicKey } }` — ads UI, OAuth buttons, membership pricing, web push |
 | `GET /config/viewer-geo` | `{ geo: { city, region, regionName, countryCode } \| null }` — server IP geolocation; used instead of third-party browser geo on localhost |
 
-Values are stored in `platform_settings` and edited at `/admin/config/ads`.
+Values for `ads` are stored in `platform_settings` and edited at `/admin/config/ads`. Membership and insider prices come from `/admin/config/economy`.
+
+### Web push (`/push`, `/users/me/push-subscription`)
+
+| Route | Auth | Notes |
+|-------|------|-------|
+| `GET /push/vapid-public-key` | — | `{ enabled, publicKey }` — alias of `GET /config/public` → `push` |
+| `GET /users/me/push-subscription` | Bearer | `{ subscribed, enabled }` |
+| `POST /users/me/push-subscription` | Bearer | Register browser push subscription (Web Push / VAPID) |
+| `DELETE /users/me/push-subscription` | Bearer | `{ endpoint }` — remove subscription |
+
+Used by the web app for browser notifications. React Native Expo push uses a separate flow (not yet exposed as a dedicated REST route).
 
 ---
 
@@ -1368,8 +1407,8 @@ Seeder flag `SEED_DEMO_CONTENT` (default `true` in dev, set `false` in `api/.env
 
 | Item | Notes |
 |------|--------|
-| CSV export | Analytics export |
 | Advertiser portal analytics | Self-serve campaign reports on `/advertise` (post-verification) |
+| Native mobile push token API | Web push uses `POST /users/me/push-subscription`; Expo device token endpoint not yet documented |
 
 **Seeded `revenue_split_rules` keys:** `live_event`, `viewer_support`, `insider_membership`, `ad_gaf_allocation`, `sponsorship`, `creator_subscription`, `coin_purchase`, `store_merchandise`
 
@@ -1436,6 +1475,8 @@ Returned by feed endpoints, `GET /videos/:id` (extended), shorts, movies browse.
   "coinsBalance": 100,
   "premiumTier": "none",
   "premiumExpiresAt": null,
+  "insiderActive": false,
+  "insiderPeriodEnd": null,
   "followersCount": 10,
   "followingCount": 5,
   "videosCount": 3,
@@ -1524,6 +1565,10 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 | `MEDIAMTX_HLS_PUBLIC_URL` | No | `http://localhost:8888` | Base URL for HLS playback (`{base}/live/{streamKey}/index.m3u8`) |
 | `AUTO_APPROVE_STREAMER` | No | `false` | `true` / `1` in **non-production** only — skip admin queue for streamer applications (off by default) |
 | `AUTO_APPROVE_VERTICAL_CREATOR` | No | `false` | `true` / `1` in **non-production** only — skip admin queue for vertical creator applications |
+| `GOOGLE_CLIENT_ID` | For OAuth | — | Comma-separated client IDs: `web,ios,android` — also served via `GET /config/public` → `auth.google` |
+| `APPLE_CLIENT_ID` | For OAuth | — | Comma-separated: `web,ios` — also served via `GET /config/public` → `auth.apple` |
+| `FACEBOOK_APP_ID` | For OAuth | — | Facebook app ID — public via `GET /config/public` → `auth.facebook` |
+| `FACEBOOK_APP_SECRET` | For OAuth | — | Server-only; used to verify Facebook access tokens |
 | `STRIPE_SECRET_KEY` | No | — | Empty → dev-mode instant coin/premium/membership grants |
 | `STRIPE_WEBHOOK_SECRET` | No | — | Required with Stripe; see [`stripe-production.md`](./stripe-production.md) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | No | — | Password-reset email |
@@ -1548,11 +1593,12 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 ## Security notes
 
 1. **Access token:** Store in secure storage on mobile (`expo-secure-store`, Keychain). Web dev uses `sessionStorage`.
-2. **Refresh token:** HttpOnly cookie only — mobile must persist `prysym_refresh` cookie manually (see [React Native integration](#react-native-integration)). Not in JSON body.
-3. **Token rotation:** Each `/auth/refresh` revokes the previous refresh session and issues a new cookie.
+2. **Refresh token:** Returned in login/register/OAuth JSON **and** set as HttpOnly cookie `prysym_refresh`. React Native should store `refreshToken` from JSON and send it to `POST /auth/refresh`. Web relies on the cookie.
+3. **Token rotation:** Each `/auth/refresh` revokes the previous refresh session and issues a new `refreshToken` + cookie.
 4. **HTTPS + secure cookies** required in production (`NODE_ENV=production`).
 5. **Rate limiting** on all routes; stricter on auth (429 on exceed).
 6. **Argon2id** password hashing.
+7. **OAuth:** Configure `GOOGLE_CLIENT_ID`, `APPLE_CLIENT_ID`, `FACEBOOK_APP_ID` in `api/.env`. Without these, OAuth routes return `503` / "not configured".
 
 ---
 
@@ -1573,4 +1619,4 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 
 ---
 
-*Last updated: 2026-07-03 — Movie poster upload: `posterUrl` on videos, `POST /videos/:id/poster/upload/*`, required before `upload/complete` for movies; homepage and `/movies` use poster art. Prior: Advertiser registration modal on `/advertise`, `DELETE /advertisers/me/:id` (cancel pending), register DTO email validation, one pending registration per user. Prior: React Native integration guide, production base URL, complete endpoint index (podcast video/cover, dislikes, advertisers, admin deletes), health response fields, feed home algorithms (`newReleases` vs `movies`), shorts `isFollowing`, podcast `mediaType`/`videoUrl`, WebSocket `gift` event, creator dashboard `gifts` block, shared response types (`VideoCard`, `User`, pagination), notification deep-link metadata, mobile auth cookie guidance. Production Stripe: [`stripe-production.md`](./stripe-production.md).*
+*Last updated: 2026-07-10 — OAuth: `POST /auth/oauth/google`, `/apple`, `/facebook` documented as implemented; refresh token in JSON + `{ refreshToken }` on `/auth/refresh`; `productType: "insider"` on Stripe checkout; `GET /config/public` auth/insider/push fields; web push subscription routes; User `insiderActive` fields; removed stale "OAuth planned" and CSV-export-planned notes.*
