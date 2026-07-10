@@ -1,7 +1,7 @@
 import type { User } from "@/contexts/auth-context";
 import type { MeResponse } from "@/lib/api/types";
 import { isInsiderActive } from "@/lib/insider";
-import { userAvatarUrl } from "@/lib/user-avatar";
+import { userAvatarUrl, profileBannerUrl } from "@/lib/user-avatar";
 
 export function mapMeToUser(me: MeResponse): User {
   const status = me.streamerStatus;
@@ -13,7 +13,7 @@ export function mapMeToUser(me: MeResponse): User {
     username: me.username.startsWith("@") ? me.username : `@${me.username}`,
     email: me.email,
     avatar: userAvatarUrl(me.avatarUrl, me.username),
-    bannerUrl: me.bannerUrl,
+    bannerUrl: profileBannerUrl(me.bannerUrl),
     bio: me.bio ?? "",
     coins: me.coinsBalance,
     premiumTier: me.premiumTier ?? "none",

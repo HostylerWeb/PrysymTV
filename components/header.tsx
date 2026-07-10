@@ -8,6 +8,12 @@ import { useCallback, useEffect, useState } from "react"
 import { NotificationsModal } from "@/components/notifications-modal"
 import { useAuth } from "@/contexts/auth-context"
 import { fetchNotifications } from "@/lib/api/notifications"
+import {
+  CompleteProfileBannerStrip,
+  appHeaderOffsetClass,
+  useNeedsProfileCompletion,
+} from "@/components/complete-profile-banner"
+import { cn } from "@/lib/utils"
 
 interface HeaderProps {
   onSearchClick: () => void
@@ -29,6 +35,7 @@ export function Header({
   offsetContent = true,
 }: HeaderProps) {
   const { isAuthenticated, user } = useAuth()
+  const needsProfileBanner = useNeedsProfileCompletion()
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
 
@@ -52,6 +59,7 @@ export function Header({
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-b from-background via-background/95 to-transparent pointer-events-none md:left-20">
+        <CompleteProfileBannerStrip className="pointer-events-auto" />
         <div className="flex items-center justify-between px-4 py-4 pointer-events-auto">
           <Link href="/" className="flex items-center gap-2 md:hidden">
             <img src="/logo.webp" alt="Prysym TV" className="h-8 w-auto object-contain" />
@@ -101,7 +109,7 @@ export function Header({
       </header>
 
       {offsetContent && (
-        <div className={APP_HEADER_HEIGHT_CLASS} aria-hidden="true" />
+        <div className={cn(appHeaderOffsetClass(needsProfileBanner))} aria-hidden="true" />
       )}
 
       <NotificationsModal

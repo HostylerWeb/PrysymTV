@@ -59,7 +59,7 @@ import { followUser, unfollowUser } from "@/lib/api/users"
 import { ReportModal } from "@/components/report-modal"
 import { ApiError } from "@/lib/api-client"
 import { RelativeTime } from "@/components/relative-time"
-import { formatViewCount } from "@/lib/format-media"
+import { formatViewCount, videoThumbnail } from "@/lib/format-media"
 import { userAvatarUrl } from "@/lib/user-avatar"
 import {
   adjustEngagement,
@@ -75,6 +75,7 @@ export type ShortItem = {
   id: string
   creatorId: string
   videoUrl: string
+  thumbnailUrl: string
   username: string
   userSlug: string
   userAvatar: string
@@ -92,6 +93,7 @@ function mapShortFromApi(card: ShortVideoCard): ShortItem {
     id: card.id,
     creatorId: card.creatorId,
     videoUrl: card.playbackUrl ?? card.videoUrl ?? "",
+    thumbnailUrl: videoThumbnail(card.thumbnailUrl),
     username: `@${card.channelSlug}`,
     userSlug: card.channelSlug,
     userAvatar: userAvatarUrl(null, card.channelSlug),
@@ -113,6 +115,7 @@ function mapShortFromVideoDetail(
     id: v.id,
     creatorId: v.creator.id,
     videoUrl: v.playbackUrl ?? v.videoUrl ?? v.hlsMasterUrl ?? "",
+    thumbnailUrl: videoThumbnail(v.thumbnailUrl ?? v.posterUrl),
     username: `@${slug}`,
     userSlug: slug,
     userAvatar: userAvatarUrl(v.creator.avatarUrl, slug),
@@ -171,6 +174,31 @@ function ShortVideo({
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [showControls, setShowControls] = useState(false)
+  const [isBuffering, setIsBuffering] = useState(true)
+
+  useEffect(() => {
+    setIsBuffering(true)
+    setIsPlaying(false)
+  }, [short.id, isActive])
+
+  useEffect(() => {
+    const el = videoRef.current
+    if (!el) return
+    const onWaiting = () => setIsBuffering(true)
+    const onPlaying = () => {
+      setIsBuffering(false)
+      setIsPlaying(true)
+    }
+    const onPause = () => setIsPlaying(false)
+    el.addEventListener("waiting", onWaiting)
+    el.addEventListener("playing", onPlaying)
+    el.addEventListener("pause", onPause)
+    return () => {
+      el.removeEventListener("waiting", onWaiting)
+      el.removeEventListener("playing", onPlaying)
+      el.removeEventListener("pause", onPause)
+    }
+  }, [short.id, isActive])
 
   useEffect(() => {
     if (videoRef.current) {
@@ -224,9 +252,20 @@ function ShortVideo({
 
   return (
     <div className="relative w-full h-full bg-black snap-start snap-always flex items-center justify-center md:max-w-[480px] md:mx-auto">
+      {short.thumbnailUrl ? (
+        <img
+          src={short.thumbnailUrl}
+          alt=""
+          className={cn(
+            "absolute inset-0 w-full h-full object-contain transition-opacity duration-200",
+            isActive && isPlaying && !isBuffering ? "opacity-0" : "opacity-100",
+          )}
+        />
+      ) : null}
       {/* Video */}
       <HlsVideoPlayer
         src={short.videoUrl}
+        poster={short.thumbnailUrl}
         className="w-full h-full object-contain"
         controls={false}
         muted={isMuted}
@@ -234,6 +273,11 @@ function ShortVideo({
         loop
         videoRef={videoRef}
       />
+      {isActive && isBuffering ? (
+        <div className="absolute inset-0 z-[2] flex items-center justify-center pointer-events-none">
+          <div className="w-12 h-12 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+        </div>
+      ) : null}
       <button type="button" className="absolute inset-0 z-[1]" onClick={togglePlay} aria-label="Toggle play" />
 
       {/* Play/Pause Indicator */}
@@ -432,7 +476,7 @@ function ShortsPageContent() {
   const openCommentsFromUrl = searchParams.get("comments") === "1"
   const highlightCommentId = searchParams.get("comment")
   const createFlow = useCreateFlow()
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
+  const { user, isAuthenticated } = useAuth()
   const confirm = useConfirm()
   const uploadShort = () =>
     triggerContextualCreate("short", createFlow, { isAuthenticated, user })
@@ -448,7 +492,6 @@ function ShortsPageContent() {
   const [activeShortForComments, setActiveShortForComments] = useState<string | null>(null)
 
   useEffect(() => {
-    if (authLoading) return
     let cancelled = false
     setFeedLoaded(false)
     setFeedError(false)
@@ -477,7 +520,7 @@ function ShortsPageContent() {
     return () => {
       cancelled = true
     }
-  }, [authLoading, isAuthenticated, feedReloadKey])
+  }, [isAuthenticated, feedReloadKey])
 
   const [newComment, setNewComment] = useState("")
   const [replyingTo, setReplyingTo] = useState<{ id: string; user: string } | null>(null)
@@ -879,7 +922,7 @@ function ShortsPageContent() {
     }
   }
 
-  if (!feedLoaded || authLoading) {
+  if (!feedLoaded) {
     return <ShortsPageSkeleton />
   }
 

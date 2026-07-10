@@ -1,5 +1,6 @@
 import { apiRequest } from "@/lib/api-client";
 import { withApiFallback } from "@/lib/api/fallback";
+import { videoThumbnail } from "@/lib/format-media";
 
 export type VerticalSeriesCard = {
   id: string;
@@ -54,15 +55,41 @@ export type VerticalEpisodePlayback = {
   nextEpisode: { episodeNumber: number; title: string } | null;
 };
 
+function mapVerticalSeriesCard(raw: VerticalSeriesCard): VerticalSeriesCard {
+  return {
+    ...raw,
+    posterUrl: raw.posterUrl ? videoThumbnail(raw.posterUrl) : null,
+  };
+}
+
+function mapVerticalSeriesDetail(raw: VerticalSeriesDetail): VerticalSeriesDetail {
+  return {
+    ...raw,
+    posterUrl: raw.posterUrl ? videoThumbnail(raw.posterUrl) : null,
+    bannerUrl: raw.bannerUrl ? videoThumbnail(raw.bannerUrl) : null,
+    episodes: raw.episodes.map((ep) => ({
+      ...ep,
+      thumbnailUrl: ep.thumbnailUrl ? videoThumbnail(ep.thumbnailUrl) : null,
+    })),
+  };
+}
+
 export function fetchVerticalSeriesList() {
   return withApiFallback(
-    () => apiRequest<{ items: VerticalSeriesCard[] }>("/verticals", { auth: false }),
+    () =>
+      apiRequest<{ items: VerticalSeriesCard[] }>("/verticals", { auth: false }).then(
+        (res) => ({
+          items: res.items.map(mapVerticalSeriesCard),
+        }),
+      ),
     { items: [] },
   );
 }
 
 export function fetchVerticalSeries(slug: string) {
-  return apiRequest<VerticalSeriesDetail>(`/verticals/${slug}`, { auth: false });
+  return apiRequest<VerticalSeriesDetail>(`/verticals/${slug}`, { auth: false }).then(
+    mapVerticalSeriesDetail,
+  );
 }
 
 export function fetchVerticalEpisode(slug: string, episodeNumber: number) {

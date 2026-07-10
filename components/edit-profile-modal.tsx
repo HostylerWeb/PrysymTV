@@ -12,7 +12,7 @@ import {
   initBannerUpload,
   uploadProfileImage,
 } from "@/lib/api/profile-upload"
-import { withUploadVersion } from "@/lib/user-avatar"
+import { profileBannerUrl, withUploadVersion } from "@/lib/user-avatar"
 interface EditProfileModalProps {
   isOpen: boolean
   onClose: () => void
@@ -42,7 +42,7 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
       setGender((user.gender as UserGenderValue | null) ?? "")
       setBirthDate(user.birthDate ?? "")
       setAvatarPreview(user.avatar)
-      setBannerPreview(user.bannerUrl)
+      setBannerPreview(profileBannerUrl(user.bannerUrl))
       setPendingAvatarUrl(null)
       setPendingBannerUrl(null)
       setError("")
@@ -85,7 +85,7 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
     } catch (err) {
       setError(getAuthErrorMessage(err))
       if (kind === "avatar") setAvatarPreview(user?.avatar ?? null)
-      else setBannerPreview(user?.bannerUrl ?? null)
+      else setBannerPreview(profileBannerUrl(user?.bannerUrl))
     } finally {
       if (kind === "avatar") setUploadingAvatar(false)
       else setUploadingBanner(false)

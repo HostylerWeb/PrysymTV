@@ -6,7 +6,6 @@ import { ConfirmProvider } from '@/contexts/confirm-context'
 import { OAuthConfigProvider } from '@/contexts/oauth-config-context'
 import { ThemeProvider } from '@/components/theme-provider'
 import { WebPushRegistrar } from '@/components/web-push-registrar'
-import { CompleteProfileBanner } from '@/components/complete-profile-banner'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
 
@@ -40,7 +39,6 @@ export default function RootLayout({
             <AuthProvider>
               <ConfirmProvider>
                 <WebPushRegistrar />
-                <CompleteProfileBanner />
                 {children}
                 <Toaster />
               </ConfirmProvider>

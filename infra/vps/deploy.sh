@@ -290,6 +290,7 @@ log "Seeding platform catalog (admin, gifts, settings)..."
 su - "$DEPLOY_USER" -c "cd '$APP/api' && npm run db:seed" || true
 
 log "Installing & building frontend..."
+su - "$DEPLOY_USER" -c "cd '$APP' && rm -rf .next/cache"
 su - "$DEPLOY_USER" -c "cd '$APP' && pnpm install --ignore-scripts=false"
 su - "$DEPLOY_USER" -c "cd '$APP' && node node_modules/next/dist/bin/next build"
 su - "$DEPLOY_USER" -c "cd '$APP' && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public"
