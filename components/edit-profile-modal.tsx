@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { X, Loader2, Camera } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth, getAuthErrorMessage } from "@/contexts/auth-context"
@@ -48,8 +49,6 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
       setError("")
     }
   }, [isOpen, user])
-
-  if (!isOpen) return null
 
   const handleImagePick = async (
     file: File,
@@ -121,21 +120,30 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
 
   const busy = isSaving || uploadingAvatar || uploadingBanner
 
-  return (
+  if (!isOpen) return null
+
+  const modal = (
     <div
-      className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center"
+      className="fixed inset-0 z-[200] pointer-events-auto bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-profile-title"
     >
       <div
         className="w-full md:max-w-md bg-background rounded-t-3xl md:rounded-2xl p-6 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-foreground">Edit Profile</h3>
+          <h3 id="edit-profile-title" className="text-lg font-bold text-foreground">Edit Profile</h3>
           <button
             type="button"
-            onClick={onClose}
+            onClick={(e) => {
+              e.stopPropagation()
+              onClose()
+            }}
             className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
@@ -285,4 +293,6 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
       </div>
     </div>
   )
+
+  return createPortal(modal, document.body)
 }

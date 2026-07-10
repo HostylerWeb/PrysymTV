@@ -78,16 +78,25 @@ export function VerticalEpisodeAdGate({ visible, videoId, creatorId, onComplete 
   }, [visible, shouldShow, creatorId, videoId, platformCreatorId, user?.id]);
 
   useEffect(() => {
-    if (!visible || !ad || !ready || countdown <= 0) return;
+    if (!visible || !ad) return;
+    const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
+    if (!mediaUrl) {
+      onCompleteRef.current();
+      return;
+    }
+    const loadTimeout = setTimeout(() => setReady(true), 3000);
+    return () => clearTimeout(loadTimeout);
+  }, [visible, ad]);
+
+  useEffect(() => {
+    if (!visible || !ad || !ready) return;
+    if (countdown <= 0) {
+      onCompleteRef.current();
+      return;
+    }
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
   }, [visible, ad, ready, countdown]);
-
-  useEffect(() => {
-    if (!visible || !ad) return;
-    const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
-    if (!mediaUrl) onCompleteRef.current();
-  }, [visible, ad]);
 
   if (!visible || !ad) return null;
 

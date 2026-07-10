@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Pressable, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { colors, withAlpha } from '@/theme/tokens';
@@ -9,7 +10,7 @@ type Props = {
   autoPlay?: boolean;
   loop?: boolean;
   muted?: boolean;
-  /** When true, uses platform native controls. Shorts should keep this false. */
+  /** When true, uses platform native controls (quality, fullscreen). */
   nativeControls?: boolean;
   /** When false, tap does not toggle play (parent can own gestures). */
   tapToToggle?: boolean;
@@ -19,7 +20,7 @@ type Props = {
   contentFit?: 'contain' | 'cover' | 'fill';
   aspectRatio?: number;
   fill?: boolean;
-  /** Pause/resume from outside (e.g. tab blur). */
+  /** Pause/resume from outside (e.g. tab blur). Still buffers while paused. */
   paused?: boolean;
 };
 
@@ -30,6 +31,7 @@ export function HlsPlayer({
   muted = false,
   nativeControls = false,
   tapToToggle = true,
+  posterUrl,
   onProgress,
   onEnded,
   contentFit = 'contain',
@@ -46,7 +48,6 @@ export function HlsPlayer({
     p.loop = loop;
     p.muted = muted;
     p.timeUpdateEventInterval = 0.5;
-    if (autoPlay && !paused) p.play();
   });
 
   useEffect(() => {
@@ -122,19 +123,26 @@ export function HlsPlayer({
     }
   };
 
-  const showLoading = (!ready || buffering) && !playing;
+  const showLoading = (!ready || buffering) && !playing && !nativeControls;
   const showPausedOverlay = !nativeControls && ready && !playing && !buffering;
 
   return (
     <View style={[styles.wrap, fill ? StyleSheet.absoluteFillObject : { aspectRatio }]}>
+      {posterUrl && (!ready || !playing) ? (
+        <Image
+          source={{ uri: posterUrl }}
+          style={StyleSheet.absoluteFill}
+          contentFit={contentFit}
+        />
+      ) : null}
       <VideoView
-        style={[StyleSheet.absoluteFill, { opacity: ready ? 1 : 0 }]}
+        style={StyleSheet.absoluteFill}
         player={player}
         contentFit={contentFit}
         allowsFullscreen
         allowsPictureInPicture={false}
         nativeControls={nativeControls}
-        pointerEvents={nativeControls ? 'auto' : 'none'}
+        pointerEvents={nativeControls ? 'box-none' : 'none'}
       />
       {showLoading ? (
         <View style={styles.overlay} pointerEvents="none">
@@ -147,7 +155,12 @@ export function HlsPlayer({
         </View>
       ) : null}
       {!nativeControls && tapToToggle ? (
-        <Pressable style={StyleSheet.absoluteFill} onPress={togglePlay} accessibilityRole="button" accessibilityLabel={playing ? 'Pause' : 'Play'} />
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={togglePlay}
+          accessibilityRole="button"
+          accessibilityLabel={playing ? 'Pause' : 'Play'}
+        />
       ) : null}
     </View>
   );

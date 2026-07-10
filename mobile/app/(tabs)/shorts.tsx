@@ -33,6 +33,8 @@ import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
 import { bumpLikeCount } from '@/utils/engagement-count';
 import { formatViewCount } from '@/utils/format-media';
 
+const SHORT_PLAYER_WINDOW = 1;
+
 export default function ShortsScreen() {
   const insets = useSafeAreaInsets();
   const tabInset = useTabBarInset();
@@ -162,11 +164,16 @@ export default function ShortsScreen() {
             disableIntervalMomentum
             decelerationRate="fast"
             showsVerticalScrollIndicator={false}
+            removeClippedSubviews={false}
+            windowSize={3}
+            maxToRenderPerBatch={2}
+            initialNumToRender={2}
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={{ itemVisiblePercentThreshold: 90 }}
             getItemLayout={getItemLayout}
             renderItem={({ item, index: itemIndex }) => {
               const isActive = itemIndex === index;
+              const inPlayerWindow = Math.abs(itemIndex - index) <= SHORT_PLAYER_WINDOW;
               const slug = item.channelSlug ?? '';
               const isFollowing = !!following[slug];
               const isLiked = !!liked[item.id];
@@ -174,15 +181,18 @@ export default function ShortsScreen() {
               return (
               <View style={{ height: feedHeight, width: '100%', backgroundColor: colors.videoBackground }}>
                 <Image source={{ uri: item.thumbnailUrl ?? '' }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                {isActive && isFocused && item.playbackUrl ? (
+                {inPlayerWindow && isFocused && item.playbackUrl ? (
                   <HlsPlayer
+                    key={`short-player-${item.id}`}
                     source={item.playbackUrl}
+                    posterUrl={item.thumbnailUrl}
                     fill
                     muted={muted}
                     contentFit="cover"
                     loop
                     nativeControls={false}
                     tapToToggle
+                    autoPlay={isActive}
                     paused={!isFocused || !isActive}
                   />
                 ) : null}

@@ -102,16 +102,20 @@ export default function VerticalWatchScreen() {
             <ActivityIndicator size="large" color={colors.onVideo} />
           </View>
         ) : null}
-        {gateDismissed && data.playbackSource && isFocused ? (
-          <HlsPlayer
-            source={data.playbackSource}
-            contentFit="cover"
-            fill
-            nativeControls={false}
-            tapToToggle
-            paused={!isFocused || !gateDismissed}
-            onProgress={onProgress}
-          />
+        {data.playbackSource && isFocused ? (
+          <View style={styles.playerLayer}>
+            <HlsPlayer
+              source={data.playbackSource}
+              contentFit="cover"
+              fill
+              posterUrl={posterUri || null}
+              nativeControls={false}
+              tapToToggle
+              paused={!gateDismissed || !isFocused}
+              autoPlay={gateDismissed}
+              onProgress={onProgress}
+            />
+          </View>
         ) : null}
         {gateDismissed && !data.playbackSource ? (
           <View style={[styles.center, StyleSheet.absoluteFill]}>
@@ -247,6 +251,7 @@ const createStyles = (colors: ThemeColors) =>
       zIndex: 1,
     },
     errorText: { color: colors.onVideo, textAlign: 'center', paddingHorizontal: 24, fontSize: 15 },
+    playerLayer: { ...StyleSheet.absoluteFillObject, zIndex: 2 },
     back: { position: 'absolute', left: 12, zIndex: 4, padding: 8 },
     topActions: {
       position: 'absolute',

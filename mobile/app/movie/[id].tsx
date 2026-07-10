@@ -95,7 +95,7 @@ export default function MovieScreen() {
             playbackUrl={movie.playbackSource}
             subtitle={`${movie.releaseYear ?? ''} · ${movie.ageRating ?? ''}`}
             showCast
-            nativeControls={false}
+            nativeControls
             onProgress={onProgress}
           />
         ) : (

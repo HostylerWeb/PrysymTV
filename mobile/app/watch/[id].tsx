@@ -112,7 +112,7 @@ export default function WatchScreen() {
           subtitle={`${channel} · ${formatViewCount(video.viewsCount ?? 0)} views`}
           showCast
           hideMeta
-          nativeControls={false}
+          nativeControls
           onProgress={onProgress}
           onShare={() => setShareOpen(true)}
           onReport={() => requireAuth(() => setReportOpen(true))}
