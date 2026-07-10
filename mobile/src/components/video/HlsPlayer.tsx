@@ -13,6 +13,7 @@ import {
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { VideoQualityMenu } from '@/components/video/VideoQualityMenu';
 import { fetchHlsVariants, type HlsVariant } from '@/lib/hls-variants';
@@ -36,6 +37,11 @@ type Props = {
   aspectRatio?: number;
   fill?: boolean;
   paused?: boolean;
+  /** Extra space above the bottom edge for corner controls (e.g. vertical episode meta). */
+  controlsBottomInset?: number;
+  /** Place corner controls at the top to avoid system nav bars on full-screen players. */
+  controlsPlacement?: 'bottom' | 'top';
+  controlsTopInset?: number;
 };
 
 function formatTime(seconds: number) {
@@ -111,6 +117,9 @@ export function HlsPlayer({
   aspectRatio = 16 / 9,
   fill = false,
   paused = false,
+  controlsBottomInset,
+  controlsPlacement = 'bottom',
+  controlsTopInset,
 }: Props) {
   const insets = useSafeAreaInsets();
   const masterSource = useMemo(() => source, [source]);
@@ -291,6 +300,20 @@ export function HlsPlayer({
     setChromeVisible(false);
   };
 
+  useEffect(() => {
+    if (!isFullscreen) return;
+    let cancelled = false;
+    void ScreenOrientation.unlockAsync().catch(() => {});
+    return () => {
+      if (cancelled) return;
+      cancelled = true;
+      void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    };
+  }, [isFullscreen]);
+
+  const cornerBottom = controlsBottomInset ?? insets.bottom + 12;
+  const cornerTop = controlsTopInset ?? insets.top + 12;
+
   const showLoading = (!ready || buffering) && !playing && !nativeControls;
   const showPausedOverlay = !nativeControls && ready && !playing && !buffering && !chromeVisible;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -375,7 +398,15 @@ export function HlsPlayer({
         </View>
       ) : null}
       {showCornerControls ? (
-        <View style={styles.qualityCorner} pointerEvents="box-none">
+        <View
+          style={[
+            controlsPlacement === 'top' ? styles.qualityCornerTop : styles.qualityCorner,
+            controlsPlacement === 'top'
+              ? { top: cornerTop }
+              : { bottom: cornerBottom },
+          ]}
+          pointerEvents="box-none"
+        >
           <PlayerOverlayControls
             enableQualityMenu={enableQualityMenu}
             enableFullscreen={enableFullscreen}
@@ -405,7 +436,7 @@ export function HlsPlayer({
       <Modal
         visible={isFullscreen}
         animationType="fade"
-        supportedOrientations={['portrait', 'landscape']}
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
         onRequestClose={toggleFullscreen}
       >
         <StatusBar hidden />
@@ -467,7 +498,11 @@ const styles = StyleSheet.create({
   qualityCorner: {
     position: 'absolute',
     right: 10,
-    bottom: 10,
+  },
+  qualityCornerTop: {
+    position: 'absolute',
+    right: 12,
+    zIndex: 5,
   },
   controlsRow: {
     flexDirection: 'row',

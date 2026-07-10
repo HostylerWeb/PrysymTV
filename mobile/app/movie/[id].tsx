@@ -16,6 +16,7 @@ import { ReportModal } from '@/components/modals/ReportModal';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useVideoDetail } from '@/hooks/api/useVideoDetail';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
+import { useBackNavigation } from '@/hooks/useBackNavigation';
 import { toggleVideoLike, toggleVideoSave } from '@/lib/api/videos';
 import { bumpLikeCount } from '@/utils/engagement-count';
 import type { ThemeColors } from '@/theme/tokens';
@@ -27,6 +28,7 @@ export default function MovieScreen() {
   const isFocused = useIsFocused();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { requireAuth } = useMockAuth();
+  useBackNavigation('/(tabs)/movies');
   const movieQuery = useVideoDetail(id);
   const movie = movieQuery.data;
 
@@ -88,7 +90,7 @@ export default function MovieScreen() {
     <>
       <ScrollView style={styles.screen}>
         <View style={styles.pad}>
-          <AppHeader showBack title="Movie" showSearch={false} showNotifications={false} />
+          <AppHeader showBack title="Movie" showSearch={false} showNotifications={false} backFallback="/(tabs)/movies" />
         </View>
         {playing ? (
           <PlayerShell

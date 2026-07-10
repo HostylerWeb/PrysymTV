@@ -14,6 +14,7 @@ import { ShareModal } from '@/components/modals/ShareModal';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useStreamDetail } from '@/hooks/api/useStreamDetail';
+import { useBackNavigation } from '@/hooks/useBackNavigation';
 import { useStreamChat } from '@/hooks/useStreamChat';
 import { followUser, toggleLiveAlerts, unfollowUser } from '@/lib/api/users';
 import { colors, radius, spacing } from '@/theme/tokens';
@@ -24,6 +25,7 @@ export default function LiveScreen() {
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { user, requireAuth } = useMockAuth();
+  useBackNavigation('/live');
   const streamQuery = useStreamDetail(id);
   const stream = streamQuery.data;
   const studioMode = studioParam === 'obs' ? 'obs' : 'camera';

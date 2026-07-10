@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useVideoDetail } from '@/hooks/api/useVideoDetail';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
+import { useBackNavigation } from '@/hooks/useBackNavigation';
 import { fetchFeedTrending } from '@/lib/api/feed';
 import { mapVideoCard } from '@/lib/api/map-content';
 import { followUser, unfollowUser } from '@/lib/api/users';
@@ -39,6 +40,7 @@ export default function WatchScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
   const { requireAuth } = useMockAuth();
+  useBackNavigation('/(tabs)/home');
   const videoQuery = useVideoDetail(id);
   const video = videoQuery.data;
 
@@ -108,7 +110,7 @@ export default function WatchScreen() {
       <View style={styles.screen}>
         {!commentsOpen ? (
           <View style={styles.pad}>
-            <AppHeader showBack showSearch={false} showNotifications={false} />
+            <AppHeader showBack showSearch={false} showNotifications={false} backFallback="/(tabs)/home" />
           </View>
         ) : null}
         <View style={commentsOpen ? { height: windowHeight * 0.32 } : undefined}>

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import { Stack } from 'expo-router';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { useFonts } from 'expo-font';
 import {
   Inter_400Regular,
@@ -101,6 +102,10 @@ export default function RootLayout() {
     Inter_800ExtraBold,
     Inter_900Black,
   });
+
+  useEffect(() => {
+    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (fontsLoaded) {

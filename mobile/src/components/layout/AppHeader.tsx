@@ -14,6 +14,8 @@ import { radius, shadows, spacing, withAlpha } from '@/theme/tokens';
 import { commonStyles } from '@/theme/styles';
 
 import type { SearchScope } from '@/lib/search-scope';
+import { navigateBack } from '@/lib/navigation';
+import type { Href } from 'expo-router';
 
 type Props = {
   title?: string;
@@ -27,6 +29,7 @@ type Props = {
   sticky?: boolean;
   edgeToEdge?: boolean;
   onCreatePress?: () => void;
+  backFallback?: Href;
 };
 
 export function AppHeader({
@@ -41,6 +44,7 @@ export function AppHeader({
   sticky = false,
   edgeToEdge = false,
   onCreatePress,
+  backFallback,
 }: Props) {
   const router = useRouter();
   const { returnToSettings } = useLocalSearchParams<{ returnToSettings?: string }>();
@@ -81,7 +85,7 @@ export function AppHeader({
                     router.replace('/profile?settings=1');
                     return;
                   }
-                  router.back();
+                  navigateBack(router, backFallback);
                 }}
                 style={commonStyles.iconButton}
                 hitSlop={8}

@@ -1,12 +1,9 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import {
-  buildLiveCameraPublisherSource,
-  type PublisherMessage,
-} from '@/components/live/live-camera-publisher-html';
+import type { PublisherMessage } from '@/components/live/live-camera-publisher-html';
+import { buildLiveCameraPublisherUri } from '@/components/live/live-camera-publisher-uri';
 import type { LiveCameraPublisherProps } from '@/components/live/live-camera-publisher-types';
-import { getWsUrl } from '@/lib/api/config';
 
 export function LiveCameraPublisher({
   whipPublishUrl,
@@ -16,14 +13,11 @@ export function LiveCameraPublisher({
   onError,
 }: LiveCameraPublisherProps) {
   const webRef = useRef<WebView>(null);
-  const baseUrl = useMemo(() => `${getWsUrl().replace(/\/$/, '')}/`, []);
-  const source = useMemo(
-    () => buildLiveCameraPublisherSource(whipPublishUrl, publishing),
-    [whipPublishUrl, publishing],
-  );
+  const uri = useMemo(() => buildLiveCameraPublisherUri(whipPublishUrl), [whipPublishUrl]);
 
   useEffect(() => {
-    webRef.current?.postMessage(JSON.stringify({ type: 'setPublishing', value: publishing }));
+    const payload = JSON.stringify({ type: 'setPublishing', value: publishing });
+    webRef.current?.postMessage(payload);
   }, [publishing]);
 
   const onMessage = (event: WebViewMessageEvent) => {
@@ -41,16 +35,20 @@ export function LiveCameraPublisher({
     <View style={styles.wrap}>
       <WebView
         ref={webRef}
-        source={source}
-        baseUrl={baseUrl}
-        originWhitelist={['https://*', 'http://*']}
+        source={{ uri }}
         style={styles.web}
+        originWhitelist={['https://*', 'http://*']}
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback
         javaScriptEnabled
         domStorageEnabled
         mediaCapturePermissionGrantType="grant"
         onMessage={onMessage}
+        onPermissionRequest={(request) => {
+          if (Platform.OS === 'android') {
+            request.nativeEvent.grant(request.nativeEvent.resources);
+          }
+        }}
       />
     </View>
   );

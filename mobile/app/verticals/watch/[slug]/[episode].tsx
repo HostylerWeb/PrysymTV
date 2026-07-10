@@ -15,6 +15,8 @@ import { GiftModal } from '@/components/modals/GiftModal';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useVerticalEpisodePlayback } from '@/hooks/api/useVerticalEpisodePlayback';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
+import { useBackNavigation } from '@/hooks/useBackNavigation';
+import { navigateBack } from '@/lib/navigation';
 import {
   toggleVerticalEpisodeLike,
   toggleVerticalEpisodeSave,
@@ -35,6 +37,7 @@ export default function VerticalWatchScreen() {
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const { requireAuth } = useMockAuth();
+  useBackNavigation(`/verticals/${slug ?? ''}`);
   const epNum = parseInt(episode ?? '1', 10) || 1;
   const playbackQuery = useVerticalEpisodePlayback(slug, epNum);
   const data = playbackQuery.data;
@@ -113,6 +116,8 @@ export default function VerticalWatchScreen() {
               tapToToggle
               enableQualityMenu
               enableFullscreen
+              controlsPlacement="top"
+              controlsTopInset={insets.top + 104}
               paused={!gateDismissed || !isFocused}
               autoPlay={gateDismissed}
               onProgress={onProgress}
@@ -124,7 +129,10 @@ export default function VerticalWatchScreen() {
             <Text style={styles.errorText}>Playback is not available for this episode.</Text>
           </View>
         ) : null}
-        <Pressable style={[styles.back, { top: insets.top + 8 }]} onPress={() => router.push(`/verticals/${data.series.slug}`)}>
+        <Pressable
+          style={[styles.back, { top: insets.top + 8 }]}
+          onPress={() => navigateBack(router, `/verticals/${data.series.slug}`)}
+        >
           <Ionicons name="chevron-back" size={28} color={colors.onVideo} />
         </Pressable>
         {!gateDismissed && gateOpen ? (
@@ -205,7 +213,7 @@ export default function VerticalWatchScreen() {
             </Pressable>
           </View>
         ) : null}
-        <View style={styles.meta} pointerEvents="box-none">
+        <View style={[styles.meta, { bottom: insets.bottom + 32 }]} pointerEvents="box-none">
           <Text style={styles.title}>{data.series.title}</Text>
           <Text style={styles.ep}>Episode {data.episode.episodeNumber}: {data.episode.title}</Text>
           {data.episode.cliffhanger ? (
@@ -271,7 +279,6 @@ const createStyles = (colors: ThemeColors) =>
       position: 'absolute',
       left: 16,
       right: 16,
-      bottom: 32,
       zIndex: 3,
     },
     title: { color: colors.onVideo, fontSize: 20, fontWeight: '800' },

@@ -25,6 +25,9 @@ type Props = {
   enableQualityMenu?: boolean;
   enableFullscreen?: boolean;
   seekOnTap?: boolean;
+  controlsBottomInset?: number;
+  controlsPlacement?: 'bottom' | 'top';
+  controlsTopInset?: number;
   paused?: boolean;
 };
 
@@ -47,6 +50,9 @@ export function PlayerShell({
   enableFullscreen = false,
   seekOnTap = false,
   paused = false,
+  controlsBottomInset,
+  controlsPlacement,
+  controlsTopInset,
 }: Props) {
   const showTopActions = showCast || onShare || onReport;
   const showPoster = posterOnly || !playbackUrl;
@@ -64,6 +70,9 @@ export function PlayerShell({
           seekOnTap={seekOnTap}
           tapToToggle={!nativeControls && !seekOnTap}
           paused={paused}
+          controlsBottomInset={controlsBottomInset}
+          controlsPlacement={controlsPlacement}
+          controlsTopInset={controlsTopInset}
         />
       ) : (
         <Pressable style={styles.posterWrap} onPress={onPlayPress} disabled={!onPlayPress}>
