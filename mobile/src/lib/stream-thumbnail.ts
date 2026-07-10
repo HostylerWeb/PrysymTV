@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { apiRequest, loadStoredAccessToken } from './client';
+import { apiRequest, loadStoredAccessToken } from './api/client';
 
 type ThumbnailUploadInit = {
   objectKey: string;
