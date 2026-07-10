@@ -15,6 +15,7 @@ export type ServedAd = {
   placement: AdPlacement;
   mediaType: "image" | "video";
   skipAfterSeconds: number;
+  bannerSize?: "strip" | "standard" | "hero" | null;
 };
 
 export type AdAttribution = {

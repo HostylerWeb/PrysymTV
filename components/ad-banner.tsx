@@ -9,6 +9,7 @@ import {
   type ServedAd,
 } from "@/lib/api/ads"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
+import { getHomeBannerSizeConfig } from "@/lib/ad-banner-size"
 import { getViewerGeo } from "@/lib/viewer-geo"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 import { useAuth } from "@/contexts/auth-context"
@@ -63,6 +64,8 @@ export function AdBanner({ creatorId, videoId, platformCreatorId: platformCreato
 
   if (!placementEnabled || !ad) return null
 
+  const bannerSize = getHomeBannerSizeConfig(ad.bannerSize)
+
   const attr = buildAdAttribution({
     campaignId: ad.id,
     placement: "home_banner",
@@ -84,7 +87,7 @@ export function AdBanner({ creatorId, videoId, platformCreatorId: platformCreato
             e.preventDefault()
             openAdDestination(ad.clickThroughUrl, attr)
           }}
-          className="block relative w-full aspect-[6/1] md:aspect-[8/1] rounded-xl overflow-hidden border border-border hover:opacity-95 transition-opacity cursor-pointer"
+          className={`block relative w-full ${bannerSize.webAspectClass} rounded-xl overflow-hidden border border-border hover:opacity-95 transition-opacity cursor-pointer`}
         >
           {ad.mediaType === "video" ? (
             <video src={ad.mediaUrl} className="w-full h-full object-cover" muted autoPlay playsInline />

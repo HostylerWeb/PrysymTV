@@ -1,4 +1,4 @@
-import { AdCampaignStatus, AdPlacement } from '@prisma/client';
+import { AdCampaignStatus, AdPlacement, HomeBannerSize } from '@prisma/client';
 import {
   IsDateString,
   IsEnum,
@@ -44,6 +44,10 @@ export class CreateAdCampaignDto {
   @IsOptional()
   @IsEnum(AdCampaignStatus)
   status?: AdCampaignStatus;
+
+  @IsOptional()
+  @IsEnum(HomeBannerSize)
+  bannerSize?: HomeBannerSize;
 
   @IsOptional()
   @IsString()

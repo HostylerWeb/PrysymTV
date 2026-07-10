@@ -3,20 +3,26 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/Button';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { ShareModal } from '@/components/modals/ShareModal';
+import { useMockAuth } from '@/context/MockAuthContext';
 import { usePlaylistDetail } from '@/hooks/api/usePlaylistDetail';
+import { removePlaylistItem } from '@/lib/api/playlists';
 import { colors, radius } from '@/theme/tokens';
 
 export default function PlaylistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { user } = useMockAuth();
   const playlistQuery = usePlaylistDetail(id);
   const playlist = playlistQuery.data;
   const [shareOpen, setShareOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   if (playlistQuery.isLoading) {
     return (
@@ -34,8 +40,29 @@ export default function PlaylistScreen() {
     );
   }
 
+  const isOwner = !!user?.username && user.username === playlist.creatorSlug;
+
   const openItem = (href: string) => {
     router.push(href as never);
+  };
+
+  const removeItem = (playlistItemId: string, title: string) => {
+    Alert.alert('Remove from playlist', `Remove "${title}" from this playlist?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => {
+          setRemovingId(playlistItemId);
+          void removePlaylistItem(playlist.id, playlistItemId)
+            .then(() => queryClient.invalidateQueries({ queryKey: ['playlist', id] }))
+            .catch((error: unknown) => {
+              Alert.alert('Error', error instanceof Error ? error.message : 'Could not remove item');
+            })
+            .finally(() => setRemovingId(null));
+        },
+      },
+    ]);
   };
 
   return (
@@ -54,12 +81,19 @@ export default function PlaylistScreen() {
             <Text style={styles.desc}>{playlist.description}</Text>
           ) : null}
           <View style={styles.actions}>
-            <Button label={editMode ? 'Done' : 'Edit'} variant="outline" onPress={() => setEditMode(!editMode)} style={styles.flex} />
+            {isOwner ? (
+              <Button
+                label={editMode ? 'Done' : 'Edit'}
+                variant="outline"
+                onPress={() => setEditMode(!editMode)}
+                style={styles.flex}
+              />
+            ) : null}
             <Button label="Share" variant="secondary" onPress={() => setShareOpen(true)} style={styles.flex} />
           </View>
-          {editMode && (
+          {editMode && isOwner ? (
             <Button label="Add videos" variant="ghost" onPress={() => router.push('/search')} />
-          )}
+          ) : null}
           {playlist.items.length === 0 ? (
             <FeedQueryState isEmpty emptyTitle="Empty playlist" emptyMessage="No items in this playlist yet." />
           ) : (
@@ -72,13 +106,18 @@ export default function PlaylistScreen() {
                     <Text style={styles.itemMeta}>{item.subtitle}</Text>
                   </View>
                 </Pressable>
-                {editMode && (
+                {editMode && isOwner && item.playlistItemId ? (
                   <Pressable
-                    onPress={() => Alert.alert('Remove', 'Playlist editing will be available in a later update.')}
+                    disabled={removingId === item.playlistItemId}
+                    onPress={() => removeItem(item.playlistItemId!, item.title)}
                   >
-                    <Ionicons name="trash-outline" size={20} color={colors.destructive} />
+                    <Ionicons
+                      name="trash-outline"
+                      size={20}
+                      color={removingId === item.playlistItemId ? colors.mutedForeground : colors.destructive}
+                    />
                   </Pressable>
-                )}
+                ) : null}
               </View>
             ))
           )}

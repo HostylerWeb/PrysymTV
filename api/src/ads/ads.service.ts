@@ -12,6 +12,7 @@ export type ServedAd = {
   placement: AdPlacement;
   mediaType: 'image' | 'video';
   skipAfterSeconds: number;
+  bannerSize?: 'strip' | 'standard' | 'hero' | null;
 };
 
 @Injectable()
@@ -147,6 +148,9 @@ export class AdsService {
             : placement === AdPlacement.vertical_episode
               ? adsConfig.shortsSkipSeconds
               : 0,
+      ...(picked.placement === AdPlacement.home_banner && picked.bannerSize
+        ? { bannerSize: picked.bannerSize }
+        : {}),
     };
   }
 }

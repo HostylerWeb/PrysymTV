@@ -6,6 +6,7 @@ import {
   type PublisherMessage,
 } from '@/components/live/live-camera-publisher-html';
 import type { LiveCameraPublisherProps } from '@/components/live/live-camera-publisher-types';
+import { getWsUrl } from '@/lib/api/config';
 
 export function LiveCameraPublisher({
   whipPublishUrl,
@@ -15,6 +16,7 @@ export function LiveCameraPublisher({
   onError,
 }: LiveCameraPublisherProps) {
   const webRef = useRef<WebView>(null);
+  const baseUrl = useMemo(() => `${getWsUrl().replace(/\/$/, '')}/`, []);
   const source = useMemo(
     () => buildLiveCameraPublisherSource(whipPublishUrl, publishing),
     [whipPublishUrl, publishing],
@@ -40,6 +42,8 @@ export function LiveCameraPublisher({
       <WebView
         ref={webRef}
         source={source}
+        baseUrl={baseUrl}
+        originWhitelist={['https://*', 'http://*']}
         style={styles.web}
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback

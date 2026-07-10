@@ -30,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { HOME_BANNER_SIZE_OPTIONS } from "@/lib/ad-banner-size"
 
 export default function AdminAdDetailPage({
   params,
@@ -48,6 +49,7 @@ export default function AdminAdDetailPage({
     mediaUrl: "",
     clickThroughUrl: "",
     placement: "home_banner",
+    bannerSize: "strip" as "strip" | "standard" | "hero",
     targetImpressions: "",
     budgetUsd: "",
     advertiserAccountId: "",
@@ -67,6 +69,7 @@ export default function AdminAdDetailPage({
       mediaUrl: campaign.mediaUrl ?? "",
       clickThroughUrl: campaign.clickThroughUrl ?? "",
       placement: campaign.placement,
+      bannerSize: (campaign.bannerSize as "strip" | "standard" | "hero" | null) ?? "strip",
       targetImpressions: String(campaign.targetImpressions),
       budgetUsd: String(campaign.budgetUsd),
       advertiserAccountId: campaign.advertiserAccountId ?? "",
@@ -93,6 +96,7 @@ export default function AdminAdDetailPage({
         mediaUrl: form.mediaUrl,
         clickThroughUrl: form.clickThroughUrl,
         placement: form.placement,
+        ...(form.placement === "home_banner" ? { bannerSize: form.bannerSize } : { bannerSize: null }),
         targetImpressions: parseInt(form.targetImpressions, 10),
         budgetUsd: parseFloat(form.budgetUsd),
         revenueRuleKey: AD_CAMPAIGN_REVENUE_RULE_KEY,
@@ -257,6 +261,28 @@ export default function AdminAdDetailPage({
               onChange={(e) => setForm((f) => ({ ...f, clickThroughUrl: e.target.value }))}
             />
           </div>
+          {form.placement === "home_banner" ? (
+            <div>
+              <Label>Banner size</Label>
+              <Select
+                value={form.bannerSize}
+                onValueChange={(v) =>
+                  setForm((f) => ({ ...f, bannerSize: v as "strip" | "standard" | "hero" }))
+                }
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {HOME_BANNER_SIZE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label} — {option.description}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           {message && <p className="text-sm text-muted-foreground">{message}</p>}
           <Button className="rounded-full" disabled={saveBusy} onClick={() => void save()}>
             {saveBusy ? "Saving…" : "Save changes"}

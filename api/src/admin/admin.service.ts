@@ -2761,6 +2761,7 @@ export class AdminService {
         mediaUrl: dto.mediaUrl,
         clickThroughUrl: dto.clickThroughUrl,
         placement: dto.placement,
+        ...(dto.bannerSize !== undefined && { bannerSize: dto.bannerSize }),
         targetImpressions: dto.targetImpressions,
         budgetUsd: dto.budgetUsd,
         status: dto.status ?? 'active',
@@ -2806,6 +2807,7 @@ export class AdminService {
     if (dto.mediaUrl !== undefined) data.mediaUrl = dto.mediaUrl;
     if (dto.clickThroughUrl !== undefined) data.clickThroughUrl = dto.clickThroughUrl;
     if (dto.placement !== undefined) data.placement = dto.placement;
+    if (dto.bannerSize !== undefined) data.bannerSize = dto.bannerSize;
     if (dto.targetImpressions !== undefined) data.targetImpressions = dto.targetImpressions;
     if (dto.budgetUsd !== undefined) data.budgetUsd = dto.budgetUsd;
     if (dto.startsAt !== undefined) data.startsAt = new Date(dto.startsAt);

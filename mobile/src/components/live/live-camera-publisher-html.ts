@@ -49,6 +49,9 @@ async function detectCodecs() {
 }
 
 async function startPreview() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error('Camera is not available. Update the app and try again.');
+  }
   stream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
     audio: true,

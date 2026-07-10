@@ -257,6 +257,7 @@ export type AdCampaign = {
   title: string;
   advertiserName: string;
   placement: string;
+  bannerSize?: "strip" | "standard" | "hero" | null;
   budgetUsd: string | number;
   deliveredImpressions: number;
   targetImpressions: number;
@@ -714,6 +715,7 @@ export function createAdminAdCampaign(body: {
   mediaUrl: string;
   clickThroughUrl: string;
   placement: string;
+  bannerSize?: "strip" | "standard" | "hero";
   targetImpressions: number;
   budgetUsd: number;
   startsAt: string;
@@ -733,6 +735,7 @@ export function updateAdminAdCampaign(
     mediaUrl: string;
     clickThroughUrl: string;
     placement: string;
+    bannerSize?: "strip" | "standard" | "hero" | null;
     targetImpressions: number;
     budgetUsd: number;
     startsAt: string;

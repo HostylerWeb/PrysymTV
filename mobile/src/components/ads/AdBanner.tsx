@@ -12,6 +12,7 @@ import { useMockAuth } from '@/context/MockAuthContext';
 import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
 import { useShouldShowAds } from '@/hooks/useShouldShowAds';
 import { resolveAdMediaUrl } from '@/lib/ad-media';
+import { getHomeBannerSizeConfig } from '@/lib/ad-banner-size';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 type Props = { onPress?: () => void };
@@ -47,6 +48,8 @@ export function AdBanner({ onPress }: Props) {
   const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
   if (!mediaUrl) return null;
 
+  const bannerSize = getHomeBannerSizeConfig(ad.bannerSize);
+
   const openAd = () => {
     onPress?.();
     void trackAdClick(
@@ -63,7 +66,7 @@ export function AdBanner({ onPress }: Props) {
   return (
     <View style={styles.wrap}>
       <Text style={styles.eyebrow}>Sponsored</Text>
-      <Pressable style={styles.banner} onPress={openAd}>
+      <Pressable style={[styles.banner, { height: bannerSize.mobileHeight }]} onPress={openAd}>
         <Image source={{ uri: mediaUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
         <View style={styles.scrim} />
         <Text style={styles.title}>{ad.title}</Text>
@@ -83,7 +86,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   banner: {
-    height: 72,
     borderRadius: radius.xl,
     overflow: 'hidden',
     borderWidth: 1,

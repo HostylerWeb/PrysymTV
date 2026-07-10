@@ -111,6 +111,8 @@ export default function VerticalWatchScreen() {
               posterUrl={posterUri || null}
               nativeControls={false}
               tapToToggle
+              enableQualityMenu
+              enableFullscreen
               paused={!gateDismissed || !isFocused}
               autoPlay={gateDismissed}
               onProgress={onProgress}

@@ -80,6 +80,8 @@ export function removePlaylistItem(playlistId: string, playlistItemId: string) {
 export function reorderPlaylistItems(playlistId: string, itemIds: string[]) {
   return apiRequest<{ success: boolean }>(`/playlists/${playlistId}/reorder`, {
     method: 'PUT',
-    body: { itemIds },
+    body: {
+      items: itemIds.map((id, sortOrder) => ({ id, sortOrder })),
+    },
   });
 }

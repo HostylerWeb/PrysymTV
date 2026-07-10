@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { HOME_BANNER_SIZE_OPTIONS } from "@/lib/ad-banner-size"
 
 export default function AdminAdsNewPage() {
   const router = useRouter()
@@ -37,6 +38,7 @@ export default function AdminAdsNewPage() {
     mediaUrl: "",
     clickThroughUrl: "",
     placement: "home_banner",
+    bannerSize: "strip" as "strip" | "standard" | "hero",
     targetImpressions: "100000",
     budgetUsd: "5000",
     startsAt: "",
@@ -84,6 +86,7 @@ export default function AdminAdsNewPage() {
         mediaUrl: form.mediaUrl,
         clickThroughUrl: form.clickThroughUrl,
         placement: form.placement,
+        ...(form.placement === "home_banner" ? { bannerSize: form.bannerSize } : {}),
         targetImpressions: parseInt(form.targetImpressions, 10),
         budgetUsd: parseFloat(form.budgetUsd),
         startsAt: new Date(form.startsAt).toISOString(),
@@ -234,6 +237,28 @@ export default function AdminAdsNewPage() {
               </SelectContent>
             </Select>
           </div>
+          {form.placement === "home_banner" ? (
+            <div>
+              <Label>Banner size</Label>
+              <Select
+                value={form.bannerSize}
+                onValueChange={(v) =>
+                  setForm((f) => ({ ...f, bannerSize: v as "strip" | "standard" | "hero" }))
+                }
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {HOME_BANNER_SIZE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label} — {option.description}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <div>
             <Label htmlFor="impressions">Target impressions</Label>
             <Input

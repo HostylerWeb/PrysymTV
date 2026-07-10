@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +21,7 @@ import { formatViewCount } from '@/utils/format-media';
 
 export default function LiveScreen() {
   const { id, studio: studioParam } = useLocalSearchParams<{ id: string; studio?: string }>();
+  const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { user, requireAuth } = useMockAuth();
   const streamQuery = useStreamDetail(id);
@@ -98,6 +100,7 @@ export default function LiveScreen() {
           subtitle={`${stream.streamer} · ${formatViewCount(stream.viewerCount)} watching`}
           badge="LIVE"
           contentFit="contain"
+          paused={!isFocused}
         />
         <View style={styles.streamerRow}>
           <View style={styles.streamerInfo}>

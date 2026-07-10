@@ -119,25 +119,6 @@ export function ProfileSettingsSheet({
           },
           accent: 'live',
         },
-    user.verticalCreatorStatus === 'approved'
-      ? {
-          icon: 'grid-outline',
-          label: 'Micro-dramas',
-          description: 'Manage vertical series & episodes',
-          route: '/settings/verticals',
-        }
-      : {
-          icon: 'grid-outline',
-          label: 'Micro-dramas',
-          description:
-            user.verticalCreatorStatus === 'pending'
-              ? 'Application pending...'
-              : 'Apply to publish vertical series',
-          action: () => {
-            onClose();
-            onUnlockFeatures?.();
-          },
-        },
     { icon: 'cube-outline', label: 'Shipping & checkout', description: 'Address for store purchases', route: '/settings/shipping' },
     { icon: 'list-outline', label: 'Playlists', description: 'Create and manage playlists', route: '/settings/playlists' },
     { icon: 'link-outline', label: 'Social Links', description: 'Links on your creator profile', route: '/settings/social' },

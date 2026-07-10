@@ -3,17 +3,20 @@ import {
   ActivityIndicator,
   AppState,
   LayoutChangeEvent,
+  Modal,
   Pressable,
+  StatusBar,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { VideoQualityMenu } from '@/components/video/VideoQualityMenu';
 import { fetchHlsVariants, type HlsVariant } from '@/lib/hls-variants';
-import { colors, withAlpha } from '@/theme/tokens';
+import { colors, radius, withAlpha } from '@/theme/tokens';
 
 type Props = {
   source: string;
@@ -25,6 +28,7 @@ type Props = {
   /** TikTok-style tap reveals timeline scrubber. */
   seekOnTap?: boolean;
   enableQualityMenu?: boolean;
+  enableFullscreen?: boolean;
   posterUrl?: string | null;
   onProgress?: (seconds: number, duration: number) => void;
   onEnded?: () => void;
@@ -41,6 +45,55 @@ function formatTime(seconds: number) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function PlayerOverlayControls({
+  enableQualityMenu,
+  enableFullscreen,
+  isFullscreen,
+  onToggleFullscreen,
+  variants,
+  selectedVariantUri,
+  onQualitySelect,
+  inline,
+}: {
+  enableQualityMenu: boolean;
+  enableFullscreen: boolean;
+  isFullscreen: boolean;
+  onToggleFullscreen: () => void;
+  variants: HlsVariant[];
+  selectedVariantUri: string | null;
+  onQualitySelect: (variant: HlsVariant | null) => void;
+  inline?: boolean;
+}) {
+  if (!enableQualityMenu && !enableFullscreen) return null;
+
+  return (
+    <View style={[styles.controlsRow, inline && styles.controlsRowInline]} pointerEvents="box-none">
+      {enableQualityMenu ? (
+        <VideoQualityMenu
+          variants={variants}
+          selectedUri={selectedVariantUri}
+          onSelect={onQualitySelect}
+        />
+      ) : null}
+      {enableFullscreen ? (
+        <Pressable
+          style={styles.fullscreenBtn}
+          onPress={onToggleFullscreen}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+        >
+          <Ionicons
+            name={isFullscreen ? 'contract-outline' : 'expand-outline'}
+            size={18}
+            color={colors.onVideo}
+          />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export function HlsPlayer({
   source,
   autoPlay = true,
@@ -50,6 +103,7 @@ export function HlsPlayer({
   tapToToggle = true,
   seekOnTap = false,
   enableQualityMenu = false,
+  enableFullscreen = false,
   posterUrl,
   onProgress,
   onEnded,
@@ -58,6 +112,7 @@ export function HlsPlayer({
   fill = false,
   paused = false,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const masterSource = useMemo(() => source, [source]);
   const [activeSource, setActiveSource] = useState(source);
   const [variants, setVariants] = useState<HlsVariant[]>([]);
@@ -67,6 +122,7 @@ export function HlsPlayer({
   const [buffering, setBuffering] = useState(true);
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   const [chromeVisible, setChromeVisible] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [trackWidth, setTrackWidth] = useState(0);
@@ -103,6 +159,12 @@ export function HlsPlayer({
     });
     return () => sub.remove();
   }, []);
+
+  useEffect(() => {
+    return () => {
+      player.pause();
+    };
+  }, [player]);
 
   useEffect(() => {
     player.muted = muted;
@@ -224,12 +286,28 @@ export function HlsPlayer({
     if (resumeAt > 0) player.currentTime = resumeAt;
   };
 
+  const toggleFullscreen = () => {
+    setIsFullscreen((value) => !value);
+    setChromeVisible(false);
+  };
+
   const showLoading = (!ready || buffering) && !playing && !nativeControls;
   const showPausedOverlay = !nativeControls && ready && !playing && !buffering && !chromeVisible;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const showCornerControls =
+    !nativeControls && (enableQualityMenu || enableFullscreen) && !seekOnTap && !isFullscreen;
 
-  return (
-    <View style={[styles.wrap, fill ? StyleSheet.absoluteFillObject : { aspectRatio }]}>
+  const renderPlayerSurface = (fullscreen: boolean) => (
+    <View
+      style={[
+        styles.wrap,
+        fullscreen
+          ? styles.fullscreenWrap
+          : fill
+            ? StyleSheet.absoluteFillObject
+            : { aspectRatio },
+      ]}
+    >
       {posterUrl && (!ready || !playing) ? (
         <Image source={{ uri: posterUrl }} style={StyleSheet.absoluteFill} contentFit={contentFit} />
       ) : null}
@@ -237,7 +315,7 @@ export function HlsPlayer({
         style={StyleSheet.absoluteFill}
         player={player}
         contentFit={contentFit}
-        allowsFullscreen
+        allowsFullscreen={false}
         allowsPictureInPicture={false}
         nativeControls={nativeControls}
         pointerEvents={nativeControls ? 'box-none' : 'none'}
@@ -261,7 +339,7 @@ export function HlsPlayer({
         />
       ) : null}
       {!nativeControls && chromeVisible && seekOnTap ? (
-        <View style={styles.chrome} pointerEvents="box-none">
+        <View style={[styles.chrome, fullscreen && { bottom: 12 + insets.bottom }]} pointerEvents="box-none">
           <View style={styles.chromeRow}>
             <Pressable
               onPress={(e) => {
@@ -270,22 +348,21 @@ export function HlsPlayer({
               }}
               hitSlop={8}
             >
-              <Ionicons
-                name={playing ? 'pause' : 'play'}
-                size={22}
-                color={colors.onVideo}
-              />
+              <Ionicons name={playing ? 'pause' : 'play'} size={22} color={colors.onVideo} />
             </Pressable>
             <Text style={styles.timeText}>
               {formatTime(currentTime)} / {formatTime(duration)}
             </Text>
-            {enableQualityMenu ? (
-              <VideoQualityMenu
-                variants={variants}
-                selectedUri={selectedVariantUri}
-                onSelect={onQualitySelect}
-              />
-            ) : null}
+            <PlayerOverlayControls
+              enableQualityMenu={enableQualityMenu}
+              enableFullscreen={enableFullscreen}
+              isFullscreen={fullscreen}
+              onToggleFullscreen={toggleFullscreen}
+              variants={variants}
+              selectedVariantUri={selectedVariantUri}
+              onQualitySelect={onQualitySelect}
+              inline
+            />
           </View>
           <Pressable
             onPress={(e) => e.stopPropagation()}
@@ -297,16 +374,44 @@ export function HlsPlayer({
           </Pressable>
         </View>
       ) : null}
-      {!nativeControls && enableQualityMenu && !seekOnTap ? (
+      {showCornerControls ? (
         <View style={styles.qualityCorner} pointerEvents="box-none">
-          <VideoQualityMenu
+          <PlayerOverlayControls
+            enableQualityMenu={enableQualityMenu}
+            enableFullscreen={enableFullscreen}
+            isFullscreen={false}
+            onToggleFullscreen={toggleFullscreen}
             variants={variants}
-            selectedUri={selectedVariantUri}
-            onSelect={onQualitySelect}
+            selectedVariantUri={selectedVariantUri}
+            onQualitySelect={onQualitySelect}
           />
         </View>
       ) : null}
+      {fullscreen ? (
+        <Pressable
+          style={[styles.fullscreenClose, { top: insets.top + 8 }]}
+          onPress={toggleFullscreen}
+          hitSlop={12}
+        >
+          <Ionicons name="close" size={26} color={colors.onVideo} />
+        </Pressable>
+      ) : null}
     </View>
+  );
+
+  return (
+    <>
+      {!isFullscreen ? renderPlayerSurface(false) : null}
+      <Modal
+        visible={isFullscreen}
+        animationType="fade"
+        supportedOrientations={['portrait', 'landscape']}
+        onRequestClose={toggleFullscreen}
+      >
+        <StatusBar hidden />
+        <View style={styles.fullscreenModal}>{renderPlayerSurface(true)}</View>
+      </Modal>
+    </>
   );
 }
 
@@ -315,6 +420,15 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: 'transparent',
     overflow: 'hidden',
+  },
+  fullscreenWrap: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#000',
+  },
+  fullscreenModal: {
+    flex: 1,
+    backgroundColor: '#000',
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -354,5 +468,32 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 10,
     bottom: 10,
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  controlsRowInline: {
+    marginLeft: 'auto',
+  },
+  fullscreenBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: withAlpha(colors.secondary, 0.8),
+  },
+  fullscreenClose: {
+    position: 'absolute',
+    right: 12,
+    zIndex: 3,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: withAlpha('#000', 0.45),
   },
 });

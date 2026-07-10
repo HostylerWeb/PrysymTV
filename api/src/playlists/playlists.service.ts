@@ -231,10 +231,22 @@ export class PlaylistsService {
   }
 
   async create(userId: string, dto: CreatePlaylistDto) {
+    const title = dto.title.trim();
+    const duplicate = await this.prisma.playlist.findFirst({
+      where: {
+        creatorId: userId,
+        title: { equals: title, mode: 'insensitive' },
+      },
+      select: { id: true },
+    });
+    if (duplicate) {
+      throw new BadRequestException('You already have a playlist with this name');
+    }
+
     const playlist = await this.prisma.playlist.create({
       data: {
         creatorId: userId,
-        title: dto.title.trim(),
+        title,
         description: dto.description?.trim(),
         type: dto.type,
         visibility: dto.visibility ?? Visibility.public,
@@ -246,6 +258,20 @@ export class PlaylistsService {
 
   async update(userId: string, id: string, dto: UpdatePlaylistDto) {
     await this.assertOwner(userId, id);
+    if (dto.title !== undefined) {
+      const title = dto.title.trim();
+      const duplicate = await this.prisma.playlist.findFirst({
+        where: {
+          creatorId: userId,
+          title: { equals: title, mode: 'insensitive' },
+          NOT: { id },
+        },
+        select: { id: true },
+      });
+      if (duplicate) {
+        throw new BadRequestException('You already have a playlist with this name');
+      }
+    }
     return this.prisma.playlist.update({
       where: { id },
       data: {

@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Image } from 'expo-image';
+import { useIsFocused } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { AppHeader } from '@/components/layout/AppHeader';
@@ -36,6 +37,7 @@ export default function WatchScreen() {
   const styles = useThemedStyles(createStyles);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { requireAuth } = useMockAuth();
   const videoQuery = useVideoDetail(id);
   const video = videoQuery.data;
@@ -67,7 +69,7 @@ export default function WatchScreen() {
     video?.id,
     progress.seconds,
     progress.duration || video?.durationSeconds || 0,
-    Boolean(video?.playbackSource),
+    Boolean(video?.playbackSource) && isFocused,
   );
 
   const relatedQuery = useQuery({
@@ -119,6 +121,8 @@ export default function WatchScreen() {
             hideMeta
             nativeControls={false}
             enableQualityMenu
+            enableFullscreen
+            paused={!isFocused}
             onProgress={onProgress}
             onShare={() => setShareOpen(true)}
             onReport={() => requireAuth(() => setReportOpen(true))}
@@ -222,7 +226,7 @@ export default function WatchScreen() {
               <View style={styles.upNextSection}>
                 <Text style={styles.section}>Up next</Text>
                 {relatedQuery.data?.map((v) => (
-                  <Pressable key={v.id} style={styles.upNext} onPress={() => router.push(`/watch/${v.id}`)}>
+                  <Pressable key={v.id} style={styles.upNext} onPress={() => router.replace(`/watch/${v.id}`)}>
                     <View style={styles.upNextThumbWrap}>
                       <Image source={{ uri: v.thumbnailUrl ?? '' }} style={styles.upNextThumb} contentFit="cover" />
                       {v.durationSeconds ? (

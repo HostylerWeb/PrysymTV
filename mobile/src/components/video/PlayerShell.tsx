@@ -23,6 +23,7 @@ type Props = {
   onProgress?: (seconds: number, duration: number) => void;
   nativeControls?: boolean;
   enableQualityMenu?: boolean;
+  enableFullscreen?: boolean;
   seekOnTap?: boolean;
   paused?: boolean;
 };
@@ -43,6 +44,7 @@ export function PlayerShell({
   onProgress,
   nativeControls = true,
   enableQualityMenu = false,
+  enableFullscreen = false,
   seekOnTap = false,
   paused = false,
 }: Props) {
@@ -58,6 +60,7 @@ export function PlayerShell({
           onProgress={onProgress}
           nativeControls={nativeControls}
           enableQualityMenu={enableQualityMenu}
+          enableFullscreen={enableFullscreen}
           seekOnTap={seekOnTap}
           tapToToggle={!nativeControls && !seekOnTap}
           paused={paused}

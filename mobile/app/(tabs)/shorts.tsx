@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -62,6 +63,7 @@ export default function ShortsScreen() {
   const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
   const [adOpen, setAdOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const swipeCount = useRef(0);
   const current = shorts[index];
 
@@ -131,6 +133,15 @@ export default function ShortsScreen() {
 
   const isLoading = shortsQuery.isLoading && shorts.length === 0;
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await shortsQuery.refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [shortsQuery]);
+
   return (
     <>
       <View style={styles.screen} onLayout={(e) => setFeedHeight(e.nativeEvent.layout.height)}>
@@ -171,6 +182,11 @@ export default function ShortsScreen() {
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={{ itemVisiblePercentThreshold: 90 }}
             getItemLayout={getItemLayout}
+            refreshing={refreshing}
+            onRefresh={() => void onRefresh()}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.primary} />
+            }
             renderItem={({ item, index: itemIndex }) => {
               const isActive = itemIndex === index;
               const inPlayerWindow = Math.abs(itemIndex - index) <= SHORT_PLAYER_WINDOW;
@@ -192,6 +208,8 @@ export default function ShortsScreen() {
                     loop
                     nativeControls={false}
                     seekOnTap
+                    enableQualityMenu
+                    enableFullscreen
                     tapToToggle={false}
                     autoPlay={isActive}
                     paused={!isFocused || !isActive}

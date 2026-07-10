@@ -16,6 +16,7 @@ import { LiveCameraPublisher } from '@/components/live/LiveCameraPublisher';
 import { Button } from '@/components/ui/Button';
 import { endStream, fetchStream } from '@/lib/api/streams';
 import type { StreamDetail } from '@/lib/api/streams';
+import { ensureLiveCameraPermissions } from '@/lib/camera-permissions';
 import { useStreamChat } from '@/hooks/useStreamChat';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -35,10 +36,22 @@ export function MobileLiveStudioPanel({ stream, mode, viewerCount }: Props) {
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
   const [ending, setEnding] = useState(false);
   const [draft, setDraft] = useState('');
+  const [cameraGranted, setCameraGranted] = useState(mode !== 'camera');
   const { messages, connected, sendMessage } = useStreamChat(stream.id);
 
   const useCamera = mode === 'camera' && !!stream.studio?.whipPublishUrl;
   const onAir = streamStatus === 'live' || (useCamera && isPublishing);
+
+  useEffect(() => {
+    if (!useCamera) return;
+    let cancelled = false;
+    void ensureLiveCameraPermissions().then((granted) => {
+      if (!cancelled) setCameraGranted(granted);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [useCamera]);
 
   useEffect(() => {
     if (!isPublishing && streamStatus !== 'live') return;
@@ -105,19 +118,34 @@ export function MobileLiveStudioPanel({ stream, mode, viewerCount }: Props) {
 
       <View style={styles.player}>
         {useCamera && stream.studio ? (
-          <LiveCameraPublisher
-            whipPublishUrl={stream.studio.whipPublishUrl}
-            publishing={isPublishing}
-            onConnected={() => {
-              setIsPublishing(true);
-              setBroadcastError(null);
-              void fetchStream(stream.id).then((detail) => setStreamStatus(detail.status));
-            }}
-            onError={(msg: string) => {
-              setBroadcastError(msg);
-              Alert.alert('Broadcast error', msg);
-            }}
-          />
+          cameraGranted ? (
+            <LiveCameraPublisher
+              whipPublishUrl={stream.studio.whipPublishUrl}
+              publishing={isPublishing}
+              onConnected={() => {
+                setIsPublishing(true);
+                setBroadcastError(null);
+                void fetchStream(stream.id).then((detail) => setStreamStatus(detail.status));
+              }}
+              onError={(msg: string) => {
+                setBroadcastError(msg);
+                Alert.alert('Broadcast error', msg);
+              }}
+            />
+          ) : (
+            <View style={[styles.obsPlaceholder, { backgroundColor: colors.videoBackground }]}>
+              <Ionicons name="camera-outline" size={40} color={colors.mutedForeground} />
+              <Text style={[styles.obsText, { color: colors.mutedForeground }]}>
+                Camera and microphone access are required to go live.
+              </Text>
+              <Button
+                label="Allow access"
+                onPress={() => {
+                  void ensureLiveCameraPermissions().then(setCameraGranted);
+                }}
+              />
+            </View>
+          )
         ) : (
           <View style={[styles.obsPlaceholder, { backgroundColor: colors.videoBackground }]}>
             <Ionicons name="desktop-outline" size={40} color={colors.mutedForeground} />

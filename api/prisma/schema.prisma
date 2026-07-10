@@ -178,6 +178,14 @@ enum AdPlacement {
   vertical_episode
 }
 
+enum HomeBannerSize {
+  strip
+  standard
+  hero
+
+  @@map("home_banner_size")
+}
+
 enum VerticalSeriesStatus {
   draft
   published
@@ -969,6 +977,7 @@ model AdCampaign {
   mediaUrl             String           @map("media_url")
   clickThroughUrl      String           @map("click_through_url")
   placement            AdPlacement
+  bannerSize           HomeBannerSize?  @map("banner_size")
   targetImpressions    Int              @map("target_impressions")
   deliveredImpressions Int              @default(0) @map("delivered_impressions")
   clicks               Int              @default(0)

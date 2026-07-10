@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { useLocalSearchParams } from 'expo-router';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { PlayerShell } from '@/components/video/PlayerShell';
@@ -23,6 +24,7 @@ import { formatDuration, formatViewCount } from '@/utils/format-media';
 
 export default function MovieScreen() {
   const styles = useThemedStyles(createStyles);
+  const isFocused = useIsFocused();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { requireAuth } = useMockAuth();
   const movieQuery = useVideoDetail(id);
@@ -53,7 +55,7 @@ export default function MovieScreen() {
     movie?.id,
     progress.seconds,
     progress.duration || movie?.durationSeconds || 0,
-    playing && Boolean(movie?.playbackSource),
+    playing && isFocused && Boolean(movie?.playbackSource),
   );
 
   const onProgress = useCallback((seconds: number, duration: number) => {
@@ -97,6 +99,8 @@ export default function MovieScreen() {
             showCast
             nativeControls={false}
             enableQualityMenu
+            enableFullscreen
+            paused={!isFocused}
             onProgress={onProgress}
           />
         ) : (
