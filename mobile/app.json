@@ -14,10 +14,15 @@
       "backgroundColor": "#030303"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "PrysymTV uses your camera for live broadcasts.",
+        "NSMicrophoneUsageDescription": "PrysymTV uses your microphone for live broadcasts."
+      }
     },
     "android": {
       "package": "tv.prysym.app",
+      "permissions": ["CAMERA", "RECORD_AUDIO"],
       "adaptiveIcon": {
         "backgroundColor": "#030303",
         "foregroundImage": "./assets/android-icon-foreground.png",

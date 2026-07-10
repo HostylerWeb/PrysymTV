@@ -9,6 +9,8 @@ export type StreamDetailView = LiveStream & {
   description?: string | null;
   slug: string;
   creatorId: string;
+  status: string;
+  studio?: import('@/lib/api/streams').StreamStudioInfo;
 };
 
 export function useStreamDetail(id: string | undefined) {
@@ -22,6 +24,8 @@ export function useStreamDetail(id: string | undefined) {
         ...base,
         slug: raw.slug,
         creatorId: raw.creatorId,
+        status: raw.status,
+        studio: raw.studio,
         thumbnailUrl: mediaThumb(raw.thumbnail),
         avatarUrl: mediaThumb(raw.streamerAvatar),
         description: raw.description ?? null,

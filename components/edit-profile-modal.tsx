@@ -156,46 +156,7 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
           )}
           <div>
             <label className="text-sm font-medium text-foreground mb-1 block">
-              Display name
-            </label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={80}
-              className="w-full h-12 px-4 rounded-xl bg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-foreground mb-1 block">
-              Bio
-            </label>
-            <textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              placeholder="Tell viewers about yourself..."
-              maxLength={500}
-              className="w-full h-24 px-4 py-3 rounded-xl bg-secondary resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-            <p className="text-xs text-muted-foreground mt-1 text-right">
-              {bio.length}/500
-            </p>
-          </div>
-          <GenderField value={gender} onChange={setGender} />
-          <div>
-            <label className="text-sm font-medium text-foreground mb-1 block">
-              Birth date
-            </label>
-            <input
-              type="date"
-              value={birthDate}
-              onChange={(e) => setBirthDate(e.target.value)}
-              max={new Date().toISOString().slice(0, 10)}
-              className="w-full h-12 px-4 rounded-xl bg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-foreground mb-1 block">
-              Avatar
+              Profile photo
             </label>
             <input
               ref={avatarInputRef}
@@ -239,7 +200,7 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
           </div>
           <div>
             <label className="text-sm font-medium text-foreground mb-1 block">
-              Banner
+              Cover image
             </label>
             <input
               ref={bannerInputRef}
@@ -277,6 +238,45 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
                 )}
               </span>
             </button>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1 block">
+              Display name
+            </label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={80}
+              className="w-full h-12 px-4 rounded-xl bg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1 block">
+              Bio
+            </label>
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder="Tell viewers about yourself..."
+              maxLength={500}
+              className="w-full h-24 px-4 py-3 rounded-xl bg-secondary resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <p className="text-xs text-muted-foreground mt-1 text-right">
+              {bio.length}/500
+            </p>
+          </div>
+          <GenderField value={gender} onChange={setGender} />
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1 block">
+              Birth date
+            </label>
+            <input
+              type="date"
+              value={birthDate}
+              onChange={(e) => setBirthDate(e.target.value)}
+              max={new Date().toISOString().slice(0, 10)}
+              className="w-full h-12 px-4 rounded-xl bg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+            />
           </div>
         </div>
         <Button

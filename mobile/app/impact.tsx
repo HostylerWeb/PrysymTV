@@ -86,35 +86,49 @@ export default function ImpactScreen() {
             ))}
 
             <Text style={[styles.section, { color: colors.foreground }]}>Funding by area</Text>
-            {data.fundingByCategory.map((row) => (
-              <View key={row.category ?? 'other'} style={[styles.fundingRow, { borderColor: colors.border }]}>
-                <Text style={{ color: colors.foreground, fontSize: 14 }}>
-                  {CATEGORY_LABELS[row.category ?? ''] ?? row.category ?? 'Other'}
-                </Text>
-                <Text style={{ color: colors.foreground, fontWeight: '700' }}>{formatUsd(row.amountUsd)}</Text>
-              </View>
-            ))}
+            {data.fundingByCategory.length > 0 ? (
+              data.fundingByCategory.map((row) => (
+                <View key={row.category ?? 'other'} style={[styles.fundingRow, { borderColor: colors.border }]}>
+                  <Text style={{ color: colors.foreground, fontSize: 14 }}>
+                    {CATEGORY_LABELS[row.category ?? ''] ?? row.category ?? 'Other'}
+                  </Text>
+                  <Text style={{ color: colors.foreground, fontWeight: '700' }}>{formatUsd(row.amountUsd)}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
+                Grant outflows by program area appear here once recorded in Admin → GAF.
+              </Text>
+            )}
 
             <Text style={[styles.section, { color: colors.foreground }]}>Recent grants</Text>
-            <Card>
-              {data.recentGrants.map((grant, i) => (
-                <View
-                  key={grant.id}
-                  style={[
-                    styles.grantRow,
-                    i < data.recentGrants.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
-                  ]}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.foreground, fontWeight: '600' }}>{grant.programTitle}</Text>
-                    <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>
-                      {new Date(grant.createdAt).toLocaleDateString()} · {CATEGORY_LABELS[grant.category ?? ''] ?? grant.category}
-                    </Text>
+            {data.recentGrants.length > 0 ? (
+              <Card>
+                {data.recentGrants.map((grant, i) => (
+                  <View
+                    key={grant.id}
+                    style={[
+                      styles.grantRow,
+                      i < data.recentGrants.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
+                    ]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.foreground, fontWeight: '600' }}>
+                        {grant.programTitle ?? grant.description ?? 'Community grant'}
+                      </Text>
+                      <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>
+                        {new Date(grant.createdAt).toLocaleDateString()} · {CATEGORY_LABELS[grant.category ?? ''] ?? grant.category}
+                      </Text>
+                    </View>
+                    <Text style={{ color: colors.foreground, fontWeight: '700' }}>{formatUsd(grant.amountUsd)}</Text>
                   </View>
-                  <Text style={{ color: colors.foreground, fontWeight: '700' }}>{formatUsd(grant.amountUsd)}</Text>
-                </View>
-              ))}
-            </Card>
+                ))}
+              </Card>
+            ) : (
+              <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
+                Community grants recorded in Admin → GAF will be listed here.
+              </Text>
+            )}
           </>
         )}
 
@@ -161,6 +175,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   grantRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  emptyHint: { fontSize: 14, lineHeight: 20, marginBottom: 8 },
   learnMore: {
     flexDirection: 'row',
     alignItems: 'center',

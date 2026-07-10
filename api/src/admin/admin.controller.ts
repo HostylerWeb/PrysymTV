@@ -44,6 +44,7 @@ import type {
   ProgramConfigEntry,
 } from '../platform-settings/platform-settings.types';
 import { UpdateUserImpactDto } from './dto/update-user-impact.dto';
+import { CreateGafGrantDto } from './dto/create-gaf-grant.dto';
 import { AdminDateRangeQueryDto } from './dto/admin-date-range-query.dto';
 import { UpdateAdminPodcastEpisodeDto } from './dto/update-admin-podcast-episode.dto';
 import { UpdateAdminVerticalEpisodeDto } from './dto/update-admin-vertical-episode.dto';
@@ -104,6 +105,19 @@ export class AdminController {
       dateFrom: query.dateFrom,
       dateTo: query.dateTo,
     });
+  }
+
+  @Get('gaf/programs')
+  listGafPrograms() {
+    return this.admin.listGafPrograms();
+  }
+
+  @Post('gaf/grants')
+  createGafGrant(
+    @Body() body: CreateGafGrantDto,
+    @CurrentUser() admin: AuthUserPayload,
+  ) {
+    return this.admin.createGafGrant(body, admin.id);
   }
 
   @Get('advertisers')

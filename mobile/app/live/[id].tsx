@@ -4,6 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader } from '@/components/layout/AppHeader';
+import { MobileLiveStudioPanel } from '@/components/live/MobileLiveStudioPanel';
 import { PlayerShell } from '@/components/video/PlayerShell';
 import { LiveGiftPanel } from '@/components/live/LiveGiftPanel';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
@@ -18,12 +19,12 @@ import { colors, radius, spacing } from '@/theme/tokens';
 import { formatViewCount } from '@/utils/format-media';
 
 export default function LiveScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, studio: studioParam } = useLocalSearchParams<{ id: string; studio?: string }>();
   const insets = useSafeAreaInsets();
   const { user, requireAuth } = useMockAuth();
   const streamQuery = useStreamDetail(id);
   const stream = streamQuery.data;
-  const { messages, connected, error: chatError, sendMessage } = useStreamChat(id);
+  const studioMode = studioParam === 'obs' ? 'obs' : 'camera';
 
   const [shareOpen, setShareOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -32,6 +33,7 @@ export default function LiveScreen() {
   const [alertsOn, setAlertsOn] = useState(false);
   const [draft, setDraft] = useState('');
   const chatRef = useRef<ScrollView>(null);
+  const { messages, connected, error: chatError, sendMessage } = useStreamChat(id);
 
   const sendChat = () => {
     if (!requireAuth(() => {})) return;
@@ -54,6 +56,32 @@ export default function LiveScreen() {
       <View style={styles.screen}>
         <FeedQueryState isError error={streamQuery.error} onRetry={() => void streamQuery.refetch()} />
       </View>
+    );
+  }
+
+  const isOwner = !!user?.id && stream.creatorId === user.id;
+  if (isOwner && stream.status !== 'ended' && studioParam) {
+    return (
+      <MobileLiveStudioPanel
+        stream={{
+          id: stream.id,
+          slug: stream.slug,
+          title: stream.title,
+          thumbnail: stream.thumbnailUrl,
+          streamer: stream.streamer,
+          streamerSlug: stream.streamerSlug,
+          streamerAvatar: stream.avatarUrl,
+          viewers: String(stream.viewerCount),
+          viewerCount: stream.viewerCount,
+          category: stream.category,
+          status: stream.status,
+          startedAgo: '',
+          creatorId: stream.creatorId,
+          studio: stream.studio,
+        }}
+        mode={studioMode}
+        viewerCount={stream.viewerCount}
+      />
     );
   }
 

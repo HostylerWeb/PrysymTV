@@ -89,7 +89,8 @@ export default function ShortDetailScreen() {
             contentFit="cover"
             fill
             nativeControls={false}
-            tapToToggle
+            seekOnTap
+            tapToToggle={false}
             paused={!isFocused}
             onProgress={onProgress}
           />

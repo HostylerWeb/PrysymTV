@@ -178,6 +178,55 @@ async function main() {
     }
   }
 
+  const seededPrograms = await prisma.gafProgram.findMany({
+    where: { isActive: true },
+    orderBy: { category: 'asc' },
+  });
+  const programByCategory = Object.fromEntries(
+    seededPrograms.map((p) => [p.category, p]),
+  ) as Record<string, (typeof seededPrograms)[0]>;
+
+  const sampleGrants = [
+    {
+      category: 'economic' as const,
+      amountUsd: 2500,
+      description: 'Small business equipment grant — pilot cohort',
+    },
+    {
+      category: 'workforce' as const,
+      amountUsd: 1800,
+      description: 'Trade certification scholarships',
+    },
+    {
+      category: 'youth' as const,
+      amountUsd: 1200,
+      description: 'Youth media & entrepreneurship workshop',
+    },
+  ];
+
+  for (const grant of sampleGrants) {
+    const program = programByCategory[grant.category];
+    const exists = await prisma.gafLedgerEntry.findFirst({
+      where: {
+        direction: 'outflow',
+        source: 'grant',
+        description: grant.description,
+      },
+    });
+    if (!exists) {
+      await prisma.gafLedgerEntry.create({
+        data: {
+          direction: 'outflow',
+          source: 'grant',
+          amountUsd: grant.amountUsd,
+          programCategory: grant.category,
+          gafProgramId: program?.id ?? null,
+          description: grant.description,
+        },
+      });
+    }
+  }
+
   const now = new Date();
   const inOneYear = new Date(now);
   inOneYear.setFullYear(inOneYear.getFullYear() + 1);

@@ -50,10 +50,10 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     borderBottomWidth: 1,
     gap: spacing.sm,
+    alignItems: 'center',
   },
-  text: { fontSize: 13, lineHeight: 18 },
+  text: { fontSize: 13, lineHeight: 18, textAlign: 'center' },
   btn: {
-    alignSelf: 'flex-start',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: radius.full,

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { createdAtFilter } from '../admin/admin-date-range.util';
@@ -118,5 +118,48 @@ export class GafService {
         createdAt: row.createdAt.toISOString(),
       })),
     };
+  }
+
+  async listPrograms() {
+    return this.prisma.gafProgram.findMany({
+      where: { isActive: true },
+      orderBy: [{ category: 'asc' }, { title: 'asc' }],
+      select: {
+        id: true,
+        category: true,
+        title: true,
+        description: true,
+      },
+    });
+  }
+
+  async createGrant(input: {
+    amountUsd: number;
+    programCategory: string;
+    gafProgramId?: string;
+    description?: string;
+  }) {
+    if (input.gafProgramId) {
+      const program = await this.prisma.gafProgram.findUnique({
+        where: { id: input.gafProgramId },
+      });
+      if (!program) {
+        throw new NotFoundException('GAF program not found');
+      }
+    }
+
+    return this.prisma.gafLedgerEntry.create({
+      data: {
+        direction: 'outflow',
+        source: 'grant',
+        amountUsd: input.amountUsd,
+        programCategory: input.programCategory as never,
+        gafProgramId: input.gafProgramId ?? null,
+        description: input.description?.trim() || null,
+      },
+      include: {
+        gafProgram: { select: { title: true } },
+      },
+    });
   }
 }

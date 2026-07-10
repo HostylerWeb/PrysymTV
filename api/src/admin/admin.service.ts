@@ -3069,6 +3069,35 @@ export class AdminService {
     return this.gaf.ledger(query);
   }
 
+  listGafPrograms() {
+    return this.gaf.listPrograms();
+  }
+
+  createGafGrant(
+    body: {
+      amountUsd: number;
+      programCategory: string;
+      gafProgramId?: string;
+      description?: string;
+    },
+    adminId: string,
+  ) {
+    return this.gaf.createGrant(body).then(async (row) => {
+      await this.auditLog.log({
+        adminId,
+        action: 'create',
+        entityType: 'gaf_ledger_entry',
+        entityId: row.id,
+        metadata: {
+          direction: 'outflow',
+          amountUsd: Number(row.amountUsd),
+          programCategory: row.programCategory,
+        },
+      });
+      return row;
+    });
+  }
+
   async deleteAdCampaign(id: string, adminId: string) {
     const existing = await this.prisma.adCampaign.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Campaign not found');

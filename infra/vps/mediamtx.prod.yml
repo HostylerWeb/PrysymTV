@@ -19,6 +19,10 @@ webrtcLocalUDPAddress: :8189
 webrtcLocalTCPAddress: :8189
 webrtcAllowOrigins:
   - PRYSYM_PUBLIC_ORIGIN
+  - http://localhost:8081
+  - http://127.0.0.1:8081
+  - http://localhost:19006
+  - http://127.0.0.1:19006
 webrtcAdditionalHosts:
   - PRYSYM_PUBLIC_HOST
   - PRYSYM_PUBLIC_IP

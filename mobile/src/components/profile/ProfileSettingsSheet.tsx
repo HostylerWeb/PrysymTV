@@ -69,7 +69,7 @@ export function ProfileSettingsSheet({
       const route = routes[initialScreen];
       if (route) {
         onClose();
-        router.push(route as never);
+        router.push(`${route}?returnToSettings=1` as never);
       }
     }
   }, [visible, initialScreen, onClose, router]);
@@ -78,7 +78,8 @@ export function ProfileSettingsSheet({
 
   const navigate = (route: string) => {
     onClose();
-    router.push(route as never);
+    const sep = route.includes('?') ? '&' : '?';
+    router.push(`${route}${sep}returnToSettings=1` as never);
   };
 
   const items: MenuItem[] = [

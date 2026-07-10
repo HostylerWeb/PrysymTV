@@ -1,47 +1,51 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { StreamerApplicationModal } from '@/components/modals/StreamerApplicationModal';
 import { useMockAuth } from '@/context/MockAuthContext';
-import { endStream, fetchStreamIngestHealth, initStream } from '@/lib/api/streams';
+import { initStream } from '@/lib/api/streams';
 import { colors, radius } from '@/theme/tokens';
 
 type StreamMode = 'camera' | 'obs';
+
+const CATEGORIES = ['Gaming', 'Music', 'Technology', 'Fitness', 'Talk'];
 
 export default function GoLiveScreen() {
   const { user } = useMockAuth();
   const router = useRouter();
   const [applyOpen, setApplyOpen] = useState(false);
-  const [mode, setMode] = useState<StreamMode>('obs');
+  const [mode, setMode] = useState<StreamMode>('camera');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Gaming');
   const [streamKey, setStreamKey] = useState('');
   const [serverUrl, setServerUrl] = useState('');
-  const [activeStreamId, setActiveStreamId] = useState<string | null>(null);
+  const [streamId, setStreamId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [healthMsg, setHealthMsg] = useState<string | null>(null);
   const approved = user?.streamerStatus === 'approved';
 
-  const startStream = async () => {
+  const openStudio = async () => {
     if (!title.trim()) {
-      Alert.alert('Title required', 'Enter a stream title before going live.');
+      Alert.alert('Title required', 'Enter a stream title before opening Live Studio.');
+      return;
+    }
+    if (streamId && mode === 'camera') {
+      router.push(`/live/${streamId}?studio=camera` as never);
+      return;
+    }
+    if (streamId && mode === 'obs') {
+      router.push(`/live/${streamId}?studio=obs` as never);
       return;
     }
     setBusy(true);
     try {
       const res = await initStream({ title: title.trim(), category: category.trim() || undefined });
-      setActiveStreamId(res.streamId);
+      setStreamId(res.streamId);
       setStreamKey(res.streamKey);
       setServerUrl(res.rtmpUrl);
-      Alert.alert(
-        'Stream ready',
-        mode === 'obs'
-          ? 'Copy the server URL and stream key into OBS, then start streaming.'
-          : 'Your broadcast credentials are ready. Copy them into a mobile RTMP encoder app to go live from your phone.',
-      );
+      router.push(`/live/${res.streamId}?studio=${mode}` as never);
     } catch (e) {
       Alert.alert('Could not start', e instanceof Error ? e.message : 'Stream init failed');
     } finally {
@@ -49,35 +53,19 @@ export default function GoLiveScreen() {
     }
   };
 
-  const checkHealth = async () => {
-    setBusy(true);
-    try {
-      const health = await fetchStreamIngestHealth();
-      const message =
-        typeof health.message === 'string'
-          ? health.message
-          : health.ok
-            ? 'Ingest is reachable.'
-            : 'Ingest health check completed.';
-      setHealthMsg(message);
-    } catch (e) {
-      setHealthMsg(e instanceof Error ? e.message : 'Health check failed');
-    } finally {
-      setBusy(false);
+  const generateObsKey = async () => {
+    if (!title.trim()) {
+      Alert.alert('Title required', 'Enter a stream title first.');
+      return;
     }
-  };
-
-  const finishStream = async () => {
-    if (!activeStreamId) return;
     setBusy(true);
     try {
-      await endStream(activeStreamId);
-      setActiveStreamId(null);
-      setStreamKey('');
-      setServerUrl('');
-      Alert.alert('Stream ended', 'Your broadcast has been stopped.');
+      const res = await initStream({ title: title.trim(), category: category.trim() || undefined });
+      setStreamId(res.streamId);
+      setStreamKey(res.streamKey);
+      setServerUrl(res.rtmpUrl);
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Could not end stream');
+      Alert.alert('Could not start', e instanceof Error ? e.message : 'Stream init failed');
     } finally {
       setBusy(false);
     }
@@ -86,52 +74,6 @@ export default function GoLiveScreen() {
   const copyIngest = () => {
     Alert.alert('RTMP settings', `Server: ${serverUrl}\nStream key: ${streamKey}`);
   };
-
-  const credentialsBlock = (
-    <>
-      <Text style={styles.sub}>
-        {mode === 'camera'
-          ? 'Phone camera streaming uses RTMP. Create credentials below, then paste them into a mobile encoder app (Prism Live, Larix, etc.).'
-          : 'Copy these into OBS or your RTMP encoder:'}
-      </Text>
-      {serverUrl ? <Text style={styles.code}>{serverUrl}</Text> : null}
-      {streamKey ? (
-        <Text style={styles.code}>{streamKey}</Text>
-      ) : (
-        <Text style={styles.sub}>Create a stream to get RTMP credentials.</Text>
-      )}
-      <View style={styles.row}>
-        <Button
-          label={busy ? 'Working…' : streamKey ? 'Refresh key' : 'Create stream'}
-          variant="secondary"
-          onPress={() => void startStream()}
-          disabled={busy}
-          style={styles.flex}
-        />
-        <Button
-          label="Copy"
-          variant="outline"
-          onPress={copyIngest}
-          disabled={!streamKey}
-          style={styles.flex}
-        />
-      </View>
-      <Button
-        label="Check ingest health"
-        variant="ghost"
-        style={{ marginTop: 8 }}
-        onPress={() => void checkHealth()}
-        disabled={busy}
-      />
-      <Button
-        label="End stream"
-        variant="outline"
-        style={{ marginTop: 8 }}
-        onPress={() => void finishStream()}
-        disabled={!activeStreamId || busy}
-      />
-    </>
-  );
 
   return (
     <>
@@ -145,53 +87,90 @@ export default function GoLiveScreen() {
               <Button label="Apply to stream" onPress={() => setApplyOpen(true)} style={{ marginTop: 12 }} />
             </Card>
           ) : (
-            <>
-              <Card>
-                <Text style={styles.title}>Go live setup</Text>
-                <View style={styles.modeRow}>
-                  {(['camera', 'obs'] as const).map((m) => (
-                    <Pressable
-                      key={m}
-                      style={[styles.modeBtn, mode === m && styles.modeBtnOn]}
-                      onPress={() => setMode(m)}
-                    >
-                      <Text style={[styles.modeText, mode === m && styles.modeTextOn]}>
-                        {m === 'camera' ? 'Camera' : 'OBS / Encoder'}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Stream title"
-                  placeholderTextColor={colors.mutedForeground}
-                  value={title}
-                  onChangeText={setTitle}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Category (e.g. Gaming, Music)"
-                  placeholderTextColor={colors.mutedForeground}
-                  value={category}
-                  onChangeText={setCategory}
-                />
-                {healthMsg ? <Text style={styles.hintBanner}>{healthMsg}</Text> : null}
-              </Card>
+            <Card>
+              <Text style={styles.sub}>
+                Go live from your phone with camera and mic — no extra software required. OBS is optional
+                for creators who need scenes, overlays, or capture hardware.
+              </Text>
 
-              <Card style={{ marginTop: 16 }}>
-                <Text style={styles.title}>{mode === 'camera' ? 'Mobile camera' : 'Encoder settings'}</Text>
-                {credentialsBlock}
-              </Card>
+              <View style={styles.modeRow}>
+                {(['camera', 'obs'] as const).map((m) => (
+                  <Pressable
+                    key={m}
+                    style={[styles.modeCard, mode === m && styles.modeCardOn]}
+                    onPress={() => setMode(m)}
+                  >
+                    <Text style={[styles.modeTitle, mode === m && styles.modeTitleOn]}>
+                      {m === 'camera' ? 'Camera & mic' : 'OBS Studio'}
+                    </Text>
+                    <Text style={styles.modeHint}>
+                      {m === 'camera'
+                        ? 'Recommended — open Live Studio on your phone.'
+                        : 'Optional — multi-source layouts and overlays.'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <TextInput
+                style={styles.input}
+                placeholder="Stream title"
+                placeholderTextColor={colors.mutedForeground}
+                value={title}
+                onChangeText={setTitle}
+              />
+              <View style={styles.categoryRow}>
+                {CATEGORIES.map((c) => (
+                  <Pressable
+                    key={c}
+                    style={[styles.categoryChip, category === c && styles.categoryChipOn]}
+                    onPress={() => setCategory(c)}
+                  >
+                    <Text style={[styles.categoryText, category === c && styles.categoryTextOn]}>{c}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {mode === 'obs' && streamKey ? (
+                <View style={styles.rtmpBox}>
+                  <Text style={styles.rtmpLabel}>Server</Text>
+                  <Text style={styles.code}>{serverUrl}</Text>
+                  <Text style={[styles.rtmpLabel, { marginTop: 8 }]}>Stream key</Text>
+                  <Text style={styles.code}>{streamKey}</Text>
+                </View>
+              ) : null}
+
+              {mode === 'camera' ? (
+                <Button
+                  label={busy ? 'Opening…' : 'Open Live Studio'}
+                  onPress={() => void openStudio()}
+                  disabled={!title.trim() || busy}
+                  style={{ marginTop: 16 }}
+                />
+              ) : streamKey ? (
+                <View style={styles.row}>
+                  <Button label="Copy server & key" variant="secondary" onPress={copyIngest} style={styles.flex} />
+                  <Button label="Open Live Studio" onPress={() => void openStudio()} disabled={busy} style={styles.flex} />
+                </View>
+              ) : (
+                <Button
+                  label={busy ? 'Generating…' : 'Generate stream key'}
+                  onPress={() => void generateObsKey()}
+                  disabled={!title.trim() || busy}
+                  style={{ marginTop: 16 }}
+                />
+              )}
+
+              <Text style={styles.hint}>
+                {mode === 'camera'
+                  ? Platform.OS === 'web'
+                    ? 'Enter a title and open Live Studio to preview your camera and mic. Tap Go Live when ready. For the most reliable broadcast, use the Prysym TV website or an Android/iOS build — Expo web preview depends on MediaMTX accepting your browser origin.'
+                    : 'Enter a title and open Live Studio to preview your camera and mic. When everything looks good, tap Go Live in the studio — viewers won\'t see you until then.'
+                  : 'In OBS use Custom service with the server URL and stream key above. Keep Live Studio open for chat and gifts.'}
+              </Text>
 
               {busy ? <ActivityIndicator color={colors.primary} style={{ marginTop: 16 }} /> : null}
-
-              <Button
-                label="Open creator dashboard"
-                variant="outline"
-                onPress={() => router.push('/creator-dashboard')}
-                style={{ marginTop: 16 }}
-              />
-            </>
+            </Card>
           )}
         </View>
       </ScrollView>
@@ -202,36 +181,48 @@ export default function GoLiveScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  pad: { paddingHorizontal: 16 },
+  pad: { paddingHorizontal: 16, paddingBottom: 32 },
   title: { color: colors.foreground, fontSize: 18, fontWeight: '700' },
-  sub: { color: colors.mutedForeground, fontSize: 13, marginVertical: 12 },
-  modeRow: { flexDirection: 'row', gap: 8, marginVertical: 12 },
-  modeBtn: {
+  sub: { color: colors.mutedForeground, fontSize: 14, lineHeight: 20, marginBottom: 16 },
+  modeRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  modeCard: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: radius.full,
-    backgroundColor: colors.secondary,
-    alignItems: 'center',
+    padding: 12,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.secondary + '55',
   },
-  modeBtnOn: { backgroundColor: colors.primary + '22' },
-  modeText: { color: colors.mutedForeground, fontWeight: '600' },
-  modeTextOn: { color: colors.primary },
+  modeCardOn: { borderColor: colors.primary, backgroundColor: colors.primary + '18' },
+  modeTitle: { color: colors.foreground, fontSize: 14, fontWeight: '700' },
+  modeTitleOn: { color: colors.primary },
+  modeHint: { color: colors.mutedForeground, fontSize: 11, lineHeight: 15, marginTop: 4 },
   input: {
     padding: 12,
     borderRadius: radius.lg,
     backgroundColor: colors.secondary,
     color: colors.foreground,
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  hintBanner: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-    marginTop: 8,
-    padding: 10,
-    borderRadius: radius.md,
+  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  categoryChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.full,
     backgroundColor: colors.secondary,
   },
-  code: { color: colors.primary, fontFamily: 'monospace', fontSize: 12, marginTop: 4 },
-  row: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  categoryChipOn: { backgroundColor: colors.primary + '22' },
+  categoryText: { color: colors.mutedForeground, fontSize: 12, fontWeight: '600' },
+  categoryTextOn: { color: colors.primary },
+  rtmpBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: radius.lg,
+    backgroundColor: colors.secondary + '88',
+  },
+  rtmpLabel: { color: colors.mutedForeground, fontSize: 11, fontWeight: '600' },
+  code: { color: colors.foreground, fontFamily: 'monospace', fontSize: 12, marginTop: 2 },
+  row: { flexDirection: 'row', gap: 8, marginTop: 16 },
   flex: { flex: 1 },
+  hint: { color: colors.mutedForeground, fontSize: 12, lineHeight: 18, marginTop: 16 },
 });

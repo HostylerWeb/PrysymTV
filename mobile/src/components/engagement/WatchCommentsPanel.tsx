@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -25,14 +24,28 @@ type Props = {
   count?: number;
   videoTitle?: string;
   thumbnailUrl?: string | null;
+  /** Pinned below player (watch page) instead of full-screen modal. */
+  layout?: 'modal' | 'pinned';
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
-export function WatchCommentsPanel({ videoId, count, videoTitle, thumbnailUrl }: Props) {
+export function WatchCommentsPanel({
+  videoId,
+  count,
+  videoTitle,
+  thumbnailUrl,
+  layout = 'modal',
+  open: openProp,
+  onOpenChange,
+}: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const { isAuthenticated, requireAuth, user } = useMockAuth();
-  const [open, setOpen] = useState(false);
+  const [openInternal, setOpenInternal] = useState(false);
+  const open = openProp ?? openInternal;
+  const setOpen = onOpenChange ?? setOpenInternal;
   const [text, setText] = useState('');
   const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
 
@@ -40,7 +53,6 @@ export function WatchCommentsPanel({ videoId, count, videoTitle, thumbnailUrl }:
   const comments = data?.items ?? [];
   const total = count ?? data?.meta.total ?? comments.length;
   const topComment = comments[0];
-
   const countLabel = total > 0 ? formatViewCount(total) : null;
 
   const submit = () => {
@@ -57,6 +69,163 @@ export function WatchCommentsPanel({ videoId, count, videoTitle, thumbnailUrl }:
       },
     );
   };
+
+  const sheetBody = (
+    <>
+      <View style={styles.sheetHeader}>
+        <Text style={styles.sheetTitle}>Comments</Text>
+        <View style={styles.sheetHeaderRight}>
+          {countLabel ? <Text style={styles.sheetCount}>{countLabel}</Text> : null}
+          <Pressable onPress={() => setOpen(false)} hitSlop={12} style={styles.closeBtn}>
+            <Ionicons name="chevron-down" size={22} color={colors.foreground} />
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.addCommentRow}>
+        {isAuthenticated ? (
+          <>
+            {replyingTo ? (
+              <View style={styles.replyBar}>
+                <Text style={styles.replyText}>Replying to @{replyingTo.username}</Text>
+                <Pressable onPress={() => setReplyingTo(null)}>
+                  <Text style={styles.replyCancel}>Cancel</Text>
+                </Pressable>
+              </View>
+            ) : null}
+            <View style={styles.composerRow}>
+              <View style={styles.composerAvatar}>
+                <Text style={styles.composerAvatarLetter}>
+                  {(user?.username ?? 'Y')[0]?.toUpperCase()}
+                </Text>
+              </View>
+              <TextInput
+                style={styles.composerInput}
+                placeholder={replyingTo ? 'Add a reply…' : 'Add a comment…'}
+                placeholderTextColor={colors.mutedForeground}
+                value={text}
+                onChangeText={setText}
+              />
+              <Pressable
+                style={[styles.sendBtn, !text.trim() && styles.sendBtnOff]}
+                onPress={submit}
+                disabled={!text.trim() || postComment.isPending}
+              >
+                <Ionicons name="send" size={16} color={colors.primaryForeground} />
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          <Pressable style={styles.signInRow} onPress={() => requireAuth()}>
+            <View style={styles.composerAvatar} />
+            <Text style={styles.signInText}>Add a comment…</Text>
+          </Pressable>
+        )}
+      </View>
+
+      <ScrollView
+        style={styles.list}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {isLoading ? (
+          <ActivityIndicator style={{ marginTop: 24 }} color={colors.primary} />
+        ) : comments.length === 0 ? (
+          <Text style={styles.previewEmpty}>No comments yet. Be the first!</Text>
+        ) : (
+          comments.map((c) => (
+            <View key={c.id}>
+              <View style={styles.comment}>
+                <View style={styles.commentAvatar}>
+                  <Text style={styles.commentAvatarLetter}>
+                    {c.user.username[0]?.toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.commentBody}>
+                  <View style={styles.commentMeta}>
+                    <Text style={styles.commentAuthor}>@{c.user.username}</Text>
+                    <Text style={styles.commentTime}>{formatRelativeTime(c.createdAt)}</Text>
+                  </View>
+                  <Text style={styles.commentText}>{c.body}</Text>
+                  <View style={styles.commentActions}>
+                    <Pressable
+                      style={styles.actionBtn}
+                      onPress={() => requireAuth(() => likeComment.mutate(c.id))}
+                    >
+                      <Ionicons
+                        name={c.liked ? 'thumbs-up' : 'thumbs-up-outline'}
+                        size={16}
+                        color={c.liked ? colors.primary : colors.mutedForeground}
+                      />
+                      {c.likesCount > 0 ? (
+                        <Text style={[styles.actionLabel, c.liked && styles.actionOn]}>
+                          {formatViewCount(c.likesCount)}
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                    <Pressable
+                      style={styles.actionBtn}
+                      onPress={() =>
+                        requireAuth(() =>
+                          setReplyingTo({ id: c.id, username: c.user.username }),
+                        )
+                      }
+                    >
+                      <Text style={styles.actionLabel}>Reply</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+              {(c.replies ?? []).map((reply) => (
+                <View key={reply.id} style={[styles.comment, styles.replyComment]}>
+                  <View style={styles.commentAvatar}>
+                    <Text style={styles.commentAvatarLetter}>
+                      {reply.user.username[0]?.toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.commentBody}>
+                    <View style={styles.commentMeta}>
+                      <Text style={styles.commentAuthor}>@{reply.user.username}</Text>
+                      <Text style={styles.commentTime}>
+                        {formatRelativeTime(reply.createdAt)}
+                      </Text>
+                    </View>
+                    <Text style={styles.commentText}>{reply.body}</Text>
+                    <View style={styles.commentActions}>
+                      <Pressable
+                        style={styles.actionBtn}
+                        onPress={() => requireAuth(() => likeComment.mutate(reply.id))}
+                      >
+                        <Ionicons
+                          name={reply.liked ? 'thumbs-up' : 'thumbs-up-outline'}
+                          size={16}
+                          color={reply.liked ? colors.primary : colors.mutedForeground}
+                        />
+                        {reply.likesCount > 0 ? (
+                          <Text style={[styles.actionLabel, reply.liked && styles.actionOn]}>
+                            {formatViewCount(reply.likesCount)}
+                          </Text>
+                        ) : null}
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ))
+        )}
+      </ScrollView>
+    </>
+  );
+
+  if (layout === 'pinned' && open) {
+    return (
+      <View style={[styles.pinnedSheet, { paddingBottom: insets.bottom }]}>
+        {sheetBody}
+      </View>
+    );
+  }
 
   return (
     <>
@@ -89,176 +258,29 @@ export function WatchCommentsPanel({ videoId, count, videoTitle, thumbnailUrl }:
         </Pressable>
       )}
 
-      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <View style={styles.modalRoot}>
-          {thumbnailUrl ? (
-            <View style={[styles.miniPlayer, { paddingTop: insets.top }]}>
-              <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-              <View style={styles.miniOverlay}>
-                <Ionicons name="play-circle" size={48} color={withAlpha(colors.onVideo, 0.9)} />
-                {videoTitle ? (
-                  <Text style={styles.miniTitle} numberOfLines={1}>{videoTitle}</Text>
-                ) : null}
-              </View>
-            </View>
-          ) : null}
-
-          <View style={[styles.sheet, thumbnailUrl ? styles.sheetBelowMini : null]}>
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Comments</Text>
-              <View style={styles.sheetHeaderRight}>
-                {countLabel ? <Text style={styles.sheetCount}>{countLabel}</Text> : null}
-                <Pressable onPress={() => setOpen(false)} hitSlop={12} style={styles.closeBtn}>
-                  <Ionicons name="close" size={22} color={colors.foreground} />
-                </Pressable>
-              </View>
-            </View>
-
-            <View style={styles.addCommentRow}>
-              {isAuthenticated ? (
-                <>
-                  {replyingTo ? (
-                    <View style={styles.replyBar}>
-                      <Text style={styles.replyText}>Replying to @{replyingTo.username}</Text>
-                      <Pressable onPress={() => setReplyingTo(null)}>
-                        <Text style={styles.replyCancel}>Cancel</Text>
-                      </Pressable>
-                    </View>
+      {layout === 'modal' ? (
+        <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
+          <View style={styles.modalRoot}>
+            {thumbnailUrl ? (
+              <View style={[styles.miniPlayer, { paddingTop: insets.top }]}>
+                <View style={StyleSheet.absoluteFill}>
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.videoBackground }]} />
+                </View>
+                <View style={styles.miniOverlay}>
+                  <Ionicons name="play-circle" size={48} color={withAlpha(colors.onVideo, 0.9)} />
+                  {videoTitle ? (
+                    <Text style={styles.miniTitle} numberOfLines={1}>{videoTitle}</Text>
                   ) : null}
-                  <View style={styles.composerRow}>
-                    <View style={styles.composerAvatar}>
-                      <Text style={styles.composerAvatarLetter}>
-                        {(user?.username ?? 'Y')[0]?.toUpperCase()}
-                      </Text>
-                    </View>
-                    <TextInput
-                      style={styles.composerInput}
-                      placeholder={replyingTo ? 'Add a reply…' : 'Add a comment…'}
-                      placeholderTextColor={colors.mutedForeground}
-                      value={text}
-                      onChangeText={setText}
-                    />
-                    <Pressable
-                      style={[styles.sendBtn, !text.trim() && styles.sendBtnOff]}
-                      onPress={submit}
-                      disabled={!text.trim() || postComment.isPending}
-                    >
-                      <Ionicons name="send" size={16} color={colors.primaryForeground} />
-                    </Pressable>
-                  </View>
-                </>
-              ) : (
-                <Pressable style={styles.signInRow} onPress={() => requireAuth()}>
-                  <View style={styles.composerAvatar} />
-                  <Text style={styles.signInText}>Add a comment…</Text>
-                </Pressable>
-              )}
-            </View>
-
-            <ScrollView
-              style={styles.list}
-              contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-              showsVerticalScrollIndicator={false}
-            >
-              {isLoading ? (
-                <ActivityIndicator style={{ marginTop: 24 }} color={colors.primary} />
-              ) : comments.length === 0 ? (
-                <Text style={styles.previewEmpty}>No comments yet. Be the first!</Text>
-              ) : (
-                comments.map((c) => (
-                  <View key={c.id}>
-                    <View style={styles.comment}>
-                      <View style={styles.commentAvatar}>
-                        <Text style={styles.commentAvatarLetter}>
-                          {c.user.username[0]?.toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={styles.commentBody}>
-                        <View style={styles.commentMeta}>
-                          <Text style={styles.commentAuthor}>@{c.user.username}</Text>
-                          <Text style={styles.commentTime}>
-                            {formatRelativeTime(c.createdAt)}
-                          </Text>
-                        </View>
-                        <Text style={styles.commentText}>{c.body}</Text>
-                        <View style={styles.commentActions}>
-                          <Pressable
-                            style={styles.actionBtn}
-                            onPress={() =>
-                              requireAuth(() => likeComment.mutate(c.id))
-                            }
-                          >
-                            <Ionicons
-                              name={c.liked ? 'thumbs-up' : 'thumbs-up-outline'}
-                              size={16}
-                              color={c.liked ? colors.primary : colors.mutedForeground}
-                            />
-                            {c.likesCount > 0 ? (
-                              <Text style={[styles.actionLabel, c.liked && styles.actionOn]}>
-                                {formatViewCount(c.likesCount)}
-                              </Text>
-                            ) : null}
-                          </Pressable>
-                          <Pressable
-                            style={styles.actionBtn}
-                            onPress={() =>
-                              requireAuth(() =>
-                                setReplyingTo({ id: c.id, username: c.user.username }),
-                              )
-                            }
-                          >
-                            <Text style={styles.actionLabel}>Reply</Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    </View>
-                    {(c.replies ?? []).map((reply) => (
-                      <View key={reply.id} style={[styles.comment, styles.replyComment]}>
-                        <View style={styles.commentAvatar}>
-                          <Text style={styles.commentAvatarLetter}>
-                            {reply.user.username[0]?.toUpperCase()}
-                          </Text>
-                        </View>
-                        <View style={styles.commentBody}>
-                          <View style={styles.commentMeta}>
-                            <Text style={styles.commentAuthor}>@{reply.user.username}</Text>
-                            <Text style={styles.commentTime}>
-                              {formatRelativeTime(reply.createdAt)}
-                            </Text>
-                          </View>
-                          <Text style={styles.commentText}>{reply.body}</Text>
-                          <View style={styles.commentActions}>
-                            <Pressable
-                              style={styles.actionBtn}
-                              onPress={() => requireAuth(() => likeComment.mutate(reply.id))}
-                            >
-                              <Ionicons
-                                name={reply.liked ? 'thumbs-up' : 'thumbs-up-outline'}
-                                size={16}
-                                color={reply.liked ? colors.primary : colors.mutedForeground}
-                              />
-                              {reply.likesCount > 0 ? (
-                                <Text style={[styles.actionLabel, reply.liked && styles.actionOn]}>
-                                  {formatViewCount(reply.likesCount)}
-                                </Text>
-                              ) : null}
-                            </Pressable>
-                          </View>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                ))
-              )}
-            </ScrollView>
+                </View>
+              </View>
+            ) : null}
+            <View style={[styles.sheet, thumbnailUrl ? styles.sheetBelowMini : null]}>{sheetBody}</View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      ) : null}
     </>
   );
 }
-
-const MINI_HEIGHT = 220;
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
@@ -294,7 +316,7 @@ function createStyles(colors: ThemeColors) {
     previewEmpty: { color: colors.mutedForeground, fontSize: 14 },
     modalRoot: { flex: 1, backgroundColor: colors.background },
     miniPlayer: {
-      height: MINI_HEIGHT,
+      height: 220,
       backgroundColor: colors.videoBackground,
       zIndex: 2,
     },
@@ -312,6 +334,15 @@ function createStyles(colors: ThemeColors) {
       borderTopLeftRadius: radius.xl,
       borderTopRightRadius: radius.xl,
       marginTop: -12,
+    },
+    pinnedSheet: {
+      flex: 1,
+      backgroundColor: colors.background,
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      marginTop: -8,
     },
     sheetHeader: {
       flexDirection: 'row',

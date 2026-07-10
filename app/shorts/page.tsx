@@ -174,6 +174,10 @@ function ShortVideo({
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [showControls, setShowControls] = useState(false)
+  const [scrubberOpen, setScrubberOpen] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const wasPlayingRef = useRef(false)
   const [isBuffering, setIsBuffering] = useState(true)
 
   useEffect(() => {
@@ -221,17 +225,29 @@ function ShortVideo({
   }, [isActive, isMuted])
 
   const togglePlay = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause()
-        setIsPlaying(false)
-      } else {
-        videoRef.current.play()
-        setIsPlaying(true)
-      }
+    const el = videoRef.current
+    if (!el) return
+    if (!scrubberOpen) {
+      wasPlayingRef.current = isPlaying
+      el.pause()
+      setIsPlaying(false)
+      setScrubberOpen(true)
+      return
     }
-    setShowControls(true)
-    setTimeout(() => setShowControls(false), 1500)
+    setScrubberOpen(false)
+    if (wasPlayingRef.current) {
+      void el.play()
+      setIsPlaying(true)
+    }
+  }
+
+  const seekToClientX = (clientX: number, track: HTMLDivElement) => {
+    const el = videoRef.current
+    if (!el || !duration) return
+    const rect = track.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    el.currentTime = ratio * duration
+    setCurrentTime(el.currentTime)
   }
 
   const toggleMute = (e: React.MouseEvent) => {
@@ -272,16 +288,75 @@ function ShortVideo({
         playsInline
         loop
         videoRef={videoRef}
+        onTimeUpdate={(t, d) => {
+          setCurrentTime(t)
+          setDuration(d)
+        }}
       />
       {isActive && isBuffering ? (
         <div className="absolute inset-0 z-[2] flex items-center justify-center pointer-events-none">
           <div className="w-12 h-12 rounded-full border-2 border-white/30 border-t-white animate-spin" />
         </div>
       ) : null}
-      <button type="button" className="absolute inset-0 z-[1]" onClick={togglePlay} aria-label="Toggle play" />
+      <button type="button" className="absolute inset-0 z-[1]" onClick={togglePlay} aria-label="Show timeline" />
+
+      {scrubberOpen ? (
+        <div
+          className="absolute left-3 right-3 bottom-24 z-[25] pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-2 text-white text-xs font-semibold mb-2">
+            <button
+              type="button"
+              className="p-1"
+              onClick={() => {
+                const el = videoRef.current
+                if (!el) return
+                if (isPlaying) {
+                  el.pause()
+                  setIsPlaying(false)
+                } else {
+                  void el.play()
+                  setIsPlaying(true)
+                }
+              }}
+            >
+              {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+            </button>
+            <span>
+              {Math.floor(currentTime / 60)}:{String(Math.floor(currentTime % 60)).padStart(2, "0")} /{" "}
+              {Math.floor(duration / 60)}:{String(Math.floor(duration % 60)).padStart(2, "0")}
+            </span>
+          </div>
+          <div
+            role="slider"
+            aria-valuemin={0}
+            aria-valuemax={duration || 0}
+            aria-valuenow={currentTime}
+            className="h-1 rounded-full bg-white/30 cursor-pointer"
+            onClick={(e) => seekToClientX(e.clientX, e.currentTarget)}
+            onPointerDown={(e) => {
+              const track = e.currentTarget
+              seekToClientX(e.clientX, track)
+              const move = (ev: PointerEvent) => seekToClientX(ev.clientX, track)
+              const up = () => {
+                window.removeEventListener("pointermove", move)
+                window.removeEventListener("pointerup", up)
+              }
+              window.addEventListener("pointermove", move)
+              window.addEventListener("pointerup", up)
+            }}
+          >
+            <div
+              className="h-full rounded-full bg-primary"
+              style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : "0%" }}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {/* Play/Pause Indicator */}
-      {showControls && (
+      {showControls && !scrubberOpen && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-20 h-20 rounded-full bg-black/50 flex items-center justify-center animate-in fade-in zoom-in duration-200">
             {isPlaying ? (

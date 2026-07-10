@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -50,6 +50,8 @@ export default function WatchScreen() {
   const [following, setFollowing] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
   const [progress, setProgress] = useState({ seconds: 0, duration: 0 });
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const { height: windowHeight } = useWindowDimensions();
 
   React.useEffect(() => {
     if (!video) return;
@@ -101,123 +103,145 @@ export default function WatchScreen() {
 
   return (
     <>
-      <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 40 }}>
-        <View style={styles.pad}>
-          <AppHeader showBack showSearch={false} showNotifications={false} />
-        </View>
-        <PlayerShell
-          title={video.title}
-          thumbnailUrl={video.thumbnailUrl}
-          playbackUrl={video.playbackSource}
-          subtitle={`${channel} · ${formatViewCount(video.viewsCount ?? 0)} views`}
-          showCast
-          hideMeta
-          nativeControls
-          onProgress={onProgress}
-          onShare={() => setShareOpen(true)}
-          onReport={() => requireAuth(() => setReportOpen(true))}
-        />
-        <AdBanner />
-        <View style={styles.metaBlock}>
-          <Text style={styles.videoTitle}>{video.title}</Text>
-          <Text style={styles.viewsLine}>
-            {formatViewCount(video.viewsCount ?? 0)} views
-          </Text>
-        </View>
-        <WatchEngagementRow
-          liked={liked}
-          disliked={disliked}
-          saved={saved}
-          likesCount={likesCount}
-          onLike={() => requireAuth(async () => {
-            const wasLiked = liked;
-            try {
-              const res = await toggleVideoLike(video.id);
-              setLiked(res.liked);
-              if (res.disliked) setDisliked(false);
-              setLikesCount((c) =>
-                res.likesCount != null ? res.likesCount : bumpLikeCount(c, wasLiked, res.liked),
-              );
-            } catch {
-              setLiked(wasLiked);
-            }
-          })}
-          onDislike={() => requireAuth(async () => {
-            const res = await toggleVideoDislike(video.id);
-            setDisliked(res.disliked);
-            if (res.liked === false && liked) {
-              setLiked(false);
-              setLikesCount((n) => Math.max(0, n - 1));
-            }
-          })}
-          onSave={() => requireAuth(async () => {
-            const res = await toggleVideoSave(video.id);
-            setSaved(res.saved);
-          })}
-          onPlaylist={() => requireAuth(() => setPlaylistOpen(true))}
-          onGift={() => requireAuth(() => setGiftOpen(true))}
-          onShare={() => setShareOpen(true)}
-        />
-        <View style={styles.creatorRow}>
-          <Pressable
-            style={styles.creatorInfo}
-            onPress={() => router.push(`/creator/${video.creator.username}`)}
-          >
-            <Image
-              source={{ uri: resolveAvatarUrl(video.creator.avatarUrl, video.creator.username) }}
-              style={styles.creatorAvatarImg}
-            />
-            <View>
-              <Text style={styles.creatorName}>{channel}</Text>
-              <Text style={styles.creatorHandle}>@{video.creator.username}</Text>
-            </View>
-          </Pressable>
-          <Button
-            label={following ? 'Following' : 'Follow'}
-            variant={following ? 'secondary' : 'primary'}
-            size="sm"
-            onPress={() => requireAuth(async () => {
-              if (following) {
-                await unfollowUser(video.creator.username);
-                setFollowing(false);
-              } else {
-                await followUser(video.creator.username);
-                setFollowing(true);
-              }
-            })}
+      <View style={styles.screen}>
+        {!commentsOpen ? (
+          <View style={styles.pad}>
+            <AppHeader showBack showSearch={false} showNotifications={false} />
+          </View>
+        ) : null}
+        <View style={commentsOpen ? { height: windowHeight * 0.32 } : undefined}>
+          <PlayerShell
+            title={video.title}
+            thumbnailUrl={video.thumbnailUrl}
+            playbackUrl={video.playbackSource}
+            subtitle={`${channel} · ${formatViewCount(video.viewsCount ?? 0)} views`}
+            showCast
+            hideMeta
+            nativeControls={false}
+            enableQualityMenu
+            onProgress={onProgress}
+            onShare={() => setShareOpen(true)}
+            onReport={() => requireAuth(() => setReportOpen(true))}
           />
         </View>
-        <Text style={styles.description}>
-          {video.description ?? video.tagline ?? `Watch ${video.title} on Prysym TV.`}
-        </Text>
-        <WatchCommentsPanel
-          videoId={video.id}
-          count={video.commentsCount}
-          videoTitle={video.title}
-          thumbnailUrl={video.thumbnailUrl}
-        />
-        {(relatedQuery.data?.length ?? 0) > 0 && (
-          <View style={styles.upNextSection}>
-            <Text style={styles.section}>Up next</Text>
-            {relatedQuery.data?.map((v) => (
-              <Pressable key={v.id} style={styles.upNext} onPress={() => router.push(`/watch/${v.id}`)}>
-                <View style={styles.upNextThumbWrap}>
-                  <Image source={{ uri: v.thumbnailUrl ?? '' }} style={styles.upNextThumb} contentFit="cover" />
-                  {v.durationSeconds ? (
-                    <View style={styles.durationBadge}>
-                      <Text style={styles.durationText}>{formatDuration(v.durationSeconds)}</Text>
-                    </View>
-                  ) : null}
-                </View>
-                <View style={styles.upNextBody}>
-                  <Text style={styles.upNextTitle} numberOfLines={2}>{v.title}</Text>
-                  <Text style={styles.upNextMeta}>{v.channel} · {formatViewCount(v.viewsCount ?? 0)} views</Text>
+        {commentsOpen ? (
+          <WatchCommentsPanel
+            layout="pinned"
+            open
+            onOpenChange={setCommentsOpen}
+            videoId={video.id}
+            count={video.commentsCount}
+            videoTitle={video.title}
+            thumbnailUrl={video.thumbnailUrl}
+          />
+        ) : (
+          <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+            <AdBanner />
+            <View style={styles.metaBlock}>
+              <Text style={styles.videoTitle}>{video.title}</Text>
+              <Text style={styles.viewsLine}>
+                {formatViewCount(video.viewsCount ?? 0)} views
+              </Text>
+            </View>
+            <WatchEngagementRow
+              liked={liked}
+              disliked={disliked}
+              saved={saved}
+              likesCount={likesCount}
+              onLike={() => requireAuth(async () => {
+                const wasLiked = liked;
+                try {
+                  const res = await toggleVideoLike(video.id);
+                  setLiked(res.liked);
+                  if (res.disliked) setDisliked(false);
+                  setLikesCount((c) =>
+                    res.likesCount != null ? res.likesCount : bumpLikeCount(c, wasLiked, res.liked),
+                  );
+                } catch {
+                  setLiked(wasLiked);
+                }
+              })}
+              onDislike={() => requireAuth(async () => {
+                const res = await toggleVideoDislike(video.id);
+                setDisliked(res.disliked);
+                if (res.liked === false && liked) {
+                  setLiked(false);
+                  setLikesCount((n) => Math.max(0, n - 1));
+                }
+              })}
+              onSave={() => requireAuth(async () => {
+                const res = await toggleVideoSave(video.id);
+                setSaved(res.saved);
+              })}
+              onPlaylist={() => requireAuth(() => setPlaylistOpen(true))}
+              onGift={() => requireAuth(() => setGiftOpen(true))}
+              onShare={() => setShareOpen(true)}
+            />
+            <View style={styles.creatorRow}>
+              <Pressable
+                style={styles.creatorInfo}
+                onPress={() => router.push(`/creator/${video.creator.username}`)}
+              >
+                <Image
+                  source={{ uri: resolveAvatarUrl(video.creator.avatarUrl, video.creator.username) }}
+                  style={styles.creatorAvatarImg}
+                />
+                <View>
+                  <Text style={styles.creatorName}>{channel}</Text>
+                  <Text style={styles.creatorHandle}>@{video.creator.username}</Text>
                 </View>
               </Pressable>
-            ))}
-          </View>
+              <Button
+                label={following ? 'Following' : 'Follow'}
+                variant={following ? 'secondary' : 'primary'}
+                size="sm"
+                onPress={() => requireAuth(async () => {
+                  if (following) {
+                    await unfollowUser(video.creator.username);
+                    setFollowing(false);
+                  } else {
+                    await followUser(video.creator.username);
+                    setFollowing(true);
+                  }
+                })}
+              />
+            </View>
+            <Text style={styles.description}>
+              {video.description ?? video.tagline ?? `Watch ${video.title} on Prysym TV.`}
+            </Text>
+            <WatchCommentsPanel
+              layout="pinned"
+              open={false}
+              onOpenChange={setCommentsOpen}
+              videoId={video.id}
+              count={video.commentsCount}
+              videoTitle={video.title}
+              thumbnailUrl={video.thumbnailUrl}
+            />
+            {(relatedQuery.data?.length ?? 0) > 0 && (
+              <View style={styles.upNextSection}>
+                <Text style={styles.section}>Up next</Text>
+                {relatedQuery.data?.map((v) => (
+                  <Pressable key={v.id} style={styles.upNext} onPress={() => router.push(`/watch/${v.id}`)}>
+                    <View style={styles.upNextThumbWrap}>
+                      <Image source={{ uri: v.thumbnailUrl ?? '' }} style={styles.upNextThumb} contentFit="cover" />
+                      {v.durationSeconds ? (
+                        <View style={styles.durationBadge}>
+                          <Text style={styles.durationText}>{formatDuration(v.durationSeconds)}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <View style={styles.upNextBody}>
+                      <Text style={styles.upNextTitle} numberOfLines={2}>{v.title}</Text>
+                      <Text style={styles.upNextMeta}>{v.channel} · {formatViewCount(v.viewsCount ?? 0)} views</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </ScrollView>
         )}
-      </ScrollView>
+      </View>
       <GiftModal
         visible={giftOpen}
         onClose={() => setGiftOpen(false)}

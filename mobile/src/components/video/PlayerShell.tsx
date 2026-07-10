@@ -22,6 +22,8 @@ type Props = {
   contentFit?: 'contain' | 'cover' | 'fill';
   onProgress?: (seconds: number, duration: number) => void;
   nativeControls?: boolean;
+  enableQualityMenu?: boolean;
+  seekOnTap?: boolean;
   paused?: boolean;
 };
 
@@ -40,6 +42,8 @@ export function PlayerShell({
   contentFit = 'contain',
   onProgress,
   nativeControls = true,
+  enableQualityMenu = false,
+  seekOnTap = false,
   paused = false,
 }: Props) {
   const showTopActions = showCast || onShare || onReport;
@@ -53,7 +57,9 @@ export function PlayerShell({
           contentFit={contentFit}
           onProgress={onProgress}
           nativeControls={nativeControls}
-          tapToToggle={!nativeControls}
+          enableQualityMenu={enableQualityMenu}
+          seekOnTap={seekOnTap}
+          tapToToggle={!nativeControls && !seekOnTap}
           paused={paused}
         />
       ) : (

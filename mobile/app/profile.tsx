@@ -32,6 +32,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatDuration } from '@/utils/format-media';
 import { resolveAvatarUrl, resolveProfileMediaUrl } from '@/lib/media-url';
+import { prefetchProfileMedia } from '@/lib/profile-media-cache';
 
 const TABS = [
   { id: 'content', label: 'My content', icon: 'grid-outline' as const },
@@ -65,7 +66,18 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       if (isAuthenticated) void refreshUser();
-    }, [isAuthenticated, refreshUser]),
+      if (settingsParam) setSettingsOpen(true);
+    }, [isAuthenticated, refreshUser, settingsParam]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      prefetchProfileMedia([
+        resolveAvatarUrl(user.avatarUrl, user.username),
+        resolveProfileMediaUrl(user.bannerUrl),
+      ]);
+    }, [user?.avatarUrl, user?.bannerUrl, user?.username]),
   );
 
   if (!isAuthenticated) {
@@ -139,7 +151,7 @@ export default function ProfileScreen() {
                 source={{ uri: bannerUri }}
                 style={styles.banner}
                 contentFit="cover"
-                cachePolicy="none"
+                cachePolicy="memory-disk"
               />
             ) : (
               <View style={[styles.banner, styles.bannerPlaceholder, { backgroundColor: colors.secondary }]} />
@@ -152,7 +164,7 @@ export default function ProfileScreen() {
               source={{ uri: avatarUri }}
               style={styles.avatar}
               contentFit="cover"
-              cachePolicy="none"
+              cachePolicy="memory-disk"
             />
             <Pressable style={styles.editFab} onPress={() => setEditOpen(true)}>
               <Ionicons name="pencil" size={14} color={colors.primaryForeground} />

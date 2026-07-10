@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CastMediaButton } from '@/components/video/CastMediaButton';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NotificationsSheet } from '@/components/modals/NotificationsSheet';
@@ -43,6 +43,7 @@ export function AppHeader({
   onCreatePress,
 }: Props) {
   const router = useRouter();
+  const { returnToSettings } = useLocalSearchParams<{ returnToSettings?: string }>();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { user, isAuthenticated } = useMockAuth();
@@ -74,7 +75,17 @@ export function AppHeader({
         <View style={styles.row}>
           <View style={styles.left}>
             {showBack ? (
-              <Pressable onPress={() => router.back()} style={commonStyles.iconButton} hitSlop={8}>
+              <Pressable
+                onPress={() => {
+                  if (returnToSettings === '1') {
+                    router.replace('/profile?settings=1');
+                    return;
+                  }
+                  router.back();
+                }}
+                style={commonStyles.iconButton}
+                hitSlop={8}
+              >
                 <Ionicons name="chevron-back" size={24} color={colors.foreground} />
               </Pressable>
             ) : (

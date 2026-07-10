@@ -1,5 +1,11 @@
 import { apiRequest } from './client';
 
+export type StreamStudioInfo = {
+  streamKey: string;
+  rtmpUrl: string;
+  whipPublishUrl: string;
+};
+
 export type StreamDetail = {
   id: string;
   slug: string;
@@ -17,6 +23,7 @@ export type StreamDetail = {
   hlsPlaybackUrl?: string | null;
   webrtcPlaybackUrl?: string | null;
   creatorId: string;
+  studio?: StreamStudioInfo;
 };
 
 export function fetchLiveStreams() {

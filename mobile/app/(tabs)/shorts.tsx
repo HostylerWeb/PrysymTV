@@ -191,7 +191,8 @@ export default function ShortsScreen() {
                     contentFit="cover"
                     loop
                     nativeControls={false}
-                    tapToToggle
+                    seekOnTap
+                    tapToToggle={false}
                     autoPlay={isActive}
                     paused={!isFocused || !isActive}
                   />

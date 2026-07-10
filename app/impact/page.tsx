@@ -111,7 +111,7 @@ export default function ImpactPage() {
               </div>
             </section>
 
-            {data.fundingByCategory.length > 0 && (
+            {data.fundingByCategory.length > 0 ? (
               <section className="mb-12">
                 <h2 className="text-xl font-bold mb-4">Funding by area</h2>
                 <div className="space-y-2">
@@ -130,9 +130,16 @@ export default function ImpactPage() {
                   ))}
                 </div>
               </section>
+            ) : (
+              <section className="mb-12">
+                <h2 className="text-xl font-bold mb-2">Funding by area</h2>
+                <p className="text-sm text-muted-foreground">
+                  Grant outflows by program area appear here once recorded in Admin → GAF.
+                </p>
+              </section>
             )}
 
-            {data.recentGrants.length > 0 && (
+            {data.recentGrants.length > 0 ? (
               <section>
                 <h2 className="text-xl font-bold mb-4">Recent grants</h2>
                 <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
@@ -155,6 +162,13 @@ export default function ImpactPage() {
                     </div>
                   ))}
                 </div>
+              </section>
+            ) : (
+              <section>
+                <h2 className="text-xl font-bold mb-2">Recent grants</h2>
+                <p className="text-sm text-muted-foreground">
+                  Community grants recorded in Admin → GAF will be listed here.
+                </p>
               </section>
             )}
           </>

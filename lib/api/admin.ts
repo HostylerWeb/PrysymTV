@@ -1389,6 +1389,29 @@ export function fetchAdminGafLedger(params?: {
   return apiRequest<AdminGafLedgerResponse>(`/admin/gaf/ledger${qs(params ?? {})}`);
 }
 
+export type AdminGafProgram = {
+  id: string;
+  category: string;
+  title: string;
+  description: string | null;
+};
+
+export function fetchAdminGafPrograms() {
+  return apiRequest<AdminGafProgram[]>("/admin/gaf/programs");
+}
+
+export function createAdminGafGrant(body: {
+  amountUsd: number;
+  programCategory: "economic" | "workforce" | "housing" | "youth";
+  gafProgramId?: string;
+  description?: string;
+}) {
+  return apiRequest<{ id: string }>("/admin/gaf/grants", {
+    method: "POST",
+    body,
+  });
+}
+
 export type AdminAdvertiserAccount = {
   id: string;
   companyName: string;

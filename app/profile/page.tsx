@@ -158,6 +158,20 @@ function ProfilePageContent() {
   }, [authParam, isAuthenticated, isLoading])
 
   useEffect(() => {
+    if (!user) return
+    const avatar = userAvatarUrl(user.avatar, user.username ?? user.email ?? "user")
+    const banner = profileBannerUrl(user.bannerUrl)
+    if (avatar) {
+      const img = new Image()
+      img.src = avatar
+    }
+    if (banner) {
+      const img = new Image()
+      img.src = banner
+    }
+  }, [user?.avatar, user?.bannerUrl, user?.username, user?.email])
+
+  useEffect(() => {
     if (!isLoading && isAuthenticated && returnTo) {
       router.replace(returnTo)
     }
