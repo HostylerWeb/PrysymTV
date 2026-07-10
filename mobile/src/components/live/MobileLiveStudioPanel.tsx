@@ -37,6 +37,13 @@ export function MobileLiveStudioPanel({ stream, mode, viewerCount }: Props) {
   const [ending, setEnding] = useState(false);
   const [draft, setDraft] = useState('');
   const [cameraGranted, setCameraGranted] = useState(mode !== 'camera');
+  const [showDevices, setShowDevices] = useState(false);
+  const [videoDevices, setVideoDevices] = useState<Array<{ deviceId: string; label: string }>>([]);
+  const [audioDevices, setAudioDevices] = useState<Array<{ deviceId: string; label: string }>>([]);
+  const [selectedVideoId, setSelectedVideoId] = useState('');
+  const [selectedAudioId, setSelectedAudioId] = useState('');
+  const [cameraOn, setCameraOn] = useState(true);
+  const [micOn, setMicOn] = useState(true);
   const { messages, connected, sendMessage } = useStreamChat(stream.id);
 
   const useCamera = mode === 'camera' && !!stream.studio?.whipPublishUrl;
@@ -121,7 +128,18 @@ export function MobileLiveStudioPanel({ stream, mode, viewerCount }: Props) {
           cameraGranted ? (
             <LiveCameraPublisher
               whipPublishUrl={stream.studio.whipPublishUrl}
+              streamId={stream.id}
               publishing={isPublishing}
+              selectedVideoDeviceId={selectedVideoId}
+              selectedAudioDeviceId={selectedAudioId}
+              cameraEnabled={cameraOn}
+              micEnabled={micOn}
+              onDevices={({ videoDevices: v, audioDevices: a }) => {
+                setVideoDevices(v);
+                setAudioDevices(a);
+                if (!selectedVideoId && v[0]?.deviceId) setSelectedVideoId(v[0].deviceId);
+                if (!selectedAudioId && a[0]?.deviceId) setSelectedAudioId(a[0].deviceId);
+              }}
               onConnected={() => {
                 setIsPublishing(true);
                 setBroadcastError(null);
@@ -173,6 +191,14 @@ export function MobileLiveStudioPanel({ stream, mode, viewerCount }: Props) {
             style={styles.flex}
           />
         ) : null}
+        {useCamera && !isPublishing ? (
+          <Button
+            label={showDevices ? 'Hide devices' : 'Camera & mic'}
+            variant="outline"
+            onPress={() => setShowDevices((v) => !v)}
+            style={styles.flex}
+          />
+        ) : null}
         {broadcastError ? (
           <Text style={[styles.broadcastHint, { color: colors.destructive }]}>{broadcastError}</Text>
         ) : isPublishing && streamStatus !== 'live' ? (
@@ -195,6 +221,51 @@ export function MobileLiveStudioPanel({ stream, mode, viewerCount }: Props) {
           {viewerCount.toLocaleString()} watching
         </Text>
       </View>
+
+      {useCamera && showDevices && !isPublishing ? (
+        <View style={[styles.devicePanel, { borderColor: colors.border }]}>
+          <Text style={[styles.deviceHeading, { color: colors.foreground }]}>Camera</Text>
+          {videoDevices.map((d) => (
+            <Pressable
+              key={d.deviceId}
+              style={[
+                styles.deviceRow,
+                selectedVideoId === d.deviceId && { backgroundColor: colors.secondary },
+              ]}
+              onPress={() => setSelectedVideoId(d.deviceId)}
+            >
+              <Text style={{ color: colors.foreground, fontSize: 13 }} numberOfLines={1}>
+                {d.label}
+              </Text>
+            </Pressable>
+          ))}
+          <Text style={[styles.deviceHeading, { color: colors.foreground, marginTop: 8 }]}>Microphone</Text>
+          {audioDevices.map((d) => (
+            <Pressable
+              key={d.deviceId}
+              style={[
+                styles.deviceRow,
+                selectedAudioId === d.deviceId && { backgroundColor: colors.secondary },
+              ]}
+              onPress={() => setSelectedAudioId(d.deviceId)}
+            >
+              <Text style={{ color: colors.foreground, fontSize: 13 }} numberOfLines={1}>
+                {d.label}
+              </Text>
+            </Pressable>
+          ))}
+          <View style={styles.deviceToggles}>
+            <Pressable style={styles.toggleBtn} onPress={() => setCameraOn((v) => !v)}>
+              <Ionicons name={cameraOn ? 'videocam' : 'videocam-off'} size={18} color={colors.foreground} />
+              <Text style={{ color: colors.foreground, fontSize: 12 }}>{cameraOn ? 'Camera on' : 'Camera off'}</Text>
+            </Pressable>
+            <Pressable style={styles.toggleBtn} onPress={() => setMicOn((v) => !v)}>
+              <Ionicons name={micOn ? 'mic' : 'mic-off'} size={18} color={colors.foreground} />
+              <Text style={{ color: colors.foreground, fontSize: 12 }}>{micOn ? 'Mic on' : 'Mic off'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       <ScrollView style={styles.chat} contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}>
         {messages.map((m) => (
@@ -277,5 +348,29 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingHorizontal: 16,
     paddingVertical: 10,
+  },
+  devicePanel: {
+    marginHorizontal: spacing.page,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+  },
+  deviceHeading: { fontSize: 12, fontWeight: '700', marginBottom: 6 },
+  deviceRow: {
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: radius.md,
+    marginBottom: 4,
+  },
+  deviceToggles: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 10,
+  },
+  toggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
 });

@@ -10,7 +10,9 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { StreamStatus, StreamerStatus } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PlaybackService } from '../playback/playback.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { verticalFromCategorySlug } from '../common/utils/category-vertical.util';
 import { StreamsGateway } from './streams.gateway';
 
@@ -34,6 +36,8 @@ export class StreamsService {
     private readonly config: ConfigService,
     private readonly notifications: NotificationsService,
     private readonly streamsGateway: StreamsGateway,
+    private readonly storage: StorageService,
+    private readonly playback: PlaybackService,
   ) {}
 
   async listLive() {
@@ -489,7 +493,7 @@ export class StreamsService {
       id: s.id,
       slug: s.creator.username,
       title: s.title,
-      thumbnail: s.thumbnailUrl,
+      thumbnail: this.playback.resolvePublicAssetUrl(s.thumbnailUrl),
       streamer: s.creator.displayName ?? s.creator.username,
       streamerSlug: s.creator.username,
       streamerAvatar: s.creator.avatarUrl,
@@ -512,6 +516,37 @@ export class StreamsService {
             whipPublishUrl: `${webrtcBase}/live/${s.temporaryStreamToken}/whip`,
           }
         : undefined,
+    };
+  }
+
+  async initThumbnailUpload(streamId: string, creatorId: string) {
+    const stream = await this.prisma.stream.findFirst({
+      where: { id: streamId, creatorId },
+    });
+    if (!stream) throw new NotFoundException('Stream not found');
+
+    const objectKey = this.storage.buildStreamThumbnailKey(streamId);
+    const target = await this.storage.createUploadTargetForKey(objectKey, 'image/jpeg');
+    return {
+      ...target,
+      publicUrl: this.storage.getPublicUrl(objectKey),
+    };
+  }
+
+  async confirmThumbnail(streamId: string, creatorId: string) {
+    const stream = await this.prisma.stream.findFirst({
+      where: { id: streamId, creatorId },
+    });
+    if (!stream) throw new NotFoundException('Stream not found');
+
+    const objectKey = this.storage.buildStreamThumbnailKey(streamId);
+    const thumbnailUrl = this.storage.getPublicUrl(objectKey);
+    await this.prisma.stream.update({
+      where: { id: streamId },
+      data: { thumbnailUrl },
+    });
+    return {
+      thumbnailUrl: this.playback.resolvePublicAssetUrl(thumbnailUrl),
     };
   }
 

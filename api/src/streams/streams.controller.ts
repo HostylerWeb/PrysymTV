@@ -75,6 +75,19 @@ export class StreamsController {
     return this.streams.endStream(id, user.id);
   }
 
+  @Post(':id/thumbnail/upload')
+  @UseGuards(JwtAuthGuard)
+  initThumbnailUpload(@CurrentUser() user: AuthUserPayload, @Param('id') id: string) {
+    return this.streams.initThumbnailUpload(id, user.id);
+  }
+
+  @Post(':id/thumbnail/confirm')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
+  confirmThumbnail(@CurrentUser() user: AuthUserPayload, @Param('id') id: string) {
+    return this.streams.confirmThumbnail(id, user.id);
+  }
+
   @Get(':id')
   @UseGuards(OptionalJwtAuthGuard)
   getOne(

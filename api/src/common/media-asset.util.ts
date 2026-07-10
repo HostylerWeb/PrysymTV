@@ -1,6 +1,7 @@
 /** Object-key prefixes that may be served via the public assets proxy. */
 export const PUBLIC_ASSET_PREFIXES = [
   'uploads/thumbnails/',
+  'uploads/stream-thumbnails/',
   'uploads/movies/',
   'uploads/podcasts/',
   'uploads/stores/',

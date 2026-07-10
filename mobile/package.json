@@ -54,6 +54,7 @@
     "prebuild:clean": "expo prebuild --platform android --clean",
     "build:apk:debug": "bash scripts/build-android.sh assembleDebug",
     "build:apk:release": "bash scripts/build-android.sh assembleRelease",
+    "install:apk:debug": "adb install -r android/app/build/outputs/apk/debug/app-debug.apk",
     "install:apk:release": "adb install -r android/app/build/outputs/apk/release/app-release.apk",
     "dev:android": "adb reverse tcp:8081 tcp:8081 && expo start",
     "log:android": "bash scripts/log-android.sh",

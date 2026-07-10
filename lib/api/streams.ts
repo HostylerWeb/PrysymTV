@@ -67,6 +67,23 @@ export function endStream(streamId: string) {
   );
 }
 
+export function initStreamThumbnailUpload(streamId: string) {
+  return apiRequest<{
+    objectKey: string;
+    uploadUrl: string;
+    uploadMethod: "PUT" | "POST";
+    uploadHeaders: Record<string, string>;
+    publicUrl: string;
+  }>(`/streams/${encodeURIComponent(streamId)}/thumbnail/upload`, { method: "POST" });
+}
+
+export function confirmStreamThumbnail(streamId: string) {
+  return apiRequest<{ thumbnailUrl: string }>(
+    `/streams/${encodeURIComponent(streamId)}/thumbnail/confirm`,
+    { method: "POST" },
+  );
+}
+
 export function getRtmpIngestUrl(): string {
   return (
     process.env.NEXT_PUBLIC_RTMP_INGEST_URL?.trim() ||

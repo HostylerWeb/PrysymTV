@@ -14,10 +14,18 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 import { VideoQualityMenu } from '@/components/video/VideoQualityMenu';
 import { fetchHlsVariants, type HlsVariant } from '@/lib/hls-variants';
 import { colors, radius, withAlpha } from '@/theme/tokens';
+
+function safePause(player: VideoPlayer) {
+  try {
+    player.pause();
+  } catch {
+    // Native player may already be released during tab/navigation unmount.
+  }
+}
 
 type Props = {
   source: string;
@@ -30,6 +38,11 @@ type Props = {
   seekOnTap?: boolean;
   enableQualityMenu?: boolean;
   enableFullscreen?: boolean;
+  /** `inline` keeps the player in a scrollable parent (e.g. vertical episode pager). */
+  fullscreenPresentation?: 'modal' | 'inline';
+  /** Parent-controlled fullscreen (inline presentation). */
+  externalFullscreen?: boolean;
+  onFullscreenChange?: (isFullscreen: boolean) => void;
   posterUrl?: string | null;
   onProgress?: (seconds: number, duration: number) => void;
   onEnded?: () => void;
@@ -84,7 +97,10 @@ function PlayerOverlayControls({
       {enableFullscreen ? (
         <Pressable
           style={styles.fullscreenBtn}
-          onPress={onToggleFullscreen}
+          onPress={(e) => {
+            e.stopPropagation();
+            onToggleFullscreen();
+          }}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
@@ -110,6 +126,9 @@ export function HlsPlayer({
   seekOnTap = false,
   enableQualityMenu = false,
   enableFullscreen = false,
+  fullscreenPresentation = 'modal',
+  externalFullscreen,
+  onFullscreenChange,
   posterUrl,
   onProgress,
   onEnded,
@@ -170,10 +189,22 @@ export function HlsPlayer({
   }, []);
 
   useEffect(() => {
+    if (fullscreenPresentation !== 'inline' || externalFullscreen === undefined) return;
+    setIsFullscreen(externalFullscreen);
+  }, [externalFullscreen, fullscreenPresentation]);
+
+  useEffect(() => {
+    if (paused && isFullscreen && fullscreenPresentation === 'modal') {
+      setIsFullscreen(false);
+      onFullscreenChange?.(false);
+    }
+  }, [paused, isFullscreen, fullscreenPresentation, onFullscreenChange]);
+
+  useEffect(() => {
     return () => {
-      player.pause();
+      void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     };
-  }, [player]);
+  }, []);
 
   useEffect(() => {
     player.muted = muted;
@@ -185,12 +216,12 @@ export function HlsPlayer({
 
   useEffect(() => {
     if (paused || !appActive) {
-      player.pause();
+      safePause(player);
       setPlaying(false);
       return;
     }
     if (seekOnTap && chromeVisible) {
-      player.pause();
+      safePause(player);
       setPlaying(false);
       return;
     }
@@ -281,24 +312,35 @@ export function HlsPlayer({
     seekToRatio(event.nativeEvent.locationX / trackWidth);
   };
 
-  const onQualitySelect = (variant: HlsVariant | null) => {
-    if (!variant) {
-      setSelectedVariantUri(null);
-      setActiveSource(masterSource);
-      player.replace({ uri: masterSource, contentType: 'hls' });
-      return;
-    }
-    setSelectedVariantUri(variant.uri);
-    setActiveSource(variant.uri);
+  const onQualitySelect = async (variant: HlsVariant | null) => {
     const resumeAt = player.currentTime;
-    player.replace({ uri: variant.uri, contentType: 'hls' });
-    if (resumeAt > 0) player.currentTime = resumeAt;
+    try {
+      if (!variant) {
+        setSelectedVariantUri(null);
+        setActiveSource(masterSource);
+        await player.replaceAsync({ uri: masterSource, contentType: 'hls' });
+      } else {
+        setSelectedVariantUri(variant.uri);
+        setActiveSource(variant.uri);
+        await player.replaceAsync({ uri: variant.uri, contentType: 'hls' });
+      }
+      if (resumeAt > 0) player.currentTime = resumeAt;
+    } catch {
+      /* quality switch failed — player keeps previous source */
+    }
   };
 
   const toggleFullscreen = () => {
-    setIsFullscreen((value) => !value);
+    setIsFullscreen((value) => {
+      const next = !value;
+      onFullscreenChange?.(next);
+      return next;
+    });
     setChromeVisible(false);
   };
+
+  const useModalFullscreen = fullscreenPresentation === 'modal';
+  const showModal = useModalFullscreen && isFullscreen;
 
   useEffect(() => {
     if (!isFullscreen) return;
@@ -307,9 +349,11 @@ export function HlsPlayer({
     return () => {
       if (cancelled) return;
       cancelled = true;
-      void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+      if (useModalFullscreen) {
+        void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+      }
     };
-  }, [isFullscreen]);
+  }, [isFullscreen, useModalFullscreen]);
 
   const cornerBottom = controlsBottomInset ?? insets.bottom + 12;
   const cornerTop = controlsTopInset ?? insets.top + 12;
@@ -318,7 +362,10 @@ export function HlsPlayer({
   const showPausedOverlay = !nativeControls && ready && !playing && !buffering && !chromeVisible;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const showCornerControls =
-    !nativeControls && (enableQualityMenu || enableFullscreen) && !seekOnTap && !isFullscreen;
+    !nativeControls &&
+    (enableQualityMenu || enableFullscreen) &&
+    !seekOnTap &&
+    (!isFullscreen || fullscreenPresentation === 'inline');
 
   const renderPlayerSurface = (fullscreen: boolean) => (
     <View
@@ -338,7 +385,7 @@ export function HlsPlayer({
         style={StyleSheet.absoluteFill}
         player={player}
         contentFit={contentFit}
-        allowsFullscreen={false}
+        fullscreenOptions={{ enable: false }}
         allowsPictureInPicture={false}
         nativeControls={nativeControls}
         pointerEvents={nativeControls ? 'box-none' : 'none'}
@@ -410,7 +457,7 @@ export function HlsPlayer({
           <PlayerOverlayControls
             enableQualityMenu={enableQualityMenu}
             enableFullscreen={enableFullscreen}
-            isFullscreen={false}
+            isFullscreen={isFullscreen}
             onToggleFullscreen={toggleFullscreen}
             variants={variants}
             selectedVariantUri={selectedVariantUri}
@@ -432,9 +479,9 @@ export function HlsPlayer({
 
   return (
     <>
-      {!isFullscreen ? renderPlayerSurface(false) : null}
+      {!showModal ? renderPlayerSurface(isFullscreen && !useModalFullscreen) : null}
       <Modal
-        visible={isFullscreen}
+        visible={showModal}
         animationType="fade"
         supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
         onRequestClose={toggleFullscreen}

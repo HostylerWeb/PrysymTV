@@ -8,7 +8,7 @@
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
     video { width: 100%; height: 100%; object-fit: cover; background: #000; }
-    #status { position: fixed; left: 12px; bottom: 12px; color: #fff; font: 12px sans-serif; opacity: 0.8; }
+    #status { position: fixed; left: 12px; bottom: 12px; color: #fff; font: 12px sans-serif; opacity: 0.8; z-index: 2; }
   </style>
 </head>
 <body>
@@ -21,6 +21,10 @@
     let publishing = false;
     let publisher = null;
     let stream = null;
+    let selectedVideoId = '';
+    let selectedAudioId = '';
+    let skipDeviceSwitch = true;
+    let thumbnailSent = false;
     const statusEl = document.getElementById('status');
     const videoEl = document.getElementById('preview');
 
@@ -32,6 +36,25 @@
       if (window.parent && window.parent !== window) {
         window.parent.postMessage(payload, '*');
       }
+    }
+
+    function mapDevices(devices, kind) {
+      return devices
+        .filter((d) => d.kind === kind && d.deviceId)
+        .map((d, i) => ({
+          deviceId: d.deviceId,
+          label: d.label?.trim() || (kind === 'videoinput' ? 'Camera ' : 'Microphone ') + (i + 1),
+        }));
+    }
+
+    async function refreshDeviceLists() {
+      if (!navigator.mediaDevices?.enumerateDevices) return;
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      post({
+        type: 'devices',
+        videoDevices: mapDevices(devices, 'videoinput'),
+        audioDevices: mapDevices(devices, 'audioinput'),
+      });
     }
 
     async function detectCodecs() {
@@ -46,23 +69,74 @@
       return { videoCodec, audioCodec };
     }
 
-    async function startPreview() {
-      if (!whipUrl) {
-        throw new Error('Missing WHIP publish URL');
+    async function acquireMedia(videoDeviceId, audioDeviceId) {
+      const videoConstraint = videoDeviceId
+        ? { deviceId: { exact: videoDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        : { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } };
+      return navigator.mediaDevices.getUserMedia({
+        video: videoConstraint,
+        audio: {
+          ...(audioDeviceId ? { deviceId: { exact: audioDeviceId } } : {}),
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+    }
+
+    function attachStream(media) {
+      stream = media;
+      videoEl.srcObject = media;
+      videoEl.muted = true;
+      const videoTrack = media.getVideoTracks()[0];
+      const audioTrack = media.getAudioTracks()[0];
+      if (videoTrack) {
+        const id = videoTrack.getSettings().deviceId;
+        if (id) selectedVideoId = id;
       }
+      if (audioTrack) {
+        const id = audioTrack.getSettings().deviceId;
+        if (id) selectedAudioId = id;
+      }
+      return videoEl.play().catch(() => {});
+    }
+
+    function captureThumbnail() {
+      if (thumbnailSent || !videoEl.videoWidth || !videoEl.videoHeight) return;
+      const canvas = document.createElement('canvas');
+      canvas.width = videoEl.videoWidth;
+      canvas.height = videoEl.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      thumbnailSent = true;
+      post({ type: 'thumbnail', dataUrl });
+    }
+
+    async function startPreview() {
+      if (!whipUrl) throw new Error('Missing WHIP publish URL');
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error('Camera is not available in this browser context.');
       }
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: true,
-      });
-      videoEl.srcObject = stream;
-      videoEl.muted = true;
-      await videoEl.play().catch(() => {});
+      stream = await acquireMedia(selectedVideoId || undefined, selectedAudioId || undefined);
+      await attachStream(stream);
+      await refreshDeviceLists();
+      skipDeviceSwitch = false;
       post({ type: 'ready' });
       statusEl.textContent = publishing ? 'Connecting…' : 'Preview ready';
       if (publishing) await startPublish();
+    }
+
+    async function switchDevices() {
+      if (skipDeviceSwitch || publishing) return;
+      try {
+        stream?.getTracks().forEach((t) => t.stop());
+        stream = await acquireMedia(selectedVideoId || undefined, selectedAudioId || undefined);
+        await attachStream(stream);
+        await refreshDeviceLists();
+      } catch (e) {
+        post({ type: 'error', message: e?.message || 'Could not switch camera or microphone' });
+      }
     }
 
     async function startPublish() {
@@ -79,6 +153,7 @@
         onConnected: () => {
           statusEl.textContent = 'Live';
           post({ type: 'connected' });
+          captureThumbnail();
         },
         onError: (err) => {
           statusEl.textContent = err;
@@ -92,6 +167,14 @@
       publisher = null;
     }
 
+    function toggleTrack(kind, enabled) {
+      const track = kind === 'video'
+        ? stream?.getVideoTracks()[0]
+        : stream?.getAudioTracks()[0];
+      if (!track) return;
+      track.enabled = enabled;
+    }
+
     function onControlMessage(raw) {
       try {
         const data = typeof raw === 'string' ? JSON.parse(raw || '{}') : raw;
@@ -100,16 +183,26 @@
           if (publishing) void startPublish();
           else stopPublish();
         }
+        if (data.type === 'setDevices') {
+          const nextVideo = data.videoDeviceId || '';
+          const nextAudio = data.audioDeviceId || '';
+          if (nextVideo === selectedVideoId && nextAudio === selectedAudioId) return;
+          selectedVideoId = nextVideo;
+          selectedAudioId = nextAudio;
+          void switchDevices();
+        }
+        if (data.type === 'setCameraEnabled') {
+          toggleTrack('video', !!data.value);
+        }
+        if (data.type === 'setMicEnabled') {
+          toggleTrack('audio', !!data.value);
+        }
       } catch (_) {}
     }
 
-    window.addEventListener('message', (event) => {
-      onControlMessage(event.data);
-    });
-
-    document.addEventListener('message', (event) => {
-      onControlMessage(event.data);
-    });
+    window.addEventListener('message', (event) => onControlMessage(event.data));
+    document.addEventListener('message', (event) => onControlMessage(event.data));
+    navigator.mediaDevices?.addEventListener('devicechange', () => { void refreshDeviceLists(); });
 
     startPreview().catch((e) => post({ type: 'error', message: e?.message || 'Camera access denied' }));
   </script>

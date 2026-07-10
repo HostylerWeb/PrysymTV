@@ -310,6 +310,54 @@ export class MediaController {
     };
   }
 
+  @Post('stream-thumbnail-upload')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+    }),
+  )
+  async streamThumbnailUpload(
+    @CurrentUser() user: AuthUserPayload,
+    @Body('objectKey') objectKey: string,
+    @Body('streamId') streamId: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!file?.buffer?.length || !objectKey?.trim() || !streamId?.trim()) {
+      throw new ForbiddenException('Missing file, objectKey, or streamId');
+    }
+
+    const key = objectKey.replace(/^\/+/, '');
+    const expected = `uploads/stream-thumbnails/${streamId}.jpg`;
+    if (key !== expected) {
+      throw new ForbiddenException('Invalid stream thumbnail object key');
+    }
+
+    const stream = await this.prisma.stream.findFirst({
+      where: { id: streamId, creatorId: user.id },
+    });
+    if (!stream) throw new NotFoundException('Stream not found');
+
+    const max = 5 * 1024 * 1024;
+    if (file.size > max) {
+      throw new ForbiddenException('Thumbnail exceeds 5 MB limit');
+    }
+
+    const mimeType = file.mimetype?.trim() || 'image/jpeg';
+    await this.storage.writeImageBuffer(key, file.buffer, mimeType);
+    const publicUrl = this.storage.getPublicUrl(key);
+    await this.prisma.stream.update({
+      where: { id: streamId },
+      data: { thumbnailUrl: publicUrl },
+    });
+    return {
+      success: true,
+      objectKey: key,
+      publicUrl,
+      thumbnailUrl: publicUrl,
+    };
+  }
+
   @Post('ad-upload')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)

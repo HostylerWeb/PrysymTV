@@ -85,6 +85,10 @@ export class StorageService implements OnModuleInit {
     return `${prefix}/${videoId}.jpg`;
   }
 
+  buildStreamThumbnailKey(streamId: string): string {
+    return `uploads/stream-thumbnails/${streamId}.jpg`;
+  }
+
   assertMimeAllowed(mimeType: string): void {
     const ok = this.settings.allowedMimePrefixes.some((prefix) =>
       mimeType.startsWith(prefix),

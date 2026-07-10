@@ -5,6 +5,7 @@ import Script from "next/script"
 import { Camera, Mic, MicOff, Video, VideoOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { captureAndUploadStreamThumbnail } from "@/lib/stream-thumbnail"
 
 type Publisher = { close: () => void }
 
@@ -65,6 +66,7 @@ function mapDevices(
 
 type BrowserLivePublisherProps = {
   whipPublishUrl: string
+  streamId?: string
   /** When false, only local camera preview (no broadcast). */
   publishing?: boolean
   className?: string
@@ -75,6 +77,7 @@ type BrowserLivePublisherProps = {
 
 export function BrowserLivePublisher({
   whipPublishUrl,
+  streamId,
   publishing = false,
   className,
   onConnected,
@@ -258,6 +261,10 @@ export function BrowserLivePublisher({
             if (!cancelled) {
               setConnected(true)
               onConnected?.()
+              const video = videoRef.current
+              if (streamId && video) {
+                void captureAndUploadStreamThumbnail(streamId, video)
+              }
             }
           },
           onError: (msg) => {

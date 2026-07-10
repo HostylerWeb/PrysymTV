@@ -103,6 +103,7 @@ export function LiveStudioPanel({
           {useCamera ? (
             <BrowserLivePublisher
               whipPublishUrl={studio!.whipPublishUrl}
+              streamId={stream.id}
               publishing={isPublishing}
             />
           ) : (
