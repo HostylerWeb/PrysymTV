@@ -6,14 +6,12 @@ import { UnlockFeaturesModal, type CreatorVerificationContext } from '@/componen
 import { StreamerApplicationModal } from '@/components/modals/StreamerApplicationModal';
 import { CreatorUploadSheet, type CreatorUploadKind } from '@/components/modals/CreatorUploadSheet';
 import { useMockAuth } from '@/context/MockAuthContext';
-import { mockUser } from '@/mocks';
 
 export type CreateTarget = 'menu' | 'short' | 'video' | 'podcast' | 'vertical';
 
 export function useCreateFlow() {
   const router = useRouter();
   const { user, requireAuth } = useMockAuth();
-  const profile = user ?? mockUser;
   const [menuOpen, setMenuOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
@@ -37,7 +35,7 @@ export function useCreateFlow() {
         return;
       }
       if (target === 'vertical') {
-        if (profile.verticalCreatorStatus !== 'approved') {
+        if (user?.verticalCreatorStatus !== 'approved') {
           setUnlockFeature('vertical');
           setUnlockOpen(true);
           return;
@@ -45,7 +43,7 @@ export function useCreateFlow() {
         setWizardOpen(true);
       }
     });
-  }, [openUpload, profile.verticalCreatorStatus, requireAuth]);
+  }, [openUpload, user?.verticalCreatorStatus, requireAuth]);
 
   const flowHost = useMemo(() => (
     <>
@@ -62,44 +60,48 @@ export function useCreateFlow() {
       <VerticalSeriesWizard
         visible={wizardOpen}
         onClose={() => setWizardOpen(false)}
-        initialIntent="add_episode"
+        initialIntent="choose"
         onComplete={() => router.push('/settings/verticals')}
       />
-      <UnlockFeaturesModal
-        visible={unlockOpen}
-        user={profile}
-        preselect={unlockFeature}
-        onClose={() => setUnlockOpen(false)}
-        onNeedVerification={(ctx) => {
-          setVerifyContext(ctx);
-          setUnlockOpen(false);
-          setStreamerOpen(true);
-        }}
-      />
-      <StreamerApplicationModal
-        visible={streamerOpen}
-        user={profile}
-        onClose={() => {
-          setStreamerOpen(false);
-          setVerifyContext(null);
-        }}
-        features={
-          verifyContext?.features.includes('live') && verifyContext?.features.includes('vertical')
-            ? ['live', 'vertical']
-            : verifyContext?.features.includes('vertical')
-              ? ['vertical']
-              : ['live', 'vertical']
-        }
-        initialDescription={verifyContext?.description}
-        portfolioUrl={verifyContext?.portfolioUrl}
-      />
-      {uploadKind && (
+      {user ? (
+        <>
+          <UnlockFeaturesModal
+            visible={unlockOpen}
+            user={user}
+            preselect={unlockFeature}
+            onClose={() => setUnlockOpen(false)}
+            onNeedVerification={(ctx) => {
+              setVerifyContext(ctx);
+              setUnlockOpen(false);
+              setStreamerOpen(true);
+            }}
+          />
+          <StreamerApplicationModal
+            visible={streamerOpen}
+            user={user}
+            onClose={() => {
+              setStreamerOpen(false);
+              setVerifyContext(null);
+            }}
+            features={
+              verifyContext?.features.includes('live') && verifyContext?.features.includes('vertical')
+                ? ['live', 'vertical']
+                : verifyContext?.features.includes('vertical')
+                  ? ['vertical']
+                  : ['live', 'vertical']
+            }
+            initialDescription={verifyContext?.description}
+            portfolioUrl={verifyContext?.portfolioUrl}
+          />
+        </>
+      ) : null}
+      {uploadKind ? (
         <CreatorUploadSheet
           visible={!!uploadKind}
           kind={uploadKind}
           onClose={() => setUploadKind(null)}
         />
-      )}
+      ) : null}
     </>
   ), [
     menuOpen,
@@ -109,7 +111,7 @@ export function useCreateFlow() {
     unlockFeature,
     verifyContext,
     uploadKind,
-    profile,
+    user,
     router,
     openUpload,
   ]);

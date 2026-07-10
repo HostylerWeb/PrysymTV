@@ -7,11 +7,9 @@ import { HlsPlayer } from '@/components/video/HlsPlayer';
 import { VerticalEpisodeAdGate } from '@/components/ads/VerticalEpisodeAdGate';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { Button } from '@/components/ui/Button';
-import { CommentsSheet } from '@/components/modals/CommentsSheet';
 import { ShareModal } from '@/components/modals/ShareModal';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { GiftModal } from '@/components/modals/GiftModal';
-import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useVerticalEpisodePlayback } from '@/hooks/api/useVerticalEpisodePlayback';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
@@ -40,11 +38,9 @@ export default function VerticalWatchScreen() {
 
   const [gateOpen, setGateOpen] = useState(true);
   const [gateDismissed, setGateDismissed] = useState(false);
-  const [commentsOpen, setCommentsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [giftOpen, setGiftOpen] = useState(false);
-  const [playlistOpen, setPlaylistOpen] = useState(false);
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
   const [seriesSaved, setSeriesSaved] = useState(false);
@@ -115,30 +111,69 @@ export default function VerticalWatchScreen() {
           <View style={[styles.topActions, { top: insets.top + 48 }]}>
             <Pressable
               style={styles.headerBtn}
+              onPress={() => setShareOpen(true)}
+              accessibilityLabel="Share"
+            >
+              <Ionicons name="share-outline" size={22} color={colors.onVideo} />
+            </Pressable>
+            <Pressable
+              style={styles.headerBtn}
+              onPress={() => requireAuth(() => setGiftOpen(true))}
+              accessibilityLabel="Gift"
+            >
+              <Ionicons name="gift-outline" size={22} color={colors.onVideo} />
+            </Pressable>
+            <Pressable
+              style={styles.headerBtn}
               onPress={() => requireAuth(async () => {
-                const res = await toggleVerticalEpisodeLike(data.episode.id);
-                setLiked(res.liked);
+                const prev = liked;
+                try {
+                  const res = await toggleVerticalEpisodeLike(data.episode.id);
+                  setLiked(res.liked);
+                } catch {
+                  setLiked(prev);
+                }
               })}
+              accessibilityLabel="Like"
             >
               <Ionicons name={liked ? 'heart' : 'heart-outline'} size={22} color={colors.onVideo} />
             </Pressable>
             <Pressable
               style={styles.headerBtn}
               onPress={() => requireAuth(async () => {
-                const res = await toggleVerticalEpisodeSave(data.episode.id);
-                setSaved(res.saved);
+                const prev = saved;
+                try {
+                  const res = await toggleVerticalEpisodeSave(data.episode.id);
+                  setSaved(res.saved);
+                } catch {
+                  setSaved(prev);
+                }
               })}
+              accessibilityLabel="Save episode"
             >
               <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={22} color={colors.onVideo} />
             </Pressable>
             <Pressable
               style={styles.headerBtn}
               onPress={() => requireAuth(async () => {
-                const res = await toggleVerticalSeriesSave(data.series.id);
-                setSeriesSaved(res.saved);
+                const prev = seriesSaved;
+                try {
+                  const res = await toggleVerticalSeriesSave(data.series.id);
+                  setSeriesSaved(res.saved);
+                } catch {
+                  setSeriesSaved(prev);
+                }
               })}
+              accessibilityLabel="Save series"
             >
               <Ionicons name={seriesSaved ? 'albums' : 'albums-outline'} size={22} color={colors.onVideo} />
+            </Pressable>
+            <Pressable
+              style={styles.headerBtn}
+              onPress={() => requireAuth(() => setReportOpen(true))}
+              accessibilityLabel="Report"
+            >
+              <Ionicons name="flag-outline" size={22} color={colors.onVideo} />
             </Pressable>
           </View>
         ) : null}
@@ -161,7 +196,6 @@ export default function VerticalWatchScreen() {
           )}
         </View>
       </View>
-      <CommentsSheet visible={commentsOpen} onClose={() => setCommentsOpen(false)} />
       <ShareModal visible={shareOpen} onClose={() => setShareOpen(false)} title={`${data.series.title} Ep ${data.episode.episodeNumber}`} />
       <GiftModal
         visible={giftOpen}
@@ -169,11 +203,6 @@ export default function VerticalWatchScreen() {
         receiverId={data.series.creatorId ?? undefined}
         receiverName={data.series.title}
         videoId={data.episode.id}
-      />
-      <AddToPlaylistSheet
-        visible={playlistOpen}
-        onClose={() => setPlaylistOpen(false)}
-        contentTitle={`${data.series.title} Ep ${data.episode.episodeNumber}`}
       />
       <ReportModal
         visible={reportOpen}

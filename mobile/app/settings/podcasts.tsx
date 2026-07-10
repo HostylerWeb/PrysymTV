@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/Button';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
+import { CreatorUploadSheet } from '@/components/modals/CreatorUploadSheet';
 import { createPodcastShow, fetchMyPodcastShows } from '@/lib/api/podcasts';
 import { mediaThumb } from '@/lib/api/map-content';
 import { colors, radius } from '@/theme/tokens';
 
 export default function SettingsPodcastsScreen() {
-  const router = useRouter();
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [showTitle, setShowTitle] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,7 +48,7 @@ export default function SettingsPodcastsScreen() {
         <View style={styles.pad}>
           <AppHeader showBack title="Podcasts" showSearch={false} showNotifications={false} />
           <Text style={styles.sub}>Manage your podcast shows, episodes, and RSS feeds.</Text>
-          <Button label="New episode" onPress={() => router.push('/settings/upload?type=podcast')} style={{ marginBottom: 8 }} />
+          <Button label="New episode" onPress={() => setUploadOpen(true)} style={{ marginBottom: 8 }} />
           <Button label="Create show" variant="outline" onPress={() => setCreateOpen(true)} style={{ marginBottom: 16 }} />
           <FeedQueryState
             isLoading={showsQuery.isLoading}
@@ -59,7 +59,7 @@ export default function SettingsPodcastsScreen() {
             emptyTitle="No shows yet"
           >
             {(showsQuery.data ?? []).map((s) => (
-              <Pressable key={s.id} style={styles.row} onPress={() => router.push('/settings/upload?type=podcast')}>
+              <Pressable key={s.id} style={styles.row} onPress={() => setUploadOpen(true)}>
                 <Image source={{ uri: mediaThumb(s.coverUrl) ?? '' }} style={styles.cover} contentFit="cover" />
                 <View style={styles.meta}>
                   <Text style={styles.title}>{s.title}</Text>
@@ -86,6 +86,12 @@ export default function SettingsPodcastsScreen() {
           style={{ marginTop: 12 }}
         />
       </BottomSheet>
+      <CreatorUploadSheet
+        visible={uploadOpen}
+        kind="podcast"
+        onClose={() => setUploadOpen(false)}
+        onSuccess={() => void showsQuery.refetch()}
+      />
     </>
   );
 }

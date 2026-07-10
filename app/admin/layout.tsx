@@ -4,7 +4,9 @@ import { notFound } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
 
-const ADMIN_UI_PREVIEW = process.env.NEXT_PUBLIC_ADMIN_UI_PREVIEW === "true"
+const ADMIN_UI_PREVIEW =
+  process.env.NODE_ENV === "development" &&
+  process.env.NEXT_PUBLIC_ADMIN_UI_PREVIEW === "true"
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, isAuthenticated } = useAuth()
@@ -13,7 +15,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const canAccess = ADMIN_UI_PREVIEW || isAdmin
 
   if (isLoading) {
-    return null
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-sm text-muted-foreground">Loading admin…</p>
+      </div>
+    )
   }
 
   if (!canAccess) {

@@ -24,7 +24,7 @@ export default function PlaylistPage({ params }: { params: Promise<{ id: string 
   const [reorderBusy, setReorderBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
-  const [navTab, setNavTab] = useState("home")
+  const [navTab, setNavTab] = useState("none")
 
   useEffect(() => {
     let cancelled = false

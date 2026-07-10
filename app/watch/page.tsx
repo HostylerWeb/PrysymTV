@@ -8,7 +8,8 @@ import { Footer } from "@/components/footer"
 import { BottomNavigation } from "@/components/bottom-navigation"
 import { VideoCard } from "@/components/video-card"
 import { Button } from "@/components/ui/button"
-import { fetchVideosBrowse } from "@/lib/api/videos-feed"
+import { fetchVideosBrowseResult } from "@/lib/api/videos-feed"
+import { FeedErrorBanner } from "@/components/feed-error-banner"
 import type { VideoCard as ApiVideoCard } from "@/lib/api/feed"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
 import { userAvatarUrl } from "@/lib/user-avatar"
@@ -27,15 +28,22 @@ function WatchBrowseContent() {
   const [activeTab, setActiveTab] = useState("videos")
   const [videos, setVideos] = useState<ApiVideoCard[]>([])
   const [loading, setLoading] = useState(true)
+  const [feedError, setFeedError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    void fetchVideosBrowse({ page: 1, limit: 24, mode: "videos", sort: "views" })
-      .then((res) => {
-        if (!cancelled) setVideos(res.items)
-      })
-      .catch(() => {
-        if (!cancelled) setVideos([])
+    setLoading(true)
+    setFeedError(false)
+    void fetchVideosBrowseResult({ page: 1, limit: 24, mode: "videos", sort: "views" })
+      .then(({ data: res, fromFallback }) => {
+        if (cancelled) return
+        if (fromFallback) {
+          setFeedError(true)
+          setVideos([])
+          return
+        }
+        setVideos(res.videos.items)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -43,11 +51,11 @@ function WatchBrowseContent() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reloadKey])
 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
-      <Header />
+      <Header onSearchClick={() => router.push('/search')} />
       <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-10">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
           <div>
@@ -61,7 +69,9 @@ function WatchBrowseContent() {
           </Button>
         </div>
 
-        {loading ? (
+        {feedError ? (
+          <FeedErrorBanner onRetry={() => setReloadKey((k) => k + 1)} />
+        ) : loading ? (
           <VideosBrowseSkeleton />
         ) : videos.length === 0 ? (
           <p className="text-muted-foreground">No videos available yet.</p>
@@ -73,8 +83,8 @@ function WatchBrowseContent() {
                 id={video.id}
                 title={video.title}
                 thumbnail={videoThumbnail(video.thumbnailUrl)}
-                channel={video.creatorName ?? "Creator"}
-                channelAvatar={userAvatarUrl(video.creatorAvatarUrl, video.creatorName)}
+                channel={video.channel}
+                channelAvatar={userAvatarUrl(null, video.channelSlug)}
                 views={formatViewCount(video.viewsCount)}
                 duration={formatDuration(video.durationSeconds)}
                 type="video"
@@ -87,13 +97,7 @@ function WatchBrowseContent() {
       <Footer />
       <BottomNavigation
         activeTab={activeTab}
-        onTabChange={(tab) => {
-          setActiveTab(tab)
-          if (tab === "home") router.push("/")
-          else if (tab === "shorts") router.push("/shorts")
-          else if (tab === "videos") router.push("/videos")
-          else if (tab === "profile") router.push("/profile")
-        }}
+        onTabChange={setActiveTab}
       />
     </main>
   )

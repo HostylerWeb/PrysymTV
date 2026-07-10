@@ -6,13 +6,17 @@ import { colors, radius, withAlpha } from '@/theme/tokens';
 type Props = {
   variant?: 'default' | 'on-video' | 'compact';
   label?: string;
+  mediaUrl?: string | null;
 };
 
 /** Cast current media to TV — Chromecast SDK wiring in a later phase. */
-export function CastMediaButton({ variant = 'default', label = 'Cast to TV' }: Props) {
+export function CastMediaButton({ variant = 'default', label = 'Cast to TV', mediaUrl }: Props) {
+  if (!mediaUrl?.trim()) return null;
+
   return (
     <Pressable
       accessibilityLabel={label}
+      accessibilityHint="Chromecast support is coming soon on mobile"
       onPress={() =>
         Alert.alert(
           label,

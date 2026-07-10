@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,17 +31,19 @@ export function AdPreroll({ visible, videoId, creatorId, onComplete }: Props) {
   const [ad, setAd] = useState<ServedAd | null>(null);
   const [countdown, setCountdown] = useState(5);
   const [ready, setReady] = useState(false);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
   useEffect(() => {
     if (!visible) return;
     setReady(false);
     if (!shouldShow) {
-      onComplete();
+      onCompleteRef.current();
       return;
     }
     void fetchServedAd('movie_preroll').then((served) => {
       if (!served) {
-        onComplete();
+        onCompleteRef.current();
         return;
       }
       setAd(served);
@@ -57,13 +59,19 @@ export function AdPreroll({ visible, videoId, creatorId, onComplete }: Props) {
         }),
       );
     });
-  }, [visible, shouldShow, creatorId, videoId, platformCreatorId, user?.id, onComplete]);
+  }, [visible, shouldShow, creatorId, videoId, platformCreatorId, user?.id]);
 
   useEffect(() => {
     if (!visible || !ad || !ready || countdown <= 0) return;
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
   }, [visible, ad, ready, countdown]);
+
+  useEffect(() => {
+    if (!visible || !ad) return;
+    const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
+    if (!mediaUrl) onCompleteRef.current();
+  }, [visible, ad]);
 
   if (!visible || !ad) return null;
 

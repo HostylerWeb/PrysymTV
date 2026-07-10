@@ -272,10 +272,12 @@ function ProfilePageContent() {
       <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
         <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-lg border-b border-border">
           <div className="flex items-center justify-between px-4 py-3 max-w-5xl mx-auto w-full">
-            <Link href="/">
-              <button className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors">
-                <ChevronLeft className="w-6 h-6 text-foreground" />
-              </button>
+            <Link
+              href="/"
+              className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors"
+              aria-label="Back to home"
+            >
+              <ChevronLeft className="w-6 h-6 text-foreground" />
             </Link>
             <h1 className="text-lg font-semibold text-foreground">Profile</h1>
             <div className="w-10" />
@@ -343,7 +345,6 @@ function ProfilePageContent() {
         <BottomNavigation 
           activeTab={navTab} 
           onTabChange={setNavTab}
-          onSearchClick={() => setIsSearchOpen(true)}
         />
 
         {/* Modals */}
@@ -365,10 +366,12 @@ function ProfilePageContent() {
       {/* Header */}
       <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-lg border-b border-border">
         <div className="flex items-center justify-between px-4 py-3 max-w-5xl mx-auto w-full">
-          <Link href="/">
-            <button className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors">
-              <ChevronLeft className="w-6 h-6 text-foreground" />
-            </button>
+          <Link
+            href="/"
+            className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors"
+            aria-label="Back to home"
+          >
+            <ChevronLeft className="w-6 h-6 text-foreground" />
           </Link>
           <h1 className="text-lg font-semibold text-foreground">Profile</h1>
           <div className="flex items-center gap-2">
@@ -412,7 +415,12 @@ function ProfilePageContent() {
                 alt="Profile"
                 className="w-24 h-24 md:w-32 md:h-32 rounded-full object-cover ring-4 ring-background"
               />
-              <button className="absolute bottom-0 right-0 md:bottom-2 md:right-2 w-8 h-8 rounded-full bg-primary flex items-center justify-center hover:scale-105 transition-transform">
+              <button
+                type="button"
+                onClick={() => setIsEditProfileOpen(true)}
+                className="absolute bottom-0 right-0 md:bottom-2 md:right-2 w-8 h-8 rounded-full bg-primary flex items-center justify-center hover:scale-105 transition-transform"
+                aria-label="Edit profile photo"
+              >
                 <Edit3 className="w-4 h-4 text-primary-foreground" />
               </button>
               {user?.streamerStatus === "approved" && (
@@ -704,7 +712,6 @@ function ProfilePageContent() {
       <BottomNavigation 
         activeTab={navTab} 
         onTabChange={setNavTab}
-        onSearchClick={() => setIsSearchOpen(true)}
       />
 
       {/* Modals */}

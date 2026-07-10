@@ -100,7 +100,8 @@ export async function signInWithFacebook(appId: string): Promise<string> {
       }
 
       if (data.accessToken) {
-        finish(() => resolve(data.accessToken))
+        const accessToken = data.accessToken
+        finish(() => resolve(accessToken))
         return
       }
 

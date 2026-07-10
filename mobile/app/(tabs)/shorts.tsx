@@ -18,12 +18,14 @@ import { ReportModal } from '@/components/modals/ReportModal';
 import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { GiftModal } from '@/components/modals/GiftModal';
 import { AdInterstitial } from '@/components/ads/AdInterstitial';
+import { HlsPlayer } from '@/components/video/HlsPlayer';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
 import { flattenShortsPages, useShortsFeed } from '@/hooks/api/useShortsFeed';
-import { toggleVideoLike } from '@/lib/api/videos';
+import { followUser, unfollowUser } from '@/lib/api/users';
+import { toggleVideoLike, toggleVideoSave } from '@/lib/api/videos';
 import { colors, radius, withAlpha } from '@/theme/tokens';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
@@ -48,6 +50,7 @@ export default function ShortsScreen() {
   const [shareOpen, setShareOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [playlistOpen, setPlaylistOpen] = useState(false);
+  const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [giftOpen, setGiftOpen] = useState(false);
   const [muted, setMuted] = useState(true);
   const [following, setFollowing] = useState<Record<string, boolean>>({});
@@ -55,6 +58,16 @@ export default function ShortsScreen() {
   const [adOpen, setAdOpen] = useState(false);
   const swipeCount = useRef(0);
   const current = shorts[index];
+
+  useEffect(() => {
+    if (!current) return;
+    setLiked((p) => ({ ...p, [current.id]: !!current.liked }));
+    setSaved((p) => ({ ...p, [current.id]: !!current.saved }));
+    setFollowing((p) => ({
+      ...p,
+      [current.channelSlug ?? '']: !!current.isFollowing,
+    }));
+  }, [current?.id, current?.liked, current?.saved, current?.isFollowing, current?.channelSlug]);
 
   useEffect(() => {
     if (!shorts.length) return;
@@ -78,9 +91,14 @@ export default function ShortsScreen() {
   adEveryRef.current = shortsInterstitialEveryNSwipes;
   adsEnabledRef.current = shortsInterstitialEnabled;
 
+  const indexRef = useRef(0);
+  const shortsLenRef = useRef(0);
+  indexRef.current = index;
+  shortsLenRef.current = shorts.length;
+
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const next = viewableItems[0]?.index;
-    if (next == null || next === index) return;
+    if (next == null || next === indexRef.current) return;
     swipeCount.current += 1;
     if (
       adsEnabledRef.current &&
@@ -90,7 +108,7 @@ export default function ShortsScreen() {
       setAdOpen(true);
     }
     setIndex(next);
-    if (next >= shorts.length - 3 && shortsQuery.hasNextPage && !shortsQuery.isFetchingNextPage) {
+    if (next >= shortsLenRef.current - 3 && shortsQuery.hasNextPage && !shortsQuery.isFetchingNextPage) {
       void shortsQuery.fetchNextPage();
     }
   }).current;
@@ -142,11 +160,25 @@ export default function ShortsScreen() {
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={{ itemVisiblePercentThreshold: 90 }}
             getItemLayout={getItemLayout}
-            renderItem={({ item }) => (
+            renderItem={({ item, index: itemIndex }) => {
+              const isActive = itemIndex === index;
+              const slug = item.channelSlug ?? '';
+              const isFollowing = !!following[slug];
+              const isLiked = !!liked[item.id];
+              const isSaved = !!saved[item.id];
+              return (
               <View style={{ height: feedHeight, width: '100%', backgroundColor: colors.videoBackground }}>
-                <Pressable style={StyleSheet.absoluteFill} onPress={() => router.push(`/shorts/${item.id}`)}>
+                {isActive && item.playbackUrl ? (
+                  <HlsPlayer
+                    source={item.playbackUrl}
+                    fill
+                    muted={muted}
+                    contentFit="cover"
+                    loop
+                  />
+                ) : (
                   <Image source={{ uri: item.thumbnailUrl ?? '' }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                </Pressable>
+                )}
                 <LinearGradient
                   colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.6)']}
                   locations={[0, 0.45, 1]}
@@ -174,16 +206,32 @@ export default function ShortsScreen() {
 
                 <View style={[styles.sideActions, { bottom: tabInset + 12 }]}>
                   <Action
-                    icon={liked[item.id] ? 'heart' : 'heart-outline'}
+                    icon={isLiked ? 'heart' : 'heart-outline'}
                     label={formatViewCount(item.likesCount ?? 0)}
                     onPress={() => requireAuth(async () => {
                       const res = await toggleVideoLike(item.id);
                       setLiked((p) => ({ ...p, [item.id]: res.liked }));
                     })}
                   />
-                  <Action icon="chatbubble-outline" label="128" onPress={() => setCommentsOpen(true)} />
+                  <Action
+                    icon="chatbubble-outline"
+                    label={formatViewCount(item.commentsCount ?? 0)}
+                    onPress={() => setCommentsOpen(true)}
+                  />
                   <Action icon="gift-outline" label="Gift" onPress={() => requireAuth(() => setGiftOpen(true))} />
-                  <Action icon="bookmark-outline" label="Save" onPress={() => requireAuth(() => setPlaylistOpen(true))} />
+                  <Action
+                    icon={isSaved ? 'bookmark' : 'bookmark-outline'}
+                    label={isSaved ? 'Saved' : 'Save'}
+                    onPress={() => requireAuth(async () => {
+                      const prev = isSaved;
+                      try {
+                        const res = await toggleVideoSave(item.id);
+                        setSaved((p) => ({ ...p, [item.id]: res.saved }));
+                      } catch {
+                        setSaved((p) => ({ ...p, [item.id]: prev }));
+                      }
+                    })}
+                  />
                   <Action icon="share-outline" label="Share" onPress={() => setShareOpen(true)} />
                   <Action icon="flag-outline" label="Report" onPress={() => requireAuth(() => setReportOpen(true))} />
                 </View>
@@ -195,16 +243,27 @@ export default function ShortsScreen() {
                   <Text style={styles.caption} numberOfLines={2}>{item.title}</Text>
                   <Text style={styles.music}>Original Sound - {item.channelSlug}</Text>
                   <Pressable
-                    style={[styles.followBtn, following[item.channelSlug ?? ''] && styles.followingBtn]}
-                    onPress={() => requireAuth(() => setFollowing((p) => ({ ...p, [item.channelSlug ?? '']: !p[item.channelSlug ?? ''] })))}
+                    style={[styles.followBtn, isFollowing && styles.followingBtn]}
+                    onPress={() => requireAuth(async () => {
+                      const next = !isFollowing;
+                      const prev = isFollowing;
+                      try {
+                        if (next) await followUser(slug);
+                        else await unfollowUser(slug);
+                        setFollowing((p) => ({ ...p, [slug]: next }));
+                      } catch {
+                        setFollowing((p) => ({ ...p, [slug]: prev }));
+                      }
+                    })}
                   >
                     <Text style={styles.followText}>
-                      {following[item.channelSlug ?? ''] ? 'Following' : 'Follow'}
+                      {isFollowing ? 'Following' : 'Follow'}
                     </Text>
                   </Pressable>
                 </View>
               </View>
-            )}
+            );
+            }}
           />
         ) : null}
       </View>
@@ -216,7 +275,7 @@ export default function ShortsScreen() {
       />
       <CommentsSheet visible={commentsOpen} onClose={() => setCommentsOpen(false)} videoId={current?.id} videoTitle={current?.title} />
       <ShareModal visible={shareOpen} onClose={() => setShareOpen(false)} title={current?.title ?? 'Short'} />
-      <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} />
+      <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetId={current?.id} />
       <GiftModal
         visible={giftOpen}
         onClose={() => setGiftOpen(false)}

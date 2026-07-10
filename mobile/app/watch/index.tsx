@@ -1,18 +1,19 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/Button';
 import { VideoCardTile } from '@/components/feed/VideoCardTile';
 import { PageFooter } from '@/components/layout/PageFooter';
-import { mockVideos } from '@/mocks';
+import { useVideosFeed } from '@/hooks/api/useVideosFeed';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 
 export default function WatchBrowseScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const longForm = mockVideos.filter((v) => v.type === 'video').slice(0, 6);
+  const videosQuery = useVideosFeed({ mode: 'videos', sort: 'views', limit: 12 });
+  const longForm = (videosQuery.data?.videos ?? []).filter((v) => v.type === 'video').slice(0, 6);
 
   return (
     <ScrollView style={[styles.screen, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -30,9 +31,13 @@ export default function WatchBrowseScreen() {
         </View>
 
         <Text style={[styles.section, { color: colors.foreground }]}>Popular now</Text>
-        {longForm.map((v) => (
-          <VideoCardTile key={v.id} video={v} variant="row" />
-        ))}
+        {videosQuery.isLoading ? (
+          <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
+        ) : longForm.length === 0 ? (
+          <Text style={{ color: colors.mutedForeground }}>No videos available yet.</Text>
+        ) : (
+          longForm.map((v) => <VideoCardTile key={v.id} video={v} variant="row" />)
+        )}
 
         <PageFooter />
       </View>

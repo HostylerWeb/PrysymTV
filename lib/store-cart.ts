@@ -5,7 +5,7 @@ export type StoreCartItem = {
   title: string
   priceUsd: number
   imageUrl: string | null
-  productType: "digital" | "merchandise"
+  productType: "digital" | "merchandise" | "ticket" | "course"
   quantity: number
   inStock: boolean
   maxQuantity: number | null
@@ -64,7 +64,7 @@ export function addToStoreCart(
     title: string
     priceUsd: number
     imageUrl: string | null
-    productType: "digital" | "merchandise"
+    productType: "digital" | "merchandise" | "ticket" | "course"
     inStock: boolean
     inventory: number | null
     inventoryUnlimited: boolean

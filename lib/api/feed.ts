@@ -1,5 +1,5 @@
 import { apiRequest } from "@/lib/api-client";
-import { withApiFallback } from "@/lib/api/fallback";
+import { withApiFallback, withApiFallbackResult } from "@/lib/api/fallback";
 import type { ContinueWatchingFeedItem, PaginatedMeta } from "@/lib/api/types";
 
 export type FeedHomeResponse = {
@@ -70,6 +70,13 @@ const EMPTY_FEED_HOME: FeedHomeResponse = {
 
 export function fetchFeedHome() {
   return withApiFallback(
+    () => apiRequest<FeedHomeResponse>("/feed/home"),
+    EMPTY_FEED_HOME,
+  );
+}
+
+export function fetchFeedHomeResult() {
+  return withApiFallbackResult(
     () => apiRequest<FeedHomeResponse>("/feed/home"),
     EMPTY_FEED_HOME,
   );

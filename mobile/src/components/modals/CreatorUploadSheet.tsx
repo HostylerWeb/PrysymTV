@@ -15,7 +15,8 @@ import { Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { ThemedInput } from '@/components/ui/ThemedInput';
-import { fetchMyPodcastShows } from '@/lib/api/podcasts';
+import { fetchMyPodcastShows, createPodcastShow } from '@/lib/api/podcasts';
+import { uploadPodcastEpisodeFlow, uploadPodcastShowCover } from '@/lib/api/podcasts-upload';
 import { runVideoUpload } from '@/lib/api/videos';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
@@ -189,8 +190,32 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
           file,
         });
       } else {
-        setError('Podcast uploads: create a show in Settings → Podcasts, then use the web studio for episode media.');
-        return;
+        let targetShowId = showId;
+        if (podcastMode === 'new') {
+          const created = await createPodcastShow({
+            title: showTitle.trim(),
+            description: showDescription.trim() || undefined,
+            category: showCategory,
+          });
+          targetShowId = created.id;
+          if (coverUri) {
+            await uploadPodcastShowCover(targetShowId, {
+              uri: coverUri,
+              name: 'cover.jpg',
+              mimeType: 'image/jpeg',
+            });
+          }
+        }
+        if (!targetShowId) {
+          setError('Select or create a podcast show.');
+          return;
+        }
+        await uploadPodcastEpisodeFlow(
+          targetShowId,
+          title.trim(),
+          file,
+          description.trim() || undefined,
+        );
       }
       setDone(true);
       onSuccess?.();

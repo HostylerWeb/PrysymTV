@@ -99,12 +99,13 @@ export default function CreatorScreen() {
     if (!profile) return;
     requireAuth(async () => {
       const next = !following;
+      const prev = following;
       try {
         if (next) await followUser(profile.username);
         else await unfollowUser(profile.username);
         setFollowing(next);
       } catch {
-        setFollowing(next);
+        setFollowing(prev);
       }
     });
   };

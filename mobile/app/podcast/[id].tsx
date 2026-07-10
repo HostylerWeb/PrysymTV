@@ -8,7 +8,6 @@ import { PlayerShell } from '@/components/video/PlayerShell';
 import { AudioPlayer } from '@/components/podcasts/AudioPlayer';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { AdPreroll } from '@/components/ads/AdPreroll';
-import { CommentsSheet } from '@/components/modals/CommentsSheet';
 import { ShareModal } from '@/components/modals/ShareModal';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
@@ -37,7 +36,6 @@ export default function PodcastEpisodeScreen() {
   const epQuery = usePodcastEpisodeDetail(id);
   const ep = epQuery.data;
 
-  const [commentsOpen, setCommentsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [giftOpen, setGiftOpen] = useState(false);
@@ -99,13 +97,26 @@ export default function PodcastEpisodeScreen() {
           </Pressable>
         </View>
         {ep.mediaType === 'video' && ep.playbackSource ? (
-          <PlayerShell
-            title={ep.title}
-            thumbnailUrl={ep.coverUrl}
-            playbackUrl={started ? ep.playbackSource : null}
-            subtitle={ep.show?.title ?? 'Podcast'}
-            showCast
-          />
+          started ? (
+            <PlayerShell
+              title={ep.title}
+              thumbnailUrl={ep.coverUrl}
+              playbackUrl={ep.playbackSource}
+              subtitle={ep.show?.title ?? 'Podcast'}
+              showCast
+            />
+          ) : (
+            <View style={styles.audio}>
+              <Text style={styles.audioTitle}>{ep.title}</Text>
+              <Text style={styles.audioSub}>
+                {ep.show?.title ?? 'Podcast'} · {formatDuration(ep.durationSeconds)}
+                {ep.playsCount != null ? ` · ${formatViewCount(ep.playsCount)} plays` : ''}
+              </Text>
+              <Pressable style={styles.playBtn} onPress={startPlayback}>
+                <Text style={styles.playText}>Play</Text>
+              </Pressable>
+            </View>
+          )
         ) : ep.playbackSource && started ? (
           <AudioPlayer
             source={ep.playbackSource}
@@ -155,7 +166,6 @@ export default function PodcastEpisodeScreen() {
           <IconBtn icon="gift-outline" label="Gift" onPress={() => requireAuth(() => setGiftOpen(true))} />
           <IconBtn icon="flag-outline" label="Report" onPress={() => requireAuth(() => setReportOpen(true))} />
         </View>
-        <Button label="Comments" variant="outline" onPress={() => setCommentsOpen(true)} style={styles.bodyBtn} />
       </ScrollView>
       <AdPreroll
         visible={prerollOpen}
@@ -163,7 +173,6 @@ export default function PodcastEpisodeScreen() {
         videoId={ep.id}
         creatorId={ep.creator?.id}
       />
-      <CommentsSheet visible={commentsOpen} onClose={() => setCommentsOpen(false)} videoTitle={ep.title} />
       <ShareModal visible={shareOpen} onClose={() => setShareOpen(false)} title={ep.title} />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetType="podcast_episode" targetId={ep.id} />
       <GiftModal

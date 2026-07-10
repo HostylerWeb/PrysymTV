@@ -10,7 +10,8 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
-import { createVerticalSeries } from '@/lib/api/verticals';
+import { createVerticalSeries, createVerticalEpisode, attachVerticalEpisodeVideo } from '@/lib/api/verticals';
+import { pollVideoUntilReady, runVideoUpload } from '@/lib/api/videos';
 import { colors, radius } from '@/theme/tokens';
 
 const GENRES = ['Drama', 'Romance', 'Thriller', 'Comedy', 'Fantasy', 'Action', 'Mystery'];
@@ -20,9 +21,12 @@ type Props = {
   onClose: () => void;
   onComplete?: () => void;
   initialIntent?: 'choose' | 'new_series' | 'add_episode';
+  seriesSlug?: string;
 };
 
 type Mode = 'choose' | 'series' | 'episode' | 'done';
+
+type PickedVideo = { uri: string; name: string; mimeType?: string };
 
 function slugifyTitle(title: string) {
   return title
@@ -39,6 +43,7 @@ export function VerticalSeriesWizard({
   onClose,
   onComplete,
   initialIntent = 'choose',
+  seriesSlug: initialSeriesSlug,
 }: Props) {
   const [mode, setMode] = useState<Mode>('choose');
   const [seriesTitle, setSeriesTitle] = useState('');
@@ -51,8 +56,11 @@ export function VerticalSeriesWizard({
   const [episodeNumber, setEpisodeNumber] = useState('1');
   const [episodeTitle, setEpisodeTitle] = useState('');
   const [cliffhanger, setCliffhanger] = useState('');
-  const [videoName, setVideoName] = useState('');
+  const [videoFile, setVideoFile] = useState<PickedVideo | null>(null);
+  const [activeSeriesSlug, setActiveSeriesSlug] = useState('');
+  const [doneMessage, setDoneMessage] = useState('Your micro-drama series is ready.');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -73,9 +81,12 @@ export function VerticalSeriesWizard({
     setEpisodeNumber('1');
     setEpisodeTitle('');
     setCliffhanger('');
-    setVideoName('');
+    setVideoFile(null);
+    setActiveSeriesSlug(initialSeriesSlug ?? '');
+    setDoneMessage('Your micro-drama series is ready.');
+    setError(null);
     setBusy(false);
-  }, [visible, initialIntent]);
+  }, [visible, initialIntent, initialSeriesSlug]);
 
   useEffect(() => {
     if (slugTouched) return;
@@ -96,12 +107,18 @@ export function VerticalSeriesWizard({
       quality: 1,
     });
     if (!result.canceled && result.assets[0]) {
-      setVideoName(result.assets[0].fileName ?? 'episode.mp4');
+      const asset = result.assets[0];
+      setVideoFile({
+        uri: asset.uri,
+        name: asset.fileName ?? 'episode.mp4',
+        mimeType: asset.mimeType ?? 'video/mp4',
+      });
     }
   };
 
   const submit = async () => {
     setBusy(true);
+    setError(null);
     try {
       if (mode === 'series') {
         if (!seriesTitle.trim() || !seriesSlug.trim()) return;
@@ -112,10 +129,42 @@ export function VerticalSeriesWizard({
           description: description.trim() || undefined,
           genre,
         });
+        setActiveSeriesSlug(seriesSlug.trim());
+        setDoneMessage('Series created. Add episodes from Micro-dramas settings.');
+        setMode('done');
+        return;
       }
-      setMode('done');
-    } catch {
-      setMode('done');
+
+      if (mode === 'episode') {
+        const slug = activeSeriesSlug || initialSeriesSlug;
+        if (!slug) {
+          setError('Select a series before uploading an episode.');
+          return;
+        }
+        if (!episodeTitle.trim() || !videoFile) {
+          setError('Episode title and video are required.');
+          return;
+        }
+        const epNum = Math.max(1, parseInt(episodeNumber, 10) || 1);
+        const ep = await createVerticalEpisode(slug, {
+          episodeNumber: epNum,
+          title: episodeTitle.trim(),
+          cliffhanger: cliffhanger.trim() || undefined,
+        });
+        const uploaded = await runVideoUpload({
+          type: 'video',
+          title: episodeTitle.trim(),
+          file: videoFile,
+          verticalEpisodeId: ep.id,
+        });
+        await pollVideoUntilReady(uploaded.videoId);
+        await attachVerticalEpisodeVideo(ep.id, uploaded.videoId);
+        setDoneMessage('Episode uploaded and processing.');
+        setMode('done');
+        onComplete?.();
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setBusy(false);
     }
@@ -127,8 +176,8 @@ export function VerticalSeriesWizard({
 
   if (mode === 'done') {
     return (
-      <BottomSheet visible={visible} onClose={reset} title="Series created">
-        <Text style={styles.sub}>Your micro-drama series is ready. Add episodes from your profile.</Text>
+      <BottomSheet visible={visible} onClose={reset} title="Done">
+        <Text style={styles.sub}>{doneMessage}</Text>
         <Button label="Done" onPress={() => { onComplete?.(); reset(); }} />
       </BottomSheet>
     );
@@ -193,11 +242,12 @@ export function VerticalSeriesWizard({
           <Label>Cliffhanger hook</Label>
           <Input value={cliffhanger} onChangeText={setCliffhanger} placeholder="Optional hook for next episode" />
           <Pressable style={styles.fileBox} onPress={() => void pickVideo()}>
-            <Text style={styles.fileLabel}>{videoName || 'Episode video 9:16 *'}</Text>
+            <Text style={styles.fileLabel}>{videoFile?.name ?? 'Episode video 9:16 *'}</Text>
           </Pressable>
+          {error ? <Text style={{ color: colors.destructive, marginTop: 8 }}>{error}</Text> : null}
           <Button
             label={busy ? 'Uploading…' : 'Publish episode'}
-            disabled={!episodeTitle.trim() || !videoName || busy}
+            disabled={!episodeTitle.trim() || !videoFile || busy || !(activeSeriesSlug || initialSeriesSlug)}
             onPress={() => void submit()}
             style={{ marginTop: 12 }}
           />

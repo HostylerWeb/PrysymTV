@@ -68,7 +68,7 @@ export function ContentRow({
         >
         {items.map((item) => (
           <div key={item.id} className="snap-start">
-            <VideoCard id={item.id} {...item} />
+            <VideoCard {...item} />
           </div>
         ))}
         </div>

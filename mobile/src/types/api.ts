@@ -42,6 +42,7 @@ export type VideoCard = {
   isFollowing?: boolean;
   isLive?: boolean;
   isNew?: boolean;
+  playbackUrl?: string | null;
 };
 
 /** Feed / browse card shape returned by most video list endpoints. */
@@ -392,6 +393,7 @@ export type VideoDetail = {
   saved?: boolean;
   disliked?: boolean;
   isFollowing?: boolean;
+  status?: string;
   creator: VideoCreator;
 };
 

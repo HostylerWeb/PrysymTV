@@ -48,7 +48,7 @@ export function PlayerShell({
           <Image source={{ uri: thumbnailUrl ?? '' }} style={styles.video} contentFit="cover" />
           <View style={styles.overlay}>
             <Ionicons name="play-circle" size={72} color={withAlpha(colors.onVideo, 0.85)} />
-            <Text style={styles.mock}>No playback URL</Text>
+            <Text style={styles.mock}>Video unavailable</Text>
           </View>
         </>
       )}
@@ -64,7 +64,7 @@ export function PlayerShell({
               <Ionicons name="share-outline" size={18} color={colors.onVideo} />
             </Pressable>
           ) : null}
-          {showCast ? <CastMediaButton variant="on-video" /> : null}
+          {showCast && playbackUrl ? <CastMediaButton variant="on-video" mediaUrl={playbackUrl} /> : null}
         </View>
       ) : null}
       {badge ? (

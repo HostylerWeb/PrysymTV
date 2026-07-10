@@ -29,7 +29,7 @@ interface CreateMenuSheetProps {
 }
 
 const ITEMS: Array<{
-  id: CreatorUploadKind | "live"
+  id: CreatorUploadKind | "vertical" | "live"
   label: string
   description: string
   icon: typeof Video

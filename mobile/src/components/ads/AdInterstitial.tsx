@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,17 +30,19 @@ export function AdInterstitial({ visible, videoId, creatorId, onClose }: Props) 
   const [ad, setAd] = useState<ServedAd | null>(null);
   const [countdown, setCountdown] = useState(5);
   const [ready, setReady] = useState(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!visible) return;
     setReady(false);
     if (!shouldShow) {
-      onClose();
+      onCloseRef.current();
       return;
     }
     void fetchServedAd('shorts_interstitial').then((served) => {
       if (!served) {
-        onClose();
+        onCloseRef.current();
         return;
       }
       setAd(served);
@@ -56,13 +58,19 @@ export function AdInterstitial({ visible, videoId, creatorId, onClose }: Props) 
         }),
       );
     });
-  }, [visible, shouldShow, creatorId, videoId, platformCreatorId, user?.id, onClose]);
+  }, [visible, shouldShow, creatorId, videoId, platformCreatorId, user?.id]);
 
   useEffect(() => {
     if (!visible || !ad || !ready || countdown <= 0) return;
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
   }, [visible, ad, ready, countdown]);
+
+  useEffect(() => {
+    if (!visible || !ad) return;
+    const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
+    if (!mediaUrl) onCloseRef.current();
+  }, [visible, ad]);
 
   if (!visible || !ad) return null;
 
@@ -83,8 +91,17 @@ export function AdInterstitial({ visible, videoId, creatorId, onClose }: Props) 
     void Linking.openURL(ad.clickThroughUrl);
   };
 
+  const canClose = ready && countdown <= 0;
+
   return (
-    <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => {
+        if (canClose) onClose();
+      }}
+    >
       <View style={styles.screen}>
         <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
           <Pressable onPress={openAd}>

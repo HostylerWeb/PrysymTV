@@ -16,11 +16,7 @@ import {
 import type { CreatorSubscription } from '@/lib/api/billing-monetization';
 import { runBillingCheckout } from '@/lib/billing-checkout';
 import { isPremiumActive } from '@/lib/premium';
-import {
-  INSIDER_PERKS,
-  MEMBERSHIP_PRICES,
-  PREMIUM_PERKS,
-} from '@/mocks/monetization';
+import { usePublicMembershipConfig } from '@/hooks/api/usePublicMembershipConfig';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, typography } from '@/theme/tokens';
 
@@ -36,7 +32,12 @@ export default function PremiumScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const premiumActive = isPremiumActive(user?.premiumTier, user?.premiumExpiresAt);
-  const premiumPrice = `$${MEMBERSHIP_PRICES.premium.toFixed(2)}/mo`;
+  const { membership, insider } = usePublicMembershipConfig();
+  const premiumPerks = membership?.perks ?? ['Ad-free viewing', 'Exclusive badges', 'Priority support'];
+  const premiumPrice = membership
+    ? `$${membership.priceUsd.toFixed(2)}/mo`
+    : 'See checkout';
+  const insiderPrice = insider ? `$${insider.priceUsd.toFixed(2)}/mo` : 'View pricing';
 
   const load = useCallback(async () => {
     setLoadingSubs(true);
@@ -117,10 +118,10 @@ export default function PremiumScreen() {
           <Card style={[styles.heroCard, { borderColor: colors.primary + '40', backgroundColor: colors.primary + '08' }]}>
             <Text style={[styles.badge, { color: colors.primary }]}>Prysym Membership</Text>
             <Text style={[styles.price, { color: colors.foreground }]}>
-              ${MEMBERSHIP_PRICES.premium.toFixed(2)}
+              {membership ? `$${membership.priceUsd.toFixed(2)}` : '—'}
               <Text style={styles.per}>/month</Text>
             </Text>
-            {PREMIUM_PERKS.map((p) => (
+            {premiumPerks.map((p) => (
               <Text key={p} style={[styles.perk, { color: colors.mutedForeground }]}>✓ {p}</Text>
             ))}
             {premiumActive ? (
@@ -149,10 +150,10 @@ export default function PremiumScreen() {
             <View style={{ flex: 1 }}>
               <Text style={{ color: colors.foreground, fontWeight: '700', fontSize: 15 }}>Platform Insider</Text>
               <Text style={{ color: colors.mutedForeground, fontSize: 13, marginTop: 4 }}>
-                Roadmaps, town halls & platform voice — ${MEMBERSHIP_PRICES.insider.toFixed(2)}/mo
+                Roadmaps, town halls & platform voice — {insiderPrice}
               </Text>
               <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 6 }}>
-                {INSIDER_PERKS[0]} · {INSIDER_PERKS[1]}
+                {(insider?.perks ?? []).slice(0, 2).join(' · ') || 'Platform voice & early access'}
               </Text>
             </View>
             <Text style={{ color: colors.primary, fontWeight: '700' }}>View</Text>

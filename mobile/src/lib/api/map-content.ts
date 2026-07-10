@@ -1,4 +1,4 @@
-import { proxyMediaAssetUrl } from '@/lib/media-url';
+import { proxyMediaAssetUrl, resolvePlaybackUrl } from '@/lib/media-url';
 import type {
   ContinueWatchingFeedItem,
   ContinueWatchingItem,
@@ -44,6 +44,7 @@ export function mapVideoCard(raw: VideoCardDetail | Record<string, unknown>): Vi
     isFollowing: r.isFollowing,
     isLive: r.isLive,
     isNew: r.isNew,
+    playbackUrl: resolvePlaybackUrl(r as Parameters<typeof resolvePlaybackUrl>[0]),
   };
 }
 

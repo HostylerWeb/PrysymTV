@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -11,12 +11,8 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { MeResponse } from '@/types/api';
-import { mockChannelMemberships } from '@/mocks/monetization';
-import { PushNotificationToggle } from '@/components/settings/PushNotificationToggle';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, typography, withAlpha } from '@/theme/tokens';
-
-type SettingsScreen = 'main' | 'notifications' | 'shipping' | 'playlists' | 'social' | 'dashboard' | 'memberships';
 
 type Props = {
   visible: boolean;
@@ -34,20 +30,10 @@ type MenuItem = {
   label: string;
   description: string;
   route?: string;
-  screen?: SettingsScreen;
   action?: () => void;
   toggle?: boolean;
   danger?: boolean;
   accent?: 'premium' | 'live';
-};
-
-const SCREEN_TITLES: Record<Exclude<SettingsScreen, 'main'>, string> = {
-  notifications: 'Notifications',
-  shipping: 'Shipping & checkout',
-  playlists: 'Playlists',
-  social: 'Social links',
-  dashboard: 'Performance & revenue',
-  memberships: 'Channel memberships',
 };
 
 export function ProfileSettingsSheet({
@@ -69,19 +55,24 @@ export function ProfileSettingsSheet({
     !!user.premiumTier &&
     user.premiumTier !== 'none' &&
     (!user.premiumExpiresAt || new Date(user.premiumExpiresAt).getTime() > Date.now());
-  const [screen, setScreen] = useState<SettingsScreen>('main');
-  const [emailNotifs, setEmailNotifs] = useState(true);
-  const [liveAlerts, setLiveAlerts] = useState(true);
-
   useEffect(() => {
     if (!visible) return;
-    const valid = ['notifications', 'shipping', 'playlists', 'social', 'dashboard', 'memberships'] as const;
-    if (initialScreen && valid.includes(initialScreen as typeof valid[number])) {
-      setScreen(initialScreen as SettingsScreen);
-    } else {
-      setScreen('main');
+    if (initialScreen) {
+      const routes: Record<string, string> = {
+        notifications: '/settings/notifications',
+        shipping: '/settings/shipping',
+        playlists: '/settings/playlists',
+        social: '/settings/social',
+        dashboard: '/settings/dashboard',
+        memberships: '/premium',
+      };
+      const route = routes[initialScreen];
+      if (route) {
+        onClose();
+        router.push(route as never);
+      }
     }
-  }, [visible, initialScreen]);
+  }, [visible, initialScreen, onClose, router]);
 
   if (!visible) return null;
 
@@ -107,12 +98,7 @@ export function ProfileSettingsSheet({
       route: '/insider',
       accent: 'premium',
     },
-    {
-      icon: 'ribbon-outline',
-      label: 'Channel memberships',
-      description: 'Creators you support monthly',
-      screen: 'memberships',
-    },
+    { icon: 'ribbon-outline', label: 'Channel memberships', description: 'Creators you support monthly', route: '/premium' },
     isStreamer
       ? {
           icon: 'radio-outline',
@@ -152,14 +138,14 @@ export function ProfileSettingsSheet({
           },
         },
     { icon: 'cube-outline', label: 'Shipping & checkout', description: 'Address for store purchases', route: '/settings/shipping' },
-    { icon: 'list-outline', label: 'Playlists', description: 'Create and manage playlists', screen: 'playlists' },
+    { icon: 'list-outline', label: 'Playlists', description: 'Create and manage playlists', route: '/settings/playlists' },
     { icon: 'link-outline', label: 'Social Links', description: 'Links on your creator profile', route: '/settings/social' },
     ...(showDashboard
       ? [{
           icon: 'bar-chart-outline' as const,
           label: 'Performance & Revenue',
           description: 'Views, ads on your videos, earnings, impact',
-          screen: 'dashboard' as const,
+          route: '/settings/dashboard' as const,
         }]
       : []),
     { icon: 'notifications-outline', label: 'Notifications', description: 'Email & push preferences', route: '/settings/notifications' },
@@ -183,91 +169,7 @@ export function ProfileSettingsSheet({
     },
   ];
 
-  const renderSubScreen = () => {
-    switch (screen) {
-      case 'notifications':
-        return (
-          <>
-            <PushNotificationToggle featured />
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>In-app notification types</Text>
-            <ToggleRow label="Email notifications" value={emailNotifs} onChange={setEmailNotifs} colors={colors} />
-            <ToggleRow label="Live stream alerts" value={liveAlerts} onChange={setLiveAlerts} colors={colors} />
-            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-              Push uses your device permission when enabled above. Email preferences sync when you sign in on a new device.
-            </Text>
-          </>
-        );
-      case 'shipping':
-        return (
-          <>
-            <Field label="Full name" value={user.displayName ?? ''} colors={colors} />
-            <Field label="Address" value="123 Creator Lane" colors={colors} />
-            <Field label="City" value="Los Angeles, CA 90001" colors={colors} />
-            <Text style={[styles.hint, { color: colors.mutedForeground }]}>Manage full shipping details from the creator store checkout flow.</Text>
-          </>
-        );
-      case 'playlists':
-        return (
-          <>
-            <Field label="Favorites" value="12 items" colors={colors} />
-            <Field label="Watch later" value="5 items" colors={colors} />
-            <Pressable style={styles.linkBtn} onPress={() => navigate('/settings/playlists')}>
-              <Text style={[styles.linkBtnText, { color: colors.primary }]}>Open playlist manager</Text>
-            </Pressable>
-          </>
-        );
-      case 'social':
-        return (
-          <>
-            <Field label="Website" value="https://prysym.tv" colors={colors} />
-            <Field label="X / Twitter" value={`@${user.username}`} colors={colors} />
-            <Field label="Instagram" value="@prysymtv" colors={colors} />
-          </>
-        );
-      case 'dashboard':
-        return (
-          <>
-            <StatCard label="Views (30d)" value="24.8K" colors={colors} />
-            <StatCard label="Ad earnings" value="$128.40" colors={colors} />
-            <StatCard label="GAF contribution" value="$12.80" colors={colors} />
-            <StatCard label="Gifts received" value="1,420 coins" colors={colors} />
-            <Pressable style={styles.linkBtn} onPress={() => navigate('/settings/dashboard')}>
-              <Text style={[styles.linkBtnText, { color: colors.primary }]}>Open full dashboard</Text>
-            </Pressable>
-            <Pressable style={styles.linkBtn} onPress={() => navigate('/impact')}>
-              <Text style={[styles.linkBtnText, { color: colors.primary }]}>View community impact (GAF)</Text>
-            </Pressable>
-          </>
-        );
-      case 'memberships':
-        return (
-          <>
-            <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0, marginBottom: 12 }]}>
-              Channel memberships are separate from platform Premium and Insider.
-            </Text>
-            {mockChannelMemberships.map((sub) => (
-              <View key={sub.id} style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={{ color: colors.foreground, fontWeight: '700' }}>@{sub.creatorUsername}</Text>
-                <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 4 }}>
-                  {sub.tier === 'premium' ? 'VIP' : 'Member'} · ${sub.priceUsd.toFixed(2)}/mo
-                </Text>
-                <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 2 }}>
-                  Renews {new Date(sub.currentPeriodEnd).toLocaleDateString()}
-                </Text>
-                <Pressable style={{ marginTop: 10 }} onPress={() => navigate(`/creator/${sub.creatorUsername}`)}>
-                  <Text style={{ color: colors.primary, fontWeight: '600' }}>View creator</Text>
-                </Pressable>
-              </View>
-            ))}
-            <ButtonRow label="Browse creators" onPress={() => navigate('/(tabs)/videos')} colors={colors} />
-          </>
-        );
-      default:
-        return null;
-    }
-  };
-
-  const title = screen === 'main' ? 'Settings' : SCREEN_TITLES[screen];
+  const title = 'Settings';
 
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -275,15 +177,9 @@ export function ProfileSettingsSheet({
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 16, maxHeight: '88%', backgroundColor: colors.background, borderColor: colors.border }]}>
         <View style={[styles.handle, { backgroundColor: colors.border }]} />
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          {screen !== 'main' ? (
-            <Pressable onPress={() => setScreen('main')} hitSlop={8} style={styles.headerIcon}>
-              <Ionicons name="chevron-back" size={24} color={colors.foreground} />
-            </Pressable>
-          ) : (
-            <View style={styles.headerIcon}>
-              <Ionicons name="settings-outline" size={22} color={colors.foreground} />
-            </View>
-          )}
+          <View style={styles.headerIcon}>
+            <Ionicons name="settings-outline" size={22} color={colors.foreground} />
+          </View>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>{title}</Text>
           <Pressable onPress={onClose} hitSlop={8}>
             <Ionicons name="close" size={24} color={colors.foreground} />
@@ -291,59 +187,52 @@ export function ProfileSettingsSheet({
         </View>
 
         <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-          {screen === 'main' ? (
-            <>
-              <Pressable style={[styles.coinsCard, { backgroundColor: withAlpha(colors.yellow, 0.1), borderColor: withAlpha(colors.yellow, 0.25) }]} onPress={() => { onClose(); onCoins(); }}>
-                <View style={styles.coinsIcon}>
-                  <Text style={styles.coinsEmoji}>🪙</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.coinsTitle, { color: colors.foreground }]}>Your Coins</Text>
-                  <Text style={[styles.coinsSub, { color: colors.mutedForeground }]}>
-                    {user.coinsBalance.toLocaleString()} available
-                  </Text>
-                </View>
-                <Text style={[styles.coinsCta, { color: colors.primary }]}>Top Up</Text>
-              </Pressable>
+          <Pressable style={[styles.coinsCard, { backgroundColor: withAlpha(colors.yellow, 0.1), borderColor: withAlpha(colors.yellow, 0.25) }]} onPress={() => { onClose(); onCoins(); }}>
+            <View style={styles.coinsIcon}>
+              <Text style={styles.coinsEmoji}>🪙</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.coinsTitle, { color: colors.foreground }]}>Your Coins</Text>
+              <Text style={[styles.coinsSub, { color: colors.mutedForeground }]}>
+                {user.coinsBalance.toLocaleString()} available
+              </Text>
+            </View>
+            <Text style={[styles.coinsCta, { color: colors.primary }]}>Top Up</Text>
+          </Pressable>
 
-              {items.map((item) => (
-                <Pressable
-                  key={item.label}
-                  style={[
-                    styles.menuItem,
-                    item.accent === 'premium' && { backgroundColor: withAlpha(colors.primary, 0.06) },
-                  ]}
-                  onPress={() => {
-                    if (item.toggle && item.action) item.action();
-                    else if (item.action) item.action();
-                    else if (item.screen) setScreen(item.screen);
-                    else if (item.route) navigate(item.route);
-                  }}
-                >
-                  <View style={[styles.menuIcon, { backgroundColor: colors.secondary }, item.danger && { backgroundColor: withAlpha(colors.destructive, 0.1) }]}>
-                    <Ionicons
-                      name={item.icon}
-                      size={20}
-                      color={item.danger ? colors.destructive : colors.foreground}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.menuLabel, { color: item.danger ? colors.destructive : colors.foreground }]}>{item.label}</Text>
-                    {!item.toggle && item.description ? (
-                      <Text style={[styles.menuDesc, { color: colors.mutedForeground }]}>{item.description}</Text>
-                    ) : null}
-                  </View>
-                  {item.toggle ? (
-                    <Switch value={isDark} onValueChange={setDarkMode} trackColor={{ true: colors.primary }} />
-                  ) : (
-                    <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
-                  )}
-                </Pressable>
-              ))}
-            </>
-          ) : (
-            renderSubScreen()
-          )}
+          {items.map((item) => (
+            <Pressable
+              key={item.label}
+              style={[
+                styles.menuItem,
+                item.accent === 'premium' && { backgroundColor: withAlpha(colors.primary, 0.06) },
+              ]}
+              onPress={() => {
+                if (item.toggle && item.action) item.action();
+                else if (item.action) item.action();
+                else if (item.route) navigate(item.route);
+              }}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: colors.secondary }, item.danger && { backgroundColor: withAlpha(colors.destructive, 0.1) }]}>
+                <Ionicons
+                  name={item.icon}
+                  size={20}
+                  color={item.danger ? colors.destructive : colors.foreground}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.menuLabel, { color: item.danger ? colors.destructive : colors.foreground }]}>{item.label}</Text>
+                {!item.toggle && item.description ? (
+                  <Text style={[styles.menuDesc, { color: colors.mutedForeground }]}>{item.description}</Text>
+                ) : null}
+              </View>
+              {item.toggle ? (
+                <Switch value={isDark} onValueChange={setDarkMode} trackColor={{ true: colors.primary }} />
+              ) : (
+                <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+              )}
+            </Pressable>
+          ))}
         </ScrollView>
       </View>
     </View>

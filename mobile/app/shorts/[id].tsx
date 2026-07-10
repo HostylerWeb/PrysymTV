@@ -34,6 +34,7 @@ export default function ShortDetailScreen() {
   const [giftOpen, setGiftOpen] = useState(false);
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const [liked, setLiked] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [following, setFollowing] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
   const [progress, setProgress] = useState({ seconds: 0, duration: 0 });
@@ -41,6 +42,7 @@ export default function ShortDetailScreen() {
   React.useEffect(() => {
     if (!short) return;
     setLiked(!!short.liked);
+    setSaved(!!short.saved);
     setFollowing(!!short.isFollowing);
     setLikesCount(short.likesCount ?? 0);
   }, [short]);
@@ -93,17 +95,32 @@ export default function ShortDetailScreen() {
             icon={liked ? 'heart' : 'heart-outline'}
             label={formatViewCount(likesCount)}
             onPress={() => requireAuth(async () => {
-              const res = await toggleVideoLike(short.id);
-              setLiked(res.liked);
-              if (res.likesCount != null) setLikesCount(res.likesCount);
+              const prevLiked = liked;
+              const prevCount = likesCount;
+              try {
+                const res = await toggleVideoLike(short.id);
+                setLiked(res.liked);
+                if (res.likesCount != null) setLikesCount(res.likesCount);
+              } catch {
+                setLiked(prevLiked);
+                setLikesCount(prevCount);
+              }
             })}
           />
           <Action icon="chatbubble-outline" label="Comments" onPress={() => requireAuth(() => setCommentsOpen(true))} />
           <Action icon="gift-outline" label="Gift" onPress={() => requireAuth(() => setGiftOpen(true))} />
           <Action
-            icon="bookmark-outline"
-            label="Save"
-            onPress={() => requireAuth(async () => { await toggleVideoSave(short.id); })}
+            icon={saved ? 'bookmark' : 'bookmark-outline'}
+            label={saved ? 'Saved' : 'Save'}
+            onPress={() => requireAuth(async () => {
+              const prev = saved;
+              try {
+                const res = await toggleVideoSave(short.id);
+                setSaved(res.saved);
+              } catch {
+                setSaved(prev);
+              }
+            })}
           />
           <Action icon="share-outline" label="Share" onPress={() => setShareOpen(true)} />
           <Action icon="flag-outline" label="Report" onPress={() => requireAuth(() => setReportOpen(true))} />
@@ -116,12 +133,17 @@ export default function ShortDetailScreen() {
           <Pressable
             style={[styles.followBtn, following && styles.followingBtn]}
             onPress={() => requireAuth(async () => {
-              if (following) {
-                await unfollowUser(short.creator.username);
-                setFollowing(false);
-              } else {
-                await followUser(short.creator.username);
-                setFollowing(true);
+              const prev = following;
+              try {
+                if (following) {
+                  await unfollowUser(short.creator.username);
+                  setFollowing(false);
+                } else {
+                  await followUser(short.creator.username);
+                  setFollowing(true);
+                }
+              } catch {
+                setFollowing(prev);
               }
             })}
           >

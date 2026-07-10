@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
 import {
@@ -17,6 +18,7 @@ import { OAuthConfigProvider } from '@/context/OAuthConfigContext';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { PodcastPlayerProvider } from '@/context/PodcastPlayerContext';
 import { AuthPromptSheet } from '@/components/auth/AuthPromptSheet';
+import { CompleteProfileBanner } from '@/components/auth/CompleteProfileBanner';
 import { ThemedStatusBar } from '@/components/layout/ThemedStatusBar';
 import { StoreCartProvider } from '@/context/StoreCartContext';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
@@ -27,63 +29,66 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 function RootStack() {
   const { colors: themeColors } = useTheme();
   return (
-    <>
+    <View style={{ flex: 1, backgroundColor: themeColors.background }}>
       <ThemedStatusBar />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: themeColors.background },
-          animation: 'slide_from_right',
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="(auth)" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="search" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="notifications" />
-        <Stack.Screen name="profile" />
-        <Stack.Screen name="watch/[id]" />
-        <Stack.Screen name="watch/index" />
-        <Stack.Screen name="movie/[id]" />
-        <Stack.Screen name="live/index" />
-        <Stack.Screen name="live/[id]" />
-        <Stack.Screen name="podcast/[id]" />
-        <Stack.Screen name="creator/[username]" />
-        <Stack.Screen name="creator/[username]/store/[productId]" />
-        <Stack.Screen name="creator/[username]/store/cart" />
-        <Stack.Screen name="verticals/[slug]" />
-        <Stack.Screen name="verticals/watch/[slug]/[episode]" />
-        <Stack.Screen name="playlist/[id]" />
-        <Stack.Screen name="history" />
-        <Stack.Screen name="premium" />
-        <Stack.Screen name="insider" />
-        <Stack.Screen name="impact" />
-        <Stack.Screen name="advertise" />
-        <Stack.Screen name="advertise/portal/[accountId]" />
-        <Stack.Screen name="advertisers" />
-        <Stack.Screen name="go-live" />
-        <Stack.Screen name="upload" />
-        <Stack.Screen name="creator-dashboard" />
-        <Stack.Screen name="settings/index" />
-        <Stack.Screen name="settings/notifications" />
-        <Stack.Screen name="settings/dashboard" />
-        <Stack.Screen name="settings/upload" />
-        <Stack.Screen name="settings/verticals" />
-        <Stack.Screen name="settings/podcasts" />
-        <Stack.Screen name="settings/playlists" />
-        <Stack.Screen name="settings/social" />
-        <Stack.Screen name="settings/shipping" />
-        <Stack.Screen name="shorts/[id]" />
-        <Stack.Screen name="cookies" />
-        <Stack.Screen name="help" />
-        <Stack.Screen name="terms" />
-        <Stack.Screen name="privacy" />
-        <Stack.Screen name="guidelines" />
-        <Stack.Screen name="+not-found" />
-      </Stack>
+      <CompleteProfileBanner />
+      <View style={{ flex: 1 }}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: themeColors.background },
+            animation: 'slide_from_right',
+          }}
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="(auth)" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="search" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="notifications" />
+          <Stack.Screen name="profile" />
+          <Stack.Screen name="watch/[id]" />
+          <Stack.Screen name="watch/index" />
+          <Stack.Screen name="movie/[id]" />
+          <Stack.Screen name="live/index" />
+          <Stack.Screen name="live/[id]" />
+          <Stack.Screen name="podcast/[id]" />
+          <Stack.Screen name="creator/[username]" />
+          <Stack.Screen name="creator/[username]/store/[productId]" />
+          <Stack.Screen name="creator/[username]/store/cart" />
+          <Stack.Screen name="verticals/[slug]" />
+          <Stack.Screen name="verticals/watch/[slug]/[episode]" />
+          <Stack.Screen name="playlist/[id]" />
+          <Stack.Screen name="history" />
+          <Stack.Screen name="premium" />
+          <Stack.Screen name="insider" />
+          <Stack.Screen name="impact" />
+          <Stack.Screen name="advertise" />
+          <Stack.Screen name="advertise/portal/[accountId]" />
+          <Stack.Screen name="advertisers" />
+          <Stack.Screen name="go-live" />
+          <Stack.Screen name="upload" />
+          <Stack.Screen name="creator-dashboard" />
+          <Stack.Screen name="settings/index" />
+          <Stack.Screen name="settings/notifications" />
+          <Stack.Screen name="settings/dashboard" />
+          <Stack.Screen name="settings/upload" />
+          <Stack.Screen name="settings/verticals" />
+          <Stack.Screen name="settings/podcasts" />
+          <Stack.Screen name="settings/playlists" />
+          <Stack.Screen name="settings/social" />
+          <Stack.Screen name="settings/shipping" />
+          <Stack.Screen name="shorts/[id]" />
+          <Stack.Screen name="cookies" />
+          <Stack.Screen name="help" />
+          <Stack.Screen name="terms" />
+          <Stack.Screen name="privacy" />
+          <Stack.Screen name="guidelines" />
+          <Stack.Screen name="+not-found" />
+        </Stack>
+      </View>
       <AuthPromptSheet />
-    </>
+    </View>
   );
 }
 

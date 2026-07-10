@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -19,6 +19,7 @@ const UPLOAD_TYPES = {
 type UploadType = keyof typeof UPLOAD_TYPES;
 
 export default function SettingsUploadScreen() {
+  const router = useRouter();
   const { type } = useLocalSearchParams<{ type?: string }>();
   const uploadType = (type && type in UPLOAD_TYPES ? type : 'video') as UploadType;
   const config = UPLOAD_TYPES[uploadType];
@@ -86,8 +87,15 @@ export default function SettingsUploadScreen() {
           <Card>
             <Text style={styles.cardTitle}>Use creator tools</Text>
             <Text style={styles.cardSub}>
-              Podcast and vertical episode uploads use dedicated flows in Settings → Podcasts or Micro-dramas.
+              {uploadType === 'podcast'
+                ? 'Upload podcast episodes from Settings → Podcasts.'
+                : 'Upload vertical episodes from Settings → Micro-dramas.'}
             </Text>
+            <Button
+              label={uploadType === 'podcast' ? 'Open Podcasts' : 'Open Micro-dramas'}
+              onPress={() => router.replace(uploadType === 'podcast' ? '/settings/podcasts' : '/settings/verticals')}
+              style={{ marginTop: 12 }}
+            />
           </Card>
         ) : null}
 

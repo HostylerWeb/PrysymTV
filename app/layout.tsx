@@ -6,6 +6,7 @@ import { ConfirmProvider } from '@/contexts/confirm-context'
 import { OAuthConfigProvider } from '@/contexts/oauth-config-context'
 import { ThemeProvider } from '@/components/theme-provider'
 import { WebPushRegistrar } from '@/components/web-push-registrar'
+import { CompleteProfileBanner } from '@/components/complete-profile-banner'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
 
@@ -15,7 +16,6 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: 'Prysym TV - Movies, Live & Videos',
   description: 'Your ultimate streaming destination for movies, live streams, and videos',
-  generator: 'v0.app',
   icons: {
     icon: [
       {
@@ -40,6 +40,7 @@ export default function RootLayout({
             <AuthProvider>
               <ConfirmProvider>
                 <WebPushRegistrar />
+                <CompleteProfileBanner />
                 {children}
                 <Toaster />
               </ConfirmProvider>

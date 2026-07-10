@@ -108,8 +108,8 @@ export function VideoCard({
           {(type === "video" || type === "live") && (
             <div className="w-9 h-9 rounded-full bg-muted flex-shrink-0 overflow-hidden">
               <img
-                src={channelAvatar ?? userAvatarUrl(null, channel)}
-                alt={channel}
+                src={channelAvatar ?? userAvatarUrl(null, channel ?? "creator")}
+                alt={channel ?? "Creator"}
                 className="w-full h-full object-cover"
               />
             </div>

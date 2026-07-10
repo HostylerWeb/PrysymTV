@@ -11,12 +11,14 @@ export async function login(email: string, password: string) {
   return data;
 }
 
+import type { UserGenderValue } from "@/lib/user-gender";
+
 export async function register(input: {
   email: string;
   username: string;
   password: string;
   displayName: string;
-  gender: import("./user-gender").UserGenderValue;
+  gender: UserGenderValue;
 }) {
   const data = await apiRequest<AuthSessionResponse>("/auth/register", {
     method: "POST",

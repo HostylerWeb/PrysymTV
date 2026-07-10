@@ -14,8 +14,9 @@ import { HomeDualSpotlight } from "@/components/home-dual-spotlight"
 import { HomeSectionShell } from "@/components/home-section-shell"
 import { HomeTrendingRail } from "@/components/home-trending-rail"
 import { HomeFeedSkeleton, HomeDualSpotlightSkeleton } from "@/components/content-skeletons"
+import { FeedErrorBanner } from "@/components/feed-error-banner"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
-import { fetchFeedHome } from "@/lib/api/feed"
+import { fetchFeedHomeResult } from "@/lib/api/feed"
 import { fetchShortsFeed } from "@/lib/api/videos-feed"
 import { fetchPodcastEpisodesFeed } from "@/lib/api/podcasts"
 import { fetchVerticalSeriesList } from "@/lib/api/verticals"
@@ -23,7 +24,7 @@ import { formatDuration, formatViewCount, moviePosterUrl, videoThumbnail } from 
 
 export default function Home() {
   const { platformCreatorId } = usePublicAdsConfig()
-  const [activeTab, setActiveTab] = useState("home")
+  const [activeTab, setActiveTab] = useState("none")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [homeShorts, setHomeShorts] = useState<
     Array<{ id: string; title: string; thumbnail: string; channel: string }>
@@ -66,10 +67,20 @@ export default function Home() {
   const [heroSlides, setHeroSlides] = useState<HomeFeaturedMovie[]>([])
   const [feedReady, setFeedReady] = useState(false)
   const [extrasReady, setExtrasReady] = useState(false)
+  const [feedError, setFeedError] = useState(false)
+  const [feedReloadKey, setFeedReloadKey] = useState(0)
 
   useEffect(() => {
-    void fetchFeedHome()
-      .then((feed) => {
+    let cancelled = false
+    setFeedReady(false)
+    setFeedError(false)
+    void fetchFeedHomeResult()
+      .then(({ data: feed, fromFallback }) => {
+        if (cancelled) return
+        if (fromFallback) {
+          setFeedError(true)
+          return
+        }
       const slides: HomeFeaturedMovie[] = []
       const seenSlideIds = new Set<string>()
       if (feed.featuredMovie && feed.heroMovieReason) {
@@ -135,8 +146,13 @@ export default function Home() {
       setTopMovies(feed.movies.map(mapMovie))
       setNewReleases(feed.newReleases.map(mapMovie))
     })
-      .finally(() => setFeedReady(true))
-  }, [])
+      .finally(() => {
+        if (!cancelled) setFeedReady(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [feedReloadKey])
 
   useEffect(() => {
     void Promise.all([
@@ -167,7 +183,7 @@ export default function Home() {
             slug: s.slug,
             title: s.title,
             posterUrl: s.posterUrl,
-            genre: s.genre,
+            genre: s.genre ?? undefined,
           })),
         )
       }),
@@ -181,6 +197,12 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20 overflow-x-hidden">
       <Header onSearchClick={() => setIsSearchOpen(true)} />
+
+      {feedError ? (
+        <div className="px-4 md:px-8 pt-4">
+          <FeedErrorBanner onRetry={() => setFeedReloadKey((k) => k + 1)} />
+        </div>
+      ) : null}
 
       <HomeHero slides={heroSlides} loading={!feedReady} />
 

@@ -83,6 +83,7 @@ export async function runVideoUpload(params: {
   visibility?: 'public' | 'private' | 'unlisted';
   tags?: string;
   file: { uri: string; name?: string | null; mimeType?: string | null };
+  verticalEpisodeId?: string;
 }) {
   const mimeType = params.file.mimeType || 'video/mp4';
   const init = await initVideoUpload({
@@ -94,9 +95,29 @@ export async function runVideoUpload(params: {
     tags: params.tags,
     mimeType,
     fileName: params.file.name ?? 'video.mp4',
+    verticalEpisodeId: params.verticalEpisodeId,
   });
   await uploadVideoFile(init, params.file);
   return completeVideoUpload({ videoId: init.videoId, objectKey: init.objectKey });
+}
+
+export async function pollVideoUntilReady(
+  videoId: string,
+  options?: { intervalMs?: number; maxAttempts?: number },
+) {
+  const intervalMs = options?.intervalMs ?? 2500;
+  const maxAttempts = options?.maxAttempts ?? 120;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const video = await fetchVideo(videoId);
+    if (video.status === 'ready') return video;
+    if (video.status === 'failed') {
+      throw new Error('Video processing failed. Try uploading again.');
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+
+  throw new Error('Processing is taking longer than expected. Your video will appear when ready.');
 }
 
 export function updateMyVideo(videoId: string, body: { title?: string; description?: string }) {

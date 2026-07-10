@@ -121,14 +121,20 @@ export function EditProfileModal({ visible, onClose }: Props) {
       return;
     }
 
+    const birth = birthDate.trim();
+    if (birth && !/^\d{4}-\d{2}-\d{2}$/.test(birth)) {
+      setError('Birth date must be YYYY-MM-DD.');
+      return;
+    }
+
     setSaving(true);
     setError('');
     try {
       await updateMe({
         displayName: name,
         bio: bio.trim() || undefined,
-        ...(gender ? { gender } : {}),
-        ...(birthDate ? { birthDate } : {}),
+        gender: gender || undefined,
+        birthDate: birth || undefined,
         ...(pendingAvatarUrl ? { avatarUrl: pendingAvatarUrl } : {}),
         ...(pendingBannerUrl ? { bannerUrl: pendingBannerUrl } : {}),
       });

@@ -181,7 +181,9 @@ export default function AdminAnalyticsPage() {
       <AdminDateRangePicker
         className="mb-6"
         value={dateRange}
-        onChange={setDateRange}
+        onChange={(value) => {
+          if (value) setDateRange(value)
+        }}
       />
 
       {tsLoading && !timeseries && (

@@ -28,7 +28,7 @@ export function resolveAvatarUrl(
   const resolved = resolveProfileMediaUrl(avatarUrl);
   if (resolved) return resolved;
   const safeSeed = encodeURIComponent(seed.replace(/^@/, '').slice(0, 32) || 'user');
-  return `https://api.dicebear.com/7.x/initials/svg?seed=${safeSeed}&backgroundColor=6366f1,475569`;
+  return `https://api.dicebear.com/7.x/initials/png?seed=${safeSeed}&backgroundColor=6366f1,475569`;
 }
 
 export function resolvePlaybackUrl(source: {

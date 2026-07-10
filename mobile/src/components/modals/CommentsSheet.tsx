@@ -117,42 +117,77 @@ export function CommentsSheet({ visible, onClose, videoId, count, videoTitle }: 
                     <Text style={styles.empty}>No comments yet. Be the first.</Text>
                   ) : (
                     comments.map((c) => (
-                      <View key={c.id} style={styles.comment}>
-                        <View style={styles.commentAvatar}>
-                          <Text style={styles.commentAvatarLetter}>
-                            {c.user.username[0]?.toUpperCase()}
-                          </Text>
-                        </View>
-                        <View style={styles.commentBody}>
-                          <View style={styles.commentHeader}>
-                            <Text style={styles.author}>@{c.user.username}</Text>
-                            <Text style={styles.time}>{formatRelativeTime(c.createdAt)}</Text>
+                      <View key={c.id}>
+                        <View style={styles.comment}>
+                          <View style={styles.commentAvatar}>
+                            <Text style={styles.commentAvatarLetter}>
+                              {c.user.username[0]?.toUpperCase()}
+                            </Text>
                           </View>
-                          <Text style={styles.body}>{c.body}</Text>
-                          <View style={styles.commentActions}>
-                            <Pressable
-                              style={styles.commentAction}
-                              onPress={() => requireAuth(() => void likeComment.mutate(c.id))}
-                            >
-                              <Ionicons
-                                name={c.liked ? 'thumbs-up' : 'thumbs-up-outline'}
-                                size={16}
-                                color={c.liked ? colors.primary : colors.mutedForeground}
-                              />
-                              {c.likesCount > 0 ? (
-                                <Text style={[styles.actionLabel, c.liked && styles.actionOn]}>
-                                  {formatViewCount(c.likesCount)}
-                                </Text>
-                              ) : null}
-                            </Pressable>
-                            <Pressable
-                              style={styles.commentAction}
-                              onPress={() => requireAuth(() => setReplyingTo({ id: c.id, username: c.user.username }))}
-                            >
-                              <Text style={styles.actionLabel}>Reply</Text>
-                            </Pressable>
+                          <View style={styles.commentBody}>
+                            <View style={styles.commentHeader}>
+                              <Text style={styles.author}>@{c.user.username}</Text>
+                              <Text style={styles.time}>{formatRelativeTime(c.createdAt)}</Text>
+                            </View>
+                            <Text style={styles.body}>{c.body}</Text>
+                            <View style={styles.commentActions}>
+                              <Pressable
+                                style={styles.commentAction}
+                                onPress={() => requireAuth(() => void likeComment.mutate(c.id))}
+                              >
+                                <Ionicons
+                                  name={c.liked ? 'thumbs-up' : 'thumbs-up-outline'}
+                                  size={16}
+                                  color={c.liked ? colors.primary : colors.mutedForeground}
+                                />
+                                {c.likesCount > 0 ? (
+                                  <Text style={[styles.actionLabel, c.liked && styles.actionOn]}>
+                                    {formatViewCount(c.likesCount)}
+                                  </Text>
+                                ) : null}
+                              </Pressable>
+                              <Pressable
+                                style={styles.commentAction}
+                                onPress={() => requireAuth(() => setReplyingTo({ id: c.id, username: c.user.username }))}
+                              >
+                                <Text style={styles.actionLabel}>Reply</Text>
+                              </Pressable>
+                            </View>
                           </View>
                         </View>
+                        {(c.replies ?? []).map((reply) => (
+                          <View key={reply.id} style={[styles.comment, styles.replyComment]}>
+                            <View style={styles.commentAvatar}>
+                              <Text style={styles.commentAvatarLetter}>
+                                {reply.user.username[0]?.toUpperCase()}
+                              </Text>
+                            </View>
+                            <View style={styles.commentBody}>
+                              <View style={styles.commentHeader}>
+                                <Text style={styles.author}>@{reply.user.username}</Text>
+                                <Text style={styles.time}>{formatRelativeTime(reply.createdAt)}</Text>
+                              </View>
+                              <Text style={styles.body}>{reply.body}</Text>
+                              <View style={styles.commentActions}>
+                                <Pressable
+                                  style={styles.commentAction}
+                                  onPress={() => requireAuth(() => void likeComment.mutate(reply.id))}
+                                >
+                                  <Ionicons
+                                    name={reply.liked ? 'thumbs-up' : 'thumbs-up-outline'}
+                                    size={16}
+                                    color={reply.liked ? colors.primary : colors.mutedForeground}
+                                  />
+                                  {reply.likesCount > 0 ? (
+                                    <Text style={[styles.actionLabel, reply.liked && styles.actionOn]}>
+                                      {formatViewCount(reply.likesCount)}
+                                    </Text>
+                                  ) : null}
+                                </Pressable>
+                              </View>
+                            </View>
+                          </View>
+                        ))}
                       </View>
                     ))
                   )}
@@ -222,6 +257,7 @@ function createStyles(colors: ThemeColors) {
     sendBtnDisabled: { opacity: 0.45 },
     listScroll: { flex: 1 },
     comment: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg },
+    replyComment: { marginLeft: 28, marginBottom: spacing.md },
     commentAvatar: {
       width: 36,
       height: 36,

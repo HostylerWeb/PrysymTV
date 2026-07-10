@@ -34,7 +34,7 @@ export function WatchCommentsPanel({ videoId, count, videoTitle, thumbnailUrl }:
   const { isAuthenticated, requireAuth, user } = useMockAuth();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
 
   const { data, isLoading, postComment, likeComment } = useVideoComments(videoId);
   const comments = data?.items ?? [];
@@ -48,7 +48,7 @@ export function WatchCommentsPanel({ videoId, count, videoTitle, thumbnailUrl }:
     const body = text.trim();
     if (!body) return;
     postComment.mutate(
-      { body, parentId: replyingTo ?? undefined },
+      { body, parentId: replyingTo?.id },
       {
         onSuccess: () => {
           setText('');
@@ -119,7 +119,7 @@ export function WatchCommentsPanel({ videoId, count, videoTitle, thumbnailUrl }:
                 <>
                   {replyingTo ? (
                     <View style={styles.replyBar}>
-                      <Text style={styles.replyText}>Replying to @{replyingTo}</Text>
+                      <Text style={styles.replyText}>Replying to @{replyingTo.username}</Text>
                       <Pressable onPress={() => setReplyingTo(null)}>
                         <Text style={styles.replyCancel}>Cancel</Text>
                       </Pressable>
@@ -166,46 +166,87 @@ export function WatchCommentsPanel({ videoId, count, videoTitle, thumbnailUrl }:
                 <Text style={styles.previewEmpty}>No comments yet. Be the first!</Text>
               ) : (
                 comments.map((c) => (
-                  <View key={c.id} style={styles.comment}>
-                    <View style={styles.commentAvatar}>
-                      <Text style={styles.commentAvatarLetter}>
-                        {c.user.username[0]?.toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={styles.commentBody}>
-                      <View style={styles.commentMeta}>
-                        <Text style={styles.commentAuthor}>@{c.user.username}</Text>
-                        <Text style={styles.commentTime}>
-                          {formatRelativeTime(c.createdAt)}
+                  <View key={c.id}>
+                    <View style={styles.comment}>
+                      <View style={styles.commentAvatar}>
+                        <Text style={styles.commentAvatarLetter}>
+                          {c.user.username[0]?.toUpperCase()}
                         </Text>
                       </View>
-                      <Text style={styles.commentText}>{c.body}</Text>
-                      <View style={styles.commentActions}>
-                        <Pressable
-                          style={styles.actionBtn}
-                          onPress={() =>
-                            requireAuth(() => likeComment.mutate(c.id))
-                          }
-                        >
-                          <Ionicons
-                            name={c.liked ? 'thumbs-up' : 'thumbs-up-outline'}
-                            size={16}
-                            color={c.liked ? colors.primary : colors.mutedForeground}
-                          />
-                          {c.likesCount > 0 ? (
-                            <Text style={[styles.actionLabel, c.liked && styles.actionOn]}>
-                              {formatViewCount(c.likesCount)}
-                            </Text>
-                          ) : null}
-                        </Pressable>
-                        <Pressable
-                          style={styles.actionBtn}
-                          onPress={() => requireAuth(() => setReplyingTo(c.user.username))}
-                        >
-                          <Text style={styles.actionLabel}>Reply</Text>
-                        </Pressable>
+                      <View style={styles.commentBody}>
+                        <View style={styles.commentMeta}>
+                          <Text style={styles.commentAuthor}>@{c.user.username}</Text>
+                          <Text style={styles.commentTime}>
+                            {formatRelativeTime(c.createdAt)}
+                          </Text>
+                        </View>
+                        <Text style={styles.commentText}>{c.body}</Text>
+                        <View style={styles.commentActions}>
+                          <Pressable
+                            style={styles.actionBtn}
+                            onPress={() =>
+                              requireAuth(() => likeComment.mutate(c.id))
+                            }
+                          >
+                            <Ionicons
+                              name={c.liked ? 'thumbs-up' : 'thumbs-up-outline'}
+                              size={16}
+                              color={c.liked ? colors.primary : colors.mutedForeground}
+                            />
+                            {c.likesCount > 0 ? (
+                              <Text style={[styles.actionLabel, c.liked && styles.actionOn]}>
+                                {formatViewCount(c.likesCount)}
+                              </Text>
+                            ) : null}
+                          </Pressable>
+                          <Pressable
+                            style={styles.actionBtn}
+                            onPress={() =>
+                              requireAuth(() =>
+                                setReplyingTo({ id: c.id, username: c.user.username }),
+                              )
+                            }
+                          >
+                            <Text style={styles.actionLabel}>Reply</Text>
+                          </Pressable>
+                        </View>
                       </View>
                     </View>
+                    {(c.replies ?? []).map((reply) => (
+                      <View key={reply.id} style={[styles.comment, styles.replyComment]}>
+                        <View style={styles.commentAvatar}>
+                          <Text style={styles.commentAvatarLetter}>
+                            {reply.user.username[0]?.toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.commentBody}>
+                          <View style={styles.commentMeta}>
+                            <Text style={styles.commentAuthor}>@{reply.user.username}</Text>
+                            <Text style={styles.commentTime}>
+                              {formatRelativeTime(reply.createdAt)}
+                            </Text>
+                          </View>
+                          <Text style={styles.commentText}>{reply.body}</Text>
+                          <View style={styles.commentActions}>
+                            <Pressable
+                              style={styles.actionBtn}
+                              onPress={() => requireAuth(() => likeComment.mutate(reply.id))}
+                            >
+                              <Ionicons
+                                name={reply.liked ? 'thumbs-up' : 'thumbs-up-outline'}
+                                size={16}
+                                color={reply.liked ? colors.primary : colors.mutedForeground}
+                              />
+                              {reply.likesCount > 0 ? (
+                                <Text style={[styles.actionLabel, reply.liked && styles.actionOn]}>
+                                  {formatViewCount(reply.likesCount)}
+                                </Text>
+                              ) : null}
+                            </Pressable>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
                   </View>
                 ))
               )}
@@ -336,6 +377,7 @@ function createStyles(colors: ThemeColors) {
     sendBtnOff: { opacity: 0.4 },
     list: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
     comment: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+    replyComment: { marginLeft: 28, marginBottom: 12 },
     commentAvatar: {
       width: 36,
       height: 36,

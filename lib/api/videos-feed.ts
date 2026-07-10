@@ -1,5 +1,5 @@
 import { apiRequest } from "@/lib/api-client";
-import { withApiFallback } from "@/lib/api/fallback";
+import { withApiFallback, withApiFallbackResult } from "@/lib/api/fallback";
 import type { VideoCard } from "@/lib/api/feed";
 import type { VideoDetail } from "@/lib/api/videos";
 
@@ -28,6 +28,16 @@ const EMPTY_MOVIES = {
 
 export function fetchShortsFeed(cursor?: string) {
   return withApiFallback(
+    () =>
+      apiRequest<{ items: ShortVideoCard[]; nextCursor: string | null }>(
+        `/videos/feed/shorts${cursor ? `?cursor=${cursor}` : ""}`,
+      ),
+    EMPTY_SHORTS,
+  );
+}
+
+export function fetchShortsFeedResult(cursor?: string) {
+  return withApiFallbackResult(
     () =>
       apiRequest<{ items: ShortVideoCard[]; nextCursor: string | null }>(
         `/videos/feed/shorts${cursor ? `?cursor=${cursor}` : ""}`,
@@ -106,6 +116,33 @@ export function fetchVideosBrowse(params: {
   const query = qs.toString();
 
   return withApiFallback(
+    () =>
+      apiRequest<VideosBrowseResponse>(
+        `/videos/feed/videos${query ? `?${query}` : ""}`,
+        { auth: false },
+      ),
+    EMPTY_BROWSE,
+  );
+}
+
+export function fetchVideosBrowseResult(params: {
+  page?: number;
+  limit?: number;
+  vertical?: string;
+  sort?: "views" | "newest";
+  mode?: "all" | "videos" | "live";
+  q?: string;
+}) {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.vertical) qs.set("vertical", params.vertical);
+  if (params.sort) qs.set("sort", params.sort);
+  if (params.mode) qs.set("mode", params.mode);
+  if (params.q?.trim()) qs.set("q", params.q.trim());
+  const query = qs.toString();
+
+  return withApiFallbackResult(
     () =>
       apiRequest<VideosBrowseResponse>(
         `/videos/feed/videos${query ? `?${query}` : ""}`,

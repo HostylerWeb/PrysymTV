@@ -266,7 +266,7 @@ export default function AdvertiserPortalPage({
       </div>
 
       <Footer />
-      <BottomNavigation activeTab="home" onTabChange={() => {}} />
+      <BottomNavigation activeTab="none" onTabChange={() => {}} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </main>
   )

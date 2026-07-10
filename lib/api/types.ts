@@ -150,8 +150,8 @@ export type UpdateMeBody = {
   bio?: string;
   avatarUrl?: string;
   bannerUrl?: string;
-  gender?: string;
-  birthDate?: string;
+  gender?: string | null;
+  birthDate?: string | null;
   buyerFullName?: string;
   buyerPhone?: string;
   buyerAddressLine1?: string;

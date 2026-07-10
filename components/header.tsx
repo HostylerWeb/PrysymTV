@@ -92,6 +92,7 @@ export function Header({
               type="button"
               onClick={onSearchClick}
               className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors"
+              aria-label="Search"
             >
               <Search className="w-5 h-5 text-foreground" />
             </button>

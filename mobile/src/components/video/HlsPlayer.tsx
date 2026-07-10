@@ -8,6 +8,7 @@ type Props = {
   source: string;
   autoPlay?: boolean;
   loop?: boolean;
+  muted?: boolean;
   onProgress?: (seconds: number, duration: number) => void;
   onEnded?: () => void;
   contentFit?: 'contain' | 'cover' | 'fill';
@@ -19,6 +20,7 @@ export function HlsPlayer({
   source,
   autoPlay = true,
   loop = false,
+  muted = false,
   onProgress,
   onEnded,
   contentFit = 'contain',
@@ -27,9 +29,14 @@ export function HlsPlayer({
 }: Props) {
   const player = useVideoPlayer(source, (p) => {
     p.loop = loop;
+    p.muted = muted;
     p.timeUpdateEventInterval = 5;
     if (autoPlay) p.play();
   });
+
+  useEffect(() => {
+    player.muted = muted;
+  }, [player, muted]);
 
   useEffect(() => {
     if (!onProgress) return;

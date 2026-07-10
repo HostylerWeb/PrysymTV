@@ -40,7 +40,7 @@ export default function CreatorDashboardPage() {
 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-8 md:pl-20">
-      <Header />
+      <Header onSearchClick={() => router.push("/search")} />
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-6">
         <Link
           href="/profile"
@@ -55,7 +55,7 @@ export default function CreatorDashboardPage() {
         </p>
         <CreatorDashboardPanel />
       </div>
-      <BottomNavigation activeTab="profile" onTabChange={() => {}} />
+      <BottomNavigation activeTab="none" onTabChange={() => {}} />
     </main>
   )
 }

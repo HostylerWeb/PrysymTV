@@ -85,7 +85,7 @@ function StoreProductPageInner() {
     shippingFeeUsd: 0,
   })
   const [cartMessage, setCartMessage] = useState<string | null>(null)
-  const [navTab, setNavTab] = useState("home")
+  const [navTab, setNavTab] = useState("none")
 
   const isOwner =
     isAuthenticated &&

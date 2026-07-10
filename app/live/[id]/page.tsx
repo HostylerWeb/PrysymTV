@@ -74,7 +74,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
   const [isMuted, setIsMuted] = useState(false)
   const [viewerCount, setViewerCount] = useState(0)
   const [followersCount, setFollowersCount] = useState(0)
-  const [activeTab, setActiveTab] = useState("home")
+  const [activeTab, setActiveTab] = useState("none")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isReportOpen, setIsReportOpen] = useState(false)
@@ -238,10 +238,10 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
         streamId: stream.id,
       })
       void refreshUser()
+      setShowGiftPanel(false)
     } catch {
       /* keep balance — server did not charge */
     }
-    setShowGiftPanel(false)
   }
 
   if (loadError) {
@@ -326,15 +326,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
         { streamId: stream.id, message: text },
         (res: { error?: string }) => {
           if (res?.error) {
-            setChatMessages((p) => [
-              ...p,
-              {
-                id: Date.now().toString(),
-                user: "You",
-                message: text,
-                color: "text-primary",
-              },
-            ])
+            setMessageInput(text)
           }
         },
       )
@@ -571,9 +563,10 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
                     requireAuth(() => {
                       const slug = stream.streamerSlug
                       const next = !isFollowing
+                      const prev = isFollowing
                       void (next ? followUser(slug) : unfollowUser(slug))
                         .then(() => setIsFollowing(next))
-                        .catch(() => setIsFollowing(next))
+                        .catch(() => setIsFollowing(prev))
                     })
                   }
                   className={cn("rounded-full", isFollowing && "bg-secondary text-foreground")}

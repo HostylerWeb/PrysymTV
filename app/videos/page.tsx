@@ -348,7 +348,7 @@ function VideosBrowseContent() {
                     <VideoCard key={v.id} {...mapVideoRow(v)} layout="grid" />
                   ))}
                 </div>
-                {hasMore && mode !== "live" && (
+                {hasMore && (
                   <div className="flex justify-center mt-10">
                     <Button
                       variant="outline"

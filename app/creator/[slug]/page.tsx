@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, use, useState, useEffect } from "react"
+import { Suspense, use, useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ChevronLeft, Share2, Play, Users, Video, Bell, BellOff, Check, Gift, ShoppingBag, Crown } from "lucide-react"
 import { GiftSheet } from "@/components/gift-sheet"
@@ -28,6 +28,7 @@ import { fetchPodcastShows } from "@/lib/api/podcasts"
 import { fetchCreatorPlaylists } from "@/lib/api/playlists"
 import { fetchCreatorStore, type CreatorStoreSummary, type PublicStoreProduct } from "@/lib/api/stores"
 import { createCreatorSubscriptionCheckout } from "@/lib/api/billing-monetization"
+import { fulfillCheckout } from "@/lib/api/billing"
 import { fetchPublicConfig } from "@/lib/api/config"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
 import { userAvatarUrl } from "@/lib/user-avatar"
@@ -62,7 +63,7 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
   const [videos, setVideos] = useState<CreatorVideo[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("videos")
-  const [navTab, setNavTab] = useState("home")
+  const [navTab, setNavTab] = useState("none")
   const [isFollowing, setIsFollowing] = useState(false)
   const [notificationsOn, setNotificationsOn] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -86,6 +87,7 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
   const [membershipError, setMembershipError] = useState<string | null>(null)
   const [membershipPrice, setMembershipPrice] = useState(4.99)
   const [membershipVipPrice, setMembershipVipPrice] = useState(9.99)
+  const fulfilledCheckoutSession = useRef<string | null>(null)
 
   useEffect(() => {
     if (rawSlug === slug) return
@@ -174,11 +176,21 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
 
   useEffect(() => {
     const checkout = searchParams.get("checkout")
-    if (checkout === "success" && profile) {
-      setIsChannelMember(true)
-      setMembershipError(null)
-    }
-  }, [searchParams, profile])
+    const sessionId = searchParams.get("session_id")
+    if (checkout !== "success" || !sessionId || !profile || !isAuthenticated) return
+    if (fulfilledCheckoutSession.current === sessionId) return
+    fulfilledCheckoutSession.current = sessionId
+    void fulfillCheckout(sessionId)
+      .then(async () => {
+        const refreshed = await fetchPublicProfile(slug)
+        setProfile(refreshed)
+        setIsChannelMember(refreshed.isChannelMember ?? false)
+        setMembershipError(null)
+      })
+      .catch(() => {
+        setMembershipError("Payment received but membership status could not be confirmed. Refresh the page.")
+      })
+  }, [searchParams, profile, slug, isAuthenticated])
 
   useEffect(() => {
     const tab = searchParams.get("tab")
@@ -244,17 +256,19 @@ function CreatorProfilePageContent({ params }: { params: Promise<{ slug: string 
     requireAuth(() => {
       const username = profile.username
       const next = !isFollowing
+      const prev = isFollowing
       void (next ? followUser(username) : unfollowUser(username))
         .then(() => setIsFollowing(next))
-        .catch(() => setIsFollowing(next))
+        .catch(() => setIsFollowing(prev))
     })
   }
 
   const handleNotifyToggle = () => {
     requireAuth(() => {
+      const prev = notificationsOn
       void toggleCreatorLiveAlerts(profile.username)
         .then((r) => setNotificationsOn(r.enabled))
-        .catch(() => setNotificationsOn((prev) => !prev))
+        .catch(() => setNotificationsOn(prev))
     })
   }
 

@@ -7,7 +7,7 @@ import { useMockAuth } from '@/context/MockAuthContext';
 import { createInsiderCheckout } from '@/lib/api/billing';
 import { runBillingCheckout } from '@/lib/billing-checkout';
 import { isInsiderActive } from '@/lib/premium';
-import { INSIDER_PERKS, MEMBERSHIP_PRICES } from '@/mocks/monetization';
+import { usePublicMembershipConfig } from '@/hooks/api/usePublicMembershipConfig';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, typography } from '@/theme/tokens';
 
@@ -18,7 +18,9 @@ export default function InsiderScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const subscribed = isInsiderActive(user?.insiderActive, user?.insiderPeriodEnd);
-  const priceLabel = `$${MEMBERSHIP_PRICES.insider.toFixed(2)}/mo`;
+  const { insider } = usePublicMembershipConfig();
+  const insiderPerks = insider?.perks ?? ['Roadmaps & early access', 'Town halls', 'Platform voice'];
+  const priceLabel = insider ? `$${insider.priceUsd.toFixed(2)}/mo` : 'See checkout';
 
   const join = () => {
     requireAuth(async () => {
@@ -72,7 +74,7 @@ export default function InsiderScreen() {
                 <Text style={[styles.planName, { color: colors.foreground }]}>Platform Insider</Text>
                 <Text style={[styles.planPrice, { color: colors.foreground }]}>{priceLabel}</Text>
               </View>
-              {INSIDER_PERKS.map((perk) => (
+              {insiderPerks.map((perk) => (
                 <Text key={perk} style={[styles.perk, { color: colors.mutedForeground }]}>
                   ✓ {perk}
                 </Text>

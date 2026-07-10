@@ -71,7 +71,7 @@ function StoreCartPageInner() {
   const [purchaseDone, setPurchaseDone] = useState(false)
   const [buyerDetails, setBuyerDetails] = useState<BuyerDetails>(EMPTY_BUYER_DETAILS)
   const [saveBuyerDetails, setSaveBuyerDetails] = useState(true)
-  const [navTab, setNavTab] = useState("home")
+  const [navTab, setNavTab] = useState("none")
 
   const refreshCart = useCallback(() => {
     const next = getStoreCart()

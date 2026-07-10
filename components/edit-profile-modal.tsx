@@ -105,8 +105,8 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
       await updateMe({
         displayName,
         bio: bio.trim() || undefined,
-        ...(gender ? { gender } : {}),
-        ...(birthDate ? { birthDate } : {}),
+        gender: gender || null,
+        birthDate: birthDate || null,
         ...(pendingAvatarUrl ? { avatarUrl: pendingAvatarUrl } : {}),
         ...(pendingBannerUrl ? { bannerUrl: pendingBannerUrl } : {}),
       })

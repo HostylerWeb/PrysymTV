@@ -125,7 +125,7 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
   const [commentsTotal, setCommentsTotal] = useState(0)
   const [commentError, setCommentError] = useState<string | null>(null)
   const [commentPosting, setCommentPosting] = useState(false)
-  const [activeTab, setActiveTab] = useState("home")
+  const [activeTab, setActiveTab] = useState("videos")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isReportOpen, setIsReportOpen] = useState(false)
@@ -280,23 +280,24 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
           if (r.disliked === false) setIsDisliked(false)
         })
         .catch(() => {
-          setIsLiked((p) => !p)
-          setLikesCount((c) => bumpLikeCount(c, wasLiked, !wasLiked))
+          setIsLiked(wasLiked)
         })
     })
   }
 
   const handleSave = () => {
     requireAuth(() => {
+      const wasSaved = isSaved
       void toggleVideoSave(id)
         .then((r) => setIsSaved(r.saved))
-        .catch(() => setIsSaved((p) => !p))
+        .catch(() => setIsSaved(wasSaved))
     })
   }
 
   const handleDislike = () => {
     requireAuth(() => {
       const wasLiked = isLiked
+      const wasDisliked = isDisliked
       void toggleVideoDislike(id)
         .then((r) => {
           setIsDisliked(r.disliked)
@@ -305,7 +306,7 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
             setLikesCount((c) => Math.max(0, c - 1))
           }
         })
-        .catch(() => setIsDisliked((p) => !p))
+        .catch(() => setIsDisliked(wasDisliked))
     })
   }
 
@@ -615,9 +616,10 @@ function WatchPageContent({ params }: { params: Promise<{ id: string }> }) {
               onClick={() =>
                 requireAuth(() => {
                   const next = !isSubscribed
+                  const prev = isSubscribed
                   void (next ? followUser(video.channelSlug) : unfollowUser(video.channelSlug))
                     .then(() => setIsSubscribed(next))
-                    .catch(() => setIsSubscribed(next))
+                    .catch(() => setIsSubscribed(prev))
                 })
               }
               className="rounded-full"

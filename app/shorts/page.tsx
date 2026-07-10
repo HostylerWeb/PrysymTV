@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import { GiftSheet } from "@/components/gift-sheet"
 import { ShortsPageSkeleton } from "@/components/content-skeletons"
+import { FeedErrorBanner } from "@/components/feed-error-banner"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { notify } from "@/lib/site-notifications"
@@ -38,7 +39,7 @@ import { useWatchAnalytics } from "@/lib/hooks/use-watch-analytics"
 import { ShareSheet } from "@/components/share-sheet"
 import { HlsVideoPlayer } from "@/components/hls-video-player"
 import {
-  fetchShortsFeed,
+  fetchShortsFeedResult,
   fetchVideo,
   recordVideoView,
   toggleVideoLike,
@@ -98,7 +99,7 @@ function mapShortFromApi(card: ShortVideoCard): ShortItem {
     likes: formatViewCount(card.likesCount ?? 0),
     comments: formatViewCount(card.commentsCount ?? 0),
     shares: formatViewCount(card.sharesCount ?? 0),
-    saves: "0",
+    saves: '',
     music: `Original Sound - ${card.channelSlug}`,
     isFollowing: card.isFollowing ?? false,
   }
@@ -118,8 +119,8 @@ function mapShortFromVideoDetail(
     caption: v.title,
     likes: formatViewCount(v.likesCount ?? 0),
     comments: formatViewCount(v.commentsCount ?? 0),
-    shares: "0",
-    saves: "0",
+    shares: '0',
+    saves: '',
     music: `Original Sound - ${slug}`,
     isFollowing: v.isFollowing ?? false,
   }
@@ -309,30 +310,24 @@ function ShortVideo({
       <div className="absolute right-2 md:right-3 top-14 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-8 z-20 flex flex-col items-center justify-center pointer-events-none">
         <div className="flex flex-col items-center gap-2 md:gap-5 pointer-events-auto">
         {/* Profile */}
-        <div className="flex flex-col items-center gap-1">
-          <Link href={`/creator/${short.userSlug}`}>
-            <div className="relative">
-              <img
-                src={short.userAvatar}
-                alt={short.username}
-                className="w-9 h-9 md:w-12 md:h-12 rounded-full border-2 border-white object-cover"
-              />
-              {!isFollowing && !isSelf && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    handleAction(onFollow)
-                  }}
-                  className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 md:w-6 md:h-6 rounded-full bg-primary flex items-center justify-center z-10"
-                  aria-label={`Follow ${short.username}`}
-                >
-                  <span className="text-white text-lg leading-none">+</span>
-                </button>
-              )}
-            </div>
+        <div className="flex flex-col items-center gap-1 relative">
+          <Link href={`/creator/${short.userSlug}`} className="relative block">
+            <img
+              src={short.userAvatar}
+              alt={short.username}
+              className="w-9 h-9 md:w-12 md:h-12 rounded-full border-2 border-white object-cover"
+            />
           </Link>
+          {!isFollowing && !isSelf && (
+            <button
+              type="button"
+              onClick={() => handleAction(onFollow)}
+              className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 md:w-6 md:h-6 rounded-full bg-primary flex items-center justify-center z-10"
+              aria-label={`Follow ${short.username}`}
+            >
+              <span className="text-white text-lg leading-none">+</span>
+            </button>
+          )}
         </div>
 
         {/* Like */}
@@ -377,7 +372,7 @@ function ShortVideo({
               isSaved && "fill-yellow-500 text-yellow-500"
             )} />
           </div>
-          <span className="text-white text-xs font-medium">{formatEngagementCount(counts.saves)}</span>
+          <span className="text-white text-[10px] md:text-xs font-medium">{isSaved ? 'Saved' : 'Save'}</span>
         </button>
 
         {/* Gift */}
@@ -443,6 +438,8 @@ function ShortsPageContent() {
     triggerContextualCreate("short", createFlow, { isAuthenticated, user })
   const [shortsData, setShortsData] = useState<ShortItem[]>([])
   const [feedLoaded, setFeedLoaded] = useState(false)
+  const [feedError, setFeedError] = useState(false)
+  const [feedReloadKey, setFeedReloadKey] = useState(0)
   const [activeIndex, setActiveIndex] = useState(0)
   const [likedShorts, setLikedShorts] = useState<Set<string>>(new Set())
   const [savedShorts, setSavedShorts] = useState<Set<string>>(new Set())
@@ -454,9 +451,15 @@ function ShortsPageContent() {
     if (authLoading) return
     let cancelled = false
     setFeedLoaded(false)
-    void fetchShortsFeed()
-      .then((res) => {
+    setFeedError(false)
+    void fetchShortsFeedResult()
+      .then(({ data: res, fromFallback }) => {
         if (cancelled) return
+        if (fromFallback) {
+          setFeedError(true)
+          setShortsData([])
+          return
+        }
         setShortsData(res.items.map(mapShortFromApi))
         setLikedShorts(new Set(res.items.filter((i) => i.liked).map((i) => i.id)))
         setSavedShorts(new Set(res.items.filter((i) => i.saved).map((i) => i.id)))
@@ -474,7 +477,7 @@ function ShortsPageContent() {
     return () => {
       cancelled = true
     }
-  }, [authLoading, isAuthenticated])
+  }, [authLoading, isAuthenticated, feedReloadKey])
 
   const [newComment, setNewComment] = useState("")
   const [replyingTo, setReplyingTo] = useState<{ id: string; user: string } | null>(null)
@@ -530,7 +533,9 @@ function ShortsPageContent() {
         }
         scrollToIndex(0)
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!cancelled) setDeepLinkReady(true)
+      })
 
     return () => {
       cancelled = true
@@ -590,7 +595,7 @@ function ShortsPageContent() {
     setShareTarget({
       id: short.id,
       title: short.caption,
-      url: `${origin}/watch/${short.id}`,
+      url: `${origin}/shorts?start=${short.id}`,
     })
     setIsShareOpen(true)
   }
@@ -670,13 +675,7 @@ function ShortsPageContent() {
         }
       })
       .catch(() => {
-        setLikedShorts((prev) => {
-          const next = new Set(prev)
-          if (wasLiked) next.delete(shortId)
-          else next.add(shortId)
-          return next
-        })
-        bumpEngagement(shortId, "likes", wasLiked ? -1 : 1)
+        // No optimistic update — leave UI unchanged on failure.
       })
   }
 
@@ -694,18 +693,9 @@ function ShortsPageContent() {
           else next.delete(shortId)
           return next
         })
-        if (r.saved !== wasSaved) {
-          bumpEngagement(shortId, "saves", r.saved ? 1 : -1)
-        }
       })
       .catch(() => {
-        setSavedShorts((prev) => {
-          const next = new Set(prev)
-          if (wasSaved) next.delete(shortId)
-          else next.add(shortId)
-          return next
-        })
-        bumpEngagement(shortId, "saves", wasSaved ? -1 : 1)
+        // No optimistic update — leave UI unchanged on failure.
       })
   }
 
@@ -725,12 +715,7 @@ function ShortsPageContent() {
         })
       })
       .catch(() => {
-        setFollowedUsers((prev) => {
-          const next = new Set(prev)
-          if (wasFollowing) next.add(username)
-          else next.delete(username)
-          return next
-        })
+        // No optimistic update — leave UI unchanged on failure.
       })
   }
 
@@ -896,6 +881,15 @@ function ShortsPageContent() {
 
   if (!feedLoaded || authLoading) {
     return <ShortsPageSkeleton />
+  }
+
+  if (feedLoaded && feedError) {
+    return (
+      <main className="min-h-screen bg-background flex flex-col items-center justify-center px-6 md:pl-20 pb-24">
+        <FeedErrorBanner onRetry={() => setFeedReloadKey((k) => k + 1)} />
+        <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+      </main>
+    )
   }
 
   if (feedLoaded && shortsData.length === 0) {

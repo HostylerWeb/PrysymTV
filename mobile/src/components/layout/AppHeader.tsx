@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { CastMediaButton } from '@/components/video/CastMediaButton';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ type Props = {
   showNotifications?: boolean;
   showCreate?: boolean;
   showCast?: boolean;
+  castMediaUrl?: string | null;
   sticky?: boolean;
   edgeToEdge?: boolean;
   onCreatePress?: () => void;
@@ -35,6 +37,7 @@ export function AppHeader({
   showNotifications = true,
   showCreate = false,
   showCast = false,
+  castMediaUrl,
   sticky = false,
   edgeToEdge = false,
   onCreatePress,
@@ -91,14 +94,7 @@ export function AppHeader({
                 <Ionicons name="add" size={22} color={colors.foreground} />
               </Pressable>
             )}
-            {showCast && (
-              <Pressable
-                style={commonStyles.iconButton}
-                onPress={() => Alert.alert('Cast', 'Casting to TV is coming soon on mobile.')}
-              >
-                <Ionicons name="tv-outline" size={20} color={colors.foreground} />
-              </Pressable>
-            )}
+            {showCast ? <CastMediaButton variant="compact" mediaUrl={castMediaUrl} /> : null}
             {showSearch && (
               <Pressable
                 onPress={() => router.push(searchScope ? `/search?scope=${searchScope}` : '/search')}
@@ -171,9 +167,9 @@ const styles = StyleSheet.create({
   logoImage: { width: 120, height: 32 },
   title: {
     flex: 1,
-    fontSize: 10,
+    fontSize: 14,
     fontWeight: '700',
-    lineHeight: 14,
+    lineHeight: 18,
   },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   createBtn: {
