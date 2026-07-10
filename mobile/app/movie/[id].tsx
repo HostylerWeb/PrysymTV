@@ -16,6 +16,7 @@ import { useMockAuth } from '@/context/MockAuthContext';
 import { useVideoDetail } from '@/hooks/api/useVideoDetail';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
 import { toggleVideoLike, toggleVideoSave } from '@/lib/api/videos';
+import { bumpLikeCount } from '@/utils/engagement-count';
 import type { ThemeColors } from '@/theme/tokens';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatDuration, formatViewCount } from '@/utils/format-media';
@@ -34,6 +35,7 @@ export default function MovieScreen() {
   const [giftOpen, setGiftOpen] = useState(false);
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [likesCount, setLikesCount] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [prerollOpen, setPrerollOpen] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -43,6 +45,7 @@ export default function MovieScreen() {
     if (!movie) return;
     setLiked(!!movie.liked);
     setSaved(!!movie.saved);
+    setLikesCount(movie.likesCount ?? 0);
   }, [movie]);
 
   usePlaybackProgress(
@@ -92,14 +95,18 @@ export default function MovieScreen() {
             playbackUrl={movie.playbackSource}
             subtitle={`${movie.releaseYear ?? ''} · ${movie.ageRating ?? ''}`}
             showCast
+            nativeControls={false}
             onProgress={onProgress}
           />
         ) : (
           <PlayerShell
             title={movie.title}
             thumbnailUrl={movie.thumbnailUrl}
+            playbackUrl={movie.playbackSource}
             subtitle={`${movie.releaseYear ?? ''} · ${movie.ageRating ?? ''}`}
             showCast
+            posterOnly
+            onPlayPress={startWatch}
           />
         )}
         <View style={styles.body}>
@@ -117,14 +124,27 @@ export default function MovieScreen() {
             liked={liked}
             disliked={false}
             saved={saved}
-            likesCount={movie.likesCount ?? 0}
+            likesCount={likesCount}
             onLike={() => requireAuth(async () => {
-              const res = await toggleVideoLike(movie.id);
-              setLiked(res.liked);
+              const wasLiked = liked;
+              try {
+                const res = await toggleVideoLike(movie.id);
+                setLiked(res.liked);
+                setLikesCount((c) =>
+                  res.likesCount != null ? res.likesCount : bumpLikeCount(c, wasLiked, res.liked),
+                );
+              } catch {
+                setLiked(wasLiked);
+              }
             })}
             onSave={() => requireAuth(async () => {
-              const res = await toggleVideoSave(movie.id);
-              setSaved(res.saved);
+              const prev = saved;
+              try {
+                const res = await toggleVideoSave(movie.id);
+                setSaved(res.saved);
+              } catch {
+                setSaved(prev);
+              }
             })}
             onPlaylist={() => requireAuth(() => setPlaylistOpen(true))}
             onGift={() => requireAuth(() => setGiftOpen(true))}

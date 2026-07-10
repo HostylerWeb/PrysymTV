@@ -79,7 +79,7 @@ export default function PodcastsScreen() {
   const openShow = (show: PodcastShow) => {
     const ep = catalog?.episodes.find((e) => e.showTitle === show.title) ?? catalog?.episodes[0];
     if (!ep) return;
-    playEpisode(ep);
+    // Navigate first — detail screen owns playback to avoid mini-player flash.
     router.push(`/podcast/${ep.id}`);
   };
 

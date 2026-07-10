@@ -70,7 +70,9 @@ export default function MoviesScreen() {
 
   const moviesQuery = useMoviesFeed();
   const allMovies = moviesQuery.data?.items ?? [];
-  const featured = moviesQuery.data?.featured ?? allMovies[0];
+  const featuredCandidate = moviesQuery.data?.featured;
+  const featured =
+    featuredCandidate?.id ? featuredCandidate : allMovies[0];
   const trending = allMovies.slice(0, 3);
   const newReleases = allMovies.slice(0, 4);
 

@@ -1,6 +1,8 @@
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HlsPlayer } from '@/components/video/HlsPlayer';
@@ -17,6 +19,7 @@ import { followUser, unfollowUser } from '@/lib/api/users';
 import { toggleVideoLike, toggleVideoSave } from '@/lib/api/videos';
 import { colors, withAlpha } from '@/theme/tokens';
 import { formatViewCount } from '@/utils/format-media';
+import { bumpLikeCount } from '@/utils/engagement-count';
 
 const { height } = Dimensions.get('window');
 
@@ -24,6 +27,7 @@ export default function ShortDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const { requireAuth } = useMockAuth();
   const shortQuery = useVideoDetail(id);
   const short = shortQuery.data;
@@ -52,7 +56,7 @@ export default function ShortDetailScreen() {
     short?.id,
     progress.seconds,
     progress.duration || short?.durationSeconds || 0,
-    Boolean(short?.playbackSource),
+    isFocused && Boolean(short?.playbackSource),
   );
 
   const onProgress = useCallback((seconds: number, duration: number) => {
@@ -78,15 +82,19 @@ export default function ShortDetailScreen() {
   return (
     <>
       <View style={[styles.screen, { height: height - insets.bottom }]}>
-        {short.playbackSource ? (
+        <Image source={{ uri: short.thumbnailUrl ?? '' }} style={StyleSheet.absoluteFill} contentFit="cover" />
+        {short.playbackSource && isFocused ? (
           <HlsPlayer
             source={short.playbackSource}
             contentFit="cover"
             fill
+            nativeControls={false}
+            tapToToggle
+            paused={!isFocused}
             onProgress={onProgress}
           />
         ) : null}
-        <View style={styles.overlay} />
+        <View style={styles.overlay} pointerEvents="none" />
         <Pressable style={[styles.back, { top: insets.top + 8 }]} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={28} color={colors.onVideo} />
         </Pressable>
@@ -100,7 +108,11 @@ export default function ShortDetailScreen() {
               try {
                 const res = await toggleVideoLike(short.id);
                 setLiked(res.liked);
-                if (res.likesCount != null) setLikesCount(res.likesCount);
+                setLikesCount(
+                  res.likesCount != null
+                    ? res.likesCount
+                    : bumpLikeCount(prevCount, prevLiked, res.liked),
+                );
               } catch {
                 setLiked(prevLiked);
                 setLikesCount(prevCount);

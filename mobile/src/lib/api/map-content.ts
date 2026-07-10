@@ -26,7 +26,7 @@ export function mapVideoCard(raw: VideoCardDetail | Record<string, unknown>): Vi
   return {
     id: r.id,
     title: r.title,
-    thumbnailUrl: mediaThumb(r.thumbnailUrl ?? r.posterUrl),
+    thumbnailUrl: mediaThumb(r.posterUrl ?? r.thumbnailUrl) ?? mediaThumb(r.thumbnailUrl),
     durationSeconds: r.durationSeconds ?? 0,
     viewsCount: r.viewsCount,
     likesCount: r.likesCount,

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommentsSheet } from '@/components/modals/CommentsSheet';
@@ -29,6 +30,7 @@ import { toggleVideoLike, toggleVideoSave } from '@/lib/api/videos';
 import { colors, radius, withAlpha } from '@/theme/tokens';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
+import { bumpLikeCount } from '@/utils/engagement-count';
 import { formatViewCount } from '@/utils/format-media';
 
 export default function ShortsScreen() {
@@ -38,6 +40,7 @@ export default function ShortsScreen() {
   const { start } = useLocalSearchParams<{ start?: string }>();
   const { requireAuth } = useMockAuth();
   const { trigger, flowHost } = useCreateFlow();
+  const isFocused = useIsFocused();
   const [feedHeight, setFeedHeight] = useState(0);
 
   const shortsQuery = useShortsFeed();
@@ -55,6 +58,7 @@ export default function ShortsScreen() {
   const [muted, setMuted] = useState(true);
   const [following, setFollowing] = useState<Record<string, boolean>>({});
   const [liked, setLiked] = useState<Record<string, boolean>>({});
+  const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
   const [adOpen, setAdOpen] = useState(false);
   const swipeCount = useRef(0);
   const current = shorts[index];
@@ -62,6 +66,7 @@ export default function ShortsScreen() {
   useEffect(() => {
     if (!current) return;
     setLiked((p) => ({ ...p, [current.id]: !!current.liked }));
+    setLikeCounts((p) => ({ ...p, [current.id]: current.likesCount ?? 0 }));
     setSaved((p) => ({ ...p, [current.id]: !!current.saved }));
     setFollowing((p) => ({
       ...p,
@@ -168,17 +173,19 @@ export default function ShortsScreen() {
               const isSaved = !!saved[item.id];
               return (
               <View style={{ height: feedHeight, width: '100%', backgroundColor: colors.videoBackground }}>
-                {isActive && item.playbackUrl ? (
+                <Image source={{ uri: item.thumbnailUrl ?? '' }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                {isActive && isFocused && item.playbackUrl ? (
                   <HlsPlayer
                     source={item.playbackUrl}
                     fill
                     muted={muted}
                     contentFit="cover"
                     loop
+                    nativeControls={false}
+                    tapToToggle
+                    paused={!isFocused || !isActive}
                   />
-                ) : (
-                  <Image source={{ uri: item.thumbnailUrl ?? '' }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                )}
+                ) : null}
                 <LinearGradient
                   colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.6)']}
                   locations={[0, 0.45, 1]}
@@ -186,7 +193,7 @@ export default function ShortsScreen() {
                   pointerEvents="none"
                 />
 
-                <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
+                <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
                   <Text style={styles.topTitle}>Shorts</Text>
                   <View style={styles.topActions}>
                     <Pressable onPress={() => setMuted(!muted)} hitSlop={8}>
@@ -204,13 +211,25 @@ export default function ShortsScreen() {
                   </View>
                 </View>
 
-                <View style={[styles.sideActions, { bottom: tabInset + 12 }]}>
+                <View style={[styles.sideActions, { bottom: tabInset + 12 }]} pointerEvents="box-none">
                   <Action
                     icon={isLiked ? 'heart' : 'heart-outline'}
-                    label={formatViewCount(item.likesCount ?? 0)}
+                    label={formatViewCount(likeCounts[item.id] ?? item.likesCount ?? 0)}
                     onPress={() => requireAuth(async () => {
-                      const res = await toggleVideoLike(item.id);
-                      setLiked((p) => ({ ...p, [item.id]: res.liked }));
+                      const wasLiked = isLiked;
+                      try {
+                        const res = await toggleVideoLike(item.id);
+                        setLiked((p) => ({ ...p, [item.id]: res.liked }));
+                        setLikeCounts((p) => ({
+                          ...p,
+                          [item.id]:
+                            res.likesCount != null
+                              ? res.likesCount
+                              : bumpLikeCount(p[item.id] ?? item.likesCount ?? 0, wasLiked, res.liked),
+                        }));
+                      } catch {
+                        setLiked((p) => ({ ...p, [item.id]: wasLiked }));
+                      }
                     })}
                   />
                   <Action
@@ -236,7 +255,7 @@ export default function ShortsScreen() {
                   <Action icon="flag-outline" label="Report" onPress={() => requireAuth(() => setReportOpen(true))} />
                 </View>
 
-                <View style={[styles.bottomMeta, { paddingBottom: tabInset + 8 }]}>
+                <View style={[styles.bottomMeta, { paddingBottom: tabInset + 8 }]} pointerEvents="box-none">
                   <Pressable onPress={() => router.push(`/creator/${item.channelSlug}`)}>
                     <Text style={styles.channel}>@{item.channelSlug}</Text>
                   </Pressable>

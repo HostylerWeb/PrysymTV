@@ -29,6 +29,7 @@ import { resolveAvatarUrl } from '@/lib/media-url';
 import { spacing } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useThemedStyles } from '@/theme/useThemedStyles';
+import { bumpLikeCount } from '@/utils/engagement-count';
 import { formatDuration, formatViewCount } from '@/utils/format-media';
 
 export default function WatchScreen() {
@@ -111,6 +112,7 @@ export default function WatchScreen() {
           subtitle={`${channel} · ${formatViewCount(video.viewsCount ?? 0)} views`}
           showCast
           hideMeta
+          nativeControls={false}
           onProgress={onProgress}
           onShare={() => setShareOpen(true)}
           onReport={() => requireAuth(() => setReportOpen(true))}
@@ -128,10 +130,17 @@ export default function WatchScreen() {
           saved={saved}
           likesCount={likesCount}
           onLike={() => requireAuth(async () => {
-            const res = await toggleVideoLike(video.id);
-            setLiked(res.liked);
-            if (res.disliked) setDisliked(false);
-            if (res.likesCount != null) setLikesCount(res.likesCount);
+            const wasLiked = liked;
+            try {
+              const res = await toggleVideoLike(video.id);
+              setLiked(res.liked);
+              if (res.disliked) setDisliked(false);
+              setLikesCount((c) =>
+                res.likesCount != null ? res.likesCount : bumpLikeCount(c, wasLiked, res.liked),
+              );
+            } catch {
+              setLiked(wasLiked);
+            }
           })}
           onDislike={() => requireAuth(async () => {
             const res = await toggleVideoDislike(video.id);

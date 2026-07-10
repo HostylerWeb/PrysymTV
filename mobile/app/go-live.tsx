@@ -36,7 +36,12 @@ export default function GoLiveScreen() {
       setActiveStreamId(res.streamId);
       setStreamKey(res.streamKey);
       setServerUrl(res.rtmpUrl);
-      Alert.alert('Stream ready', 'Use the server URL and stream key in OBS, then start your encoder.');
+      Alert.alert(
+        'Stream ready',
+        mode === 'obs'
+          ? 'Copy the server URL and stream key into OBS, then start streaming.'
+          : 'Your broadcast credentials are ready. Copy them into a mobile RTMP encoder app to go live from your phone.',
+      );
     } catch (e) {
       Alert.alert('Could not start', e instanceof Error ? e.message : 'Stream init failed');
     } finally {
@@ -68,6 +73,8 @@ export default function GoLiveScreen() {
     try {
       await endStream(activeStreamId);
       setActiveStreamId(null);
+      setStreamKey('');
+      setServerUrl('');
       Alert.alert('Stream ended', 'Your broadcast has been stopped.');
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Could not end stream');
@@ -79,6 +86,52 @@ export default function GoLiveScreen() {
   const copyIngest = () => {
     Alert.alert('RTMP settings', `Server: ${serverUrl}\nStream key: ${streamKey}`);
   };
+
+  const credentialsBlock = (
+    <>
+      <Text style={styles.sub}>
+        {mode === 'camera'
+          ? 'Phone camera streaming uses RTMP. Create credentials below, then paste them into a mobile encoder app (Prism Live, Larix, etc.).'
+          : 'Copy these into OBS or your RTMP encoder:'}
+      </Text>
+      {serverUrl ? <Text style={styles.code}>{serverUrl}</Text> : null}
+      {streamKey ? (
+        <Text style={styles.code}>{streamKey}</Text>
+      ) : (
+        <Text style={styles.sub}>Create a stream to get RTMP credentials.</Text>
+      )}
+      <View style={styles.row}>
+        <Button
+          label={busy ? 'Working…' : streamKey ? 'Refresh key' : 'Create stream'}
+          variant="secondary"
+          onPress={() => void startStream()}
+          disabled={busy}
+          style={styles.flex}
+        />
+        <Button
+          label="Copy"
+          variant="outline"
+          onPress={copyIngest}
+          disabled={!streamKey}
+          style={styles.flex}
+        />
+      </View>
+      <Button
+        label="Check ingest health"
+        variant="ghost"
+        style={{ marginTop: 8 }}
+        onPress={() => void checkHealth()}
+        disabled={busy}
+      />
+      <Button
+        label="End stream"
+        variant="outline"
+        style={{ marginTop: 8 }}
+        onPress={() => void finishStream()}
+        disabled={!activeStreamId || busy}
+      />
+    </>
+  );
 
   return (
     <>
@@ -126,47 +179,8 @@ export default function GoLiveScreen() {
               </Card>
 
               <Card style={{ marginTop: 16 }}>
-                <Text style={styles.title}>{mode === 'camera' ? 'Live studio' : 'Encoder settings'}</Text>
-                {mode === 'camera' ? (
-                  <>
-                    <Text style={styles.sub}>
-                      Mobile camera streaming uses the same RTMP ingest. Generate keys below and use a compatible encoder app.
-                    </Text>
-                    <Button label="Generate stream key" onPress={() => void startStream()} disabled={busy} style={{ marginTop: 12 }} />
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.sub}>Copy these into OBS or your RTMP encoder:</Text>
-                    {serverUrl ? <Text style={styles.code}>{serverUrl}</Text> : null}
-                    {streamKey ? <Text style={styles.code}>{streamKey}</Text> : (
-                      <Text style={styles.sub}>Generate a stream key to get RTMP credentials.</Text>
-                    )}
-                    <View style={styles.row}>
-                      <Button
-                        label={busy ? 'Working…' : 'Generate key'}
-                        variant="secondary"
-                        onPress={() => void startStream()}
-                        disabled={busy}
-                        style={styles.flex}
-                      />
-                      <Button
-                        label="Copy"
-                        variant="outline"
-                        onPress={copyIngest}
-                        disabled={!streamKey}
-                        style={styles.flex}
-                      />
-                    </View>
-                    <Button label="Check ingest health" variant="ghost" style={{ marginTop: 8 }} onPress={() => void checkHealth()} disabled={busy} />
-                    <Button
-                      label="End stream"
-                      variant="outline"
-                      style={{ marginTop: 8 }}
-                      onPress={() => void finishStream()}
-                      disabled={!activeStreamId || busy}
-                    />
-                  </>
-                )}
+                <Text style={styles.title}>{mode === 'camera' ? 'Mobile camera' : 'Encoder settings'}</Text>
+                {credentialsBlock}
               </Card>
 
               {busy ? <ActivityIndicator color={colors.primary} style={{ marginTop: 16 }} /> : null}

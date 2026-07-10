@@ -29,7 +29,7 @@ export function CompleteProfileBanner() {
         ]}
       >
         <Text style={[styles.text, { color: colors.foreground }]}>
-          Complete your profile — add your gender so we can personalize your experience.
+          Complete your profile so we can personalize your experience.
         </Text>
         <Pressable
           onPress={() => setEditOpen(true)}

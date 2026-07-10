@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { CastMediaButton } from '@/components/video/CastMediaButton';
@@ -13,11 +13,16 @@ type Props = {
   subtitle?: string;
   badge?: string;
   showCast?: boolean;
+  /** Poster-only state before playback starts (not an error). */
+  posterOnly?: boolean;
+  onPlayPress?: () => void;
   onShare?: () => void;
   onReport?: () => void;
   hideMeta?: boolean;
   contentFit?: 'contain' | 'cover' | 'fill';
   onProgress?: (seconds: number, duration: number) => void;
+  nativeControls?: boolean;
+  paused?: boolean;
 };
 
 export function PlayerShell({
@@ -27,30 +32,46 @@ export function PlayerShell({
   subtitle,
   badge,
   showCast = false,
+  posterOnly = false,
+  onPlayPress,
   onShare,
   onReport,
   hideMeta = false,
   contentFit = 'contain',
   onProgress,
+  nativeControls = true,
+  paused = false,
 }: Props) {
   const showTopActions = showCast || onShare || onReport;
+  const showPoster = posterOnly || !playbackUrl;
 
   return (
     <View style={styles.wrap}>
-      {playbackUrl ? (
+      {playbackUrl && !posterOnly ? (
         <HlsPlayer
           source={playbackUrl}
           contentFit={contentFit}
           onProgress={onProgress}
+          nativeControls={nativeControls}
+          tapToToggle={!nativeControls}
+          paused={paused}
         />
       ) : (
-        <>
+        <Pressable style={styles.posterWrap} onPress={onPlayPress} disabled={!onPlayPress}>
           <Image source={{ uri: thumbnailUrl ?? '' }} style={styles.video} contentFit="cover" />
           <View style={styles.overlay}>
-            <Ionicons name="play-circle" size={72} color={withAlpha(colors.onVideo, 0.85)} />
-            <Text style={styles.mock}>Video unavailable</Text>
+            {onPlayPress ? (
+              <Ionicons name="play-circle" size={72} color={withAlpha(colors.onVideo, 0.85)} />
+            ) : (
+              <>
+                <ActivityIndicator size="large" color={withAlpha(colors.onVideo, 0.9)} />
+                {!posterOnly && !playbackUrl ? (
+                  <Text style={styles.mock}>Video unavailable</Text>
+                ) : null}
+              </>
+            )}
           </View>
-        </>
+        </Pressable>
       )}
       {showTopActions ? (
         <View style={styles.topActions}>
@@ -64,7 +85,9 @@ export function PlayerShell({
               <Ionicons name="share-outline" size={18} color={colors.onVideo} />
             </Pressable>
           ) : null}
-          {showCast && playbackUrl ? <CastMediaButton variant="on-video" mediaUrl={playbackUrl} /> : null}
+          {showCast && playbackUrl && !posterOnly ? (
+            <CastMediaButton variant="on-video" mediaUrl={playbackUrl} />
+          ) : null}
         </View>
       ) : null}
       {badge ? (
@@ -84,14 +107,12 @@ export function PlayerShell({
 
 const styles = StyleSheet.create({
   wrap: { backgroundColor: colors.videoBackground },
+  posterWrap: { width: '100%', aspectRatio: 16 / 9 },
   video: { width: '100%', aspectRatio: 16 / 9, backgroundColor: colors.secondary },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    top: 0,
-    height: undefined,
-    aspectRatio: 16 / 9,
   },
   mock: { color: withAlpha(colors.onVideo, 0.6), fontSize: 12, marginTop: 8 },
   topActions: {

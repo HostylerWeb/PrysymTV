@@ -1,7 +1,9 @@
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HlsPlayer } from '@/components/video/HlsPlayer';
 import { VerticalEpisodeAdGate } from '@/components/ads/VerticalEpisodeAdGate';
@@ -31,6 +33,7 @@ export default function VerticalWatchScreen() {
   const { slug, episode } = useLocalSearchParams<{ slug: string; episode: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const { requireAuth } = useMockAuth();
   const epNum = parseInt(episode ?? '1', 10) || 1;
   const playbackQuery = useVerticalEpisodePlayback(slug, epNum);
@@ -60,7 +63,7 @@ export default function VerticalWatchScreen() {
     data?.episode.id,
     progress.seconds,
     progress.duration || data?.episode.durationSeconds || 0,
-    gateDismissed && Boolean(data?.playbackSource),
+    isFocused && gateDismissed && Boolean(data?.playbackSource),
   );
 
   const onProgress = useCallback((seconds: number, duration: number) => {
@@ -69,7 +72,7 @@ export default function VerticalWatchScreen() {
 
   if (playbackQuery.isLoading) {
     return (
-      <View style={[styles.screen, styles.center]}>
+      <View style={[styles.screen, styles.center, { height }]}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -84,17 +87,36 @@ export default function VerticalWatchScreen() {
   }
 
   const hasNext = Boolean(data.nextEpisode);
+  const posterUri = data.series.posterUrl ?? '';
 
   return (
     <>
       <View style={styles.screen}>
-        {gateDismissed && data.playbackSource ? (
+        {posterUri ? (
+          <Image source={{ uri: posterUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.videoBackground }]} />
+        )}
+        {!gateDismissed ? (
+          <View style={[styles.loadingScrim, StyleSheet.absoluteFill]} pointerEvents="none">
+            <ActivityIndicator size="large" color={colors.onVideo} />
+          </View>
+        ) : null}
+        {gateDismissed && data.playbackSource && isFocused ? (
           <HlsPlayer
             source={data.playbackSource}
             contentFit="cover"
             fill
+            nativeControls={false}
+            tapToToggle
+            paused={!isFocused || !gateDismissed}
             onProgress={onProgress}
           />
+        ) : null}
+        {gateDismissed && !data.playbackSource ? (
+          <View style={[styles.center, StyleSheet.absoluteFill]}>
+            <Text style={styles.errorText}>Playback is not available for this episode.</Text>
+          </View>
         ) : null}
         <Pressable style={[styles.back, { top: insets.top + 8 }]} onPress={() => router.push(`/verticals/${data.series.slug}`)}>
           <Ionicons name="chevron-back" size={28} color={colors.onVideo} />
@@ -108,7 +130,7 @@ export default function VerticalWatchScreen() {
           />
         ) : null}
         {gateDismissed ? (
-          <View style={[styles.topActions, { top: insets.top + 48 }]}>
+          <View style={[styles.topActions, { top: insets.top + 48 }]} pointerEvents="box-none">
             <Pressable
               style={styles.headerBtn}
               onPress={() => setShareOpen(true)}
@@ -177,7 +199,7 @@ export default function VerticalWatchScreen() {
             </Pressable>
           </View>
         ) : null}
-        <View style={styles.meta}>
+        <View style={styles.meta} pointerEvents="box-none">
           <Text style={styles.title}>{data.series.title}</Text>
           <Text style={styles.ep}>Episode {data.episode.episodeNumber}: {data.episode.title}</Text>
           {data.episode.cliffhanger ? (
@@ -216,24 +238,37 @@ export default function VerticalWatchScreen() {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  center: { alignItems: 'center', justifyContent: 'center' },
-  back: { position: 'absolute', left: 12, zIndex: 4, padding: 8 },
-  topActions: {
-    position: 'absolute',
-    right: 12,
-    zIndex: 4,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  headerBtn: {
-    padding: 8,
-    borderRadius: radius.full,
-    backgroundColor: withAlpha(colors.videoBackground, 0.5),
-  },
-  meta: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, zIndex: 3, backgroundColor: withAlpha(colors.background, 0.85) },
-  title: { color: colors.foreground, fontSize: 18, fontWeight: '800' },
-  ep: { color: colors.primary, marginTop: 4, fontWeight: '600' },
-  cliff: { color: colors.primary, fontSize: 13, marginTop: 8, fontStyle: 'italic' },
-  hint: { color: colors.mutedForeground, fontSize: 12, marginTop: 8 },
+    screen: { flex: 1, backgroundColor: colors.background },
+    center: { alignItems: 'center', justifyContent: 'center' },
+    loadingScrim: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: withAlpha('#000', 0.45),
+      zIndex: 1,
+    },
+    errorText: { color: colors.onVideo, textAlign: 'center', paddingHorizontal: 24, fontSize: 15 },
+    back: { position: 'absolute', left: 12, zIndex: 4, padding: 8 },
+    topActions: {
+      position: 'absolute',
+      right: 12,
+      zIndex: 4,
+      flexDirection: 'row',
+      gap: 8,
+    },
+    headerBtn: {
+      padding: 8,
+      borderRadius: radius.full,
+      backgroundColor: withAlpha(colors.videoBackground, 0.5),
+    },
+    meta: {
+      position: 'absolute',
+      left: 16,
+      right: 16,
+      bottom: 32,
+      zIndex: 3,
+    },
+    title: { color: colors.onVideo, fontSize: 20, fontWeight: '800' },
+    ep: { color: colors.onVideo, fontSize: 14, marginTop: 4 },
+    cliff: { color: withAlpha(colors.onVideo, 0.8), fontSize: 13, marginTop: 6 },
+    hint: { color: withAlpha(colors.onVideo, 0.7), marginTop: 8, fontSize: 13 },
   });

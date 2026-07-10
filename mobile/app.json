@@ -54,7 +54,8 @@
       ],
       "expo-web-browser",
       "expo-secure-store",
-      "expo-video"
+      "expo-video",
+      "@react-native-community/datetimepicker"
     ]
   }
 }

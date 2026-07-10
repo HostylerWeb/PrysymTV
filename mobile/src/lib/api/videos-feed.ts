@@ -17,7 +17,9 @@ export function fetchMoviesFeed(page = 1, limit = 24) {
 }
 
 export function fetchFeaturedMovie() {
-  return apiRequest<VideoCardDetail | null>('/videos/feed/movies/featured', { auth: false });
+  return apiRequest<{ item: VideoCardDetail | null }>('/videos/feed/movies/featured', {
+    auth: false,
+  });
 }
 
 export type VideosBrowseParams = {

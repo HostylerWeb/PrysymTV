@@ -36,28 +36,45 @@ export function VerticalEpisodeAdGate({ visible, videoId, creatorId, onComplete 
   useEffect(() => {
     if (!visible) return;
     setReady(false);
+    let cancelled = false;
     if (!shouldShow) {
       onCompleteRef.current();
       return;
     }
-    void fetchServedAd('vertical_episode', { peek: true }).then((served) => {
-      if (!served) {
+    const failSafe = setTimeout(() => {
+      if (!cancelled) onCompleteRef.current();
+    }, 2500);
+    void fetchServedAd('vertical_episode', { peek: true })
+      .then((served) => {
+        if (cancelled) return;
+        if (!served) {
+          clearTimeout(failSafe);
+          onCompleteRef.current();
+          return;
+        }
+        clearTimeout(failSafe);
+        setAd(served);
+        setCountdown(served.skipAfterSeconds);
+        void trackAdImpression(
+          buildAdAttribution({
+            campaignId: served.id,
+            placement: 'vertical_episode',
+            creatorId,
+            platformCreatorId,
+            videoId,
+            viewerUserId: user?.id,
+          }),
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        clearTimeout(failSafe);
         onCompleteRef.current();
-        return;
-      }
-      setAd(served);
-      setCountdown(served.skipAfterSeconds);
-      void trackAdImpression(
-        buildAdAttribution({
-          campaignId: served.id,
-          placement: 'vertical_episode',
-          creatorId,
-          platformCreatorId,
-          videoId,
-          viewerUserId: user?.id,
-        }),
-      );
-    });
+      });
+    return () => {
+      cancelled = true;
+      clearTimeout(failSafe);
+    };
   }, [visible, shouldShow, creatorId, videoId, platformCreatorId, user?.id]);
 
   useEffect(() => {

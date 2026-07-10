@@ -851,7 +851,7 @@ export class VideosService {
           data: { likesCount: { decrement: 1 } },
         });
       });
-      return { liked: false };
+      return { liked: false, likesCount: Math.max(0, video.likesCount - 1) };
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -893,7 +893,7 @@ export class VideosService {
       videoId,
       video.type,
     );
-    return { liked: true, disliked: false };
+    return { liked: true, disliked: false, likesCount: video.likesCount + 1 };
   }
 
   async toggleDislike(userId: string, videoId: string) {

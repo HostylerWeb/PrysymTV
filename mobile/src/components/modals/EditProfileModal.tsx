@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
@@ -34,6 +35,7 @@ export function EditProfileModal({ visible, onClose }: Props) {
   const [bio, setBio] = useState(user?.bio ?? '');
   const [gender, setGender] = useState<UserGenderValue | ''>('');
   const [birthDate, setBirthDate] = useState('');
+  const [showBirthPicker, setShowBirthPicker] = useState(false);
   const [avatarUri, setAvatarUri] = useState(user?.avatarUrl ?? '');
   const [bannerUri, setBannerUri] = useState(user?.bannerUrl ?? '');
   const [pendingAvatarUrl, setPendingAvatarUrl] = useState<string | null>(null);
@@ -203,14 +205,44 @@ export function EditProfileModal({ visible, onClose }: Props) {
       <ThemedInput label="Display name" value={displayName} onChangeText={setDisplayName} />
       <ThemedInput label="Bio" value={bio} onChangeText={setBio} multiline />
       <GenderField value={gender} onChange={setGender} />
-      <ThemedInput
-        label="Birth date"
-        value={birthDate}
-        onChangeText={setBirthDate}
-        placeholder="YYYY-MM-DD"
-        autoCapitalize="none"
-        keyboardType="numbers-and-punctuation"
-      />
+      <Text style={[styles.birthLabel, { color: colors.foreground }]}>Birth date</Text>
+      <Pressable
+        style={[styles.birthBtn, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+        onPress={() => setShowBirthPicker(true)}
+      >
+        <Ionicons name="calendar-outline" size={18} color={colors.mutedForeground} />
+        <Text style={{ color: birthDate ? colors.foreground : colors.mutedForeground, flex: 1 }}>
+          {birthDate || 'Select date'}
+        </Text>
+        {birthDate ? (
+          <Pressable
+            onPress={() => setBirthDate('')}
+            hitSlop={8}
+            accessibilityLabel="Clear birth date"
+          >
+            <Ionicons name="close-circle" size={18} color={colors.mutedForeground} />
+          </Pressable>
+        ) : null}
+      </Pressable>
+      {showBirthPicker ? (
+        <DateTimePicker
+          value={birthDate ? new Date(`${birthDate}T12:00:00`) : new Date(2000, 0, 1)}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          maximumDate={new Date()}
+          onChange={(_, date) => {
+            if (Platform.OS === 'android') setShowBirthPicker(false);
+            if (!date) return;
+            const yyyy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const dd = String(date.getDate()).padStart(2, '0');
+            setBirthDate(`${yyyy}-${mm}-${dd}`);
+          }}
+        />
+      ) : null}
+      {Platform.OS === 'ios' && showBirthPicker ? (
+        <Button label="Done" variant="ghost" onPress={() => setShowBirthPicker(false)} style={{ marginTop: 4 }} />
+      ) : null}
       <Button
         label={saving ? 'Saving…' : 'Save changes'}
         onPress={() => void handleSave()}
@@ -223,6 +255,16 @@ export function EditProfileModal({ visible, onClose }: Props) {
 
 const styles = StyleSheet.create({
   error: { fontSize: 13, marginBottom: 8, textAlign: 'center' },
+  birthLabel: { fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 8 },
+  birthBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
   bannerRow: {
     marginTop: 8,
     width: '100%',

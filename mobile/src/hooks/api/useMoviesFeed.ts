@@ -18,7 +18,7 @@ export function useMoviesFeed(page = 1, limit = 48) {
         fetchMoviesFeed(page, limit),
       ]);
       return {
-        featured: featured ? mapVideoCard(featured) : null,
+        featured: featured.item ? mapVideoCard(featured.item) : null,
         items: feed.items.map(mapVideoCard),
         meta: feed.meta,
       };
