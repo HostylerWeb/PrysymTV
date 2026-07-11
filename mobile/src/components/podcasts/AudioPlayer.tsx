@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Audio } from 'expo-av';
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius } from '@/theme/tokens';
 import { formatDuration } from '@/utils/format-media';
@@ -14,51 +14,34 @@ type Props = {
 };
 
 export function AudioPlayer({ source, title, durationSeconds, onProgress, autoPlay = false }: Props) {
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [position, setPosition] = useState(0);
+  const player = useAudioPlayer(source);
+  const status = useAudioPlayerStatus(player);
 
   useEffect(() => {
-    let mounted = true;
-    void (async () => {
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: source },
-        { shouldPlay: autoPlay },
-        (status) => {
-          if (!status.isLoaded || !mounted) return;
-          setPlaying(status.isPlaying);
-          const secs = (status.positionMillis ?? 0) / 1000;
-          setPosition(secs);
-          onProgress?.(secs);
-        },
-      );
-      soundRef.current = sound;
-    })();
-    return () => {
-      mounted = false;
-      void soundRef.current?.unloadAsync();
-    };
-  }, [source, autoPlay, onProgress]);
+    void setAudioModeAsync({ playsInSilentMode: true });
+  }, []);
 
-  const toggle = async () => {
-    const sound = soundRef.current;
-    if (!sound) return;
-    const status = await sound.getStatusAsync();
-    if (!status.isLoaded) return;
-    if (status.isPlaying) await sound.pauseAsync();
-    else await sound.playAsync();
+  useEffect(() => {
+    if (autoPlay) player.play();
+  }, [autoPlay, player, source]);
+
+  useEffect(() => {
+    if (status.currentTime != null) {
+      onProgress?.(status.currentTime);
+    }
+  }, [status.currentTime, onProgress]);
+
+  const toggle = () => {
+    if (status.playing) player.pause();
+    else player.play();
   };
 
-  const seek = async (delta: number) => {
-    const sound = soundRef.current;
-    if (!sound) return;
-    const status = await sound.getStatusAsync();
-    if (!status.isLoaded) return;
-    const next = Math.max(0, Math.min((status.positionMillis ?? 0) / 1000 + delta, durationSeconds));
-    await sound.setPositionAsync(next * 1000);
+  const seek = (delta: number) => {
+    const next = Math.max(0, Math.min((status.currentTime ?? 0) + delta, durationSeconds));
+    player.seekTo(next);
   };
 
+  const position = status.currentTime ?? 0;
   const progress = durationSeconds > 0 ? position / durationSeconds : 0;
 
   return (
@@ -71,13 +54,13 @@ export function AudioPlayer({ source, title, durationSeconds, onProgress, autoPl
         {formatDuration(position)} / {formatDuration(durationSeconds)}
       </Text>
       <View style={styles.controls}>
-        <Pressable style={styles.ctrlBtn} onPress={() => void seek(-15)}>
+        <Pressable style={styles.ctrlBtn} onPress={() => seek(-15)}>
           <Text style={styles.ctrlText}>15s</Text>
         </Pressable>
-        <Pressable style={styles.playBtn} onPress={() => void toggle()}>
-          <Ionicons name={playing ? 'pause' : 'play'} size={24} color={colors.primaryForeground} />
+        <Pressable style={styles.playBtn} onPress={toggle}>
+          <Ionicons name={status.playing ? 'pause' : 'play'} size={24} color={colors.primaryForeground} />
         </Pressable>
-        <Pressable style={styles.ctrlBtn} onPress={() => void seek(15)}>
+        <Pressable style={styles.ctrlBtn} onPress={() => seek(15)}>
           <Text style={styles.ctrlText}>15s</Text>
         </Pressable>
       </View>

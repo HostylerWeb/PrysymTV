@@ -59,7 +59,7 @@ export function LiveStudioPanel({
   onCopyRtmp,
   copiedRtmp,
 }: LiveStudioPanelProps) {
-  const [isPublishing, setIsPublishing] = useState(stream.status === "live")
+  const [isPublishing, setIsPublishing] = useState(false)
   const useCamera = mode === "camera" && !!studio?.whipPublishUrl
   const hasObsPlayback = Boolean(stream.hlsPlaybackUrl || stream.webrtcPlaybackUrl)
   const showObsPlayer = mode === "obs" && hasObsPlayback

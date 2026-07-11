@@ -1,4 +1,4 @@
-import { Audio } from 'expo-av';
+import { requestRecordingPermissionsAsync } from 'expo-audio';
 import * as ImagePicker from 'expo-image-picker';
 import { Alert, Linking, PermissionsAndroid, Platform } from 'react-native';
 
@@ -31,8 +31,8 @@ export async function ensureLiveCameraPermissions(): Promise<boolean> {
   }
 
   const camera = await ImagePicker.requestCameraPermissionsAsync();
-  const microphone = await Audio.requestPermissionsAsync();
-  const granted = camera.status === 'granted' && microphone.status === 'granted';
+  const microphone = await requestRecordingPermissionsAsync();
+  const granted = camera.status === 'granted' && microphone.granted;
   if (!granted) {
     Alert.alert(
       'Camera & microphone required',

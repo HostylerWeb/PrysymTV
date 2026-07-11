@@ -33,7 +33,7 @@ export function MobileLiveStudioPanel({ stream, mode, viewerCount, playbackUrl }
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const [isPublishing, setIsPublishing] = useState(stream.status === 'live');
+  const [isPublishing, setIsPublishing] = useState(false);
   const [streamStatus, setStreamStatus] = useState(stream.status);
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
   const [ending, setEnding] = useState(false);

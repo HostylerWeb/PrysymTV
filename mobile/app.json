@@ -22,7 +22,10 @@
     },
     "android": {
       "package": "tv.prysym.app",
-      "permissions": ["CAMERA", "RECORD_AUDIO"],
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#030303",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -65,7 +68,8 @@
           "supportsPictureInPicture": false
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-audio"
     ]
   }
 }

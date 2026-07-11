@@ -62,7 +62,8 @@ import type { Socket } from "socket.io-client"
 export default function LiveWatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const searchParams = useSearchParams()
-  const studioMode = searchParams.get("studio") === "obs" ? "obs" : "camera"
+  const studioParam = searchParams.get("studio")
+  const studioMode = studioParam === "obs" ? "obs" : "camera"
   const [stream, setStream] = useState<StreamDetail | null>(null)
   const [giftCatalog, setGiftCatalog] = useState<
     Array<{ id: string; name: string; cost: number; icon: string }>
@@ -401,7 +402,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
     })
   }
 
-  if (isOwner && stream.status !== "ended") {
+  if (isOwner && stream.status !== "ended" && studioParam) {
     return (
       <main className="h-[100dvh] bg-background flex flex-col pb-16 md:pb-0 md:pl-20 overflow-hidden">
         <LiveStudioPanel

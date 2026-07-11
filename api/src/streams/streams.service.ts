@@ -272,6 +272,7 @@ export class StreamsService {
       where: {
         status: StreamStatus.live,
         temporaryStreamToken: { not: null },
+        startedAt: { lt: new Date(Date.now() - 90_000) },
       },
       select: { id: true, temporaryStreamToken: true },
     });
