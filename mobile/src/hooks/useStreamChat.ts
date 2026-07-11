@@ -9,6 +9,7 @@ import {
 export function useStreamChat(streamId: string | undefined) {
   const [messages, setMessages] = useState<StreamChatMessage[]>([]);
   const [connected, setConnected] = useState(false);
+  const [viewerCount, setViewerCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
@@ -53,6 +54,11 @@ export function useStreamChat(streamId: string | undefined) {
 
         socket.on('streamEnded', () => setConnected(false));
         socket.on('disconnect', () => setConnected(false));
+        socket.on('viewers', (payload: { count?: number }) => {
+          if (typeof payload?.count === 'number') {
+            setViewerCount(payload.count);
+          }
+        });
       })
       .catch((err: Error) => {
         if (!cancelled) {
@@ -75,5 +81,5 @@ export function useStreamChat(streamId: string | undefined) {
     return true;
   };
 
-  return { messages, connected, error, sendMessage };
+  return { messages, connected, viewerCount, error, sendMessage };
 }

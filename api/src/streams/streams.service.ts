@@ -524,6 +524,7 @@ export class StreamsService {
         status: StreamStatus.ended,
         endedAt: new Date(),
         hlsPlaybackUrl: null,
+        viewerCount: 0,
       },
     });
 
@@ -558,6 +559,7 @@ export class StreamsService {
         status: StreamStatus.ended,
         endedAt: new Date(),
         hlsPlaybackUrl: null,
+        viewerCount: 0,
       },
     });
 
@@ -685,8 +687,10 @@ export class StreamsService {
       streamer: s.creator.displayName ?? s.creator.username,
       streamerSlug: s.creator.username,
       streamerAvatar: s.creator.avatarUrl,
-      viewers: this.formatCount(s.viewerCount),
-      viewerCount: s.viewerCount,
+      viewers: this.formatCount(
+        s.status === StreamStatus.live ? s.viewerCount : 0,
+      ),
+      viewerCount: s.status === StreamStatus.live ? s.viewerCount : 0,
       category: s.category ?? 'Live',
       status: s.status,
       startedAgo,

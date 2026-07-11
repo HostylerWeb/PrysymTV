@@ -55,7 +55,7 @@ export function MobileLiveStudioPanel({ stream, mode, viewerCount, playbackUrl }
   const [cameraOn, setCameraOn] = useState(true);
   const [micOn, setMicOn] = useState(true);
   const [mirrorPreview, setMirrorPreview] = useState(true);
-  const { messages, connected, sendMessage } = useStreamChat(stream.id);
+  const { messages, connected, viewerCount: chatViewerCount, sendMessage } = useStreamChat(stream.id);
 
   const useCamera = mode === 'camera' && !!stream.studio?.whipPublishUrl;
   const showObsPlayer = mode === 'obs' && Boolean(playbackUrl) && streamStatus === 'live';
@@ -281,10 +281,12 @@ export function MobileLiveStudioPanel({ stream, mode, viewerCount, playbackUrl }
               </>
             ) : null}
 
-            <View style={styles.viewerChip}>
-              <Ionicons name="people" size={14} color="#fff" />
-              <Text style={styles.viewerChipText}>{viewerCount.toLocaleString()}</Text>
-            </View>
+            {onAir ? (
+              <View style={styles.viewerChip}>
+                <Ionicons name="people" size={14} color="#fff" />
+                <Text style={styles.viewerChipText}>{chatViewerCount.toLocaleString()}</Text>
+              </View>
+            ) : null}
 
             <View style={styles.controlSpacer} />
 

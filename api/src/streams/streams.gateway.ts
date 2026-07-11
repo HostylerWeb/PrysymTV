@@ -11,6 +11,7 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
+import { StreamStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 type StreamChatPayload = {
@@ -89,7 +90,31 @@ export class StreamsGateway implements OnGatewayConnection, OnGatewayDisconnect 
   private async syncViewerCount(streamId: string) {
     const room = `stream:${streamId}`;
     const sockets = await this.server.in(room).fetchSockets();
-    const count = sockets.length;
+
+    const stream = await this.prisma.stream.findUnique({
+      where: { id: streamId },
+      select: { creatorId: true, status: true },
+    });
+    if (!stream) return;
+
+    // Preview / scheduled: studio chat sockets are not audience viewers.
+    if (stream.status !== StreamStatus.live) {
+      try {
+        await this.prisma.stream.update({
+          where: { id: streamId },
+          data: { viewerCount: 0 },
+        });
+      } catch {
+        /* stream may have ended */
+      }
+      this.server.to(room).emit('viewers', { count: 0 });
+      return;
+    }
+
+    const count = sockets.filter(
+      (socket) => socket.data.userId !== stream.creatorId,
+    ).length;
+
     try {
       await this.prisma.stream.update({
         where: { id: streamId },
