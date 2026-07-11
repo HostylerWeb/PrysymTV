@@ -25,8 +25,13 @@
     let selectedAudioId = '';
     let skipDeviceSwitch = true;
     let thumbnailSent = false;
+    let mirrorPreview = true;
     const statusEl = document.getElementById('status');
     const videoEl = document.getElementById('preview');
+
+    function applyMirrorPreview() {
+      videoEl.style.transform = mirrorPreview ? 'scaleX(-1)' : 'none';
+    }
 
     function post(msg) {
       const payload = JSON.stringify(msg);
@@ -97,6 +102,7 @@
         const id = audioTrack.getSettings().deviceId;
         if (id) selectedAudioId = id;
       }
+      applyMirrorPreview();
       return videoEl.play().catch(() => {});
     }
 
@@ -196,6 +202,10 @@
         }
         if (data.type === 'setMicEnabled') {
           toggleTrack('audio', !!data.value);
+        }
+        if (data.type === 'setMirrorPreview') {
+          mirrorPreview = !!data.value;
+          applyMirrorPreview();
         }
       } catch (_) {}
     }

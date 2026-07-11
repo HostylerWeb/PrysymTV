@@ -54,13 +54,20 @@ export function BottomSheet({
         header: {
           flexDirection: 'row',
           alignItems: 'center',
-          paddingHorizontal: 16,
+          paddingHorizontal: 12,
           paddingVertical: 12,
           borderBottomWidth: 1,
           borderBottomColor: colors.border,
         },
-        title: { ...typography.h2, color: colors.foreground, flex: 1, textAlign: 'center' },
-        close: { padding: 4 },
+        title: {
+          ...typography.h2,
+          color: colors.foreground,
+          flex: 1,
+          textAlign: 'center',
+          fontSize: 16,
+        },
+        close: { width: 36, alignItems: 'flex-start' },
+        closePlaceholder: { width: 36 },
         scroll: { flex: 1 },
         scrollContent: { padding: 16, paddingBottom: 24 },
         body: { flex: 1, padding: 16 },
@@ -71,27 +78,33 @@ export function BottomSheet({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable
-          style={[styles.sheet, { height, paddingBottom: insets.bottom + 12 }]}
-          onPress={(e) => e.stopPropagation()}
-        >
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
+        <View style={[styles.sheet, { height, paddingBottom: insets.bottom + 12 }]}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            {title ? <Text style={styles.title}>{title}</Text> : <View style={{ flex: 1 }} />}
             <Pressable onPress={onClose} hitSlop={12} style={styles.close}>
               <Ionicons name="close" size={22} color={colors.foreground} />
             </Pressable>
+            {title ? (
+              <Text style={styles.title} numberOfLines={1}>
+                {title}
+              </Text>
+            ) : (
+              <View style={{ flex: 1 }} />
+            )}
+            <View style={styles.closePlaceholder} />
           </View>
           <Body
             style={scroll ? styles.scroll : styles.body}
             contentContainerStyle={scroll ? styles.scrollContent : undefined}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
             {children}
           </Body>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

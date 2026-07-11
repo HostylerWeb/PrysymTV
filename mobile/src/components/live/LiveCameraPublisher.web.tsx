@@ -86,6 +86,7 @@ export function LiveCameraPublisher({
   whipPublishUrl,
   streamId,
   publishing,
+  mirrorPreview = true,
   onReady,
   onConnected,
   onError,
@@ -346,7 +347,7 @@ export function LiveCameraPublisher({
           height: '100%',
           objectFit: 'contain',
           backgroundColor: '#000',
-          transform: 'scaleX(-1)',
+          transform: mirrorPreview ? 'scaleX(-1)' : 'none',
         }}
       />
       {!previewReady && !error ? (

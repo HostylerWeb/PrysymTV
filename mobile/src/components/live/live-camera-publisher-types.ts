@@ -17,6 +17,8 @@ export type LiveCameraPublisherProps = {
   selectedAudioDeviceId?: string;
   cameraEnabled?: boolean;
   micEnabled?: boolean;
+  /** Mirror the local preview only (does not flip the broadcast). Default true. */
+  mirrorPreview?: boolean;
   onReady?: () => void;
   onConnected?: () => void;
   onError?: (message: string) => void;

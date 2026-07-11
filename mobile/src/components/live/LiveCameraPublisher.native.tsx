@@ -16,6 +16,7 @@ export function LiveCameraPublisher({
   selectedAudioDeviceId,
   cameraEnabled,
   micEnabled,
+  mirrorPreview = true,
   onReady,
   onConnected,
   onError,
@@ -50,6 +51,10 @@ export function LiveCameraPublisher({
     if (micEnabled === undefined) return;
     postControl({ type: 'setMicEnabled', value: micEnabled });
   }, [micEnabled, postControl]);
+
+  useEffect(() => {
+    postControl({ type: 'setMirrorPreview', value: mirrorPreview });
+  }, [mirrorPreview, postControl]);
 
   const onMessage = (event: WebViewMessageEvent) => {
     try {
