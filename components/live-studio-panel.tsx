@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { cn } from "@/lib/utils"
 import { BrowserLivePublisher } from "@/components/browser-live-publisher"
+import { LiveBroadcastPlayer } from "@/components/live-broadcast-player"
 import { StreamChatLine, type StreamChatLine as ChatLine } from "@/components/stream-chat-line"
 import type { StreamDetail, StreamStudioInfo } from "@/lib/api/streams"
 
@@ -60,7 +61,13 @@ export function LiveStudioPanel({
 }: LiveStudioPanelProps) {
   const [isPublishing, setIsPublishing] = useState(stream.status === "live")
   const useCamera = mode === "camera" && !!studio?.whipPublishUrl
-  const onAir = useCamera ? isPublishing : stream.status === "live"
+  const hasObsPlayback = Boolean(stream.hlsPlaybackUrl || stream.webrtcPlaybackUrl)
+  const showObsPlayer = mode === "obs" && hasObsPlayback
+  const onAir = useCamera
+    ? isPublishing
+    : mode === "obs"
+      ? stream.status === "live" && hasObsPlayback
+      : stream.status === "live"
 
   return (
     <div className="flex-1 flex flex-col lg:flex-row min-h-0 w-full max-w-[1600px] mx-auto lg:px-4 lg:py-4 lg:gap-4">
@@ -105,6 +112,15 @@ export function LiveStudioPanel({
               whipPublishUrl={studio!.whipPublishUrl}
               streamId={stream.id}
               publishing={isPublishing}
+            />
+          ) : showObsPlayer ? (
+            <LiveBroadcastPlayer
+              key={stream.webrtcPlaybackUrl ?? stream.hlsPlaybackUrl ?? stream.id}
+              webrtcUrl={stream.webrtcPlaybackUrl}
+              hlsUrl={stream.hlsPlaybackUrl}
+              poster={stream.thumbnail}
+              className="w-full h-full object-contain bg-black"
+              autoPlay
             />
           ) : (
             <ObsStudioPlaceholder

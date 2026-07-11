@@ -1,6 +1,10 @@
 import { ContentVertical } from '@prisma/client';
 
 export type EconomySettings = {
+  /** USD value of one coin when spending (gifts, paid streams, revenue) */
+  coinUsd: number;
+  /** Minimum USD price a streamer can set for a paid live stream */
+  minPaidStreamUsd: number;
   minPayoutUsd: number;
   /** Ad-free Prysym membership (Shorts, Verticals, Movies) — admin-set price */
   membershipPriceUsd: number;

@@ -42,6 +42,8 @@ export type VideoCard = {
   isFollowing?: boolean;
   isLive?: boolean;
   isNew?: boolean;
+  isPaid?: boolean;
+  entryCoinCost?: number | null;
   playbackUrl?: string | null;
 };
 
@@ -221,6 +223,9 @@ export type LiveStream = {
   streamer: string;
   streamerSlug: string;
   avatarUrl: string | null;
+  isPaid?: boolean;
+  entryCoinCost?: number | null;
+  entryPriceUsd?: number | null;
 };
 
 export type PodcastShow = {

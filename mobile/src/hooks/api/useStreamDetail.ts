@@ -10,28 +10,41 @@ export type StreamDetailView = LiveStream & {
   slug: string;
   creatorId: string;
   status: string;
+  isPaid?: boolean;
+  hasAccess?: boolean;
+  entryCoinCost?: number | null;
+  entryPriceUsd?: number | null;
+  hlsPlaybackUrl?: string | null;
+  webrtcPlaybackUrl?: string | null;
   studio?: import('@/lib/api/streams').StreamStudioInfo;
 };
 
-export function useStreamDetail(id: string | undefined) {
+export function useStreamDetail(id: string | undefined, authUserId?: string | null) {
   return useQuery({
-    queryKey: ['stream', id],
+    queryKey: ['stream', id, authUserId ?? 'guest'],
     enabled: Boolean(id),
     queryFn: async (): Promise<StreamDetailView> => {
       const raw = await fetchStream(id!);
       const base = mapStreamDetail(raw);
+      const hasAccess = raw.hasAccess !== false;
       return {
         ...base,
         slug: raw.slug,
         creatorId: raw.creatorId,
         status: raw.status,
         studio: raw.studio,
+        isPaid: raw.isPaid,
+        hasAccess: raw.hasAccess,
+        entryCoinCost: raw.entryCoinCost,
+        entryPriceUsd: raw.entryPriceUsd,
+        hlsPlaybackUrl: hasAccess ? raw.hlsPlaybackUrl ?? null : null,
+        webrtcPlaybackUrl: hasAccess ? raw.webrtcPlaybackUrl ?? null : null,
         thumbnailUrl: mediaThumb(raw.thumbnail),
         avatarUrl: mediaThumb(raw.streamerAvatar),
         description: raw.description ?? null,
-        playbackSource: resolvePlaybackUrl(raw),
+        playbackSource: hasAccess ? resolvePlaybackUrl(raw) : null,
       };
     },
-    refetchInterval: 30_000,
+    refetchInterval: 3_000,
   });
 }

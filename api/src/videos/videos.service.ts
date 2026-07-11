@@ -625,6 +625,7 @@ export class VideosService {
     sort?: string;
     mode?: string;
     q?: string;
+    viewerId?: string;
   }) {
     const page = Math.max(1, params.page ?? 1);
     const limit = Math.min(Math.max(1, params.limit ?? 24), 48);
@@ -706,7 +707,11 @@ export class VideosService {
       });
       return {
         videos: emptyVideos,
-        live: { items: streams.map((s) => this.mapLiveBrowseItem(s)) },
+        live: {
+          items: (await this.streams.mapStreams(streams, params.viewerId)).map(
+            (s) => this.mapLiveBrowseItemFromDto(s),
+          ),
+        },
       };
     }
 
@@ -758,12 +763,37 @@ export class VideosService {
       }),
     ]);
 
+    const mappedLive = await this.streams.mapStreams(streams, params.viewerId);
+
     return {
       videos: {
         items: await this.playback.mapVideoCardsWithPlayback(videoItems),
         meta: { page, limit, total: videoTotal },
       },
-      live: { items: streams.map((s) => this.mapLiveBrowseItem(s)) },
+      live: { items: mappedLive.map((s) => this.mapLiveBrowseItemFromDto(s)) },
+    };
+  }
+
+  private mapLiveBrowseItemFromDto(s: Awaited<ReturnType<StreamsService['mapStreams']>>[number]) {
+    return {
+      contentType: 'live' as const,
+      id: s.id,
+      slug: s.slug,
+      title: s.title,
+      thumbnailUrl: s.thumbnail,
+      hlsPlaybackUrl: s.hlsPlaybackUrl,
+      viewerCount: s.viewerCount,
+      category: s.category,
+      vertical: null,
+      streamer: s.streamer,
+      streamerSlug: s.streamerSlug,
+      streamerAvatar: s.streamerAvatar,
+      creatorId: s.creatorId,
+      accessType: s.accessType,
+      entryPriceUsd: s.entryPriceUsd,
+      entryCoinCost: s.entryCoinCost,
+      isPaid: s.isPaid,
+      hasAccess: s.hasAccess,
     };
   }
 

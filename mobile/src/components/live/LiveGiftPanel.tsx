@@ -1,16 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { fetchGiftsCatalog, sendGift, type GiftCatalogItem } from '@/lib/api/billing';
 import { colors, radius } from '@/theme/tokens';
 
-const GIFT_EMOJI: Record<string, string> = {
-  rose: '🌹',
-  fire: '🔥',
-  rocket: '🚀',
-  heart: '❤️',
-  star: '⭐',
-};
+import { giftVisualFor } from '@/lib/gift-icons';
 
 type Props = {
   receiverId: string;
@@ -60,17 +54,24 @@ export function LiveGiftPanel({ receiverId, streamId, onSent }: Props) {
         <ActivityIndicator color={colors.primary} />
       ) : (
         <View style={styles.grid}>
-          {catalog.map((g) => (
+          {catalog.map((g) => {
+            const visual = giftVisualFor(g);
+            return (
             <Pressable
               key={g.id}
               style={[styles.gift, selected === g.id && styles.giftOn]}
               onPress={() => requireAuth(() => setSelected(g.id))}
             >
-              <Text style={styles.emoji}>{GIFT_EMOJI[g.animationKey] ?? '🎁'}</Text>
+              {visual.type === 'image' ? (
+                <Image source={{ uri: visual.value }} style={styles.giftImage} />
+              ) : (
+                <Text style={styles.emoji}>{visual.value}</Text>
+              )}
               <Text style={styles.name}>{g.name}</Text>
               <Text style={styles.coins}>{g.coinCost} coins</Text>
             </Pressable>
-          ))}
+            );
+          })}
         </View>
       )}
       <Pressable style={[styles.sendBtn, (!selected || sent) && styles.sendOff]} onPress={send} disabled={!selected || sent}>
@@ -105,6 +106,7 @@ const styles = StyleSheet.create({
   },
   giftOn: { borderColor: colors.primary, backgroundColor: colors.primary + '12' },
   emoji: { fontSize: 24 },
+  giftImage: { width: 32, height: 32, resizeMode: 'contain' },
   name: { color: colors.foreground, fontWeight: '600', fontSize: 12, marginTop: 4 },
   coins: { color: colors.primary, fontSize: 10, marginTop: 2 },
   sendBtn: {

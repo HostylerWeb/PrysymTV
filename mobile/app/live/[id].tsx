@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,10 +12,12 @@ import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { Button } from '@/components/ui/Button';
 import { ShareModal } from '@/components/modals/ShareModal';
 import { ReportModal } from '@/components/modals/ReportModal';
+import { CoinsModal } from '@/components/modals/CoinsModal';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useStreamDetail } from '@/hooks/api/useStreamDetail';
 import { useBackNavigation } from '@/hooks/useBackNavigation';
 import { useStreamChat } from '@/hooks/useStreamChat';
+import { unlockStream } from '@/lib/api/streams';
 import { followUser, toggleLiveAlerts, unfollowUser } from '@/lib/api/users';
 import { colors, radius, spacing } from '@/theme/tokens';
 import { formatViewCount } from '@/utils/format-media';
@@ -24,20 +26,28 @@ export default function LiveScreen() {
   const { id, studio: studioParam } = useLocalSearchParams<{ id: string; studio?: string }>();
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
-  const { user, requireAuth } = useMockAuth();
+  const { user, requireAuth, refreshUser } = useMockAuth();
   useBackNavigation('/live');
-  const streamQuery = useStreamDetail(id);
+  const streamQuery = useStreamDetail(id, user?.id);
   const stream = streamQuery.data;
   const studioMode = studioParam === 'obs' ? 'obs' : 'camera';
 
   const [shareOpen, setShareOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [giftOpen, setGiftOpen] = useState(false);
+  const [coinsOpen, setCoinsOpen] = useState(false);
+  const [unlockBusy, setUnlockBusy] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
   const [following, setFollowing] = useState(false);
   const [alertsOn, setAlertsOn] = useState(false);
   const [draft, setDraft] = useState('');
   const chatRef = useRef<ScrollView>(null);
-  const { messages, connected, error: chatError, sendMessage } = useStreamChat(id);
+
+  const isOwner = !!user?.id && stream?.creatorId === user.id;
+  const needsPaywall = Boolean(stream?.isPaid) && !stream?.hasAccess && !isOwner;
+  const chatStreamId = needsPaywall ? undefined : id;
+  const { messages, connected, error: chatError, sendMessage } = useStreamChat(chatStreamId);
+  const userCoins = user?.coinsBalance ?? 0;
 
   const sendChat = () => {
     if (!requireAuth(() => {})) return;
@@ -45,6 +55,37 @@ export default function LiveScreen() {
       setDraft('');
       setTimeout(() => chatRef.current?.scrollToEnd({ animated: true }), 50);
     }
+  };
+
+  const handleUnlock = async () => {
+    if (!stream) return;
+    setUnlockBusy(true);
+    setUnlockError(null);
+    try {
+      await unlockStream(stream.id);
+      await refreshUser();
+      await streamQuery.refetch();
+    } catch (e) {
+      setUnlockError(e instanceof Error ? e.message : 'Could not unlock stream');
+    } finally {
+      setUnlockBusy(false);
+    }
+  };
+
+  const handleUnlockPress = () => {
+    if (!stream) return;
+    const entryCost = stream.entryCoinCost ?? 0;
+    if (userCoins < entryCost) {
+      setCoinsOpen(true);
+      return;
+    }
+    void handleUnlock();
+  };
+
+  const handleLoginToView = () => {
+    requireAuth(() => {
+      void refreshUser().then(() => streamQuery.refetch());
+    });
   };
 
   if (streamQuery.isLoading) {
@@ -63,7 +104,6 @@ export default function LiveScreen() {
     );
   }
 
-  const isOwner = !!user?.id && stream.creatorId === user.id;
   if (isOwner && stream.status !== 'ended' && studioParam) {
     return (
       <MobileLiveStudioPanel
@@ -85,6 +125,7 @@ export default function LiveScreen() {
         }}
         mode={studioMode}
         viewerCount={stream.viewerCount}
+        playbackUrl={stream.playbackSource}
       />
     );
   }
@@ -95,15 +136,76 @@ export default function LiveScreen() {
         <View style={styles.pad}>
           <AppHeader showBack showSearch={false} showNotifications={false} />
         </View>
-        <PlayerShell
-          title={stream.title}
-          thumbnailUrl={stream.thumbnailUrl}
-          playbackUrl={stream.playbackSource}
-          subtitle={`${stream.streamer} · ${formatViewCount(stream.viewerCount)} watching`}
-          badge="LIVE"
-          contentFit="contain"
-          paused={!isFocused}
-        />
+        {needsPaywall ? (
+          <View style={styles.paywall}>
+            {stream.thumbnailUrl ? (
+              <Image source={{ uri: stream.thumbnailUrl }} style={styles.paywallImage} blurRadius={12} />
+            ) : (
+              <View style={styles.paywallImage} />
+            )}
+            <View style={styles.paywallOverlay}>
+              <Ionicons name="lock-closed" size={40} color="#fbbf24" />
+              <Text style={styles.paywallTitle}>Paid VIP Live Stream</Text>
+              <Text style={styles.paywallBody}>
+                {!user
+                  ? `Sign in to watch this VIP stream. Entry costs ${stream.entryCoinCost?.toLocaleString() ?? '—'} coins${
+                      stream.entryPriceUsd != null ? ` ($${stream.entryPriceUsd.toFixed(2)})` : ''
+                    } after you log in.`
+                  : `You need ${stream.entryCoinCost?.toLocaleString() ?? '—'} coins to join this VIP stream${
+                      stream.entryPriceUsd != null ? ` ($${stream.entryPriceUsd.toFixed(2)})` : ''
+                    }.`}
+              </Text>
+              {user ? (
+                <Text style={styles.paywallBalance}>
+                  Your balance: 🪙 {userCoins.toLocaleString()}
+                  {userCoins < (stream.entryCoinCost ?? 0) ? (
+                    <Text style={styles.paywallNeed}>
+                      {' '}
+                      · Need {(stream.entryCoinCost ?? 0) - userCoins} more to unlock
+                    </Text>
+                  ) : null}
+                </Text>
+              ) : null}
+              {!user ? (
+                <Button
+                  label="Login To View"
+                  onPress={handleLoginToView}
+                  style={{ marginTop: 12, alignSelf: 'stretch' }}
+                />
+              ) : (
+                <>
+                  <Button
+                    label={
+                      unlockBusy
+                        ? 'Unlocking…'
+                        : `Unlock · ${stream.entryCoinCost?.toLocaleString() ?? '—'} coins`
+                    }
+                    onPress={handleUnlockPress}
+                    disabled={unlockBusy}
+                    style={{ marginTop: 12, alignSelf: 'stretch' }}
+                  />
+                  <Button
+                    label="Get coins"
+                    variant="outline"
+                    onPress={() => setCoinsOpen(true)}
+                    style={{ marginTop: 8, alignSelf: 'stretch' }}
+                  />
+                </>
+              )}
+              {unlockError ? <Text style={styles.unlockError}>{unlockError}</Text> : null}
+            </View>
+          </View>
+        ) : (
+          <PlayerShell
+            title={stream.title}
+            thumbnailUrl={stream.thumbnailUrl}
+            playbackUrl={stream.playbackSource}
+            subtitle={`${stream.streamer} · ${formatViewCount(stream.viewerCount)} watching`}
+            badge={stream.isPaid ? 'VIP' : 'LIVE'}
+            contentFit="contain"
+            paused={!isFocused}
+          />
+        )}
         <View style={styles.streamerRow}>
           <View style={styles.streamerInfo}>
             <Text style={styles.streamerName}>{stream.streamer}</Text>
@@ -137,19 +239,23 @@ export default function LiveScreen() {
         </View>
         <View style={styles.topActions}>
           <Button label="Share" variant="outline" onPress={() => setShareOpen(true)} />
-          <Button label={giftOpen ? 'Hide gifts' : 'Send gift'} variant="secondary" onPress={() => requireAuth(() => setGiftOpen(!giftOpen))} />
+          {!needsPaywall ? (
+            <Button label={giftOpen ? 'Hide gifts' : 'Send gift'} variant="secondary" onPress={() => requireAuth(() => setGiftOpen(!giftOpen))} />
+          ) : null}
           <Button label="Report" variant="ghost" onPress={() => setReportOpen(true)} />
         </View>
-        {giftOpen ? (
+        {!needsPaywall && giftOpen ? (
           <LiveGiftPanel
             receiverId={stream.creatorId}
             streamId={stream.id}
             onSent={() => setGiftOpen(false)}
           />
         ) : null}
-        {chatError ? (
+        {!needsPaywall && chatError ? (
           <Text style={styles.chatError}>{chatError}</Text>
         ) : null}
+        {!needsPaywall ? (
+        <>
         <ScrollView
           ref={chatRef}
           style={styles.chat}
@@ -177,9 +283,12 @@ export default function LiveScreen() {
           />
           <Button label="Send" style={styles.sendBtn} onPress={sendChat} disabled={!draft.trim() || !connected} />
         </View>
+        </>
+        ) : null}
       </View>
       <ShareModal visible={shareOpen} onClose={() => setShareOpen(false)} title={stream.title} />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetType="stream" targetId={stream.id} />
+      <CoinsModal visible={coinsOpen} onClose={() => setCoinsOpen(false)} balance={userCoins} />
     </>
   );
 }
@@ -188,6 +297,27 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   center: { alignItems: 'center', justifyContent: 'center' },
   pad: { paddingHorizontal: spacing.page },
+  paywall: {
+    marginHorizontal: spacing.page,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#111',
+    marginBottom: 12,
+  },
+  paywallImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  paywallOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  paywallTitle: { color: '#fff', fontSize: 18, fontWeight: '800', marginTop: 12, textAlign: 'center' },
+  paywallBody: { color: 'rgba(255,255,255,0.85)', fontSize: 14, textAlign: 'center', marginTop: 8, lineHeight: 20 },
+  paywallBalance: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 8, textAlign: 'center' },
+  paywallNeed: { color: '#fbbf24' },
+  unlockError: { color: colors.destructive, fontSize: 12, marginTop: 8, textAlign: 'center' },
   streamerRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,6 +1,6 @@
 "use client"
 
-import { Play } from "lucide-react"
+import { Coins, Play } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { userAvatarUrl } from "@/lib/user-avatar"
@@ -19,6 +19,8 @@ interface VideoCardProps {
   channelAvatar?: string
   isLive?: boolean
   liveViewers?: string
+  isPaid?: boolean
+  entryCoinCost?: number | null
   type: "movie" | "video" | "live"
   progress?: number
   /** carousel = fixed width row item; grid = full cell width */
@@ -37,6 +39,8 @@ export function VideoCard({
   channel,
   isLive,
   liveViewers,
+  isPaid,
+  entryCoinCost,
   type,
   progress,
   channelAvatar,
@@ -79,6 +83,14 @@ export function VideoCard({
           </div>
 
           {/* Duration / Live Badge */}
+          <div className="absolute top-2 left-2 flex flex-wrap gap-1.5">
+            {isLive && isPaid ? (
+              <span className="bg-amber-500/95 text-black text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
+                <Coins className="w-3 h-3" />
+                VIP · {entryCoinCost?.toLocaleString() ?? "—"}
+              </span>
+            ) : null}
+          </div>
           <div className="absolute bottom-2 right-2">
             {isLive ? (
               <span className="bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded flex items-center gap-1">

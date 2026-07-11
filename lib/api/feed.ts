@@ -14,6 +14,11 @@ export type FeedHomeResponse = {
     streamerAvatar: string | null;
     viewers: number;
     category: string | null;
+    accessType?: "free" | "paid";
+    entryPriceUsd?: number | null;
+    entryCoinCost?: number | null;
+    isPaid?: boolean;
+    hasAccess?: boolean;
   }>;
   continueWatching: ContinueWatchingFeedItem[];
   featuredLive: {
@@ -25,6 +30,11 @@ export type FeedHomeResponse = {
     streamer: string;
     streamerAvatar: string | null;
     viewerCount: number;
+    accessType?: "free" | "paid";
+    entryPriceUsd?: number | null;
+    entryCoinCost?: number | null;
+    isPaid?: boolean;
+    hasAccess?: boolean;
   } | null;
   trending: VideoCard[];
   newReleases: VideoCard[];

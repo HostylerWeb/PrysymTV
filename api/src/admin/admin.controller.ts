@@ -575,6 +575,13 @@ export class AdminController {
     return this.admin.upsertGiftCatalog(body);
   }
 
+  @Post('gift-catalog/image/upload')
+  uploadGiftImage(
+    @Body() body: { giftId: string; mimeType: string; fileName?: string },
+  ) {
+    return this.admin.uploadGiftImageInit(body);
+  }
+
   @Delete('gift-catalog/:id')
   deleteGiftCatalog(@Param('id') id: string) {
     return this.admin.deleteGiftCatalog(id);

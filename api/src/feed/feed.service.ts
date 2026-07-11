@@ -92,36 +92,42 @@ export class FeedService {
           : Promise.resolve(null),
       ]);
 
-    const asset = (url: string | null | undefined) =>
-      this.playback.resolvePublicAssetUrl(url);
+    const mappedLive = await this.streams.mapStreams(liveStreams, userId);
 
     return {
-      liveNow: liveStreams.map((s) => ({
+      liveNow: mappedLive.map((s) => ({
         id: s.id,
-        slug: s.creator.username,
+        slug: s.slug,
         title: s.title,
-        thumbnailUrl:
-          asset(s.thumbnailUrl) ?? asset(s.creator.avatarUrl),
+        thumbnailUrl: s.thumbnail,
         hlsPlaybackUrl: s.hlsPlaybackUrl,
-        streamer: s.creator.displayName ?? s.creator.username,
-        streamerSlug: s.creator.username,
-        streamerAvatar: asset(s.creator.avatarUrl),
+        streamer: s.streamer,
+        streamerSlug: s.streamerSlug,
+        streamerAvatar: s.streamerAvatar,
         viewers: s.viewerCount,
         category: s.category,
+        accessType: s.accessType,
+        entryPriceUsd: s.entryPriceUsd,
+        entryCoinCost: s.entryCoinCost,
+        isPaid: s.isPaid,
+        hasAccess: s.hasAccess,
       })),
       continueWatching,
-      featuredLive: liveStreams[0]
+      featuredLive: mappedLive[0]
         ? {
-            id: liveStreams[0].id,
-            slug: liveStreams[0].creator.username,
-            title: liveStreams[0].title,
-            thumbnailUrl:
-              asset(liveStreams[0].thumbnailUrl) ??
-              asset(liveStreams[0].creator.avatarUrl),
-            hlsPlaybackUrl: liveStreams[0].hlsPlaybackUrl,
-            streamer: liveStreams[0].creator.displayName ?? liveStreams[0].creator.username,
-            streamerAvatar: asset(liveStreams[0].creator.avatarUrl),
-            viewerCount: liveStreams[0].viewerCount,
+            id: mappedLive[0].id,
+            slug: mappedLive[0].slug,
+            title: mappedLive[0].title,
+            thumbnailUrl: mappedLive[0].thumbnail,
+            hlsPlaybackUrl: mappedLive[0].hlsPlaybackUrl,
+            streamer: mappedLive[0].streamer,
+            streamerAvatar: mappedLive[0].streamerAvatar,
+            viewerCount: mappedLive[0].viewerCount,
+            accessType: mappedLive[0].accessType,
+            entryPriceUsd: mappedLive[0].entryPriceUsd,
+            entryCoinCost: mappedLive[0].entryCoinCost,
+            isPaid: mappedLive[0].isPaid,
+            hasAccess: mappedLive[0].hasAccess,
           }
         : null,
       trending,

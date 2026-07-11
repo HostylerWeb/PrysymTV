@@ -240,6 +240,27 @@ export class StorageService implements OnModuleInit {
     return `uploads/stores/${storeId}/images/${randomUUID()}${extension}`;
   }
 
+  buildGiftImageKey(giftId: string, fileName?: string): string {
+    const safeId = giftId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const extension = this.extensionFromFileName(fileName) || '.png';
+    return `uploads/gifts/${safeId}${extension}`;
+  }
+
+  assertGiftImageMime(mimeType: string): void {
+    const allowed = new Set([
+      'image/png',
+      'image/webp',
+      'image/gif',
+      'image/jpeg',
+      'image/jpg',
+    ]);
+    if (!allowed.has(mimeType.toLowerCase())) {
+      throw new BadRequestException(
+        'Gift images must be PNG, WebP, GIF, or JPEG',
+      );
+    }
+  }
+
   /** Podcast episode audio or video files. */
   async createPodcastMediaUploadTargetForKey(
     objectKey: string,

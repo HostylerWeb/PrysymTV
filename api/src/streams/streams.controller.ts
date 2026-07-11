@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
+import { InitStreamDto } from './dto/init-stream.dto';
 import { StreamsService } from './streams.service';
 
 @Controller('streams')
@@ -23,20 +24,20 @@ export class StreamsController {
 
   @Post('init')
   @UseGuards(JwtAuthGuard)
-  init(
-    @CurrentUser() user: AuthUserPayload,
-    @Body() body: { title?: string; category?: string },
-  ) {
+  init(@CurrentUser() user: AuthUserPayload, @Body() body: InitStreamDto) {
     return this.streams.initStream(
       user.id,
       body.title?.trim() || 'Live Stream',
       body.category,
+      body.accessType ?? 'free',
+      body.entryPriceUsd,
     );
   }
 
   @Get('live')
-  live() {
-    return this.streams.listLive();
+  @UseGuards(OptionalJwtAuthGuard)
+  live(@Req() req: Request & { user?: AuthUserPayload | null }) {
+    return this.streams.listLive(req.user?.id);
   }
 
   @Get('ingest/health')
@@ -66,6 +67,13 @@ export class StreamsController {
   @HttpCode(200)
   mediamtxDone(@Query('path') path: string) {
     return this.streams.mediamtxDone(path ?? '');
+  }
+
+  @Post(':id/unlock')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
+  unlockStream(@CurrentUser() user: AuthUserPayload, @Param('id') id: string) {
+    return this.streams.unlockStream(id, user.id);
   }
 
   @Post(':id/end')

@@ -309,6 +309,8 @@ function VideosBrowseContent() {
                       viewers={formatViewCount(stream.viewerCount)}
                       category={stream.category ?? stream.vertical ?? "Live"}
                       avatar={stream.streamerAvatar}
+                      isPaid={stream.isPaid}
+                      entryCoinCost={stream.entryCoinCost}
                     />
                   ))}
                   </div>
@@ -330,6 +332,8 @@ function VideosBrowseContent() {
                     channel={stream.streamer}
                     channelAvatar={userAvatarUrl(stream.streamerAvatar, stream.streamerSlug)}
                     isLive
+                    isPaid={stream.isPaid}
+                    entryCoinCost={stream.entryCoinCost}
                     liveViewers={`${formatViewCount(stream.viewerCount)} watching`}
                     type="live"
                     layout="grid"

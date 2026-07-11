@@ -44,6 +44,8 @@ export function mapVideoCard(raw: VideoCardDetail | Record<string, unknown>): Vi
     isFollowing: r.isFollowing,
     isLive: r.isLive,
     isNew: r.isNew,
+    isPaid: (r as { isPaid?: boolean }).isPaid,
+    entryCoinCost: (r as { entryCoinCost?: number | null }).entryCoinCost,
     playbackUrl: resolvePlaybackUrl(r as Parameters<typeof resolvePlaybackUrl>[0]),
   };
 }
@@ -60,6 +62,9 @@ type FeedLiveItem = {
   viewers?: number;
   viewerCount?: number;
   category?: string | null;
+  isPaid?: boolean;
+  entryCoinCost?: number | null;
+  entryPriceUsd?: number | null;
 };
 
 export function mapFeedLiveStream(raw: FeedLiveItem): LiveStream {
@@ -72,6 +77,9 @@ export function mapFeedLiveStream(raw: FeedLiveItem): LiveStream {
     streamer: raw.streamer,
     streamerSlug: raw.streamerSlug,
     avatarUrl: mediaThumb(raw.streamerAvatar),
+    isPaid: raw.isPaid,
+    entryCoinCost: raw.entryCoinCost,
+    entryPriceUsd: raw.entryPriceUsd,
   };
 }
 

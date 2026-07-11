@@ -25,6 +25,7 @@ import {
   VideoType,
 } from '@prisma/client';
 import { geoFromMetadata } from '../common/geo/request-geo';
+import { packagePriceFromCoins } from '../common/utils/coin-usd.util';
 import { AdvertisersService } from '../advertisers/advertisers.service';
 import { PlaylistsService } from '../playlists/playlists.service';
 import { GafService } from '../gaf/gaf.service';
@@ -2229,13 +2230,29 @@ export class AdminService {
         name: g.name,
         coinCost: g.coinCost,
         animationKey: g.animationKey,
+        imageUrl: g.imageUrl,
         isActive: g.isActive,
       })),
     };
   }
 
-  updateEconomyConfig(adminId: string, body: UpdateEconomyConfigDto) {
-    return this.platformSettings.setEconomy(body, adminId);
+  async updateEconomyConfig(adminId: string, body: UpdateEconomyConfigDto) {
+    const current = await this.platformSettings.getEconomy();
+    const next = await this.platformSettings.setEconomy(body, adminId);
+    if (body.coinUsd != null && body.coinUsd !== current.coinUsd) {
+      const packages = await this.prisma.coinPackage.findMany();
+      await Promise.all(
+        packages.map((p) =>
+          this.prisma.coinPackage.update({
+            where: { id: p.id },
+            data: {
+              priceUsd: packagePriceFromCoins(p.coins, next.coinUsd),
+            },
+          }),
+        ),
+      );
+    }
+    return next;
   }
 
   getAdsConfig() {
@@ -2344,19 +2361,21 @@ export class AdminService {
   }
 
   async upsertCoinPackage(body: UpsertCoinPackageDto) {
+    const economy = await this.platformSettings.getEconomy();
+    const priceUsd = packagePriceFromCoins(body.coins, economy.coinUsd);
     const row = await this.prisma.coinPackage.upsert({
       where: { id: body.id },
       create: {
         id: body.id,
         coins: body.coins,
-        priceUsd: body.priceUsd,
+        priceUsd,
         label: body.label,
         isActive: body.isActive ?? true,
         sortOrder: body.sortOrder ?? 0,
       },
       update: {
         coins: body.coins,
-        priceUsd: body.priceUsd,
+        priceUsd,
         label: body.label,
         isActive: body.isActive ?? true,
         sortOrder: body.sortOrder ?? 0,
@@ -2382,19 +2401,28 @@ export class AdminService {
   }
 
   async upsertGiftCatalog(body: UpsertGiftCatalogDto) {
+    const animationKey = body.animationKey?.trim() || body.id;
+    const imageUrl =
+      body.imageUrl === undefined
+        ? undefined
+        : body.imageUrl?.trim()
+          ? body.imageUrl.trim()
+          : null;
     const row = await this.prisma.giftCatalog.upsert({
       where: { id: body.id },
       create: {
         id: body.id,
         name: body.name,
         coinCost: body.coinCost,
-        animationKey: body.animationKey,
+        animationKey,
+        imageUrl: imageUrl ?? null,
         isActive: body.isActive ?? true,
       },
       update: {
         name: body.name,
         coinCost: body.coinCost,
-        animationKey: body.animationKey,
+        animationKey,
+        ...(imageUrl !== undefined ? { imageUrl } : {}),
         isActive: body.isActive ?? true,
       },
     });
@@ -2403,6 +2431,7 @@ export class AdminService {
       name: row.name,
       coinCost: row.coinCost,
       animationKey: row.animationKey,
+      imageUrl: row.imageUrl,
       isActive: row.isActive,
     };
   }
@@ -2869,6 +2898,34 @@ export class AdminService {
     const target = await this.storage.createAdMediaUploadTarget(
       body.mimeType.trim(),
       body.fileName,
+    );
+    return {
+      objectKey: target.objectKey,
+      uploadUrl: target.uploadUrl,
+      uploadMethod: target.uploadMethod,
+      uploadHeaders: target.uploadHeaders,
+      expiresIn: target.expiresIn,
+      publicUrl: this.storage.getPublicUrl(target.objectKey),
+    };
+  }
+
+  async uploadGiftImageInit(body: {
+    giftId: string;
+    mimeType: string;
+    fileName?: string;
+  }) {
+    const giftId = body.giftId?.trim();
+    if (!giftId) {
+      throw new BadRequestException('giftId is required');
+    }
+    if (!body.mimeType?.trim()) {
+      throw new BadRequestException('mimeType is required');
+    }
+    this.storage.assertGiftImageMime(body.mimeType.trim());
+    const objectKey = this.storage.buildGiftImageKey(giftId, body.fileName);
+    const target = await this.storage.createUploadTargetForKey(
+      objectKey,
+      body.mimeType.trim(),
     );
     return {
       objectKey: target.objectKey,

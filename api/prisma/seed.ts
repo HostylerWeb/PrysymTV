@@ -20,10 +20,10 @@ const GIFT_CATALOG = [
 ];
 
 const COIN_PACKAGES = [
-  { id: 'starter', coins: 100, priceUsd: 0.99, label: 'Starter', sortOrder: 1 },
-  { id: 'popular', coins: 500, priceUsd: 3.99, label: 'Popular', sortOrder: 2 },
-  { id: 'premium', coins: 1000, priceUsd: 6.99, label: 'Premium', sortOrder: 3 },
-  { id: 'mega', coins: 5000, priceUsd: 29.99, label: 'Mega', sortOrder: 4 },
+  { id: 'starter', coins: 100, priceUsd: 2, label: 'Starter', sortOrder: 1 },
+  { id: 'popular', coins: 500, priceUsd: 10, label: 'Popular', sortOrder: 2 },
+  { id: 'premium', coins: 1000, priceUsd: 20, label: 'Premium', sortOrder: 3 },
+  { id: 'mega', coins: 5000, priceUsd: 100, label: 'Mega', sortOrder: 4 },
 ];
 
 /** Initial DB defaults only — admins change via API; app reads from `revenue_split_rules`. */
@@ -32,6 +32,15 @@ const REVENUE_SPLIT_RULES = [
     ruleKey: 'live_event',
     name: 'Live event / ticket / PPV',
     description: 'Stakeholder default: creator 80%, platform 15%, GAF 5%',
+    creatorBps: 8000,
+    platformBps: 1500,
+    gafBps: 500,
+    creatorDevFundBps: 0,
+  },
+  {
+    ruleKey: 'paid_live_stream',
+    name: 'Paid live stream (VIP entry)',
+    description: 'Revenue when viewers unlock a paid live stream with coins. Default: creator 80%, platform 15%, GAF 5%',
     creatorBps: 8000,
     platformBps: 1500,
     gafBps: 500,

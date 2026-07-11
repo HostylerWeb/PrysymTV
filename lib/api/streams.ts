@@ -14,6 +14,11 @@ export type StreamDetail = {
   status: string;
   startedAgo: string;
   description?: string | null;
+  accessType?: "free" | "paid";
+  entryPriceUsd?: number | null;
+  entryCoinCost?: number | null;
+  isPaid?: boolean;
+  hasAccess?: boolean;
   hlsPlaybackUrl?: string | null;
   webrtcPlaybackUrl?: string | null;
   creatorId: string;
@@ -43,11 +48,32 @@ export function fetchLiveStreams() {
   return apiRequest<{ items: StreamDetail[] }>("/streams/live", { auth: false });
 }
 
-export function initStream(title: string, category?: string) {
+export function initStream(
+  title: string,
+  category?: string,
+  options?: { accessType?: "free" | "paid"; entryPriceUsd?: number },
+) {
   return apiRequest<StreamInitResponse>("/streams/init", {
     method: "POST",
-    body: { title, ...(category ? { category } : {}) },
+    body: {
+      title,
+      ...(category ? { category } : {}),
+      ...(options?.accessType ? { accessType: options.accessType } : {}),
+      ...(options?.entryPriceUsd != null
+        ? { entryPriceUsd: options.entryPriceUsd }
+        : {}),
+    },
   });
+}
+
+export function unlockStream(streamId: string) {
+  return apiRequest<{
+    success: boolean;
+    alreadyOwned?: boolean;
+    coinsSpent: number;
+    coinsRemaining: number;
+    hasAccess: boolean;
+  }>(`/streams/${encodeURIComponent(streamId)}/unlock`, { method: "POST" });
 }
 
 export function fetchStreamIngestHealth() {

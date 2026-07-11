@@ -14,6 +14,8 @@ interface LiveStream {
   viewers: string
   category: string
   avatar?: string | null
+  isPaid?: boolean
+  entryCoinCost?: number | null
 }
 
 interface LiveRowProps {

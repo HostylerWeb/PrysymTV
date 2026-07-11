@@ -33,6 +33,9 @@ import {
   Users,
   Truck,
   Sparkles,
+  Coins,
+  Lock,
+  Globe,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -242,6 +245,9 @@ export function ProfileSettingsSheet({
   const [liveCategoryOptions, setLiveCategoryOptions] = useState<ContentCategory[]>([])
   const [copied, setCopied] = useState(false)
   const [goLiveMode, setGoLiveMode] = useState<"camera" | "obs">("camera")
+  const [goLiveAccessType, setGoLiveAccessType] = useState<"free" | "paid">("free")
+  const [goLivePriceUsd, setGoLivePriceUsd] = useState("")
+  const [minPaidStreamUsd, setMinPaidStreamUsd] = useState(5)
   const [ingestHealth, setIngestHealth] = useState<{
     rtmpReachable: boolean
     hint: string
@@ -334,6 +340,13 @@ export function ProfileSettingsSheet({
         }
       })
       .catch(() => setLiveCategoryOptions([]))
+    void fetchPublicConfig()
+      .then((cfg) => {
+        if (cfg.live?.minPaidStreamUsd != null) {
+          setMinPaidStreamUsd(cfg.live.minPaidStreamUsd)
+        }
+      })
+      .catch(() => {})
   }, [isOpen, screen])
 
   useEffect(() => {
@@ -675,16 +688,39 @@ export function ProfileSettingsSheet({
               error={goLiveError}
               ingestHealth={ingestHealth}
               mode={goLiveMode}
+              accessType={goLiveAccessType}
+              entryPriceUsd={goLivePriceUsd}
+              minPaidStreamUsd={minPaidStreamUsd}
               categoryOptions={liveCategoryOptions}
               onModeChange={setGoLiveMode}
+              onAccessTypeChange={setGoLiveAccessType}
+              onEntryPriceChange={setGoLivePriceUsd}
               onTitleChange={setStreamTitle}
               onCategoryChange={setStreamCategory}
               onGenerateKey={async () => {
                 if (!streamTitle.trim()) return
+                if (goLiveAccessType === "paid") {
+                  const price = parseFloat(goLivePriceUsd)
+                  if (!Number.isFinite(price) || price < minPaidStreamUsd) {
+                    setGoLiveError(
+                      `Enter a price of at least $${minPaidStreamUsd.toFixed(2)} for paid streams.`,
+                    )
+                    return
+                  }
+                }
                 setGoLiveLoading(true)
                 setGoLiveError(null)
                 try {
-                  const res = await initStream(streamTitle.trim(), streamCategory)
+                  const res = await initStream(
+                    streamTitle.trim(),
+                    streamCategory,
+                    goLiveAccessType === "paid"
+                      ? {
+                          accessType: "paid",
+                          entryPriceUsd: parseFloat(goLivePriceUsd),
+                        }
+                      : { accessType: "free" },
+                  )
                   setStreamKey(res.streamKey)
                   setStreamId(res.streamId)
                   setRtmpUrl(res.rtmpUrl || getRtmpIngestUrl())
@@ -1657,8 +1693,13 @@ function GoLivePanel({
   error,
   ingestHealth,
   mode,
+  accessType,
+  entryPriceUsd,
+  minPaidStreamUsd,
   categoryOptions,
   onModeChange,
+  onAccessTypeChange,
+  onEntryPriceChange,
   onTitleChange,
   onCategoryChange,
   onGenerateKey,
@@ -1677,8 +1718,13 @@ function GoLivePanel({
   error: string | null
   ingestHealth: { rtmpReachable: boolean; hint: string } | null
   mode: "camera" | "obs"
+  accessType: "free" | "paid"
+  entryPriceUsd: string
+  minPaidStreamUsd: number
   categoryOptions: ContentCategory[]
   onModeChange: (mode: "camera" | "obs") => void
+  onAccessTypeChange: (type: "free" | "paid") => void
+  onEntryPriceChange: (value: string) => void
   onTitleChange: (v: string) => void
   onCategoryChange: (v: string) => void
   onGenerateKey: () => void | Promise<void>
@@ -1686,6 +1732,35 @@ function GoLivePanel({
   onOpenLive: () => void
   onApplyStreamer: () => void
 }) {
+  const parsedEntryPrice = parseFloat(entryPriceUsd)
+  const entryPriceTooLow =
+    accessType === "paid" &&
+    entryPriceUsd.trim() !== "" &&
+    Number.isFinite(parsedEntryPrice) &&
+    parsedEntryPrice < minPaidStreamUsd
+
+  const primaryActionLabel = (() => {
+    if (loading) return "Opening…"
+    if (!title.trim()) return "Enter a stream title"
+    if (accessType === "paid") {
+      if (!entryPriceUsd.trim()) return "Enter VIP entry price"
+      if (!Number.isFinite(parsedEntryPrice)) return "Enter a valid VIP price"
+      if (parsedEntryPrice < minPaidStreamUsd) {
+        return `Minimum VIP price is $${minPaidStreamUsd.toFixed(2)}`
+      }
+    }
+    if (mode === "camera") return "Open Live Studio"
+    return streamKey ? "Open Live Studio" : "Generate Stream Key"
+  })()
+
+  const canSubmitGoLive =
+    Boolean(title.trim()) &&
+    !loading &&
+    (accessType !== "paid" ||
+      (entryPriceUsd.trim() !== "" &&
+        Number.isFinite(parsedEntryPrice) &&
+        parsedEntryPrice >= minPaidStreamUsd))
+
   if (!isStreamer) {
     return (
       <div className="py-8 text-center px-2">
@@ -1705,6 +1780,135 @@ function GoLivePanel({
         Go live from your browser with camera and mic — no extra software required. OBS is optional
         for creators who need scenes, overlays, or professional capture hardware.
       </p>
+
+      {/* Stream access — required, shown first */}
+      <section
+        aria-labelledby="go-live-stream-access-heading"
+        className="rounded-2xl border-2 border-primary/40 bg-gradient-to-br from-primary/8 via-card to-amber-500/10 p-4 md:p-5 space-y-4 shadow-md ring-1 ring-primary/10"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <span className="inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary-foreground">
+              Required
+            </span>
+            <h3
+              id="go-live-stream-access-heading"
+              className="text-lg md:text-xl font-bold text-foreground mt-2"
+            >
+              Who can watch your stream?
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1 max-w-lg">
+              Pick <strong className="text-foreground font-semibold">Free</strong> so anyone can
+              join, or <strong className="text-foreground font-semibold">Paid VIP</strong> so viewers
+              pay coins to unlock.
+            </p>
+          </div>
+          <span
+            className={cn(
+              "shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold",
+              accessType === "paid"
+                ? "bg-amber-500 text-black shadow-sm"
+                : "bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40",
+            )}
+          >
+            {accessType === "paid" ? (
+              <>
+                <Coins className="w-3.5 h-3.5" /> VIP · Paid
+              </>
+            ) : (
+              <>
+                <Globe className="w-3.5 h-3.5" /> Free · Open
+              </>
+            )}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => onAccessTypeChange("free")}
+            className={cn(
+              "relative rounded-xl border-2 p-4 md:p-5 text-left transition-all",
+              accessType === "free"
+                ? "border-emerald-500 bg-emerald-500/15 shadow-lg shadow-emerald-500/10 ring-2 ring-emerald-500/30 ring-offset-2 ring-offset-background"
+                : "border-border bg-background/80 hover:border-emerald-500/50 hover:bg-emerald-500/5",
+            )}
+          >
+            {accessType === "free" ? (
+              <span className="absolute top-3 right-3 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-white">
+                <Check className="w-3.5 h-3.5" />
+              </span>
+            ) : null}
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 mb-3">
+              <Globe className="w-6 h-6" />
+            </div>
+            <p className="text-base md:text-lg font-bold text-foreground">Free stream</p>
+            <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
+              Open to everyone. No coin unlock — viewers watch as soon as you go live.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onAccessTypeChange("paid")}
+            className={cn(
+              "relative rounded-xl border-2 p-4 md:p-5 text-left transition-all",
+              accessType === "paid"
+                ? "border-amber-500 bg-amber-500/15 shadow-lg shadow-amber-500/15 ring-2 ring-amber-500/40 ring-offset-2 ring-offset-background"
+                : "border-border bg-background/80 hover:border-amber-500/50 hover:bg-amber-500/5",
+            )}
+          >
+            {accessType === "paid" ? (
+              <span className="absolute top-3 right-3 flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-black">
+                <Check className="w-3.5 h-3.5" />
+              </span>
+            ) : null}
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/25 text-amber-700 dark:text-amber-300 mb-3">
+              <Lock className="w-6 h-6" />
+            </div>
+            <p className="text-base md:text-lg font-bold text-foreground">Paid VIP stream</p>
+            <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
+              Viewers must spend coins to watch or hear. You set the entry price in USD.
+            </p>
+          </button>
+        </div>
+
+        {accessType === "paid" ? (
+          <div className="rounded-xl border-2 border-amber-500/50 bg-amber-500/10 p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <Coins className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              <label className="text-sm font-semibold text-foreground">VIP entry price (USD)</label>
+            </div>
+            <input
+              type="number"
+              min={minPaidStreamUsd}
+              step={0.01}
+              value={entryPriceUsd}
+              onChange={(e) => onEntryPriceChange(e.target.value)}
+              placeholder={`Minimum $${minPaidStreamUsd.toFixed(2)}`}
+              className={cn(
+                "w-full h-12 px-4 rounded-xl bg-background border text-base font-medium",
+                entryPriceTooLow
+                  ? "border-destructive/60 ring-1 ring-destructive/30"
+                  : "border-amber-500/30",
+              )}
+            />
+            {entryPriceTooLow ? (
+              <p className="text-xs text-destructive font-medium">
+                Price must be at least ${minPaidStreamUsd.toFixed(2)} for paid VIP streams.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Minimum ${minPaidStreamUsd.toFixed(2)}. Viewers pay the equivalent in coins before they
+                can watch or listen.
+              </p>
+            )}
+          </div>
+        ) : null}
+      </section>
+
+      <div>
+        <p className="text-sm font-medium mb-2">Broadcast method</p>
       <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
@@ -1735,8 +1939,9 @@ function GoLivePanel({
           </p>
         </button>
       </div>
+      </div>
 
-      {ingestHealth && (
+      {mode === "obs" && ingestHealth && (
         <div
           className={`p-3 rounded-xl text-xs md:text-sm border ${
             ingestHealth.rtmpReachable
@@ -1795,19 +2000,36 @@ function GoLivePanel({
             {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             {copied ? "Copied" : "Copy server & key"}
           </Button>
-          <Button onClick={onOpenLive} className="flex-1 rounded-full">
-            Open Live Studio
+          <Button
+            onClick={() => {
+              if (!canSubmitGoLive) return
+              onOpenLive()
+            }}
+            disabled={loading}
+            className="flex-1 rounded-full"
+          >
+            {primaryActionLabel}
           </Button>
         </div>
       ) : mode === "camera" && streamKey ? (
-        <Button onClick={onOpenLive} className="w-full rounded-full gap-2">
+        <Button
+          onClick={() => {
+            if (!canSubmitGoLive) return
+            onOpenLive()
+          }}
+          disabled={loading}
+          className="w-full rounded-full gap-2"
+        >
           <Radio className="w-4 h-4" />
-          Open Live Studio
+          {primaryActionLabel}
         </Button>
       ) : (
         <Button
-          onClick={() => void onGenerateKey()}
-          disabled={!title.trim() || loading}
+          onClick={() => {
+            if (!canSubmitGoLive) return
+            void onGenerateKey()
+          }}
+          disabled={loading}
           className="w-full rounded-full gap-2"
         >
           {mode === "camera" ? (
@@ -1815,11 +2037,7 @@ function GoLivePanel({
           ) : (
             <Key className="w-4 h-4" />
           )}
-          {loading
-            ? "Opening…"
-            : mode === "camera"
-              ? "Open Live Studio"
-              : "Generate Stream Key"}
+          {primaryActionLabel}
         </Button>
       )}
       {mode === "obs" ? (

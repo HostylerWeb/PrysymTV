@@ -12,6 +12,7 @@ export type GiftCatalogItem = {
   name: string;
   coinCost: number;
   animationKey: string;
+  imageUrl?: string | null;
 };
 
 export type CheckoutResult = {

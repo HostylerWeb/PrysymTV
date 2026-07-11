@@ -8,12 +8,21 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { StreamStatus, StreamerStatus } from '@prisma/client';
+import {
+  Prisma,
+  RevenueSourceType,
+  StreamAccessType,
+  StreamStatus,
+  StreamerStatus,
+} from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PlaybackService } from '../playback/playback.service';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RevenueSplitService } from '../revenue/revenue-split.service';
 import { StorageService } from '../storage/storage.service';
 import { verticalFromCategorySlug } from '../common/utils/category-vertical.util';
+import { coinsToGrossUsd, usdToCoinCost } from '../common/utils/coin-usd.util';
 import { StreamsGateway } from './streams.gateway';
 
 type MediamtxAuthBody = {
@@ -27,6 +36,28 @@ type MediamtxAuthBody = {
   query?: string;
 };
 
+type StreamRow = {
+  id: string;
+  title: string;
+  category: string | null;
+  status: StreamStatus;
+  accessType: StreamAccessType;
+  entryPriceUsd: Prisma.Decimal | null;
+  entryCoinCost: number | null;
+  thumbnailUrl: string | null;
+  hlsPlaybackUrl: string | null;
+  temporaryStreamToken: string | null;
+  viewerCount: number;
+  startedAt: Date | null;
+  creator: {
+    id: string;
+    username: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+    bio?: string | null;
+  };
+};
+
 @Injectable()
 export class StreamsService {
   private readonly logger = new Logger(StreamsService.name);
@@ -38,9 +69,11 @@ export class StreamsService {
     private readonly streamsGateway: StreamsGateway,
     private readonly storage: StorageService,
     private readonly playback: PlaybackService,
+    private readonly platformSettings: PlatformSettingsService,
+    private readonly revenueSplit: RevenueSplitService,
   ) {}
 
-  async listLive() {
+  async listLive(viewerId?: string) {
     await this.syncStreamsFromIngest();
 
     const items = await this.prisma.stream.findMany({
@@ -57,9 +90,8 @@ export class StreamsService {
         },
       },
     });
-    return {
-      items: items.map((s) => this.mapStream(s)),
-    };
+    const mapped = await this.mapStreams(items, viewerId);
+    return { items: mapped };
   }
 
   async getOne(idOrSlug: string, viewerId?: string) {
@@ -130,6 +162,105 @@ export class StreamsService {
     }
 
     return this.mapStream(stream, viewerId);
+  }
+
+  async unlockStream(streamId: string, userId: string) {
+    const stream = await this.prisma.stream.findUnique({
+      where: { id: streamId },
+      select: {
+        id: true,
+        creatorId: true,
+        accessType: true,
+        entryCoinCost: true,
+        status: true,
+      },
+    });
+    if (!stream) throw new NotFoundException('Stream not found');
+    if (stream.accessType !== StreamAccessType.paid) {
+      throw new BadRequestException('This stream is free to watch');
+    }
+    if (stream.creatorId === userId) {
+      throw new BadRequestException('You already have access as the stream owner');
+    }
+    if (
+      stream.status !== StreamStatus.live &&
+      stream.status !== StreamStatus.scheduled
+    ) {
+      throw new BadRequestException('This stream is no longer available');
+    }
+
+    const coinCost = stream.entryCoinCost;
+    if (coinCost == null || coinCost <= 0) {
+      throw new BadRequestException('Stream entry price is not configured');
+    }
+
+    const existing = await this.prisma.streamAccess.findUnique({
+      where: { userId_streamId: { userId, streamId } },
+    });
+    if (existing) {
+      const sender = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { coinsBalance: true },
+      });
+      return {
+        success: true,
+        alreadyOwned: true,
+        coinsSpent: 0,
+        coinsRemaining: sender?.coinsBalance ?? 0,
+        hasAccess: true,
+      };
+    }
+
+    const sender = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { coinsBalance: true },
+    });
+    if (!sender) throw new NotFoundException('User not found');
+    if (sender.coinsBalance < coinCost) {
+      throw new BadRequestException('Insufficient coins');
+    }
+
+    const grossUsd = coinsToGrossUsd(
+      coinCost,
+      await this.platformSettings.getCoinUsd(),
+    );
+
+    const access = await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { coinsBalance: { decrement: coinCost } },
+      });
+      return tx.streamAccess.create({
+        data: { userId, streamId, coinCost },
+      });
+    });
+
+    const { batch } = await this.revenueSplit.distributeAndPersist({
+      ruleKey: 'paid_live_stream',
+      sourceType: RevenueSourceType.ticket,
+      sourceId: access.id,
+      grossAmountUsd: grossUsd,
+      creatorId: stream.creatorId,
+      metadata: { streamId, coins: coinCost },
+    });
+
+    await this.prisma.streamAccess.update({
+      where: { id: access.id },
+      data: { revenueBatchId: batch.id },
+    });
+
+    const updatedSender = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { coinsBalance: true },
+    });
+
+    return {
+      success: true,
+      alreadyOwned: false,
+      coinsSpent: coinCost,
+      coinsRemaining: updatedSender?.coinsBalance ?? 0,
+      hasAccess: true,
+    };
   }
 
   /** When webhooks fail, promote scheduled streams that already have an HLS manifest. */
@@ -236,7 +367,13 @@ export class StreamsService {
     };
   }
 
-  async initStream(creatorId: string, title: string, category?: string) {
+  async initStream(
+    creatorId: string,
+    title: string,
+    category?: string,
+    accessType: 'free' | 'paid' = 'free',
+    entryPriceUsd?: number,
+  ) {
     const creator = await this.prisma.user.findUnique({
       where: { id: creatorId },
       select: { streamerStatus: true, isBanned: true },
@@ -251,6 +388,27 @@ export class StreamsService {
       );
     }
 
+    const resolvedAccess =
+      accessType === 'paid' ? StreamAccessType.paid : StreamAccessType.free;
+
+    let entryCoinCost: number | null = null;
+    let priceUsd: Prisma.Decimal | null = null;
+
+    if (resolvedAccess === StreamAccessType.paid) {
+      if (entryPriceUsd == null || !Number.isFinite(entryPriceUsd)) {
+        throw new BadRequestException('Paid streams require an entry price in USD');
+      }
+      const economy = await this.platformSettings.getEconomy();
+      const minUsd = economy.minPaidStreamUsd;
+      if (entryPriceUsd < minUsd) {
+        throw new BadRequestException(
+          `Minimum paid stream price is $${minUsd.toFixed(2)}`,
+        );
+      }
+      entryCoinCost = usdToCoinCost(entryPriceUsd, economy.coinUsd);
+      priceUsd = new Prisma.Decimal(entryPriceUsd.toFixed(2));
+    }
+
     const stream = await this.prisma.stream.create({
       data: {
         creatorId,
@@ -258,6 +416,9 @@ export class StreamsService {
         category: category?.trim() || 'Live',
         vertical: verticalFromCategorySlug(category?.trim()) ?? undefined,
         status: StreamStatus.scheduled,
+        accessType: resolvedAccess,
+        entryPriceUsd: priceUsd,
+        entryCoinCost,
         temporaryStreamToken: `sk_${randomUUID().replace(/-/g, '')}`,
       },
     });
@@ -268,6 +429,9 @@ export class StreamsService {
       streamKey: stream.temporaryStreamToken,
       rtmpUrl: rtmpBase.replace(/\/$/, ''),
       status: stream.status,
+      accessType: stream.accessType,
+      entryPriceUsd: priceUsd != null ? Number(priceUsd) : null,
+      entryCoinCost,
     };
   }
 
@@ -450,26 +614,38 @@ export class StreamsService {
     return `${webrtcBase}/live/${streamKey.trim()}/whep`;
   }
 
-  private mapStream(
-    s: {
-      id: string;
-      title: string;
-      category: string | null;
-      status: StreamStatus;
-      thumbnailUrl: string | null;
-      hlsPlaybackUrl: string | null;
-      temporaryStreamToken: string | null;
-      viewerCount: number;
-      startedAt: Date | null;
-      creator: {
-        id: string;
-        username: string;
-        displayName: string | null;
-        avatarUrl: string | null;
-        bio?: string | null;
-      };
-    },
+  async mapStreams(streams: StreamRow[], viewerId?: string) {
+    const paidIds = streams
+      .filter((s) => s.accessType === StreamAccessType.paid)
+      .map((s) => s.id);
+    const entitled = await this.getEntitledStreamIds(viewerId, paidIds);
+    return streams.map((s) => this.mapStreamSync(s, viewerId, entitled));
+  }
+
+  async mapStream(stream: StreamRow, viewerId?: string) {
+    const entitled =
+      stream.accessType === StreamAccessType.paid && viewerId
+        ? await this.getEntitledStreamIds(viewerId, [stream.id])
+        : new Set<string>();
+    return this.mapStreamSync(stream, viewerId, entitled);
+  }
+
+  private async getEntitledStreamIds(
+    viewerId: string | undefined,
+    streamIds: string[],
+  ): Promise<Set<string>> {
+    if (!viewerId || !streamIds.length) return new Set();
+    const rows = await this.prisma.streamAccess.findMany({
+      where: { userId: viewerId, streamId: { in: streamIds } },
+      select: { streamId: true },
+    });
+    return new Set(rows.map((r) => r.streamId));
+  }
+
+  private mapStreamSync(
+    s: StreamRow,
     viewerId?: string,
+    entitledStreamIds: Set<string> = new Set(),
   ) {
     const startedAgo = s.startedAt
       ? `${Math.max(1, Math.floor((Date.now() - s.startedAt.getTime()) / 60000))}m ago`
@@ -484,10 +660,21 @@ export class StreamsService {
       s.temporaryStreamToken &&
       (s.status === StreamStatus.live || s.status === StreamStatus.scheduled);
 
+    const isPaid = s.accessType === StreamAccessType.paid;
+    const hasAccess =
+      !isPaid ||
+      isOwner ||
+      (viewerId != null && entitledStreamIds.has(s.id));
+
     const webrtcBase = (
       this.config.get<string>('MEDIAMTX_WEBRTC_PUBLIC_URL') ??
       'http://localhost:8889'
     ).replace(/\/$/, '');
+
+    const hlsPlaybackUrl = hasAccess ? s.hlsPlaybackUrl : null;
+    const webrtcUrl = hasAccess
+      ? this.webrtcPlaybackUrl(s.status, s.temporaryStreamToken)
+      : null;
 
     return {
       id: s.id,
@@ -503,11 +690,14 @@ export class StreamsService {
       status: s.status,
       startedAgo,
       description: s.creator.bio,
-      hlsPlaybackUrl: s.hlsPlaybackUrl,
-      webrtcPlaybackUrl: this.webrtcPlaybackUrl(
-        s.status,
-        s.temporaryStreamToken,
-      ),
+      accessType: s.accessType,
+      entryPriceUsd:
+        s.entryPriceUsd != null ? Number(s.entryPriceUsd) : null,
+      entryCoinCost: s.entryCoinCost,
+      isPaid,
+      hasAccess,
+      hlsPlaybackUrl,
+      webrtcPlaybackUrl: webrtcUrl,
       creatorId: s.creator.id,
       studio: isOwner
         ? {

@@ -6,7 +6,8 @@ import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { fetchGiftCatalog, sendGift } from "@/lib/api/billing"
-import { giftIconFor } from "@/lib/gift-icons"
+import { giftCatalogIcon } from "@/lib/gift-icons"
+import { GiftIcon } from "@/components/gift-icon"
 import { useAuth } from "@/contexts/auth-context"
 
 type GiftSheetProps = {
@@ -46,7 +47,7 @@ export function GiftSheet({
             id: g.id,
             name: g.name,
             cost: g.coinCost,
-            icon: giftIconFor(g.animationKey),
+            icon: giftCatalogIcon(g),
           })),
         ),
       )
@@ -111,7 +112,7 @@ export function GiftSheet({
                 (busy || userCoins < gift.cost) && "opacity-50",
               )}
             >
-              <span className="text-3xl">{gift.icon}</span>
+              <GiftIcon value={gift.icon} size={36} />
               <span className="text-sm font-medium">{gift.name}</span>
               <span className="text-xs">🪙 {gift.cost}</span>
             </button>

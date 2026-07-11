@@ -155,6 +155,7 @@ export function HlsPlayer({
   const [duration, setDuration] = useState(0);
   const [trackWidth, setTrackWidth] = useState(0);
   const wasPlayingRef = useRef(false);
+  const fullscreenOn = externalFullscreen ?? isFullscreen;
 
   const player = useVideoPlayer(
     { uri: activeSource, contentType: activeSource.includes('.m3u8') ? 'hls' : 'auto' },
@@ -189,16 +190,14 @@ export function HlsPlayer({
   }, []);
 
   useEffect(() => {
-    if (fullscreenPresentation !== 'inline' || externalFullscreen === undefined) return;
-    setIsFullscreen(externalFullscreen);
-  }, [externalFullscreen, fullscreenPresentation]);
-
-  useEffect(() => {
-    if (paused && isFullscreen && fullscreenPresentation === 'modal') {
-      setIsFullscreen(false);
-      onFullscreenChange?.(false);
+    if (paused && fullscreenOn && fullscreenPresentation === 'modal') {
+      if (externalFullscreen === undefined) {
+        setIsFullscreen(false);
+      } else {
+        onFullscreenChange?.(false);
+      }
     }
-  }, [paused, isFullscreen, fullscreenPresentation, onFullscreenChange]);
+  }, [paused, fullscreenOn, fullscreenPresentation, externalFullscreen, onFullscreenChange]);
 
   useEffect(() => {
     return () => {
@@ -331,19 +330,21 @@ export function HlsPlayer({
   };
 
   const toggleFullscreen = () => {
-    setIsFullscreen((value) => {
-      const next = !value;
-      onFullscreenChange?.(next);
-      return next;
-    });
     setChromeVisible(false);
+    const next = !fullscreenOn;
+    if (externalFullscreen !== undefined) {
+      onFullscreenChange?.(next);
+      return;
+    }
+    setIsFullscreen(next);
+    onFullscreenChange?.(next);
   };
 
   const useModalFullscreen = fullscreenPresentation === 'modal';
-  const showModal = useModalFullscreen && isFullscreen;
+  const showModal = useModalFullscreen && fullscreenOn;
 
   useEffect(() => {
-    if (!isFullscreen) return;
+    if (!fullscreenOn) return;
     let cancelled = false;
     void ScreenOrientation.unlockAsync().catch(() => {});
     return () => {
@@ -353,7 +354,7 @@ export function HlsPlayer({
         void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
       }
     };
-  }, [isFullscreen, useModalFullscreen]);
+  }, [fullscreenOn, useModalFullscreen]);
 
   const cornerBottom = controlsBottomInset ?? insets.bottom + 12;
   const cornerTop = controlsTopInset ?? insets.top + 12;
@@ -365,7 +366,7 @@ export function HlsPlayer({
     !nativeControls &&
     (enableQualityMenu || enableFullscreen) &&
     !seekOnTap &&
-    (!isFullscreen || fullscreenPresentation === 'inline');
+    (!fullscreenOn || (fullscreenPresentation === 'inline' && !playing));
 
   const renderPlayerSurface = (fullscreen: boolean) => (
     <View
@@ -457,7 +458,7 @@ export function HlsPlayer({
           <PlayerOverlayControls
             enableQualityMenu={enableQualityMenu}
             enableFullscreen={enableFullscreen}
-            isFullscreen={isFullscreen}
+            isFullscreen={fullscreenOn}
             onToggleFullscreen={toggleFullscreen}
             variants={variants}
             selectedVariantUri={selectedVariantUri}
@@ -479,7 +480,7 @@ export function HlsPlayer({
 
   return (
     <>
-      {!showModal ? renderPlayerSurface(isFullscreen && !useModalFullscreen) : null}
+      {!showModal ? renderPlayerSurface(fullscreenOn && !useModalFullscreen) : null}
       <Modal
         visible={showModal}
         animationType="fade"

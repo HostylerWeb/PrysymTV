@@ -19,6 +19,12 @@ export function LiveStreamCard({ stream, featured }: { stream: LiveStream; featu
         <View style={styles.liveDot} />
         <Text style={styles.liveText}>LIVE</Text>
       </View>
+      {stream.isPaid ? (
+        <View style={styles.vipBadge}>
+          <Ionicons name="logo-bitcoin" size={10} color="#000" />
+          <Text style={styles.vipText}>VIP · {stream.entryCoinCost?.toLocaleString() ?? '—'}</Text>
+        </View>
+      ) : null}
       <View style={styles.body}>
         <Text style={styles.title} numberOfLines={2}>{stream.title}</Text>
         <Text style={styles.meta}>{stream.streamer} · {formatViewCount(stream.viewerCount)} watching</Text>
@@ -62,6 +68,19 @@ const styles = StyleSheet.create({
   },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.live },
   liveText: { color: colors.onVideo, fontSize: 10, fontWeight: '800' },
+  vipBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  vipText: { color: '#000', fontSize: 10, fontWeight: '800' },
   body: { padding: 12 },
   title: { color: colors.foreground, fontSize: 15, fontWeight: '700' },
   meta: { color: colors.mutedForeground, fontSize: 12, marginTop: 4 },

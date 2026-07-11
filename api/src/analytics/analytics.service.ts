@@ -18,8 +18,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RevenueSplitService } from '../revenue/revenue-split.service';
 import { TrackEventsDto } from './dto/track-events.dto';
 import { TrackContentAdDto } from './dto/track-content-ad.dto';
-
-const COIN_USD = new Prisma.Decimal('0.01');
+import { coinsToGrossUsd } from '../common/utils/coin-usd.util';
 
 @Injectable()
 export class AnalyticsService {
@@ -247,6 +246,7 @@ export class AnalyticsService {
     const since24h = this.periodStart(1);
     const since7d = this.periodStart(7);
     const since30d = this.periodStart(30);
+    const coinUsd = await this.platformSettings.getCoinUsd();
 
     const user = await this.prisma.user.findUnique({
       where: { id: creatorId },
@@ -498,8 +498,8 @@ export class AnalyticsService {
     const coinsReceived30d = giftStats30d._sum.coinValue ?? 0;
     const coinsReceivedLifetime = giftStatsLifetime._sum.coinValue ?? 0;
     const creatorSharePercent = viewerSupportRule.creatorBps / 100;
-    const grossGifts30dUsd = COIN_USD.mul(coinsReceived30d);
-    const grossGiftsLifetimeUsd = COIN_USD.mul(coinsReceivedLifetime);
+    const grossGifts30dUsd = coinsToGrossUsd(coinsReceived30d, coinUsd);
+    const grossGiftsLifetimeUsd = coinsToGrossUsd(coinsReceivedLifetime, coinUsd);
 
     return {
       partnerTier: user?.partnerTier ?? 'standard',
@@ -558,14 +558,16 @@ export class AnalyticsService {
         recent: recentGifts.map((g) => {
           const creatorUsd =
             g.revenueBatch?.entries[0]?.amountUsd ??
-            COIN_USD.mul(g.coinValue).mul(viewerSupportRule.creatorBps).div(10000);
+            coinsToGrossUsd(g.coinValue, coinUsd)
+              .mul(viewerSupportRule.creatorBps)
+              .div(10000);
           return {
             id: g.id,
             giftName: g.catalog.name,
             fromUsername: g.sender.username,
             fromDisplayName: g.sender.displayName,
             coins: g.coinValue,
-            grossUsd: COIN_USD.mul(g.coinValue).toFixed(2),
+            grossUsd: coinsToGrossUsd(g.coinValue, coinUsd).toFixed(2),
             creatorEarningsUsd: creatorUsd.toFixed(2),
             createdAt: g.createdAt.toISOString(),
           };

@@ -13,6 +13,8 @@ import type {
 } from './platform-settings.types';
 
 export const DEFAULT_ECONOMY_SETTINGS: EconomySettings = {
+  coinUsd: 0.02,
+  minPaidStreamUsd: 5,
   minPayoutUsd: 50,
   membershipPriceUsd: 4.99,
   insiderPriceUsd: 4.99,

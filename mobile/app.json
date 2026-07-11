@@ -59,7 +59,12 @@
       ],
       "expo-web-browser",
       "expo-secure-store",
-      "expo-video",
+      [
+        "expo-video",
+        {
+          "supportsPictureInPicture": false
+        }
+      ],
       "@react-native-community/datetimepicker"
     ]
   }

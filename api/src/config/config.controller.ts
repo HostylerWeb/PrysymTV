@@ -79,6 +79,10 @@ export class ConfigController {
         impressionRevenueCpmUsd: ads.impressionRevenueCpmUsd,
         placements: ads.placements,
       },
+      live: {
+        minPaidStreamUsd: economy.minPaidStreamUsd,
+        coinUsd: economy.coinUsd,
+      },
       auth: buildPublicOAuthConfig(this.config),
       push: {
         enabled: this.push.isEnabled(),

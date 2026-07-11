@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import { giftIconFor } from "@/lib/gift-icons"
+import { GiftIcon } from "@/components/gift-icon"
 
 export type StreamChatLine = {
   id: string
@@ -16,12 +17,10 @@ export type StreamChatLine = {
 
 export function StreamChatLine({ msg }: { msg: StreamChatLine }) {
   if (msg.type === "gift") {
-    const icon = msg.giftIcon ?? giftIconFor(msg.giftName)
+    const icon = giftIconFor(msg.giftIcon ?? msg.giftName)
     return (
       <div className="flex items-center gap-2.5 rounded-xl border border-pink-500/35 bg-gradient-to-r from-pink-500/15 via-amber-500/10 to-purple-500/15 px-3 py-2.5 shadow-sm">
-        <span className="text-2xl shrink-0 leading-none" aria-hidden>
-          {icon}
-        </span>
+        <GiftIcon value={icon} size={28} />
         <div className="min-w-0 text-sm leading-snug">
           <span className={cn("font-bold", msg.color)}>{msg.user}</span>
           <span className="text-foreground/90"> sent </span>

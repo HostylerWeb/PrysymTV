@@ -105,14 +105,15 @@
 | `PUT` | `/billing/creators/payout-profile` | ✅ `{ method, details }` — required before requesting payouts |
 | `POST` | `/billing/creators/payouts/request` | ✅ `{ amountUsd }` — uses saved profile; min from `platform_settings.economy.minPayoutUsd` (default $50) |
 | `POST` | `/billing/gifts/send` | ✅ (coins + `viewer_support` revenue split) |
-| `POST` | `/streams/init` | ✅ Requires `streamer_status: approved` |
-| `GET` | `/streams/ingest/health` | ✅ Bearer — RTMP/HLS reachability for Go Live |
+| `POST` | `/streams/init` | ✅ Requires `streamer_status: approved`; `{ title, category?, accessType?: free\|paid, entryPriceUsd? }` |
+| `POST` | `/streams/:id/unlock` | ✅ Bearer — deduct coins for paid VIP stream; creates entitlement |
+| `GET` | `/streams/ingest/health` | ✅ No auth — RTMP/HLS reachability for Go Live (OBS mode) |
 | `POST` | `/streams/mediamtx/auth` | ✅ MediaMTX HTTP auth (no Bearer) |
 | `POST` | `/streams/webhooks/ready` | ✅ |
 | `POST` | `/streams/webhooks/done` | ✅ |
 | `GET` | `/streams/live` | ✅ |
 | `POST` | `/streams/:id/end` | ✅ Bearer — stream owner ends broadcast; kicks RTMP + notifies viewers |
-| `GET` | `/streams/:id` | ✅ (UUID or creator `username`); polls HLS fallback when webhook missed |
+| `GET` | `/streams/:id` | ✅ Optional Bearer — UUID or creator `username`; paid streams redact playback unless entitled; owner always gets `studio` + playback |
 | WS | `/streams` (Socket.IO) | ✅ `join`, `message`, `history` — Bearer in handshake |
 | `GET` | `/podcasts/shows` | ✅ |
 | `GET` | `/podcasts/shows/featured` | ✅ |
@@ -234,10 +235,11 @@
 | `DELETE` | `/admin/vertical-episodes/:id` | ✅ |
 | `DELETE` | `/admin/podcast-episodes/:id` | ✅ |
 | `GET` | `/admin/config/economy` | ✅ Pricing + coin/gift tables |
-| `PUT` | `/admin/config/economy` | ✅ `minPayoutUsd`, premium/insider prices |
+| `PUT` | `/admin/config/economy` | ✅ `coinUsd`, `minPaidStreamUsd`, `minPayoutUsd`, premium/insider prices |
 | `PUT` | `/admin/coin-packages` | ✅ Upsert package body |
 | `DELETE` | `/admin/coin-packages/:id` | ✅ |
-| `PUT` | `/admin/gift-catalog` | ✅ Upsert gift body |
+| `PUT` | `/admin/gift-catalog` | ✅ Upsert gift body (`imageUrl` optional) |
+| `POST` | `/admin/gift-catalog/image/upload` | ✅ `{ giftId, mimeType, fileName? }` → presigned upload; optimal 128–256px PNG/WebP |
 | `DELETE` | `/admin/gift-catalog/:id` | ✅ Deactivate if in use |
 | `GET` | `/admin/config/ads` | ✅ Network knobs + placements |
 | `PUT` | `/admin/config/ads` | ✅ |
@@ -804,7 +806,7 @@ Bearer required.
 | Route | Auth | Status |
 |-------|------|--------|
 | `GET /billing/products` | — | ✅ Coin packages from DB |
-| `GET /billing/gifts/catalog` | — | ✅ |
+| `GET /billing/gifts/catalog` | — | ✅ Active gifts; items include optional `imageUrl` (custom icon) |
 | `POST /billing/gifts/send` | Bearer | ✅ Deducts coins, **`viewer_support`** split → creator balance; in-app `gift` notification to receiver |
 | `POST /billing/stripe/create-checkout` | Bearer | ✅ `{ packageId?, productType: "coins" \| "premium" \| "insider" }` |
 | `POST /billing/stripe/webhook` | Stripe signature | ✅ `checkout.session.completed` + `async_payment_succeeded` |
@@ -818,6 +820,18 @@ Bearer required.
 | `POST /billing/creators/payouts/request` | Bearer | ✅ `{ amountUsd }` — snapshots saved profile into payout row; min $50 |
 
 **Monetization V1 scope:** Platform Premium = site-wide ad-free. Channel membership = paid support for one creator (separate from free Follow). Payout fulfillment is manual until admin UI. See [`stripe-production.md`](./stripe-production.md).
+
+**`GET /billing/gifts/catalog` item:**
+```json
+{
+  "id": "heart",
+  "name": "Heart",
+  "coinCost": 1,
+  "animationKey": "heart",
+  "imageUrl": "https://api.example.com/assets/uploads/gifts/heart.png"
+}
+```
+`imageUrl` takes priority over `animationKey` emoji in clients. `animationKey` is optional when a custom image is set.
 
 **`POST /billing/gifts/send` body:**
 ```json
@@ -835,14 +849,51 @@ Bearer required.
 
 | Route | Status |
 |-------|--------|
-| `POST /streams/init` | ✅ `{ title, category? }` — requires `streamer_status: approved`; RTMP key + MediaMTX webhooks |
-| `GET /streams/ingest/health` | ✅ Bearer — `{ rtmp, hls, mediamtx }` for Go Live diagnostics |
+| `POST /streams/init` | ✅ `{ title, category?, accessType?: "free" \| "paid", entryPriceUsd? }` — requires `streamer_status: approved`; enforces `minPaidStreamUsd` from economy settings; returns RTMP key + MediaMTX webhooks |
+| `POST /streams/:id/unlock` | ✅ Bearer — spend coins to watch a paid VIP stream; idempotent if already entitled |
+| `GET /streams/ingest/health` | ✅ No auth — `{ rtmpUrl, hlsPublicUrl, rtmpReachable, mediamtxRequired, hint }` for Go Live diagnostics (show in OBS mode only) |
 | `POST /streams/mediamtx/auth` | ✅ MediaMTX HTTP auth (no Bearer) |
 | `POST /streams/webhooks/ready` | ✅ `?path=live/{streamKey}` — marks stream live; notifies `creator_live_alerts` subscribers |
 | `POST /streams/webhooks/done` | ✅ Ends stream |
-| `GET /streams/live` | ✅ All `live` streams |
+| `GET /streams/live` | ✅ All `live` streams; optional Bearer for per-viewer `hasAccess` on paid items |
 | `POST /streams/:id/end` | ✅ Bearer — owner ends stream; disconnects publisher via MediaMTX API; Socket.IO `streamEnded` to room |
-| `GET /streams/:id` | ✅ By stream UUID **or** creator `username`; if HLS playlist exists but webhook missed, syncs to `live` |
+| `GET /streams/:id` | ✅ By stream UUID **or** creator `username`; optional Bearer for entitlements; syncs HLS if webhook missed |
+
+**`POST /streams/init` body (paid VIP):**
+```json
+{
+  "title": "Friday Night Stream",
+  "category": "Gaming",
+  "accessType": "paid",
+  "entryPriceUsd": 5
+}
+```
+Server computes `entryCoinCost` from `coinUsd` in economy settings (default $0.02/coin → $5 = 250 coins).
+
+**`GET /streams/:id` paid stream fields (viewer):**
+```json
+{
+  "accessType": "paid",
+  "entryPriceUsd": 5,
+  "entryCoinCost": 250,
+  "isPaid": true,
+  "hasAccess": false,
+  "hlsPlaybackUrl": null,
+  "webrtcPlaybackUrl": null
+}
+```
+When `hasAccess` is true (owner, unlocked, or free stream), playback URLs are included. Stream owner also receives `studio: { streamKey, rtmpUrl, whipPublishUrl }`.
+
+**`POST /streams/:id/unlock` response:**
+```json
+{
+  "success": true,
+  "alreadyOwned": false,
+  "coinsSpent": 250,
+  "coinsRemaining": 750,
+  "hasAccess": true
+}
+```
 
 ### Live chat (WebSocket) ✅
 
@@ -876,6 +927,8 @@ Bearer required.
 ```
 
 Gifts on videos/shorts/profile do **not** emit WebSocket events — only in-app `gift` notification to the receiver.
+
+`giftIcon` is the catalog `imageUrl` when set, otherwise the `animationKey` (emoji id).
 
 ---
 
@@ -1304,7 +1357,7 @@ Long-form video browse (`type = video`). Returns live streams when `mode` includ
 
 | Route | Notes |
 |-------|--------|
-| `GET /config/public` | `{ platformCreatorId, membership, insider, channelMembership, ads: { … }, auth: { google, apple, facebook }, push: { enabled, publicKey } }` — ads UI, OAuth buttons, membership pricing, web push |
+| `GET /config/public` | `{ platformCreatorId, membership, insider, channelMembership, live: { minPaidStreamUsd, coinUsd }, ads: { … }, auth: { google, apple, facebook }, push: { enabled, publicKey } }` — ads UI, OAuth buttons, membership pricing, paid-live minimums, web push |
 | `GET /config/viewer-geo` | `{ geo: { city, region, regionName, countryCode } \| null }` — server IP geolocation; used instead of third-party browser geo on localhost |
 
 Values for `ads` are stored in `platform_settings` and edited at `/admin/config/ads`. Membership and insider prices come from `/admin/config/economy`.
@@ -1373,8 +1426,8 @@ Used by the web app for browser notifications. React Native Expo push uses a sep
 
 | Route | Notes |
 |-------|--------|
-| `GET/PUT /admin/config/economy` | Min payout, premium/insider prices; GET includes coin packages + gifts |
-| `PUT/DELETE /admin/coin-packages`, `/gift-catalog` | Catalog CRUD |
+| `GET/PUT /admin/config/economy` | `coinUsd`, `minPaidStreamUsd`, `minPayoutUsd`, membership prices; GET includes coin packages (auto-priced `coins × coinUsd`) + gifts (`imageUrl` optional) |
+| `PUT/DELETE /admin/coin-packages`, `/gift-catalog` | Catalog CRUD; `POST /admin/gift-catalog/image/upload` for custom gift icons |
 | `GET/PUT /admin/config/ads` | Skip timers, swipe frequency, placement toggles, GAF rule key |
 | `GET/PUT /admin/config/analytics` | Dashboard KPI visibility, alert thresholds |
 | `GET/PUT /admin/config/scorecard` | Mission module %, display prefs |
@@ -1625,4 +1678,4 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 
 ---
 
-*Last updated: 2026-07-10 — OAuth: `POST /auth/oauth/google`, `/apple`, `/facebook` documented as implemented; refresh token in JSON + `{ refreshToken }` on `/auth/refresh`; `productType: "insider"` on Stripe checkout; `GET /config/public` auth/insider/push fields; web push subscription routes; User `insiderActive` fields; removed stale "OAuth planned" and CSV-export-planned notes.*
+*Last updated: 2026-07-12 — Paid VIP live streams (`accessType`, `entryPriceUsd`, `POST /streams/:id/unlock`); economy `coinUsd` + `minPaidStreamUsd`; gift catalog `imageUrl` + admin image upload; ingest health no auth; `GET /config/public` → `live`; gender/birthDate on users (see User profile section).*

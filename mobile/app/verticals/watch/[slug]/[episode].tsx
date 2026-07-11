@@ -356,9 +356,9 @@ export default function VerticalWatchScreen() {
                   setSeriesSaved(prev);
                 }
               })}
-              accessibilityLabel="Save series"
+              accessibilityLabel="Save series to library"
             >
-              <Ionicons name={seriesSaved ? 'albums' : 'albums-outline'} size={22} color={colors.onVideo} />
+              <Ionicons name={seriesSaved ? 'library' : 'library-outline'} size={22} color={colors.onVideo} />
             </Pressable>
             <Pressable
               style={styles.headerBtn}
@@ -368,16 +368,6 @@ export default function VerticalWatchScreen() {
               <Ionicons name="flag-outline" size={22} color={colors.onVideo} />
             </Pressable>
           </View>
-        ) : null}
-
-        {immersive ? (
-          <Pressable
-            style={[styles.immersiveExit, { top: insets.top + 8 }]}
-            onPress={() => onFullscreenChange(false)}
-            hitSlop={12}
-          >
-            <Ionicons name="contract-outline" size={24} color={colors.onVideo} />
-          </Pressable>
         ) : null}
 
         {showChrome && activeGateDismissed && data ? (
@@ -445,14 +435,6 @@ const createStyles = (colors: ThemeColors) =>
     screen: { flex: 1, backgroundColor: colors.background },
     center: { alignItems: 'center', justifyContent: 'center' },
     back: { position: 'absolute', left: 12, zIndex: 20, padding: 8 },
-    immersiveExit: {
-      position: 'absolute',
-      right: 12,
-      zIndex: 20,
-      padding: 8,
-      borderRadius: radius.full,
-      backgroundColor: withAlpha(colors.videoBackground, 0.55),
-    },
     topActions: {
       position: 'absolute',
       right: 12,

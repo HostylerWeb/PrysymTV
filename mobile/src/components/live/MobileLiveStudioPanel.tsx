@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LiveCameraPublisher } from '@/components/live/LiveCameraPublisher';
+import { HlsPlayer } from '@/components/video/HlsPlayer';
 import { Button } from '@/components/ui/Button';
 import { endStream, fetchStream } from '@/lib/api/streams';
 import type { StreamDetail } from '@/lib/api/streams';
@@ -25,9 +26,10 @@ type Props = {
   stream: StreamDetail & { studio?: { whipPublishUrl: string; rtmpUrl: string; streamKey: string } };
   mode: 'camera' | 'obs';
   viewerCount: number;
+  playbackUrl?: string | null;
 };
 
-export function MobileLiveStudioPanel({ stream, mode, viewerCount }: Props) {
+export function MobileLiveStudioPanel({ stream, mode, viewerCount, playbackUrl }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -47,7 +49,12 @@ export function MobileLiveStudioPanel({ stream, mode, viewerCount }: Props) {
   const { messages, connected, sendMessage } = useStreamChat(stream.id);
 
   const useCamera = mode === 'camera' && !!stream.studio?.whipPublishUrl;
-  const onAir = streamStatus === 'live' || (useCamera && isPublishing);
+  const showObsPlayer = mode === 'obs' && Boolean(playbackUrl) && streamStatus === 'live';
+  const onAir = useCamera
+    ? isPublishing
+    : mode === 'obs'
+      ? streamStatus === 'live' && Boolean(playbackUrl)
+      : streamStatus === 'live';
 
   useEffect(() => {
     if (!useCamera) return;
@@ -164,17 +171,32 @@ export function MobileLiveStudioPanel({ stream, mode, viewerCount }: Props) {
               />
             </View>
           )
+        ) : showObsPlayer && playbackUrl ? (
+          <HlsPlayer
+            source={playbackUrl}
+            autoPlay
+            posterUrl={stream.thumbnail}
+            contentFit="contain"
+            aspectRatio={16 / 9}
+          />
         ) : (
           <View style={[styles.obsPlaceholder, { backgroundColor: colors.videoBackground }]}>
             <Ionicons name="desktop-outline" size={40} color={colors.mutedForeground} />
             <Text style={[styles.obsText, { color: colors.mutedForeground }]}>
-              Stream from OBS using your RTMP credentials from Go Live setup.
+              {streamStatus === 'live'
+                ? 'Waiting for playback signal…'
+                : 'Stream from OBS using your RTMP credentials below. Start streaming in OBS, then your picture appears here.'}
             </Text>
             {stream.studio ? (
               <>
                 <Text style={[styles.code, { color: colors.foreground }]}>{stream.studio.rtmpUrl}</Text>
                 <Text style={[styles.code, { color: colors.foreground }]}>{stream.studio.streamKey}</Text>
               </>
+            ) : null}
+            {streamStatus === 'scheduled' ? (
+              <Text style={[styles.obsWaiting, { color: colors.mutedForeground }]}>
+                Waiting for OBS to connect…
+              </Text>
             ) : null}
           </View>
         )}
@@ -322,6 +344,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   obsText: { textAlign: 'center', fontSize: 13 },
+  obsWaiting: { textAlign: 'center', fontSize: 12, marginTop: 8 },
   code: { fontSize: 11, fontFamily: 'monospace' },
   actions: {
     flexDirection: 'row',

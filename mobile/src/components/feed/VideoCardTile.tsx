@@ -84,6 +84,11 @@ export function VideoCardTile({ video, variant = 'grid', width, onPress }: Props
             <Text style={styles.liveText}>LIVE</Text>
           </View>
         )}
+        {video.isLive && video.isPaid ? (
+          <View style={styles.vipBadge}>
+            <Text style={styles.vipText}>VIP · {video.entryCoinCost?.toLocaleString() ?? '—'}</Text>
+          </View>
+        ) : null}
       </View>
       <View style={styles.infoRow}>
         <View style={styles.channelAvatar}>
@@ -188,6 +193,19 @@ function createVideoCardStyles(colors: ThemeColors) {
     },
     liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primaryForeground },
     liveText: { color: colors.primaryForeground, fontSize: 10, fontWeight: '800' },
+    vipBadge: {
+      position: 'absolute',
+      top: 8,
+      left: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: '#f59e0b',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: radius.sm,
+    },
+    vipText: { color: '#000', fontSize: 10, fontWeight: '800' },
     infoRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
     channelAvatar: {
       width: 36,

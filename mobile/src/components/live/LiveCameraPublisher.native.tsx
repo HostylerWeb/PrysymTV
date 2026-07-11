@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import type {
@@ -71,6 +71,17 @@ export function LiveCameraPublisher({
     }
   };
 
+  const androidPermissionProps =
+    Platform.OS === 'android'
+      ? ({
+          onPermissionRequest: (request: {
+            nativeEvent: { grant: (resources: string[]) => void; resources: string[] };
+          }) => {
+            request.nativeEvent.grant(request.nativeEvent.resources);
+          },
+        } as Record<string, unknown>)
+      : {};
+
   return (
     <View style={styles.wrap}>
       <WebView
@@ -84,11 +95,7 @@ export function LiveCameraPublisher({
         domStorageEnabled
         mediaCapturePermissionGrantType="grant"
         onMessage={onMessage}
-        onPermissionRequest={(request) => {
-          if (Platform.OS === 'android') {
-            request.nativeEvent.grant(request.nativeEvent.resources);
-          }
-        }}
+        {...androidPermissionProps}
       />
     </View>
   );

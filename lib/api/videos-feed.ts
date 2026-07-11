@@ -83,6 +83,11 @@ export type LiveBrowseItem = {
   streamerSlug: string;
   streamerAvatar: string | null;
   creatorId: string;
+  accessType?: "free" | "paid";
+  entryPriceUsd?: number | null;
+  entryCoinCost?: number | null;
+  isPaid?: boolean;
+  hasAccess?: boolean;
 };
 
 export type VideosBrowseResponse = {

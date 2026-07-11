@@ -25,8 +25,7 @@ import { StoresService } from '../stores/stores.service';
 import { CREATOR_SUB_PLANS } from './creator-sub-plans';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { SendGiftDto } from './dto/send-gift.dto';
-
-const COIN_USD = new Prisma.Decimal('0.01');
+import { coinsToGrossUsd } from '../common/utils/coin-usd.util';
 
 /** Single platform membership — ad-free on Shorts, Verticals, and Movies. */
 const PREMIUM_PLANS: Record<
@@ -830,7 +829,10 @@ export class BillingService {
     });
     if (!receiver) throw new NotFoundException('Receiver not found');
 
-    const grossUsd = COIN_USD.mul(catalog.coinCost);
+    const grossUsd = coinsToGrossUsd(
+      catalog.coinCost,
+      await this.platformSettings.getCoinUsd(),
+    );
 
     const gift = await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
@@ -879,7 +881,7 @@ export class BillingService {
         user: sender.displayName ?? sender.username,
         giftId: catalog.id,
         giftName: catalog.name,
-        giftIcon: catalog.animationKey,
+        giftIcon: catalog.imageUrl ?? catalog.animationKey,
         coins: catalog.coinCost,
         color: 'text-pink-400',
         createdAt: new Date().toISOString(),

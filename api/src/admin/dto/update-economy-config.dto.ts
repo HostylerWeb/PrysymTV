@@ -5,6 +5,18 @@ export class UpdateEconomyConfigDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0.0001)
+  coinUsd?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  minPaidStreamUsd?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   @Min(1)
   minPayoutUsd?: number;
 

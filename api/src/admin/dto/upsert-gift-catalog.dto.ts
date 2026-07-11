@@ -19,8 +19,13 @@ export class UpsertGiftCatalogDto {
   @Min(1)
   coinCost!: number;
 
+  @IsOptional()
   @IsString()
-  animationKey!: string;
+  animationKey?: string;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string | null;
 
   @IsOptional()
   @IsBoolean()

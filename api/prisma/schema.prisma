@@ -92,6 +92,11 @@ enum StreamStatus {
   ended
 }
 
+enum StreamAccessType {
+  free
+  paid
+}
+
 enum PlaylistType {
   video
   podcast
@@ -486,6 +491,7 @@ model User {
   storeOrdersAsBuyer    StoreOrder[]          @relation("StoreBuyer")
   viewerSupportSent     ViewerSupportTransaction[] @relation("SupportSender")
   viewerSupportReceived ViewerSupportTransaction[] @relation("SupportReceiver")
+  streamAccessEntitlements StreamAccess[]
   insiderSubscription   PlatformInsiderSubscription?
   sponsorshipsAsCreator SponsorshipDeal[]     @relation("SponsorshipCreator")
   sponsorshipsAsBrand   SponsorshipDeal[]     @relation("SponsorshipBrand")
@@ -609,6 +615,7 @@ model GiftCatalog {
   name         String
   coinCost     Int     @map("coin_cost")
   animationKey String  @map("animation_key")
+  imageUrl     String? @map("image_url")
   isActive     Boolean @default(true) @map("is_active")
   gifts        Gift[]
 
@@ -713,28 +720,48 @@ model PodcastEpisode {
 }
 
 model Stream {
-  id                   String       @id @default(uuid()) @db.Uuid
-  creatorId            String       @map("creator_id") @db.Uuid
+  id                   String           @id @default(uuid()) @db.Uuid
+  creatorId            String           @map("creator_id") @db.Uuid
   title                String
   category             String?
   vertical             ContentVertical? @map("vertical")
-  status               StreamStatus @default(scheduled)
-  thumbnailUrl         String?      @map("thumbnail_url")
-  hlsPlaybackUrl       String?      @map("hls_playback_url")
-  viewerCount          Int          @default(0) @map("viewer_count")
-  temporaryStreamToken String?      @map("temporary_stream_token")
-  scheduledAt          DateTime?    @map("scheduled_at")
-  startedAt            DateTime?    @map("started_at")
-  endedAt              DateTime?    @map("ended_at")
-  createdAt            DateTime     @default(now()) @map("created_at")
-  creator              User         @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  status               StreamStatus     @default(scheduled)
+  accessType           StreamAccessType @default(free) @map("access_type")
+  entryPriceUsd        Decimal?         @map("entry_price_usd") @db.Decimal(10, 2)
+  entryCoinCost        Int?             @map("entry_coin_cost")
+  thumbnailUrl         String?          @map("thumbnail_url")
+  hlsPlaybackUrl       String?          @map("hls_playback_url")
+  viewerCount          Int              @default(0) @map("viewer_count")
+  temporaryStreamToken String?          @map("temporary_stream_token")
+  scheduledAt          DateTime?        @map("scheduled_at")
+  startedAt            DateTime?        @map("started_at")
+  endedAt              DateTime?        @map("ended_at")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  creator              User             @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   liveEvent            LiveEvent?
   gifts                Gift[]
   messages             StreamMessage[]
   viewerSupport        ViewerSupportTransaction[]
+  accesses             StreamAccess[]
 
   @@index([creatorId, status])
   @@map("streams")
+}
+
+model StreamAccess {
+  id             String              @id @default(uuid()) @db.Uuid
+  userId         String              @map("user_id") @db.Uuid
+  streamId       String              @map("stream_id") @db.Uuid
+  coinCost       Int                 @map("coin_cost")
+  revenueBatchId String?             @map("revenue_batch_id") @db.Uuid
+  createdAt      DateTime            @default(now()) @map("created_at")
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stream         Stream              @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  revenueBatch   RevenueLedgerBatch? @relation(fields: [revenueBatchId], references: [id])
+
+  @@unique([userId, streamId])
+  @@index([streamId])
+  @@map("stream_access")
 }
 
 model Follow {
@@ -1107,6 +1134,7 @@ model RevenueLedgerBatch {
   viewerSupport  ViewerSupportTransaction?
   storeOrders    StoreOrder[]
   gafEntries     GafLedgerEntry[]
+  streamAccess   StreamAccess[]
 
   @@index([sourceType, sourceId])
   @@index([creatorId, createdAt])

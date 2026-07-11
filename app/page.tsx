@@ -47,6 +47,8 @@ export default function Home() {
       viewers: string
       category: string
       avatar: string | null
+      isPaid?: boolean
+      entryCoinCost?: number | null
     }>
   >([])
   const [trendingVideos, setTrendingVideos] = useState<
@@ -122,6 +124,8 @@ export default function Home() {
           viewers: String(s.viewers),
           category: s.category ?? "Live",
           avatar: s.streamerAvatar,
+          isPaid: s.isPaid,
+          entryCoinCost: s.entryCoinCost,
         })),
       )
       setTrendingVideos(

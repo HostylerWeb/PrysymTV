@@ -1,6 +1,6 @@
 "use client"
 
-import { Users } from "lucide-react"
+import { Coins, Users } from "lucide-react"
 import Link from "next/link"
 import { userAvatarUrl } from "@/lib/user-avatar"
 import { LiveStreamThumbnail } from "@/components/live-stream-thumbnail"
@@ -16,6 +16,8 @@ interface LiveCardProps {
   viewers: string
   category: string
   avatar?: string | null
+  isPaid?: boolean
+  entryCoinCost?: number | null
 }
 
 export function LiveCard({
@@ -29,11 +31,12 @@ export function LiveCard({
   viewers,
   category,
   avatar,
+  isPaid,
+  entryCoinCost,
 }: LiveCardProps) {
   return (
     <Link href={`/live/${id}`}>
       <div className="group flex-shrink-0 w-[300px] md:w-[340px] cursor-pointer">
-        {/* Thumbnail */}
         <div className="relative aspect-video rounded-lg overflow-hidden bg-muted mb-2">
           <LiveStreamThumbnail
             title={title}
@@ -44,20 +47,24 @@ export function LiveCard({
             streamer={streamer}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
-          
-          {/* Live Badge */}
-          <div className="absolute top-2 left-2 flex items-center gap-2">
+
+          <div className="absolute top-2 left-2 flex items-center gap-2 flex-wrap">
             <span className="bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-primary-foreground animate-pulse" />
               LIVE
             </span>
+            {isPaid ? (
+              <span className="bg-amber-500/95 text-black text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
+                <Coins className="w-3 h-3" />
+                VIP · {entryCoinCost?.toLocaleString() ?? "—"} coins
+              </span>
+            ) : null}
             <span className="bg-background/80 backdrop-blur-sm text-foreground text-xs font-medium px-2 py-1 rounded flex items-center gap-1">
               <Users className="w-3 h-3" />
               {viewers}
             </span>
           </div>
 
-          {/* Category Badge */}
           <div className="absolute bottom-2 left-2">
             <span className="bg-secondary/90 backdrop-blur-sm text-secondary-foreground text-xs font-medium px-2 py-1 rounded">
               {category}
@@ -65,7 +72,6 @@ export function LiveCard({
           </div>
         </div>
 
-        {/* Info */}
         <div className="flex gap-3">
           <div className="w-10 h-10 rounded-full bg-muted flex-shrink-0 overflow-hidden ring-2 ring-primary">
             <img

@@ -13,6 +13,9 @@ export type FeedHomeResponse = {
     streamerAvatar: string | null;
     viewers: number;
     category: string | null;
+    isPaid?: boolean;
+    entryCoinCost?: number | null;
+    entryPriceUsd?: number | null;
   }>;
   continueWatching: ContinueWatchingFeedItem[];
   featuredLive: {
@@ -24,6 +27,9 @@ export type FeedHomeResponse = {
     streamer: string;
     streamerAvatar: string | null;
     viewerCount: number;
+    isPaid?: boolean;
+    entryCoinCost?: number | null;
+    entryPriceUsd?: number | null;
   } | null;
   trending: VideoCardDetail[];
   newReleases: VideoCardDetail[];

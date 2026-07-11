@@ -53,6 +53,10 @@ export type PublicAppConfig = {
     basic: PublicChannelMembershipTier;
     premium: PublicChannelMembershipTier;
   };
+  live?: {
+    minPaidStreamUsd: number;
+    coinUsd: number;
+  };
   auth: PublicOAuthConfig;
   push: PublicPushConfig;
 };

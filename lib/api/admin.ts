@@ -1037,6 +1037,8 @@ export function deleteAdminAdvertiser(id: string) {
 }
 
 export type AdminEconomyConfig = {
+  coinUsd: number;
+  minPaidStreamUsd: number;
   minPayoutUsd: number;
   membershipPriceUsd: number;
   insiderPriceUsd: number;
@@ -1056,6 +1058,7 @@ export type AdminEconomyConfig = {
     name: string;
     coinCost: number;
     animationKey: string;
+    imageUrl: string | null;
     isActive: boolean;
   }>;
 };
@@ -1214,10 +1217,25 @@ export function upsertAdminGiftCatalog(body: {
   id: string;
   name: string;
   coinCost: number;
-  animationKey: string;
+  animationKey?: string;
+  imageUrl?: string | null;
   isActive?: boolean;
 }) {
   return apiRequest("/admin/gift-catalog", { method: "PUT", body });
+}
+
+export function initAdminGiftImageUpload(body: {
+  giftId: string;
+  fileName: string;
+  mimeType: string;
+}) {
+  return apiRequest<{
+    uploadUrl: string;
+    uploadMethod: string;
+    uploadHeaders: Record<string, string>;
+    publicUrl: string;
+    objectKey: string;
+  }>("/admin/gift-catalog/image/upload", { method: "POST", body });
 }
 
 export function deleteAdminGiftCatalog(id: string) {

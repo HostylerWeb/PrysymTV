@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
 import { useMockAuth } from '@/context/MockAuthContext';
@@ -8,17 +8,7 @@ import { useThemedStyles } from '@/theme/useThemedStyles';
 import type { ThemeColors } from '@/theme/tokens';
 import { radius } from '@/theme/tokens';
 
-const GIFT_EMOJI: Record<string, string> = {
-  rose: '🌹',
-  fire: '🔥',
-  rocket: '🚀',
-  heart: '❤️',
-  star: '⭐',
-};
-
-function giftEmoji(animationKey: string) {
-  return GIFT_EMOJI[animationKey] ?? '🎁';
-}
+import { giftVisualFor } from '@/lib/gift-icons';
 
 type Props = {
   visible: boolean;
@@ -92,17 +82,24 @@ export function GiftModal({
         <ActivityIndicator style={{ marginVertical: 24 }} />
       ) : (
         <View style={styles.grid}>
-          {catalog.map((g) => (
+          {catalog.map((g) => {
+            const visual = giftVisualFor(g);
+            return (
             <Pressable
               key={g.id}
               style={[styles.gift, selected === g.id && styles.giftOn]}
               onPress={() => setSelected(g.id)}
             >
-              <Text style={styles.emoji}>{giftEmoji(g.animationKey)}</Text>
+              {visual.type === 'image' ? (
+                <Image source={{ uri: visual.value }} style={styles.giftImage} />
+              ) : (
+                <Text style={styles.emoji}>{visual.value}</Text>
+              )}
               <Text style={styles.name}>{g.name}</Text>
               <Text style={styles.coins}>🪙 {g.coinCost}</Text>
             </Pressable>
-          ))}
+            );
+          })}
         </View>
       )}
       <Button label={busyId ? 'Sending…' : 'Send gift'} disabled={!selected || busyId != null} onPress={send} />
@@ -127,6 +124,7 @@ function createStyles(colors: ThemeColors) {
     },
     giftOn: { borderColor: colors.primary, backgroundColor: colors.primary + '10' },
     emoji: { fontSize: 28 },
+    giftImage: { width: 36, height: 36, resizeMode: 'contain' },
     name: { color: colors.foreground, fontWeight: '600', marginTop: 6, fontSize: 12 },
     coins: { color: colors.primary, fontSize: 12, marginTop: 2 },
   });

@@ -33,9 +33,17 @@ export class PlatformSettingsService {
       raw.membershipPriceUsd ?? raw.premiumPriceUsd ?? DEFAULT_ECONOMY_SETTINGS.membershipPriceUsd;
     return {
       ...raw,
+      coinUsd: raw.coinUsd ?? DEFAULT_ECONOMY_SETTINGS.coinUsd,
+      minPaidStreamUsd:
+        raw.minPaidStreamUsd ?? DEFAULT_ECONOMY_SETTINGS.minPaidStreamUsd,
       membershipPriceUsd,
       premiumPriceUsd: membershipPriceUsd,
     };
+  }
+
+  async getCoinUsd(): Promise<Prisma.Decimal> {
+    const economy = await this.getEconomy();
+    return new Prisma.Decimal(economy.coinUsd.toFixed(6));
   }
 
   async setEconomy(

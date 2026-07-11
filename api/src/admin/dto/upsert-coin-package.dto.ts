@@ -17,10 +17,12 @@ export class UpsertCoinPackageDto {
   @Min(1)
   coins!: number;
 
+  /** Ignored — computed server-side from coins × economy coinUsd */
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  priceUsd!: number;
+  priceUsd?: number;
 
   @IsString()
   label!: string;

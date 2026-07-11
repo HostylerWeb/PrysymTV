@@ -35,14 +35,15 @@ import Link from "next/link"
 import { BottomNavigation } from "@/components/bottom-navigation"
 import { SearchModal } from "@/components/search-modal"
 import { AuthModal } from "@/components/auth-modal"
+import { CoinsModal } from "@/components/coins-modal"
 import { ReportModal } from "@/components/report-modal"
 import { ShareSheet } from "@/components/share-sheet"
 import { useAuth } from "@/contexts/auth-context"
 import { LiveBroadcastPlayer } from "@/components/live-broadcast-player"
 import { CastMediaButton } from "@/components/cast-media-button"
 import { LiveStudioPanel } from "@/components/live-studio-panel"
-import { fetchGiftCatalog, sendGift } from "@/lib/api/billing"
-import { endStream, fetchStream, type StreamDetail } from "@/lib/api/streams"
+import { fetchGiftCatalog, sendGift, createCoinCheckout } from "@/lib/api/billing"
+import { endStream, fetchStream, unlockStream, type StreamDetail } from "@/lib/api/streams"
 import {
   fetchPublicProfile,
   followUser,
@@ -53,7 +54,9 @@ import { formatEngagementCount } from "@/lib/engagement-count"
 import { userAvatarUrl } from "@/lib/user-avatar"
 import { connectStreamChat, type StreamChatMessage, type StreamGiftEvent } from "@/lib/api/stream-chat"
 import { StreamChatLine, type StreamChatLine as StreamChatLineType } from "@/components/stream-chat-line"
-import { giftIconFor } from "@/lib/gift-icons"
+import { giftCatalogIcon, giftIconFor } from "@/lib/gift-icons"
+import { GiftIcon } from "@/components/gift-icon"
+import { ApiError } from "@/lib/api-client"
 import type { Socket } from "socket.io-client"
 
 export default function LiveWatchPage({ params }: { params: Promise<{ id: string }> }) {
@@ -79,6 +82,11 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isReportOpen, setIsReportOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
+  const [isCoinsModalOpen, setIsCoinsModalOpen] = useState(false)
+  const [coinsPurchasing, setCoinsPurchasing] = useState(false)
+  const [coinsPurchaseError, setCoinsPurchaseError] = useState<string | null>(null)
+  const [unlockBusy, setUnlockBusy] = useState(false)
+  const [unlockError, setUnlockError] = useState<string | null>(null)
   const [isEndingStream, setIsEndingStream] = useState(false)
   const [copiedRtmp, setCopiedRtmp] = useState(false)
   const chatRef = useRef<HTMLDivElement>(null)
@@ -111,6 +119,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
               prev.hlsPlaybackUrl === s.hlsPlaybackUrl &&
               prev.webrtcPlaybackUrl === s.webrtcPlaybackUrl &&
               prev.status === s.status &&
+              prev.hasAccess === s.hasAccess &&
               prev.id === s.id
             ) {
               return prev
@@ -135,7 +144,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
             id: g.id,
             name: g.name,
             cost: g.coinCost,
-            icon: giftIconFor(g.id),
+            icon: giftCatalogIcon(g),
           })),
         )
       }
@@ -145,7 +154,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
       cancelled = true
       clearInterval(poll)
     }
-  }, [id])
+  }, [id, isAuthenticated])
 
   useEffect(() => {
     const el = liveVideoRef.current
@@ -153,7 +162,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
   }, [isMuted, stream?.hlsPlaybackUrl])
 
   useEffect(() => {
-    if (!stream?.id) return
+    if (!stream?.id || stream.isPaid && !stream.hasAccess) return
     let cancelled = false
     void connectStreamChat(stream.id)
       .then(({ socket, history }) => {
@@ -222,11 +231,67 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
       socketRef.current?.disconnect()
       socketRef.current = null
     }
-  }, [stream?.id])
+  }, [stream?.id, stream?.isPaid, stream?.hasAccess])
+
+  const handlePurchasePackage = async (packageId: string) => {
+    setCoinsPurchasing(true)
+    setCoinsPurchaseError(null)
+    try {
+      const res = await createCoinCheckout(packageId)
+      if (res.devMode) {
+        await refreshUser()
+        setIsCoinsModalOpen(false)
+        return
+      }
+      if (res.checkoutUrl) {
+        window.location.href = res.checkoutUrl
+      }
+    } catch (e) {
+      setCoinsPurchaseError(
+        e instanceof ApiError
+          ? e.message
+          : "Could not start checkout. Stripe may not be configured on the server.",
+      )
+    } finally {
+      setCoinsPurchasing(false)
+    }
+  }
+
+  const handleUnlockStream = async () => {
+    if (!stream || unlockBusy) return
+    setUnlockBusy(true)
+    setUnlockError(null)
+    try {
+      await unlockStream(stream.id)
+      await refreshUser()
+      const refreshed = await fetchStream(stream.id)
+      setStream(refreshed)
+    } catch (e) {
+      setUnlockError(
+        e instanceof ApiError ? e.message : "Could not unlock this stream.",
+      )
+    } finally {
+      setUnlockBusy(false)
+    }
+  }
 
   const requireAuth = (action: () => void) => {
     if (!isAuthenticated) setIsAuthModalOpen(true)
     else action()
+  }
+
+  const handleAuthSuccess = () => {
+    void (async () => {
+      await refreshUser()
+      try {
+        const s = await fetchStream(id)
+        setStream(s)
+        setViewerCount(s.viewerCount)
+        setLoadError(false)
+      } catch {
+        /* keep current stream shell */
+      }
+    })()
   }
 
   const handleSendGift = async (gift: { id: string; name: string; cost: number; icon: string }) => {
@@ -267,7 +332,10 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
 
   const isOwner =
     isAuthenticated && user?.id != null && stream.creatorId === user.id
+  const needsPaywall =
+    Boolean(stream.isPaid) && !stream.hasAccess && !isOwner
   const isLive =
+    !needsPaywall &&
     stream.status === "live" &&
     Boolean(stream.webrtcPlaybackUrl || stream.hlsPlaybackUrl)
   const canEndStream =
@@ -352,7 +420,11 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
         />
         <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
         <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
-        <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          onSuccess={handleAuthSuccess}
+        />
       </main>
     )
   }
@@ -366,7 +438,101 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
             ref={playerContainerRef}
             className="relative w-full flex-1 min-h-[40vh] aspect-video lg:aspect-auto lg:min-h-[320px] bg-black rounded-none lg:rounded-xl overflow-hidden shrink-0"
           >
-            {isLive && (stream.webrtcPlaybackUrl || stream.hlsPlaybackUrl) ? (
+            {needsPaywall ? (
+              <>
+                {stream.thumbnail ? (
+                  <img
+                    src={stream.thumbnail}
+                    alt={stream.title}
+                    className="w-full h-full object-cover blur-md scale-105"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-zinc-900" />
+                )}
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 p-6 text-center">
+                  <Lock className="w-12 h-12 text-amber-400 mb-4" />
+                  <h2 className="text-xl md:text-2xl font-bold text-white mb-2">
+                    Paid VIP Live Stream
+                  </h2>
+                  <p className="text-white/85 text-sm md:text-base max-w-md mb-6">
+                    {!isAuthenticated ? (
+                      <>
+                        Sign in to watch this VIP stream. Entry costs{" "}
+                        <span className="font-semibold text-amber-300">
+                          {stream.entryCoinCost?.toLocaleString() ?? "—"} coins
+                        </span>
+                        {stream.entryPriceUsd != null
+                          ? ` ($${stream.entryPriceUsd.toFixed(2)})`
+                          : ""}{" "}
+                        after you log in.
+                      </>
+                    ) : (
+                      <>
+                        You need{" "}
+                        <span className="font-semibold text-amber-300">
+                          {stream.entryCoinCost?.toLocaleString() ?? "—"} coins
+                        </span>{" "}
+                        to join this VIP stream
+                        {stream.entryPriceUsd != null
+                          ? ` ($${stream.entryPriceUsd.toFixed(2)})`
+                          : ""}
+                        .
+                      </>
+                    )}
+                  </p>
+                  {isAuthenticated ? (
+                    <p className="text-white/70 text-xs mb-4">
+                      Your balance: 🪙 {userCoins.toLocaleString()}
+                      {userCoins < (stream.entryCoinCost ?? 0) ? (
+                        <span className="text-amber-300">
+                          {" "}
+                          · Need {(stream.entryCoinCost ?? 0) - userCoins} more to unlock
+                        </span>
+                      ) : null}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm">
+                    {!isAuthenticated ? (
+                      <Button
+                        className="rounded-full flex-1"
+                        onClick={() => setIsAuthModalOpen(true)}
+                      >
+                        Login To View
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          className="rounded-full flex-1 shadow-md"
+                          disabled={unlockBusy}
+                          onClick={() => {
+                            const entryCost = stream.entryCoinCost ?? 0
+                            if (userCoins < entryCost) {
+                              setIsCoinsModalOpen(true)
+                              return
+                            }
+                            void handleUnlockStream()
+                          }}
+                        >
+                          {unlockBusy
+                            ? "Unlocking…"
+                            : `Unlock · ${stream.entryCoinCost?.toLocaleString() ?? "—"} coins`}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="rounded-full flex-1 border-white/50 bg-white/15 text-white hover:bg-white/25 hover:text-white shadow-md"
+                          onClick={() => setIsCoinsModalOpen(true)}
+                        >
+                          Get coins
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  {unlockError ? (
+                    <p className="text-destructive text-sm mt-3">{unlockError}</p>
+                  ) : null}
+                </div>
+              </>
+            ) : isLive && (stream.webrtcPlaybackUrl || stream.hlsPlaybackUrl) ? (
               <LiveBroadcastPlayer
                 key={stream.webrtcPlaybackUrl ?? stream.hlsPlaybackUrl}
                 webrtcUrl={stream.webrtcPlaybackUrl}
@@ -410,11 +576,17 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
                     <ChevronLeft className="w-5 h-5 text-white" />
                   </button>
                 </Link>
-                {isLive ? (
+                {(stream.status === "live" || isLive) ? (
                   <span className="bg-primary text-white text-xs font-bold px-2.5 py-1 rounded flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-white animate-pulse" /> LIVE
                   </span>
-                ) : (
+                ) : null}
+                {stream.isPaid ? (
+                  <span className="bg-amber-500 text-black text-xs font-bold px-2.5 py-1 rounded">
+                    VIP
+                  </span>
+                ) : null}
+                {!isLive && stream.status !== "live" ? (
                   <span className="bg-amber-600 text-white text-xs font-bold px-2.5 py-1 rounded">
                     {stream.status === "ended"
                       ? "ENDED"
@@ -422,7 +594,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
                         ? "STARTING"
                         : "OFFLINE"}
                   </span>
-                )}
+                ) : null}
                 <span className="bg-black/50 backdrop-blur text-white text-xs px-2.5 py-1 rounded flex items-center gap-1">
                   <Users className="w-3.5 h-3.5" />
                   {viewerCount.toLocaleString()}
@@ -578,6 +750,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
           </div>
 
           {/* Mobile-only chat below info */}
+          {!needsPaywall ? (
           <div className="flex-1 flex flex-col min-h-0 lg:hidden">
             <div ref={chatRef} className="flex-1 overflow-y-auto px-4 py-2 space-y-2 min-h-[100px]">
               {chatMessages.map((msg) => (
@@ -620,9 +793,11 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
               )}
             </div>
           </div>
+          ) : null}
         </div>
 
         {/* Desktop chat sidebar */}
+        {!needsPaywall ? (
         <aside className="hidden lg:flex flex-col w-full lg:w-[380px] xl:w-[420px] shrink-0 border border-border rounded-xl bg-card/20 min-h-0 overflow-hidden">
           <div className="px-4 py-3 border-b border-border font-semibold text-sm">Live chat</div>
           <div ref={chatRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2 min-h-0">
@@ -666,9 +841,10 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
             )}
           </div>
         </aside>
+        ) : null}
       </div>
 
-      {showGiftPanel && (
+      {showGiftPanel && !needsPaywall && (
         <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setShowGiftPanel(false)}>
           <div
             className="absolute bottom-0 left-0 right-0 md:left-1/2 md:-translate-x-1/2 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:w-[450px] bg-background rounded-t-3xl md:rounded-3xl p-4 md:p-6"
@@ -690,7 +866,7 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
                     userCoins < gift.cost && "opacity-50",
                   )}
                 >
-                  <span className="text-3xl">{gift.icon}</span>
+                  <GiftIcon value={gift.icon} size={36} />
                   <span className="text-sm font-medium">{gift.name}</span>
                   <span className="text-xs">🪙 {gift.cost}</span>
                 </button>
@@ -707,7 +883,22 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
 
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={handleAuthSuccess}
+      />
+      <CoinsModal
+        isOpen={isCoinsModalOpen}
+        onClose={() => {
+          setIsCoinsModalOpen(false)
+          setCoinsPurchaseError(null)
+        }}
+        currentCoins={userCoins}
+        onPurchasePackage={handlePurchasePackage}
+        purchasing={coinsPurchasing}
+        purchaseError={coinsPurchaseError}
+      />
       <ReportModal
         isOpen={isReportOpen}
         onClose={() => setIsReportOpen(false)}

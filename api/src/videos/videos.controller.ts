@@ -89,6 +89,7 @@ export class VideosController {
   }
 
   @Get('feed/videos')
+  @UseGuards(OptionalJwtAuthGuard)
   videosBrowse(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -96,6 +97,7 @@ export class VideosController {
     @Query('sort') sort?: string,
     @Query('mode') mode?: string,
     @Query('q') q?: string,
+    @Req() req?: Request & { user?: AuthUserPayload | null },
   ) {
     return this.videos.videosBrowseFeed({
       page: page ? parseInt(page, 10) : 1,
@@ -104,6 +106,7 @@ export class VideosController {
       sort,
       mode,
       q,
+      viewerId: req?.user?.id,
     });
   }
 
