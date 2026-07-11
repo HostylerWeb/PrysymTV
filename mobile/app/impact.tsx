@@ -97,7 +97,7 @@ export default function ImpactScreen() {
               ))
             ) : (
               <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
-                Grant outflows by program area appear here once recorded in Admin → GAF.
+                Funding breakdown by program area will appear here as grants are awarded.
               </Text>
             )}
 
@@ -126,7 +126,7 @@ export default function ImpactScreen() {
               </Card>
             ) : (
               <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
-                Community grants recorded in Admin → GAF will be listed here.
+                Recent community grants will appear here.
               </Text>
             )}
           </>

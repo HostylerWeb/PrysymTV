@@ -1952,36 +1952,33 @@ function GoLivePanel({
           {ingestHealth.hint}
         </div>
       )}
-      <div className="md:grid md:grid-cols-2 md:gap-4">
-      <input
-        value={title}
-        onChange={(e) => onTitleChange(e.target.value)}
-        placeholder="Stream title"
-        className="w-full h-11 md:h-12 px-4 rounded-xl bg-secondary text-sm md:text-base md:col-span-2"
-      />
-      <select
-        value={category}
-        onChange={(e) => onCategoryChange(e.target.value)}
-        className="w-full h-11 md:h-12 px-4 rounded-xl bg-secondary text-sm md:text-base md:col-span-2"
-      >
-        {(categoryOptions.length > 0
-          ? categoryOptions
-          : [
-              { slug: "gaming", label: "Gaming" },
-              { slug: "music", label: "Music" },
-              { slug: "technology", label: "Technology" },
-              { slug: "fitness", label: "Fitness" },
-              { slug: "talk", label: "Talk" },
-            ]
-        ).map((c) => (
-          <option key={c.slug} value={c.label}>
-            {c.label}
-          </option>
-        ))}
-      </select>
-      <p className="text-xs text-muted-foreground md:col-span-2 -mt-2">
-        Categories are managed in Admin → Config → Video categories.
-      </p>
+      <div className="flex flex-col gap-3 md:grid md:grid-cols-2 md:gap-4">
+        <input
+          value={title}
+          onChange={(e) => onTitleChange(e.target.value)}
+          placeholder="Stream title"
+          className="w-full h-11 md:h-12 px-4 rounded-xl bg-secondary text-sm md:text-base md:col-span-2"
+        />
+        <select
+          value={category}
+          onChange={(e) => onCategoryChange(e.target.value)}
+          className="w-full h-11 md:h-12 px-4 rounded-xl bg-secondary text-sm md:text-base md:col-span-2"
+        >
+          {(categoryOptions.length > 0
+            ? categoryOptions
+            : [
+                { slug: "gaming", label: "Gaming" },
+                { slug: "music", label: "Music" },
+                { slug: "technology", label: "Technology" },
+                { slug: "fitness", label: "Fitness" },
+                { slug: "talk", label: "Talk" },
+              ]
+          ).map((c) => (
+            <option key={c.slug} value={c.label}>
+              {c.label}
+            </option>
+          ))}
+        </select>
       </div>
       {mode === "obs" && (
         <div className="p-3 md:p-4 rounded-xl bg-secondary/30 text-xs md:text-sm space-y-1 font-mono break-all">

@@ -338,7 +338,7 @@ export function CreatorDashboardPanel({ className }: { className?: string }) {
             </p>
             <p className="text-xs text-muted-foreground mt-2">
               A share of your monetization (gifts, memberships, store sales) funds community programs.
-              Impact metrics are updated from your earnings and admin-verified outcomes.
+              Impact metrics update from your earnings and verified program outcomes.
             </p>
           </div>
         </div>

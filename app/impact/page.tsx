@@ -134,7 +134,7 @@ export default function ImpactPage() {
               <section className="mb-12">
                 <h2 className="text-xl font-bold mb-2">Funding by area</h2>
                 <p className="text-sm text-muted-foreground">
-                  Grant outflows by program area appear here once recorded in Admin → GAF.
+                  Funding breakdown by program area will appear here as grants are awarded.
                 </p>
               </section>
             )}
@@ -167,7 +167,7 @@ export default function ImpactPage() {
               <section>
                 <h2 className="text-xl font-bold mb-2">Recent grants</h2>
                 <p className="text-sm text-muted-foreground">
-                  Community grants recorded in Admin → GAF will be listed here.
+                  Recent community grants will appear here.
                 </p>
               </section>
             )}
