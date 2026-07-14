@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { ThemedInput } from '@/components/ui/ThemedInput';
 import { fetchMyPodcastShows, createPodcastShow } from '@/lib/api/podcasts';
+import { fetchPodcastCategories, fetchVideoCategories, type ContentCategory } from '@/lib/api/categories';
 import { uploadPodcastEpisodeFlow, uploadPodcastShowCover } from '@/lib/api/podcasts-upload';
 import { runVideoUpload } from '@/lib/api/videos';
 import { uploadQueuedBodyFor } from '@/lib/upload-processing-copy';
@@ -47,15 +48,6 @@ const KIND_META: Record<
   },
 };
 
-const VIDEO_CATEGORIES = [
-  { slug: 'general', label: 'General' },
-  { slug: 'sports', label: 'Sports' },
-  { slug: 'education', label: 'Education' },
-  { slug: 'community', label: 'Community' },
-];
-
-const PODCAST_CATEGORIES = ['General', 'Tech', 'True Crime', 'Sports', 'Education'];
-
 const VISIBILITY = [
   { value: 'public', label: 'Public' },
   { value: 'unlisted', label: 'Unlisted' },
@@ -86,7 +78,9 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
   const [done, setDone] = useState(false);
   const [doneMessage, setDoneMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
+  const [videoCategories, setVideoCategories] = useState<ContentCategory[]>([]);
+  const [podcastCategories, setPodcastCategories] = useState<Array<{ slug: string; label: string }>>([]);
 
   const [podcastMode, setPodcastMode] = useState<'existing' | 'new'>('new');
   const [showTitle, setShowTitle] = useState('');
@@ -96,6 +90,31 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
   const [podcastMediaType, setPodcastMediaType] = useState<'audio' | 'video'>('audio');
   const [existingShows, setExistingShows] = useState<Array<{ id: string; title: string }>>([]);
   const [showId, setShowId] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    void fetchVideoCategories()
+      .then((res) => {
+        if (res.items.length > 0) {
+          setVideoCategories(res.items);
+          setCategory((current) =>
+            res.items.some((item) => item.slug === current) ? current : res.items[0].slug,
+          );
+        }
+      })
+      .catch(() => {});
+    void fetchPodcastCategories()
+      .then((res) => {
+        if (res.items.length > 0) {
+          setPodcastCategories(res.items);
+          setShowCategory((current) =>
+            res.items.some((item) => item.label === current) ? current : res.items[0].label,
+          );
+        }
+      })
+      .catch(() => {});
+  }, [visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -108,6 +127,7 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
     setDone(false);
     setDoneMessage(null);
     setBusy(false);
+    setUploadPercent(null);
     setError(null);
     setPodcastMode('new');
     setShowTitle('');
@@ -180,6 +200,7 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
       return;
     }
     setBusy(true);
+    setUploadPercent(0);
     setError(null);
     try {
       if (kind === 'short' || kind === 'video') {
@@ -191,6 +212,7 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
           visibility,
           tags: tags.trim() || undefined,
           file,
+          onProgress: setUploadPercent,
         });
         setDoneMessage(uploadQueuedBodyFor(kind));
       } else {
@@ -219,6 +241,7 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
           title.trim(),
           file,
           description.trim() || undefined,
+          setUploadPercent,
         );
         setDoneMessage(
           "Your podcast episode is ready and published. Check your notifications bell for updates.",
@@ -230,6 +253,7 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setBusy(false);
+      setUploadPercent(null);
     }
   };
 
@@ -312,13 +336,13 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
                         />
                         <Text style={styles.fieldLabel}>Category</Text>
                         <View style={styles.chipRow}>
-                          {PODCAST_CATEGORIES.map((c) => (
+                          {podcastCategories.map((c) => (
                             <Pressable
-                              key={c}
-                              style={[styles.chip, showCategory === c && styles.chipOn]}
-                              onPress={() => setShowCategory(c)}
+                              key={c.slug}
+                              style={[styles.chip, showCategory === c.label && styles.chipOn]}
+                              onPress={() => setShowCategory(c.label)}
                             >
-                              <Text style={styles.chipText}>{c}</Text>
+                              <Text style={styles.chipText}>{c.label}</Text>
                             </Pressable>
                           ))}
                         </View>
@@ -362,7 +386,7 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
                   <>
                     <Text style={styles.fieldLabel}>Category</Text>
                     <View style={styles.chipRow}>
-                      {VIDEO_CATEGORIES.map((c) => (
+                      {videoCategories.map((c) => (
                         <Pressable
                           key={c.slug}
                           style={[styles.chip, category === c.slug && styles.chipOn]}
@@ -413,7 +437,13 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
                 {error ? <Text style={styles.error}>{error}</Text> : null}
 
                 <Button
-                  label={busy ? 'Uploading…' : 'Upload'}
+                  label={
+                    busy
+                      ? uploadPercent != null
+                        ? `Uploading ${uploadPercent}%`
+                        : 'Uploading…'
+                      : 'Upload'
+                  }
                   disabled={busy || !title.trim() || !file}
                   onPress={() => void handleSubmit()}
                   style={{ marginTop: 16, marginBottom: 8 }}

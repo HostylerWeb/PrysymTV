@@ -339,6 +339,7 @@ export class NotificationsService {
     episodeNumber?: number,
   ): Promise<void> {
     const label = this.contentLabelForVideoType(videoType);
+    await this.dismissProcessingStartedNotification(userId, videoId);
     await this.notifyCreatorContentProcessing({
       userId,
       phase: 'complete',
@@ -365,6 +366,7 @@ export class NotificationsService {
     videoType: VideoType,
   ): Promise<void> {
     const label = this.contentLabelForVideoType(videoType);
+    await this.dismissProcessingStartedNotification(userId, videoId);
     await this.notifyCreatorContentProcessing({
       userId,
       phase: 'failed',
@@ -387,6 +389,7 @@ export class NotificationsService {
     episodeId: string,
     title: string,
   ): Promise<void> {
+    await this.dismissProcessingStartedNotification(userId, episodeId);
     await this.notifyCreatorContentProcessing({
       userId,
       phase: 'complete',
@@ -400,6 +403,23 @@ export class NotificationsService {
         podcastEpisodeId: episodeId,
       },
       message: `Your podcast episode "${title}" is ready and published.`,
+    });
+  }
+
+  private async dismissProcessingStartedNotification(
+    userId: string,
+    referenceId: string,
+  ): Promise<void> {
+    await this.prisma.notification.deleteMany({
+      where: {
+        userId,
+        type: 'system',
+        referenceId,
+        metadata: {
+          path: ['processingPhase'],
+          equals: 'started',
+        },
+      },
     });
   }
 

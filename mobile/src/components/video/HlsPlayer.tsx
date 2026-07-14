@@ -151,6 +151,7 @@ export function HlsPlayer({
   const [variants, setVariants] = useState<HlsVariant[]>([]);
   const [selectedVariantUri, setSelectedVariantUri] = useState<string | null>(null);
   const [playing, setPlaying] = useState(autoPlay && !paused);
+  const [ended, setEnded] = useState(false);
   const [ready, setReady] = useState(false);
   const [buffering, setBuffering] = useState(true);
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
@@ -175,6 +176,7 @@ export function HlsPlayer({
   useEffect(() => {
     setActiveSource(source);
     setSelectedVariantUri(null);
+    setEnded(false);
   }, [source]);
 
   useEffect(() => {
@@ -288,8 +290,16 @@ export function HlsPlayer({
   }, [player, onProgress]);
 
   useEffect(() => {
-    if (!onEnded) return;
-    const sub = player.addListener('playToEnd', () => onEnded());
+    const sub = player.addListener('playToEnd', () => {
+      const total = player.duration;
+      if (total > 0.15) {
+        player.currentTime = total - 0.1;
+      }
+      safePause(player);
+      setPlaying(false);
+      setEnded(true);
+      onEnded?.();
+    });
     return () => sub.remove();
   }, [player, onEnded]);
 
@@ -299,6 +309,10 @@ export function HlsPlayer({
       player.pause();
       setPlaying(false);
     } else {
+      if (ended) {
+        player.currentTime = 0;
+        setEnded(false);
+      }
       player.play();
       setPlaying(true);
     }
@@ -443,7 +457,7 @@ export function HlsPlayer({
             : { aspectRatio },
       ]}
     >
-      {posterUrl && (!ready || !playing) ? (
+      {posterUrl && (!ready || (!playing && !ended)) ? (
         <Image source={{ uri: posterUrl }} style={StyleSheet.absoluteFill} contentFit={contentFit} />
       ) : null}
       <VideoView

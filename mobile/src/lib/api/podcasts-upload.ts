@@ -52,10 +52,11 @@ export async function uploadPodcastEpisodeFlow(
   title: string,
   file: PickedMedia,
   description?: string,
+  onProgress?: (percent: number) => void,
 ) {
   const episode = await createPodcastEpisode(showId, { title, description });
   const init = await initPodcastEpisodeUpload(episode.id, file);
-  await uploadPickedFile(init, file);
+  await uploadPickedFile(init, file, { onProgress });
   const done = await completePodcastEpisodeUpload(episode.id, init.objectKey);
   return {
     episodeId: done.episodeId,

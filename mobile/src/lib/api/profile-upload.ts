@@ -52,21 +52,54 @@ async function formDataFilePart(file: PickedFile): Promise<Blob | File> {
   return { uri: file.uri, name, type: mime } as unknown as Blob;
 }
 
+async function uploadWithProgress(
+  url: string,
+  method: string,
+  headers: Record<string, string>,
+  body: Blob | FormData,
+  onProgress?: (percent: number) => void,
+): Promise<string | void> {
+  return new Promise<string | void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.responseType = 'text';
+    xhr.upload.onprogress = (event) => {
+      if (!onProgress || !event.lengthComputable || event.total <= 0) return;
+      onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(100);
+        resolve(xhr.responseText || undefined);
+        return;
+      }
+      reject(new Error(`Upload failed (${xhr.status})`));
+    };
+    xhr.onerror = () => reject(new Error('Upload failed'));
+    xhr.open(method, url);
+    for (const [key, value] of Object.entries(headers)) {
+      xhr.setRequestHeader(key, value);
+    }
+    xhr.send(body);
+  });
+}
+
 export async function uploadPickedFile(
   init: FileUploadInit,
   file: PickedFile,
+  options?: { onProgress?: (percent: number) => void },
 ): Promise<string> {
   const mime = file.mimeType || 'image/jpeg';
-  const name = file.name || 'upload.jpg';
+  options?.onProgress?.(0);
 
   if (init.uploadMethod === 'PUT') {
     const blob = await (await fetch(file.uri)).blob();
-    const res = await fetch(init.uploadUrl, {
-      method: 'PUT',
-      headers: { ...init.uploadHeaders, 'Content-Type': mime },
-      body: blob,
-    });
-    if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+    await uploadWithProgress(
+      init.uploadUrl,
+      'PUT',
+      { ...init.uploadHeaders, 'Content-Type': mime },
+      blob,
+      options?.onProgress,
+    );
     return init.publicUrl;
   }
 
@@ -77,15 +110,20 @@ export async function uploadPickedFile(
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(init.uploadUrl, {
-    method: 'POST',
+  const responseText = await uploadWithProgress(
+    init.uploadUrl,
+    'POST',
     headers,
-    body: form,
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `Upload failed (${res.status})`);
+    form,
+    options?.onProgress,
+  );
+  if (responseText) {
+    try {
+      const data = JSON.parse(responseText) as { publicUrl: string };
+      if (data.publicUrl) return data.publicUrl;
+    } catch {
+      /* fall through */
+    }
   }
-  const data = (await res.json()) as { publicUrl: string };
-  return data.publicUrl;
+  return init.publicUrl;
 }

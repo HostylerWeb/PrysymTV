@@ -71,8 +71,9 @@ export function completeVideoUpload(body: { videoId: string; objectKey?: string 
 export async function uploadVideoFile(
   init: UploadInitResponse,
   file: { uri: string; name?: string | null; mimeType?: string | null },
+  onProgress?: (percent: number) => void,
 ) {
-  await uploadPickedFile(init, file);
+  await uploadPickedFile(init, file, { onProgress });
 }
 
 export async function runVideoUpload(params: {
@@ -84,6 +85,7 @@ export async function runVideoUpload(params: {
   tags?: string;
   file: { uri: string; name?: string | null; mimeType?: string | null };
   verticalEpisodeId?: string;
+  onProgress?: (percent: number) => void;
 }) {
   const mimeType = params.file.mimeType || 'video/mp4';
   const init = await initVideoUpload({
@@ -97,7 +99,7 @@ export async function runVideoUpload(params: {
     fileName: params.file.name ?? 'video.mp4',
     verticalEpisodeId: params.verticalEpisodeId,
   });
-  await uploadVideoFile(init, params.file);
+  await uploadVideoFile(init, params.file, params.onProgress);
   return completeVideoUpload({ videoId: init.videoId, objectKey: init.objectKey });
 }
 

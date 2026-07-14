@@ -29,6 +29,7 @@ export default function SettingsUploadScreen() {
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<{ uri: string; name: string; mimeType?: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
 
   const pickVideo = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -53,12 +54,14 @@ export default function SettingsUploadScreen() {
   const publish = async () => {
     if (!config.videoType || !file || !title.trim()) return;
     setBusy(true);
+    setUploadPercent(0);
     try {
       await runVideoUpload({
         type: config.videoType,
         title: title.trim(),
         description: description.trim() || undefined,
         file,
+        onProgress: setUploadPercent,
       });
       Alert.alert(
         'Upload received',
@@ -72,6 +75,7 @@ export default function SettingsUploadScreen() {
       Alert.alert('Upload failed', e instanceof Error ? e.message : 'Could not upload');
     } finally {
       setBusy(false);
+      setUploadPercent(null);
     }
   };
 
@@ -141,7 +145,13 @@ export default function SettingsUploadScreen() {
             <Text style={styles.cardTitle}>Ready to publish</Text>
             <Text style={styles.cardSub}>{config.label}: {title || 'Untitled'}</Text>
             <Button
-              label={busy ? 'Uploading…' : 'Publish'}
+              label={
+                busy
+                  ? uploadPercent != null
+                    ? `Uploading ${uploadPercent}%`
+                    : 'Uploading…'
+                  : 'Publish'
+              }
               onPress={() => void publish()}
               disabled={busy || !file}
               style={{ marginTop: 12 }}

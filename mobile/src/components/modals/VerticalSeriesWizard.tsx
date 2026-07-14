@@ -61,6 +61,7 @@ export function VerticalSeriesWizard({
   const [activeSeriesSlug, setActiveSeriesSlug] = useState('');
   const [doneMessage, setDoneMessage] = useState('Your micro-drama series is ready.');
   const [busy, setBusy] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -119,6 +120,7 @@ export function VerticalSeriesWizard({
 
   const submit = async () => {
     setBusy(true);
+    setUploadPercent(null);
     setError(null);
     try {
       if (mode === 'series') {
@@ -147,6 +149,7 @@ export function VerticalSeriesWizard({
           return;
         }
         const epNum = Math.max(1, parseInt(episodeNumber, 10) || 1);
+        setUploadPercent(0);
         const ep = await createVerticalEpisode(slug, {
           episodeNumber: epNum,
           title: episodeTitle.trim(),
@@ -157,6 +160,7 @@ export function VerticalSeriesWizard({
           title: episodeTitle.trim(),
           file: videoFile,
           verticalEpisodeId: ep.id,
+          onProgress: setUploadPercent,
         });
         await attachVerticalEpisodeVideo(ep.id, uploaded.videoId);
         setDoneMessage(uploadQueuedBodyFor('vertical episode'));
@@ -167,6 +171,7 @@ export function VerticalSeriesWizard({
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setBusy(false);
+      setUploadPercent(null);
     }
   };
 
@@ -246,7 +251,13 @@ export function VerticalSeriesWizard({
           </Pressable>
           {error ? <Text style={{ color: colors.destructive, marginTop: 8 }}>{error}</Text> : null}
           <Button
-            label={busy ? 'Uploading…' : 'Publish episode'}
+            label={
+              busy
+                ? uploadPercent != null
+                  ? `Uploading ${uploadPercent}%`
+                  : 'Uploading…'
+                : 'Publish episode'
+            }
             disabled={!episodeTitle.trim() || !videoFile || busy || !(activeSeriesSlug || initialSeriesSlug)}
             onPress={() => void submit()}
             style={{ marginTop: 12 }}
