@@ -85,7 +85,34 @@ export class AdminService {
     };
   }
 
+  /**
+   * Podcast episodes are created as `processing` before upload. Only videos/movies/shorts
+   * use the BullMQ transcode queue. Shells with no media are abandoned uploads, not transcoding.
+   */
+  private podcastTranscodingWhere() {
+    return {
+      status: ContentStatus.processing,
+      OR: [{ audioUrl: { not: null } }, { videoUrl: { not: null } }],
+    };
+  }
+
+  /** Mark old podcast shells (never uploaded) as failed so they leave the processing bell. */
+  private async reconcileAbandonedPodcastShells(): Promise<void> {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    await this.prisma.podcastEpisode.updateMany({
+      where: {
+        status: ContentStatus.processing,
+        audioUrl: null,
+        videoUrl: null,
+        createdAt: { lt: cutoff },
+      },
+      data: { status: ContentStatus.failed },
+    });
+  }
+
   async getOverview() {
+    await this.reconcileAbandonedPodcastShells();
+
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -141,7 +168,7 @@ export class AdminService {
         where: { status: ContentStatus.processing },
       }),
       this.prisma.podcastEpisode.count({
-        where: { status: ContentStatus.processing },
+        where: this.podcastTranscodingWhere(),
       }),
     ]);
 
@@ -179,6 +206,8 @@ export class AdminService {
   }
 
   async listProcessingContent(limit = 20) {
+    await this.reconcileAbandonedPodcastShells();
+
     const take = Math.min(Math.max(limit, 1), 50);
     const [videos, verticalEpisodes, podcastEpisodes, videoTotal, verticalTotal, podcastTotal] =
       await Promise.all([
@@ -191,6 +220,7 @@ export class AdminService {
           title: true,
           type: true,
           createdAt: true,
+          updatedAt: true,
           creator: { select: { username: true } },
         },
       }),
@@ -203,17 +233,19 @@ export class AdminService {
           title: true,
           episodeNumber: true,
           createdAt: true,
+          updatedAt: true,
           series: { select: { title: true, slug: true } },
         },
       }),
       this.prisma.podcastEpisode.findMany({
-        where: { status: ContentStatus.processing },
+        where: this.podcastTranscodingWhere(),
         orderBy: { createdAt: 'desc' },
         take,
         select: {
           id: true,
           title: true,
           createdAt: true,
+          updatedAt: true,
           show: { select: { title: true } },
         },
       }),
@@ -222,7 +254,7 @@ export class AdminService {
         where: { status: ContentStatus.processing },
       }),
       this.prisma.podcastEpisode.count({
-        where: { status: ContentStatus.processing },
+        where: this.podcastTranscodingWhere(),
       }),
     ]);
 
@@ -238,7 +270,8 @@ export class AdminService {
               ? 'Short'
               : 'Video',
         creator: v.creator ? `@${v.creator.username}` : undefined,
-        submittedAt: v.createdAt.toISOString(),
+        submittedAt: v.updatedAt.toISOString(),
+        stage: 'transcoding' as const,
         adminHref: `/admin/content/${v.type === VideoType.movie ? 'movies' : v.type === VideoType.short ? 'shorts' : 'videos'}`,
       })),
       ...verticalEpisodes.map((ep) => ({
@@ -248,7 +281,8 @@ export class AdminService {
         label: 'Vertical episode',
         seriesTitle: ep.series.title,
         episodeNumber: ep.episodeNumber,
-        submittedAt: ep.createdAt.toISOString(),
+        submittedAt: ep.updatedAt.toISOString(),
+        stage: 'transcoding' as const,
         adminHref: '/admin/content/verticals',
       })),
       ...podcastEpisodes.map((ep) => ({
@@ -257,7 +291,8 @@ export class AdminService {
         kind: 'podcast_episode',
         label: 'Podcast episode',
         seriesTitle: ep.show.title,
-        submittedAt: ep.createdAt.toISOString(),
+        submittedAt: ep.updatedAt.toISOString(),
+        stage: 'transcoding' as const,
         adminHref: '/admin/content/podcasts',
       })),
     ].sort(

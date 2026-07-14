@@ -37,6 +37,7 @@ export type AdminProcessingItem = {
   seriesTitle?: string;
   episodeNumber?: number;
   submittedAt: string;
+  stage?: "transcoding" | "awaiting_upload";
   adminHref: string;
 };
 

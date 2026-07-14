@@ -50,7 +50,7 @@ function ProcessingRow({ item }: { item: AdminProcessingItem }) {
         </p>
         <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1.5">
           <Loader2 className="w-3 h-3 animate-spin" />
-          Transcoding ·{" "}
+          {item.stage === "awaiting_upload" ? "Awaiting upload" : "Transcoding"} ·{" "}
           {formatDistanceToNow(new Date(item.submittedAt), { addSuffix: true })}
         </p>
       </div>
