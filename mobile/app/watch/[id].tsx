@@ -124,6 +124,7 @@ export default function WatchScreen() {
             nativeControls={false}
             enableQualityMenu
             enableFullscreen
+            enablePlayerChrome
             paused={!isFocused}
             onProgress={onProgress}
             onShare={() => setShareOpen(true)}

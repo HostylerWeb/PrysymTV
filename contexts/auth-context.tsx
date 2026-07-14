@@ -8,7 +8,12 @@ import {
   useCallback,
   type ReactNode,
 } from "react"
-import { ApiError, loadStoredAccessToken, setAccessToken } from "@/lib/api-client"
+import {
+  ApiError,
+  ACCESS_TOKEN_STORAGE_KEY,
+  ensureAccessToken,
+  setAccessToken,
+} from "@/lib/api-client"
 import * as authApi from "@/lib/api/auth"
 import {
   fetchMe,
@@ -84,7 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   const refreshUser = useCallback(async () => {
-    if (!loadStoredAccessToken()) {
+    const token = await ensureAccessToken()
+    if (!token) {
       setUser(null)
       return
     }
@@ -95,9 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     let cancelled = false
 
-    async function hydrate() {
-      loadStoredAccessToken()
-      const token = loadStoredAccessToken()
+    async function hydrateFromToken(token: string | null) {
       if (!token) {
         if (!cancelled) {
           setUser(null)
@@ -117,9 +121,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    async function hydrate() {
+      const token = await ensureAccessToken()
+      await hydrateFromToken(token)
+    }
+
+    function onStorage(event: StorageEvent) {
+      if (event.key !== ACCESS_TOKEN_STORAGE_KEY || cancelled) return
+      if (event.newValue) {
+        setAccessToken(event.newValue)
+        void hydrateFromToken(event.newValue)
+      } else {
+        setAccessToken(null)
+        setUser(null)
+      }
+    }
+
     void hydrate()
+    window.addEventListener("storage", onStorage)
     return () => {
       cancelled = true
+      window.removeEventListener("storage", onStorage)
     }
   }, [])
 

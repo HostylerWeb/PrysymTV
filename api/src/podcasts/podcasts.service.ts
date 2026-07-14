@@ -17,6 +17,7 @@ import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { probeMedia } from '../queue/ffmpeg.util';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { PlaybackService } from '../playback/playback.service';
@@ -32,6 +33,7 @@ export class PodcastsService {
     private readonly storage: StorageService,
     private readonly config: ConfigService,
     private readonly playback: PlaybackService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private async mapEpisodeMedia<T extends { audioUrl: string | null; videoUrl: string | null }>(
@@ -392,6 +394,12 @@ export class PodcastsService {
         publishedAt: new Date(),
       },
     });
+
+    void this.notifications.notifyPodcastEpisodeReady(
+      userId,
+      updated.id,
+      updated.title,
+    );
 
     return this.mapEpisodeMedia({
       episodeId: updated.id,

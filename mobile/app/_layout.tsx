@@ -14,6 +14,7 @@ import {
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
+import { ImmersivePlaybackProvider } from '@/context/ImmersivePlaybackContext';
 import { MockAuthProvider } from '@/context/MockAuthContext';
 import { OAuthConfigProvider } from '@/context/OAuthConfigContext';
 import { QueryProvider } from '@/providers/QueryProvider';
@@ -122,11 +123,13 @@ export default function RootLayout() {
           <QueryProvider>
             <OAuthConfigProvider>
               <MockAuthProvider>
-                <PodcastPlayerProvider>
-                  <StoreCartProvider>
-                    <RootStack />
-                  </StoreCartProvider>
-                </PodcastPlayerProvider>
+                <ImmersivePlaybackProvider>
+                  <PodcastPlayerProvider>
+                    <StoreCartProvider>
+                      <RootStack />
+                    </StoreCartProvider>
+                  </PodcastPlayerProvider>
+                </ImmersivePlaybackProvider>
               </MockAuthProvider>
             </OAuthConfigProvider>
           </QueryProvider>

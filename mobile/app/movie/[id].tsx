@@ -102,6 +102,7 @@ export default function MovieScreen() {
             nativeControls={false}
             enableQualityMenu
             enableFullscreen
+            enablePlayerChrome
             paused={!isFocused}
             onProgress={onProgress}
           />

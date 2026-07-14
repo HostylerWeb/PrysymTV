@@ -7,6 +7,8 @@ export type NotificationMetadata = {
   seriesSlug?: string;
   episodeNumber?: number;
   podcastEpisodeId?: string;
+  processingPhase?: 'started' | 'complete' | 'failed';
+  contentLabel?: string;
 };
 
 function verticalEpisodeRoute(
@@ -77,6 +79,28 @@ export function buildNotificationRoute(
     case 'gift':
       return referenceId ? `/live/${referenceId}` : undefined;
 
+    case 'system': {
+      const phase = metadata?.processingPhase;
+      if (phase === 'started' || phase === 'failed') {
+        return undefined;
+      }
+
+      if (contentType === 'vertical_episode') {
+        return verticalEpisodeRoute(metadata?.seriesSlug, metadata?.episodeNumber);
+      }
+      if (contentType === 'podcast_episode') {
+        return podcastEpisodeRoute(metadata?.podcastEpisodeId ?? referenceId ?? undefined);
+      }
+      if (videoId) {
+        if (videoType === 'short') {
+          return { pathname: '/(tabs)/shorts', params: { start: videoId } } as unknown as string;
+        }
+        if (videoType === 'movie') return `/movie/${videoId}`;
+        return `/watch/${videoId}`;
+      }
+      return '/profile';
+    }
+
     default:
       return undefined;
   }
@@ -128,6 +152,28 @@ export function resolveNotificationNavTarget(
     case 'live':
     case 'gift':
       return referenceId ? `/live/${referenceId}` : undefined;
+
+    case 'system': {
+      const phase = metadata?.processingPhase;
+      if (phase === 'started' || phase === 'failed') {
+        return undefined;
+      }
+
+      if (contentType === 'vertical_episode') {
+        return verticalEpisodeRoute(metadata?.seriesSlug, metadata?.episodeNumber);
+      }
+      if (contentType === 'podcast_episode') {
+        return podcastEpisodeRoute(metadata?.podcastEpisodeId ?? referenceId ?? undefined);
+      }
+      if (videoId) {
+        if (videoType === 'short') {
+          return { pathname: '/(tabs)/shorts', params: { start: videoId } };
+        }
+        if (videoType === 'movie') return `/movie/${videoId}`;
+        return `/watch/${videoId}`;
+      }
+      return '/profile';
+    }
 
     default:
       return undefined;

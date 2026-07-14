@@ -4,6 +4,7 @@ import {
   AppState,
   LayoutChangeEvent,
   Modal,
+  PanResponder,
   Pressable,
   StatusBar,
   StyleSheet,
@@ -17,6 +18,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 import { VideoQualityMenu } from '@/components/video/VideoQualityMenu';
 import { fetchHlsVariants, type HlsVariant } from '@/lib/hls-variants';
+import { useImmersivePlaybackRegistration } from '@/context/ImmersivePlaybackContext';
 import { colors, radius, withAlpha } from '@/theme/tokens';
 
 function safePause(player: VideoPlayer) {
@@ -36,6 +38,8 @@ type Props = {
   tapToToggle?: boolean;
   /** TikTok-style tap reveals timeline scrubber. */
   seekOnTap?: boolean;
+  /** YouTube-style controls with seek bar; tap to show/hide while playing. */
+  enablePlayerChrome?: boolean;
   enableQualityMenu?: boolean;
   enableFullscreen?: boolean;
   /** `inline` keeps the player in a scrollable parent (e.g. vertical episode pager). */
@@ -124,6 +128,7 @@ export function HlsPlayer({
   nativeControls = false,
   tapToToggle = true,
   seekOnTap = false,
+  enablePlayerChrome = false,
   enableQualityMenu = false,
   enableFullscreen = false,
   fullscreenPresentation = 'modal',
@@ -153,10 +158,11 @@ export function HlsPlayer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [trackWidth, setTrackWidth] = useState(0);
   const wasPlayingRef = useRef(false);
+  const chromeHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fullscreenOn = externalFullscreen ?? isFullscreen;
-
+  const trackWidthRef = useRef(0);
+  const durationRef = useRef(0);
   const player = useVideoPlayer(
     { uri: activeSource, contentType: activeSource.includes('.m3u8') ? 'hls' : 'auto' },
     (p) => {
@@ -199,6 +205,8 @@ export function HlsPlayer({
     }
   }, [paused, fullscreenOn, fullscreenPresentation, externalFullscreen, onFullscreenChange]);
 
+  useImmersivePlaybackRegistration(fullscreenOn);
+
   useEffect(() => {
     return () => {
       void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
@@ -228,6 +236,24 @@ export function HlsPlayer({
       player.play();
     }
   }, [player, paused, appActive, chromeVisible, seekOnTap, autoPlay]);
+
+  useEffect(() => {
+    if (!enablePlayerChrome || !ready) return;
+    if (!playing) {
+      setChromeVisible(true);
+    }
+  }, [enablePlayerChrome, playing, ready]);
+
+  useEffect(() => {
+    if (!enablePlayerChrome || !chromeVisible || !playing) return;
+    if (chromeHideTimerRef.current) clearTimeout(chromeHideTimerRef.current);
+    chromeHideTimerRef.current = setTimeout(() => {
+      setChromeVisible(false);
+    }, 3000);
+    return () => {
+      if (chromeHideTimerRef.current) clearTimeout(chromeHideTimerRef.current);
+    };
+  }, [enablePlayerChrome, chromeVisible, playing]);
 
   useEffect(() => {
     const playingSub = player.addListener('playingChange', ({ isPlaying }) => {
@@ -268,7 +294,7 @@ export function HlsPlayer({
   }, [player, onEnded]);
 
   const togglePlay = () => {
-    if (!tapToToggle || nativeControls) return;
+    if (nativeControls) return;
     if (player.playing) {
       player.pause();
       setPlaying(false);
@@ -280,6 +306,14 @@ export function HlsPlayer({
 
   const handleVideoTap = () => {
     if (nativeControls) return;
+    if (enablePlayerChrome) {
+      setChromeVisible((visible) => {
+        const next = !visible;
+        if (next && chromeHideTimerRef.current) clearTimeout(chromeHideTimerRef.current);
+        return next;
+      });
+      return;
+    }
     if (seekOnTap) {
       if (!chromeVisible) {
         wasPlayingRef.current = player.playing;
@@ -300,16 +334,43 @@ export function HlsPlayer({
     togglePlay();
   };
 
+  const revealChrome = () => {
+    setChromeVisible(true);
+    if (chromeHideTimerRef.current) clearTimeout(chromeHideTimerRef.current);
+  };
+
   const seekToRatio = (ratio: number) => {
-    const next = Math.max(0, Math.min(1, ratio)) * (duration || 0);
+    const total = durationRef.current;
+    if (!total) return;
+    const next = Math.max(0, Math.min(1, ratio)) * total;
     player.currentTime = next;
     setCurrentTime(next);
   };
 
-  const onTrackPress = (event: { nativeEvent: { locationX: number } }) => {
-    if (!trackWidth || !duration) return;
-    seekToRatio(event.nativeEvent.locationX / trackWidth);
+  durationRef.current = duration;
+
+  const seekAtX = (x: number) => {
+    const width = trackWidthRef.current;
+    if (!width || !durationRef.current) return;
+    seekToRatio(x / width);
   };
+
+  const scrubPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (evt) => {
+          if (chromeHideTimerRef.current) clearTimeout(chromeHideTimerRef.current);
+          seekAtX(evt.nativeEvent.locationX);
+        },
+        onPanResponderMove: (evt) => {
+          if (chromeHideTimerRef.current) clearTimeout(chromeHideTimerRef.current);
+          seekAtX(evt.nativeEvent.locationX);
+        },
+      }),
+    [player],
+  );
 
   const onQualitySelect = async (variant: HlsVariant | null) => {
     const resumeAt = player.currentTime;
@@ -360,12 +421,15 @@ export function HlsPlayer({
   const cornerTop = controlsTopInset ?? insets.top + 12;
 
   const showLoading = (!ready || buffering) && !playing && !nativeControls;
-  const showPausedOverlay = !nativeControls && ready && !playing && !buffering && !chromeVisible;
+  const showPausedOverlay =
+    !nativeControls && ready && !playing && !buffering && !chromeVisible && !enablePlayerChrome;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const showChromeControls = !nativeControls && chromeVisible && (seekOnTap || enablePlayerChrome);
   const showCornerControls =
     !nativeControls &&
     (enableQualityMenu || enableFullscreen) &&
     !seekOnTap &&
+    !enablePlayerChrome &&
     (!fullscreenOn || (fullscreenPresentation === 'inline' && !playing));
 
   const renderPlayerSurface = (fullscreen: boolean) => (
@@ -401,7 +465,7 @@ export function HlsPlayer({
           <Ionicons name="play-circle" size={72} color={withAlpha(colors.onVideo, 0.85)} />
         </View>
       ) : null}
-      {!nativeControls && (tapToToggle || seekOnTap) ? (
+      {!nativeControls && (tapToToggle || seekOnTap || enablePlayerChrome) ? (
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={handleVideoTap}
@@ -409,12 +473,33 @@ export function HlsPlayer({
           accessibilityLabel={playing ? 'Pause' : 'Play'}
         />
       ) : null}
-      {!nativeControls && chromeVisible && seekOnTap ? (
-        <View style={[styles.chrome, fullscreen && { bottom: 12 + insets.bottom }]} pointerEvents="box-none">
+      {!nativeControls && enablePlayerChrome && !chromeVisible && duration > 0 ? (
+        <Pressable
+          style={[styles.miniProgressWrap, fullscreen && { bottom: Math.max(insets.bottom, 4) }]}
+          onPress={revealChrome}
+          accessibilityRole="button"
+          accessibilityLabel="Show playback controls"
+        >
+          <View style={styles.miniProgressTrack}>
+            <View style={[styles.miniProgressFill, { width: `${progress}%` }]} />
+          </View>
+        </Pressable>
+      ) : null}
+      {showChromeControls ? (
+        <View
+          style={[
+            styles.chrome,
+            fullscreen && { bottom: 12 + insets.bottom },
+            enablePlayerChrome && styles.chromeBackdrop,
+          ]}
+          pointerEvents="auto"
+        >
           <View style={styles.chromeRow}>
             <Pressable
-              onPress={(e) => {
-                e.stopPropagation();
+              onPress={() => {
+                if (enablePlayerChrome && chromeHideTimerRef.current) {
+                  clearTimeout(chromeHideTimerRef.current);
+                }
                 togglePlay();
               }}
               hitSlop={8}
@@ -435,14 +520,17 @@ export function HlsPlayer({
               inline
             />
           </View>
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            onLayout={(e: LayoutChangeEvent) => setTrackWidth(e.nativeEvent.layout.width)}
-            onPressIn={onTrackPress}
-            style={styles.track}
+          <View
+            {...scrubPanResponder.panHandlers}
+            onLayout={(e: LayoutChangeEvent) => {
+              trackWidthRef.current = e.nativeEvent.layout.width;
+            }}
+            style={styles.trackHitArea}
           >
-            <View style={[styles.trackFill, { width: `${progress}%` }]} />
-          </Pressable>
+            <View style={styles.track}>
+              <View style={[styles.trackFill, { width: `${progress}%` }]} />
+            </View>
+          </View>
         </View>
       ) : null}
       {showCornerControls ? (
@@ -484,10 +572,11 @@ export function HlsPlayer({
       <Modal
         visible={showModal}
         animationType="fade"
+        statusBarTranslucent
         supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
         onRequestClose={toggleFullscreen}
       >
-        <StatusBar hidden />
+        <StatusBar hidden translucent backgroundColor="transparent" barStyle="light-content" />
         <View style={styles.fullscreenModal}>{renderPlayerSurface(true)}</View>
       </Modal>
     </>
@@ -507,6 +596,7 @@ const styles = StyleSheet.create({
   },
   fullscreenModal: {
     flex: 1,
+    width: '100%',
     backgroundColor: '#000',
   },
   overlay: {
@@ -522,6 +612,29 @@ const styles = StyleSheet.create({
     bottom: 12,
     gap: 8,
   },
+  chromeBackdrop: {
+    paddingTop: 10,
+    paddingHorizontal: 10,
+    paddingBottom: 8,
+    borderRadius: radius.lg,
+    backgroundColor: withAlpha('#000', 0.55),
+  },
+  miniProgressWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 0,
+  },
+  miniProgressTrack: {
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  miniProgressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+  },
   chromeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -532,6 +645,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     flex: 1,
+  },
+  trackHitArea: {
+    paddingVertical: 12,
+    marginVertical: -8,
+    justifyContent: 'center',
   },
   track: {
     height: 4,

@@ -28,7 +28,12 @@ import { radius, spacing, typography } from '@/theme/tokens';
 
 type Props = { visible: boolean; onClose: () => void };
 
-function iconFor(type: string, colors: ThemeColors): { name: keyof typeof Ionicons.glyphMap; color: string } {
+function iconFor(
+  type: string,
+  colors: ThemeColors,
+  processingPhase?: NotificationListItem['processingPhase'],
+): { name: keyof typeof Ionicons.glyphMap; color: string } | 'spinner' {
+  if (type === 'system' && processingPhase === 'started') return 'spinner';
   switch (type) {
     case 'like': return { name: 'heart', color: colors.primary };
     case 'comment': return { name: 'chatbubble', color: '#3b82f6' };
@@ -36,6 +41,7 @@ function iconFor(type: string, colors: ThemeColors): { name: keyof typeof Ionico
     case 'live':
     case 'upload': return { name: 'play', color: colors.primary };
     case 'gift': return { name: 'gift', color: colors.warning };
+    case 'system': return { name: 'notifications', color: colors.yellow };
     default: return { name: 'notifications', color: colors.yellow };
   }
 }
@@ -147,11 +153,12 @@ export function NotificationsSheet({ visible, onClose }: Props) {
                 </View>
               ) : (
                 filtered.map((item) => {
-                  const icon = iconFor(item.type, colors);
+                  const icon = iconFor(item.type, colors, item.processingPhase);
+                  const canNavigate = Boolean(item.navTarget);
                   return (
                     <Pressable
                       key={item.id}
-                      style={[styles.row, !item.isRead && styles.rowUnread]}
+                      style={[styles.row, !item.isRead && styles.rowUnread, !canNavigate && styles.rowStatic]}
                       onPress={() => void openItem(item)}
                     >
                       <View style={styles.avatarWrap}>
@@ -163,7 +170,11 @@ export function NotificationsSheet({ visible, onClose }: Props) {
                           <Image source={{ uri: item.avatar }} style={styles.avatar} contentFit="cover" />
                         )}
                         <View style={styles.typeBadge}>
-                          <Ionicons name={icon.name} size={12} color={icon.color} />
+                          {icon === 'spinner' ? (
+                            <ActivityIndicator size={12} color="#3b82f6" />
+                          ) : (
+                            <Ionicons name={icon.name} size={12} color={icon.color} />
+                          )}
                         </View>
                       </View>
                       <View style={styles.copy}>
@@ -266,6 +277,7 @@ function createNotificationStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   rowUnread: { backgroundColor: colors.primary + '08' },
+  rowStatic: { opacity: 0.92 },
   avatarWrap: { position: 'relative' },
   avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.secondary },
   systemAvatar: {

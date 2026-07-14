@@ -18,6 +18,8 @@ export type NotificationMetadata = {
   seriesSlug?: string;
   episodeNumber?: number;
   podcastEpisodeId?: string;
+  processingPhase?: 'started' | 'complete' | 'failed';
+  contentLabel?: string;
 };
 
 @Injectable()
@@ -288,6 +290,144 @@ export class NotificationsService {
         episodeNumber,
         videoId,
       },
+    });
+  }
+
+  private contentLabelForVideoType(type: VideoType): string {
+    switch (type) {
+      case VideoType.movie:
+        return 'movie';
+      case VideoType.short:
+        return 'short';
+      default:
+        return 'video';
+    }
+  }
+
+  async notifyVideoProcessingStarted(
+    userId: string,
+    videoId: string,
+    title: string,
+    videoType: VideoType,
+    verticalEpisodeId?: string | null,
+  ): Promise<void> {
+    const label = this.contentLabelForVideoType(videoType);
+    await this.notifyCreatorContentProcessing({
+      userId,
+      phase: 'started',
+      title,
+      referenceId: videoId,
+      metadata: {
+        dedupeKey: `processing:started:${videoId}`,
+        processingPhase: 'started',
+        contentLabel: label,
+        videoType,
+        videoId,
+        contentType: verticalEpisodeId ? 'vertical_episode' : 'video',
+      },
+      message: `Your ${label} "${title}" is being processed. You can leave this page — we'll notify you when it's ready.`,
+    });
+  }
+
+  async notifyVideoProcessingComplete(
+    userId: string,
+    videoId: string,
+    title: string,
+    videoType: VideoType,
+    verticalEpisodeId?: string | null,
+    seriesSlug?: string,
+    episodeNumber?: number,
+  ): Promise<void> {
+    const label = this.contentLabelForVideoType(videoType);
+    await this.notifyCreatorContentProcessing({
+      userId,
+      phase: 'complete',
+      title,
+      referenceId: videoId,
+      metadata: {
+        dedupeKey: `processing:complete:${videoId}`,
+        processingPhase: 'complete',
+        contentLabel: label,
+        videoType,
+        videoId,
+        contentType: verticalEpisodeId ? 'vertical_episode' : 'video',
+        seriesSlug,
+        episodeNumber,
+      },
+      message: `Your ${label} "${title}" is ready and published.`,
+    });
+  }
+
+  async notifyVideoProcessingFailed(
+    userId: string,
+    videoId: string,
+    title: string,
+    videoType: VideoType,
+  ): Promise<void> {
+    const label = this.contentLabelForVideoType(videoType);
+    await this.notifyCreatorContentProcessing({
+      userId,
+      phase: 'failed',
+      title,
+      referenceId: videoId,
+      metadata: {
+        dedupeKey: `processing:failed:${videoId}`,
+        processingPhase: 'failed',
+        contentLabel: label,
+        videoType,
+        videoId,
+        contentType: 'video',
+      },
+      message: `Processing failed for your ${label} "${title}". Try uploading again.`,
+    });
+  }
+
+  async notifyPodcastEpisodeReady(
+    userId: string,
+    episodeId: string,
+    title: string,
+  ): Promise<void> {
+    await this.notifyCreatorContentProcessing({
+      userId,
+      phase: 'complete',
+      title,
+      referenceId: episodeId,
+      metadata: {
+        dedupeKey: `processing:complete:podcast:${episodeId}`,
+        processingPhase: 'complete',
+        contentLabel: 'podcast episode',
+        contentType: 'podcast_episode',
+        podcastEpisodeId: episodeId,
+      },
+      message: `Your podcast episode "${title}" is ready and published.`,
+    });
+  }
+
+  private async notifyCreatorContentProcessing(params: {
+    userId: string;
+    phase: 'started' | 'complete' | 'failed';
+    title: string;
+    referenceId: string;
+    metadata: NotificationMetadata;
+    message: string;
+  }): Promise<void> {
+    if (!(await this.isPrefEnabled(params.userId, 'system'))) return;
+
+    const dedupeKey =
+      params.metadata.dedupeKey ?? `processing:${params.phase}:${params.referenceId}`;
+    if (await this.alreadySent(params.userId, dedupeKey)) return;
+
+    await this.persistNotification({
+      userId: params.userId,
+      type: 'system',
+      actorId: params.userId,
+      referenceId: params.referenceId,
+      message: params.message,
+      metadata: {
+        ...params.metadata,
+        dedupeKey,
+        processingPhase: params.phase,
+      } as Prisma.InputJsonValue,
     });
   }
 

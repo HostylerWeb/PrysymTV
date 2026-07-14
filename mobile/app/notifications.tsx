@@ -66,21 +66,35 @@ export default function NotificationsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           ListEmptyComponent={<Text style={styles.empty}>No notifications yet.</Text>}
-          renderItem={({ item }) => (
+          renderItem={({ item }) => {
+            const canNavigate = Boolean(item.navTarget);
+            return (
             <Pressable
-              style={[styles.row, !item.isRead && styles.unread]}
+              style={[styles.row, !item.isRead && styles.unread, !canNavigate && styles.rowStatic]}
               onPress={() => void openItem(item)}
             >
-              <Image source={{ uri: item.avatar }} style={styles.avatar} contentFit="cover" />
+              {item.type === 'system' ? (
+                <View style={styles.systemAvatar}>
+                  <Text style={styles.systemLetter}>P</Text>
+                </View>
+              ) : (
+                <Image source={{ uri: item.avatar }} style={styles.avatar} contentFit="cover" />
+              )}
               <View style={styles.copy}>
                 <Text style={styles.msg}>
-                  <Text style={styles.user}>{item.user} </Text>
+                  {item.type !== 'system' ? (
+                    <Text style={styles.user}>{item.user} </Text>
+                  ) : null}
                   {item.message}
                 </Text>
-                <Text style={styles.type}>{item.time} · {item.type}</Text>
+                <Text style={styles.type}>
+                  {item.time}
+                  {item.processingPhase === 'started' ? ' · Processing' : ''}
+                </Text>
               </View>
             </Pressable>
-          )}
+            );
+          }}
         />
       )}
     </View>
@@ -106,7 +120,17 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   unread: { borderColor: colors.primary + '55' },
+  rowStatic: { opacity: 0.92 },
   avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.muted },
+  systemAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  systemLetter: { color: colors.primaryForeground, fontWeight: '800', fontSize: 16 },
   copy: { flex: 1 },
   user: { fontWeight: '700', color: colors.foreground },
   msg: { color: colors.foreground, fontSize: 14, lineHeight: 20 },

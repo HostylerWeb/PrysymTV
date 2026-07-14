@@ -100,6 +100,9 @@ export class AdminService {
       pendingApps,
       pendingVerticalApps,
       pendingStoreApps,
+      processingVideos,
+      processingVerticalEpisodes,
+      processingPodcastEpisodes,
     ] = await Promise.all([
       this.prisma.analyticsEvent.findMany({
         where: { createdAt: { gte: since24h }, userId: { not: null } },
@@ -133,6 +136,13 @@ export class AdminService {
       this.prisma.storeCreatorApplication.count({
         where: { status: ApplicationStatus.pending },
       }),
+      this.prisma.video.count({ where: { status: ContentStatus.processing } }),
+      this.prisma.verticalEpisode.count({
+        where: { status: ContentStatus.processing },
+      }),
+      this.prisma.podcastEpisode.count({
+        where: { status: ContentStatus.processing },
+      }),
     ]);
 
     const pendingPayoutsUsd = pendingPayouts.reduce(
@@ -160,6 +170,104 @@ export class AdminService {
       pendingVerticalCreatorApplications: pendingVerticalApps,
       pendingStoreCreatorApplications: pendingStoreApps,
       pendingApplications: pendingApps + pendingVerticalApps + pendingStoreApps,
+      processingVideos,
+      processingVerticalEpisodes,
+      processingPodcastEpisodes,
+      processingTotal:
+        processingVideos + processingVerticalEpisodes + processingPodcastEpisodes,
+    };
+  }
+
+  async listProcessingContent(limit = 20) {
+    const take = Math.min(Math.max(limit, 1), 50);
+    const [videos, verticalEpisodes, podcastEpisodes, videoTotal, verticalTotal, podcastTotal] =
+      await Promise.all([
+      this.prisma.video.findMany({
+        where: { status: ContentStatus.processing },
+        orderBy: { createdAt: 'desc' },
+        take,
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          createdAt: true,
+          creator: { select: { username: true } },
+        },
+      }),
+      this.prisma.verticalEpisode.findMany({
+        where: { status: ContentStatus.processing },
+        orderBy: { createdAt: 'desc' },
+        take,
+        select: {
+          id: true,
+          title: true,
+          episodeNumber: true,
+          createdAt: true,
+          series: { select: { title: true, slug: true } },
+        },
+      }),
+      this.prisma.podcastEpisode.findMany({
+        where: { status: ContentStatus.processing },
+        orderBy: { createdAt: 'desc' },
+        take,
+        select: {
+          id: true,
+          title: true,
+          createdAt: true,
+          show: { select: { title: true } },
+        },
+      }),
+      this.prisma.video.count({ where: { status: ContentStatus.processing } }),
+      this.prisma.verticalEpisode.count({
+        where: { status: ContentStatus.processing },
+      }),
+      this.prisma.podcastEpisode.count({
+        where: { status: ContentStatus.processing },
+      }),
+    ]);
+
+    const items = [
+      ...videos.map((v) => ({
+        id: v.id,
+        title: v.title,
+        kind: v.type as string,
+        label:
+          v.type === VideoType.movie
+            ? 'Movie'
+            : v.type === VideoType.short
+              ? 'Short'
+              : 'Video',
+        creator: v.creator ? `@${v.creator.username}` : undefined,
+        submittedAt: v.createdAt.toISOString(),
+        adminHref: `/admin/content/${v.type === VideoType.movie ? 'movies' : v.type === VideoType.short ? 'shorts' : 'videos'}`,
+      })),
+      ...verticalEpisodes.map((ep) => ({
+        id: ep.id,
+        title: ep.title,
+        kind: 'vertical_episode',
+        label: 'Vertical episode',
+        seriesTitle: ep.series.title,
+        episodeNumber: ep.episodeNumber,
+        submittedAt: ep.createdAt.toISOString(),
+        adminHref: '/admin/content/verticals',
+      })),
+      ...podcastEpisodes.map((ep) => ({
+        id: ep.id,
+        title: ep.title,
+        kind: 'podcast_episode',
+        label: 'Podcast episode',
+        seriesTitle: ep.show.title,
+        submittedAt: ep.createdAt.toISOString(),
+        adminHref: '/admin/content/podcasts',
+      })),
+    ].sort(
+      (a, b) =>
+        new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
+    );
+
+    return {
+      items: items.slice(0, take),
+      total: videoTotal + verticalTotal + podcastTotal,
     };
   }
 

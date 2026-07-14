@@ -9,6 +9,7 @@ export type NotificationMetadata = {
   seriesSlug?: string;
   episodeNumber?: number;
   podcastEpisodeId?: string;
+  processingPhase?: 'started' | 'complete' | 'failed';
 };
 
 function commentQuery(commentId?: string, openComments = false): string {
@@ -110,6 +111,34 @@ export function buildNotificationActionUrl(
     case 'live':
     case 'gift':
       return referenceId ? `/live/${referenceId}` : '/';
+
+    case 'system': {
+      const phase = metadata?.processingPhase;
+      if (phase === 'started' || phase === 'failed') {
+        return '/';
+      }
+      if (contentType === 'vertical_episode') {
+        return (
+          verticalEpisodeUrl(metadata?.seriesSlug, metadata?.episodeNumber) ??
+          '/'
+        );
+      }
+      if (contentType === 'podcast_episode') {
+        return (
+          podcastEpisodeUrl(
+            metadata?.podcastEpisodeId ?? referenceId ?? undefined,
+          ) ?? '/'
+        );
+      }
+      if (videoId) {
+        if (videoType === 'short') {
+          return `/shorts?start=${encodeURIComponent(videoId)}`;
+        }
+        if (videoType === 'movie') return `/movie/${videoId}`;
+        return `/watch/${videoId}`;
+      }
+      return '/profile';
+    }
 
     default:
       return '/';

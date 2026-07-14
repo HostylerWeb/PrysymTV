@@ -11,7 +11,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
 import { createVerticalSeries, createVerticalEpisode, attachVerticalEpisodeVideo } from '@/lib/api/verticals';
-import { pollVideoUntilReady, runVideoUpload } from '@/lib/api/videos';
+import { runVideoUpload } from '@/lib/api/videos';
+import { uploadQueuedBodyFor } from '@/lib/upload-processing-copy';
 import { colors, radius } from '@/theme/tokens';
 
 const GENRES = ['Drama', 'Romance', 'Thriller', 'Comedy', 'Fantasy', 'Action', 'Mystery'];
@@ -157,9 +158,8 @@ export function VerticalSeriesWizard({
           file: videoFile,
           verticalEpisodeId: ep.id,
         });
-        await pollVideoUntilReady(uploaded.videoId);
         await attachVerticalEpisodeVideo(ep.id, uploaded.videoId);
-        setDoneMessage('Episode uploaded and processing.');
+        setDoneMessage(uploadQueuedBodyFor('vertical episode'));
         setMode('done');
         onComplete?.();
       }

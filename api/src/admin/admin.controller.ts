@@ -363,6 +363,14 @@ export class AdminController {
     return this.admin.getContentStats();
   }
 
+  @Get('content/processing')
+  listProcessingContent(@Query('limit') limit?: string) {
+    const parsed = limit ? Number.parseInt(limit, 10) : 20;
+    return this.admin.listProcessingContent(
+      Number.isFinite(parsed) ? parsed : 20,
+    );
+  }
+
   @Get('content/videos')
   listVideos(@Query() query: AdminListQueryDto) {
     return this.admin.listAdminVideos(query);

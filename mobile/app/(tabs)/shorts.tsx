@@ -58,7 +58,7 @@ export default function ShortsScreen() {
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [giftOpen, setGiftOpen] = useState(false);
-  const [muted, setMuted] = useState(true);
+  const [muted, setMuted] = useState(false);
   const [following, setFollowing] = useState<Record<string, boolean>>({});
   const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
@@ -227,9 +227,6 @@ export default function ShortsScreen() {
                   <View style={styles.topActions}>
                     <Pressable onPress={() => setMuted(!muted)} hitSlop={8}>
                       <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={22} color={colors.onVideo} />
-                    </Pressable>
-                    <Pressable hitSlop={8}>
-                      <Ionicons name="ellipsis-vertical" size={22} color={colors.onVideo} />
                     </Pressable>
                     <Pressable onPress={() => requireAuth(() => trigger('short'))} hitSlop={8}>
                       <Ionicons name="add" size={24} color={colors.onVideo} />

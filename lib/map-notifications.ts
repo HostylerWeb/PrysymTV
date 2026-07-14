@@ -30,6 +30,7 @@ export type NotificationListItem = {
   isRead: boolean;
   avatar: string;
   actionUrl?: string;
+  processingPhase?: NotificationMetadata["processingPhase"];
 };
 
 export function mapNotificationToListItem(n: ApiNotification): NotificationListItem {
@@ -58,5 +59,6 @@ export function mapNotificationToListItem(n: ApiNotification): NotificationListI
       n.metadata,
       n.actor?.username,
     ),
+    processingPhase: n.metadata?.processingPhase,
   };
 }

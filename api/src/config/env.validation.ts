@@ -41,7 +41,7 @@ export class EnvironmentVariables {
   JWT_ACCESS_TTL: string = '15m';
 
   @IsString()
-  JWT_REFRESH_TTL: string = '7d';
+  JWT_REFRESH_TTL: string = '400d';
 
   @IsString()
   CORS_ORIGIN: string = 'http://localhost:3001';

@@ -23,7 +23,10 @@ interface NotificationsModalProps {
   onUnreadChange?: (count: number) => void
 }
 
-function getNotificationIcon(type: string) {
+function getNotificationIcon(
+  type: string,
+  processingPhase?: NotificationListItem["processingPhase"],
+) {
   switch (type) {
     case "like":
       return <Heart className="w-4 h-4 text-primary fill-primary" />
@@ -37,7 +40,11 @@ function getNotificationIcon(type: string) {
     case "gift":
       return <Heart className="w-4 h-4 text-amber-500 fill-amber-500" />
     case "system":
-      return <Bell className="w-4 h-4 text-yellow-500" />
+      return processingPhase === "started" ? (
+        <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+      ) : (
+        <Bell className="w-4 h-4 text-yellow-500" />
+      )
     default:
       return <Bell className="w-4 h-4" />
   }
@@ -52,10 +59,14 @@ function NotificationRow({
   onRead: (id: string) => void
   onClose: () => void
 }) {
+  const isClickable = Boolean(notification.actionUrl)
+
   const content = (
     <div
       className={cn(
-        "flex items-start gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors",
+        "flex items-start gap-3 px-4 py-3 transition-colors",
+        isClickable && "hover:bg-secondary/50 cursor-pointer",
+        !isClickable && "cursor-default",
         !notification.isRead && "bg-primary/5",
       )}
       onClick={() => {
@@ -75,7 +86,7 @@ function NotificationRow({
           />
         )}
         <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-background flex items-center justify-center border-2 border-background">
-          {getNotificationIcon(notification.type)}
+          {getNotificationIcon(notification.type, notification.processingPhase)}
         </div>
       </div>
       <div className="flex-1 min-w-0">

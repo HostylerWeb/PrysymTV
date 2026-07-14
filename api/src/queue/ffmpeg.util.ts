@@ -65,9 +65,12 @@ export async function probeMedia(
   };
 }
 
-/** Ladder heights capped by source (no upscale). Movies/videos: 720p + 1080p only. */
-export function pickTranscodeHeights(sourceHeight: number): number[] {
-  const candidates = [720, 1080];
+/** Ladder heights capped by source (no upscale). */
+export function pickTranscodeHeights(
+  sourceHeight: number,
+  options?: { preferMovieLadder?: boolean },
+): number[] {
+  const candidates = options?.preferMovieLadder ? [480, 720, 1080] : [720, 1080];
   const cap = sourceHeight > 0 ? sourceHeight : 720;
   const picked = candidates.filter((h) => h <= cap);
   return picked.length > 0 ? picked : [Math.min(720, cap)];
@@ -133,6 +136,7 @@ export async function transcodeToHls(
   ffprobePath: string,
   profile: TranscodeProfile = 'adaptive',
   maxHeight = 720,
+  preferMovieLadder = false,
 ): Promise<MediaProbe> {
   const probe = await probeMedia(inputPath, ffprobePath);
 
@@ -165,7 +169,7 @@ export async function transcodeToHls(
     return probe;
   }
 
-  const heights = pickTranscodeHeights(probe.height);
+  const heights = pickTranscodeHeights(probe.height, { preferMovieLadder });
   const n = heights.length;
 
   if (n === 1) {

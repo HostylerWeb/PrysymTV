@@ -27,6 +27,7 @@ export type NotificationListItem = {
   isRead: boolean;
   avatar: string;
   actorUsername?: string;
+  processingPhase?: NotificationMetadata['processingPhase'];
   navTarget?: ReturnType<typeof resolveNotificationNavTarget>;
 };
 
@@ -59,6 +60,7 @@ export function mapNotificationToListItem(n: ApiNotification): NotificationListI
     isRead: n.isRead,
     avatar,
     actorUsername: n.actor?.username,
+    processingPhase: n.metadata?.processingPhase,
     navTarget: resolveNotificationNavTarget(
       n.type,
       n.referenceId,

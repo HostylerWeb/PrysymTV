@@ -132,6 +132,7 @@ function VerticalEpisodeCell({
             posterUrl={posterUri || null}
             nativeControls={false}
             tapToToggle
+            enablePlayerChrome
             enableQualityMenu
             enableFullscreen
             fullscreenPresentation="inline"

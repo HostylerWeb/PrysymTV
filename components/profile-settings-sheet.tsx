@@ -40,7 +40,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { User } from "@/contexts/auth-context"
-import { uploadVideoFlow, pollVideoUntilReady, getVideoUploadMaxBytes } from "@/lib/api/videos"
+import { uploadVideoFlow, getVideoUploadMaxBytes } from "@/lib/api/videos"
+import { UploadQueuedSuccess } from "@/components/upload-queued-success"
 import { fetchStreamIngestHealth, initStream, getRtmpIngestUrl } from "@/lib/api/streams"
 import { createPremiumCheckout, createInsiderCheckout } from "@/lib/api/billing"
 import { fetchPublicConfig, type PublicMembershipConfig } from "@/lib/api/config"
@@ -1001,7 +1002,7 @@ export function ProfileSettingsSheet({
                 setUploadProgress(0)
                 setProcessingStatus(null)
                 try {
-                  const queued = await uploadVideoFlow(
+                  await uploadVideoFlow(
                     {
                       type: uploadType as "short" | "video",
                       title: uploadTitle.trim(),
@@ -1011,12 +1012,6 @@ export function ProfileSettingsSheet({
                     uploadFile,
                     setUploadProgress,
                   )
-                  setUploading(false)
-                  setUploadProcessing(true)
-                  setProcessingStatus("processing")
-                  await pollVideoUntilReady(queued.videoId, {
-                    onStatus: setProcessingStatus,
-                  })
                   setUploadDone(true)
                 } catch (e) {
                   const msg =
@@ -2084,28 +2079,11 @@ function UploadPanel({
 }) {
   if (done) {
     return (
-      <div className="py-10 text-center">
-        <Check className="w-12 h-12 text-primary mx-auto mb-3" />
-        <p className="font-semibold">Upload complete</p>
-        <p className="text-sm text-muted-foreground mt-1">Your video is ready to watch.</p>
-      </div>
-    )
-  }
-
-  if (processing) {
-    return (
-      <div className="py-10 text-center px-4">
-        <div className="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-        <p className="font-semibold">Processing video</p>
-        <p className="text-sm text-muted-foreground mt-1">
-          {processingStatus === "ready"
-            ? "Finishing up…"
-            : "Transcoding for playback. This may take a few minutes."}
-        </p>
-        {processingStatus && processingStatus !== "ready" && (
-          <p className="text-xs text-muted-foreground mt-2 capitalize">Status: {processingStatus}</p>
-        )}
-      </div>
+      <UploadQueuedSuccess
+        contentLabel={selected === "short" ? "short" : "video"}
+        onClose={() => onSelect(selected ?? "")}
+        closeLabel="Upload more"
+      />
     )
   }
 

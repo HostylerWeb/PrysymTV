@@ -22,6 +22,22 @@ export type AdminOverview = {
   pendingStreamerApplications: number;
   pendingVerticalCreatorApplications: number;
   pendingApplications: number;
+  processingVideos?: number;
+  processingVerticalEpisodes?: number;
+  processingPodcastEpisodes?: number;
+  processingTotal?: number;
+};
+
+export type AdminProcessingItem = {
+  id: string;
+  title: string;
+  kind: string;
+  label: string;
+  creator?: string;
+  seriesTitle?: string;
+  episodeNumber?: number;
+  submittedAt: string;
+  adminHref: string;
 };
 
 export type AdminApplicationType = "streamer" | "vertical" | "store";
@@ -284,6 +300,12 @@ function qs(params: Record<string, string | number | undefined>) {
 
 export function fetchAdminOverview() {
   return apiRequest<AdminOverview>("/admin/analytics/overview");
+}
+
+export function fetchAdminProcessingContent(limit = 20) {
+  return apiRequest<{ items: AdminProcessingItem[]; total: number }>(
+    `/admin/content/processing?limit=${limit}`,
+  );
 }
 
 export type AdminAnalyticsTimeseries = {

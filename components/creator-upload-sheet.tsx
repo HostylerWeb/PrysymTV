@@ -7,9 +7,9 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 import {
   getVideoUploadMaxBytes,
-  pollVideoUntilReady,
   uploadVideoFlow,
 } from "@/lib/api/videos"
+import { UploadQueuedSuccess } from "@/components/upload-queued-success"
 import {
   createPodcastShow,
   fetchMyPodcastShows,
@@ -114,8 +114,8 @@ export function CreatorUploadSheet({
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [processing, setProcessing] = useState(false)
   const [done, setDone] = useState(false)
+  const [doneMessage, setDoneMessage] = useState<string | null>(null)
 
   const [podcastShows, setPodcastShows] = useState<MyPodcastShow[]>([])
   const [showId, setShowId] = useState("")
@@ -149,8 +149,8 @@ export function CreatorUploadSheet({
     setProgress(0)
     setError(null)
     setBusy(false)
-    setProcessing(false)
     setDone(false)
+    setDoneMessage(null)
     setShowId("")
     setNewShowTitle("")
     setNewShowDescription("")
@@ -283,6 +283,9 @@ export function CreatorUploadSheet({
           description.trim() || undefined,
         )
         await assignPlaylists("podcast_episode", episodeId)
+        setDoneMessage(
+          "Your podcast episode is ready and published. We'll notify you in your notifications bell.",
+        )
         setDone(true)
         onSuccess?.()
         return
@@ -302,15 +305,11 @@ export function CreatorUploadSheet({
         file,
         setProgress,
       )
-      setBusy(false)
-      setProcessing(true)
-      await pollVideoUntilReady(queued.videoId)
       await assignPlaylists("video", queued.videoId)
       setDone(true)
       onSuccess?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed")
-      setProcessing(false)
     } finally {
       setBusy(false)
     }
@@ -344,24 +343,23 @@ export function CreatorUploadSheet({
 
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
           {done ? (
-            <div className="py-10 text-center">
-              <Check className="w-12 h-12 text-primary mx-auto mb-3" />
-              <p className="font-semibold">Upload complete</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Your content is ready or processing.
-              </p>
-              <Button onClick={onClose} className="mt-6 rounded-full w-full">
-                Done
-              </Button>
-            </div>
-          ) : processing ? (
-            <div className="py-10 text-center">
-              <div className="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="font-semibold">Processing…</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Transcoding for playback. This may take a few minutes.
-              </p>
-            </div>
+            doneMessage ? (
+              <div className="py-10 text-center">
+                <Check className="w-12 h-12 text-primary mx-auto mb-3" />
+                <p className="font-semibold">Upload complete</p>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  {doneMessage}
+                </p>
+                <Button onClick={onClose} className="mt-6 rounded-full w-full">
+                  Done
+                </Button>
+              </div>
+            ) : (
+              <UploadQueuedSuccess
+                contentLabel={kind === "short" ? "short" : "video"}
+                onClose={onClose}
+              />
+            )
           ) : (
             <>
               {kind === "podcast" && (

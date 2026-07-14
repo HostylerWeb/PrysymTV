@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import {
   Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Heart,
-  Share2, MoreHorizontal, Mic, Clock, Users, TrendingUp,
+  Share2, Mic, Clock, Users, TrendingUp,
   Plus,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -349,7 +349,6 @@ export default function PodcastsPage() {
                 <div
                   key={ep.id}
                   onClick={() => startEpisode(ep)}
-                  onDoubleClick={() => { window.location.href = `/podcast/${ep.id}` }}
                   className={cn(
                     "group flex items-center gap-4 p-3 rounded-2xl cursor-pointer transition-all duration-200",
                     nowPlaying?.id === ep.id
@@ -378,12 +377,16 @@ export default function PodcastsPage() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground line-clamp-1">
+                    <Link
+                      href={`/podcast/${ep.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-sm font-semibold text-foreground line-clamp-1 hover:text-primary transition-colors block"
+                    >
                       {ep.title}
                       {isVideoEpisode(ep) ? (
                         <span className="ml-2 text-[10px] font-medium text-primary">Video</span>
                       ) : null}
-                    </p>
+                    </Link>
                     <p className="text-xs text-muted-foreground">{ep.podcast} · {ep.date}</p>
                   </div>
 
@@ -397,9 +400,6 @@ export default function PodcastsPage() {
                       <Heart className={cn("w-4 h-4", isEpisodeLiked(ep) && "fill-primary")} />
                     </button>
                     <span className="text-xs text-muted-foreground w-10 text-right">{ep.duration}</span>
-                    <button className="w-8 h-8 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </button>
                   </div>
                 </div>
               ))}

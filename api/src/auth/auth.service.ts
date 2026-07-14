@@ -253,7 +253,7 @@ export class AuthService {
 
     const refreshRaw = generateSecureToken(48);
     const refreshExpires = this.parseTtlMs(
-      this.config.get('JWT_REFRESH_TTL', '7d'),
+      this.config.get('JWT_REFRESH_TTL', '400d'),
     );
     await this.prisma.refreshSession.create({
       data: {
@@ -459,7 +459,7 @@ export class AuthService {
 
   private parseTtlMs(ttl: string): number {
     const match = /^(\d+)([dhms])$/.exec(ttl);
-    if (!match) return 7 * 24 * 60 * 60 * 1000;
+    if (!match) return 400 * 24 * 60 * 60 * 1000;
     const n = parseInt(match[1], 10);
     const unit = match[2];
     const multipliers: Record<string, number> = {

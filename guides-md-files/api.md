@@ -3,7 +3,7 @@
 **Base URL (development):** `http://localhost:4000/api/v1`  
 **Base URL (production):** `https://srv1765056.hstgr.cloud/api/v1`  
 **WebSocket host (no `/api/v1`):** same origin as API — e.g. `https://srv1765056.hstgr.cloud` (namespace `/streams`)  
-**Auth:** Bearer access token in `Authorization: Bearer <accessToken>`. Refresh token in HttpOnly cookie `prysym_refresh` (path `/api/v1/auth`, 7-day TTL by default).  
+**Auth:** Bearer access token in `Authorization: Bearer <accessToken>`. Refresh token in HttpOnly cookie `prysym_refresh` (path `/api/v1/auth`, `JWT_REFRESH_TTL` default `400d`).  
 **Content-Type:** `application/json` unless noted (multipart for `/media/*` image uploads and local-storage upload fallbacks).
 
 > **React Native:** This doc includes a dedicated [React Native integration](#react-native-integration) section. Login/register/OAuth responses include `refreshToken` in the JSON body **and** set an HttpOnly `prysym_refresh` cookie. Mobile clients may send `{ refreshToken }` to `POST /auth/refresh` (recommended) or persist the cookie.
@@ -226,6 +226,7 @@
 | `DELETE` | `/admin/videos/:id` | ✅ |
 | `DELETE` | `/admin/comments/:id` | ✅ |
 | `GET` | `/admin/content/stats` | ✅ |
+| `GET` | `/admin/content/processing` | ✅ `?limit=` — videos, vertical episodes, podcast episodes in `processing` status |
 | `GET` | `/admin/content/videos` | ✅ `?type=short\|video\|movie` |
 | `GET` | `/admin/content/comments` | ✅ |
 | `GET` | `/admin/content/vertical-series` | ✅ |
@@ -352,7 +353,7 @@ The API **also** sets an HttpOnly refresh cookie (web clients rely on this):
 
 | Cookie | Path | TTL (default) | Purpose |
 |--------|------|---------------|---------|
-| `prysym_refresh` | `/api/v1/auth` | `JWT_REFRESH_TTL` (`7d`) | Rotating refresh session |
+| `prysym_refresh` | `/api/v1/auth` | `JWT_REFRESH_TTL` (`400d`) | Rotating refresh session |
 
 **Refresh flow:** `POST /auth/refresh` with `{ refreshToken }` in the JSON body **or** the `prysym_refresh` cookie. Revokes the old session and returns a new `accessToken`, `refreshToken`, and refresh cookie.
 
@@ -467,7 +468,7 @@ Anonymous connections are allowed (read-only chat); sending messages requires a 
 | `upload` | New content from someone you follow |
 | `live` | `referenceId` = stream UUID → live player |
 | `gift` | `referenceId` = stream UUID if live gift; for video gifts, open creator profile or video context |
-| `system` | Platform announcements |
+| `system` | Processing lifecycle for uploader (`started` / `complete` / `failed`) or platform announcements — **only `complete` is tappable** |
 
 **`metadata` fields:**
 
@@ -481,8 +482,12 @@ type NotificationMetadata = {
   seriesSlug?: string;
   episodeNumber?: number;
   podcastEpisodeId?: string;
+  processingPhase?: 'started' | 'complete' | 'failed';
+  contentLabel?: string;
 };
 ```
+
+**Clickability:** Rows with `processingPhase: 'started'` or `'failed'` must **not** navigate (content is not playable yet). Only `processingPhase: 'complete'` (or other notification types with valid targets) should open a screen.
 
 **Screen mapping examples:**
 
@@ -637,10 +642,12 @@ type NotificationMetadata = {
   seriesSlug?: string;
   episodeNumber?: number;
   podcastEpisodeId?: string;
+  processingPhase?: 'started' | 'complete' | 'failed';
+  contentLabel?: string;
 };
 ```
 
-See [React Native integration — deep links](#push--in-app-notification-deep-links) for screen routing. Like notifications use `dedupeKey` so unlike → like again does **not** re-notify.
+See [React Native integration — deep links](#push--in-app-notification-deep-links) for screen routing. Like notifications use `dedupeKey` so unlike → like again does **not** re-notify. Processing notifications (`processingPhase`) are only tappable when `complete`.
 
 **Notification triggers** (respect `GET/PUT /users/me/notification-preferences`; default all on):
 
@@ -652,7 +659,7 @@ See [React Native integration — deep links](#push--in-app-notification-deep-li
 | `gift` | Someone sends you a gift (live stream, video, shorts, or profile) |
 | `live` | A creator you subscribed to (live-alerts bell) goes live |
 | `upload` | Someone you follow publishes a new public video (processing → `ready`) |
-| `system` | Reserved for platform announcements (admin) |
+| `system` | Upload processing lifecycle for uploader (`started` / `complete` / `failed`); platform announcements |
 
 **Public creator routes** (no auth unless noted):
 
@@ -780,8 +787,18 @@ After `POST /videos/upload/complete`, a job on queue `video-processing` runs in 
 
 | `VIDEO_PROCESSING_MODE` | Behavior |
 |-------------------------|----------|
-| `ffmpeg` | Download raw → multi-bitrate HLS (360p–1080p ladder) → JPEG thumbnail → update `hlsMasterUrl`, `thumbnailUrl`, `durationSeconds` → delete raw on S3 |
+| `ffmpeg` | Download raw → multi-bitrate HLS → JPEG thumbnail → update `hlsMasterUrl`, `thumbnailUrl`, `durationSeconds` → delete raw on S3 |
 | `skip` | Raw file URL as playback; optional probe + thumbnail via FFmpeg |
+
+**HLS ladder (when `ffmpeg`):**
+
+| Content | Renditions |
+|---------|------------|
+| Shorts (`type: short`) | Single stream, max 720p |
+| Long videos (`type: video`) | 720p + 1080p (capped by source height; no upscale) |
+| Movies (`type: movie`) | **480p + 720p + 1080p** (capped by source) — ensures a multi-variant `master.m3u8` so quality selection works even for 720p sources |
+
+Clients show a quality menu only when the HLS master playlist has **2+** `#EXT-X-STREAM-INF` variants. Single-variant outputs hide the control.
 
 **Requires:** `ffmpeg` and `ffprobe` on PATH (`FFMPEG_PATH`, `FFPROBE_PATH`).  
 **Storage:** `STORAGE_DRIVER=local` (dev) or `s3` (Cloudflare R2-compatible). See [`how-to-run.md`](./how-to-run.md#7-video-uploads-r2--ffmpeg).
@@ -1385,7 +1402,7 @@ Used by the web app for browser notifications. React Native Expo push uses a sep
 
 | Route | Notes |
 |-------|--------|
-| `GET /admin/analytics/overview` | `{ dau, liveNow, liveViewers, revenueTodayUsd, pendingReports, pendingPayouts, pendingPayoutsUsd, pendingApplications, pendingStreamerApplications, pendingVerticalCreatorApplications, pendingStoreCreatorApplications }` |
+| `GET /admin/analytics/overview` | `{ dau, liveNow, liveViewers, revenueTodayUsd, pendingReports, pendingPayouts, pendingPayoutsUsd, pendingApplications, pendingStreamerApplications, pendingVerticalCreatorApplications, pendingStoreCreatorApplications, processingVideos, processingVerticalEpisodes, processingPodcastEpisodes, processingTotal }` |
 | `GET /admin/analytics/timeseries` | `?range=7d\|30d\|90d` — daily buckets + `revenueBySource`, `topContent`, `premiumSubscribers` |
 
 ### Moderation, users, streamers, payouts, live
@@ -1411,6 +1428,7 @@ Used by the web app for browser notifications. React Native Expo push uses a sep
 | Route | Notes |
 |-------|--------|
 | `GET /admin/content/stats` | Counts by type |
+| `GET /admin/content/processing` | `?limit=` (max 50) — `{ items[], total }` — videos, vertical episodes, podcast episodes in `processing` status (admin processing bell) |
 | `GET /admin/content/videos` | `?type=short\|video\|movie` |
 | `GET /admin/videos/:id` | Full metadata for admin movie/video edit sheet |
 | `PUT /admin/videos/:id` | Update metadata (title, description, cast, genre, age rating, etc.) |
@@ -1594,7 +1612,7 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 | `JWT_ACCESS_SECRET` | Yes | — | ≥32 chars; unique in production |
 | `JWT_REFRESH_SECRET` | Yes | — | ≥32 chars; unique in production |
 | `JWT_ACCESS_TTL` | No | `15m` | Access token lifetime |
-| `JWT_REFRESH_TTL` | No | `7d` | Refresh token lifetime |
+| `JWT_REFRESH_TTL` | No | `400d` | Refresh token lifetime |
 | `API_PORT` | No | `4000` | HTTP listen port |
 | `API_PUBLIC_URL` | Yes | — | Public API base, e.g. `http://localhost:4000/api/v1` — used for presigned/local upload URLs |
 | `API_BUILD_ID` | No | — | Shown on `GET /health` |
@@ -1651,7 +1669,7 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 
 ## Security notes
 
-1. **Access token:** Store in secure storage on mobile (`expo-secure-store`, Keychain). Web dev uses `sessionStorage`.
+1. **Access token:** Store in secure storage on mobile (`expo-secure-store`, Keychain). Web stores access token in **`localStorage`** (`prysymtv_access_token`) and restores via `POST /auth/refresh` when missing.
 2. **Refresh token:** Returned in login/register/OAuth JSON **and** set as HttpOnly cookie `prysym_refresh`. React Native should store `refreshToken` from JSON and send it to `POST /auth/refresh`. Web relies on the cookie.
 3. **Token rotation:** Each `/auth/refresh` revokes the previous refresh session and issues a new `refreshToken` + cookie.
 4. **HTTPS + secure cookies** required in production (`NODE_ENV=production`).
@@ -1678,4 +1696,4 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 
 ---
 
-*Last updated: 2026-07-12 — Paid VIP live streams (`accessType`, `entryPriceUsd`, `POST /streams/:id/unlock`); economy `coinUsd` + `minPaidStreamUsd`; gift catalog `imageUrl` + admin image upload; ingest health no auth; `GET /config/public` → `live`; gender/birthDate on users (see User profile section).*
+*Last updated: 2026-07-15 — Upload processing notifications (`processingPhase`, non-clickable `started`/`failed`); admin `GET /admin/content/processing` + `processingTotal` on overview; movie HLS ladder (480p/720p/1080p); web access token in `localStorage`; paid VIP live streams; gift catalog `imageUrl`; gender/birthDate on users.*

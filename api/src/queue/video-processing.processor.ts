@@ -65,8 +65,12 @@ export class VideoProcessingProcessor extends WorkerHost {
         return;
       }
       const isShort = video.type === VideoType.short;
+      const isMovie = video.type === VideoType.movie;
       if (isShort) {
         this.logger.log(`Video ${videoId}: shorts profile (single 720p HLS)`);
+      }
+      if (isMovie) {
+        this.logger.log(`Video ${videoId}: movie profile (480p/720p/1080p adaptive HLS)`);
       }
       await this.processFfmpegMode(
         videoId,
@@ -75,6 +79,7 @@ export class VideoProcessingProcessor extends WorkerHost {
         ffprobePath,
         settings.tmpDir,
         isShort ? 'single' : 'adaptive',
+        isMovie,
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -83,6 +88,12 @@ export class VideoProcessingProcessor extends WorkerHost {
         where: { id: videoId },
         data: { status: ContentStatus.failed },
       });
+      void this.notifications.notifyVideoProcessingFailed(
+        video.creatorId,
+        videoId,
+        video.title,
+        video.type,
+      );
       throw err;
     }
   }
@@ -142,6 +153,22 @@ export class VideoProcessingProcessor extends WorkerHost {
       },
     });
 
+    if (prior?.verticalEpisodeId) {
+      await this.prisma.verticalEpisode.update({
+        where: { id: prior.verticalEpisodeId },
+        data: {
+          status: ContentStatus.ready,
+          videoUrl: objectKey,
+          thumbnailUrl: thumbnailUrl ?? undefined,
+          durationSeconds,
+        },
+      });
+    }
+
+    if (prior) {
+      void this.notifyCreatorProcessingComplete(videoId, prior);
+    }
+
     if (
       prior &&
       prior.status !== ContentStatus.ready &&
@@ -150,6 +177,36 @@ export class VideoProcessingProcessor extends WorkerHost {
       void this.notifyUploadFollowers(videoId, prior);
     }
     this.logger.log(`Video ${videoId} ready (processing mode: skip)`);
+  }
+
+  private async notifyCreatorProcessingComplete(
+    videoId: string,
+    prior: {
+      creatorId: string;
+      title: string;
+      type: VideoType;
+      verticalEpisodeId: string | null;
+    },
+  ): Promise<void> {
+    let seriesSlug: string | undefined;
+    let episodeNumber: number | undefined;
+    if (prior.verticalEpisodeId) {
+      const episode = await this.prisma.verticalEpisode.findUnique({
+        where: { id: prior.verticalEpisodeId },
+        include: { series: { select: { slug: true } } },
+      });
+      seriesSlug = episode?.series?.slug;
+      episodeNumber = episode?.episodeNumber;
+    }
+    void this.notifications.notifyVideoProcessingComplete(
+      prior.creatorId,
+      videoId,
+      prior.title,
+      prior.type,
+      prior.verticalEpisodeId,
+      seriesSlug,
+      episodeNumber,
+    );
   }
 
   private async notifyUploadFollowers(
@@ -193,6 +250,7 @@ export class VideoProcessingProcessor extends WorkerHost {
     ffprobePath: string,
     tmpDirOverride: string,
     profile: 'adaptive' | 'single' = 'adaptive',
+    preferMovieLadder = false,
   ) {
     const workRoot = tmpDirOverride
       ? join(tmpDirOverride, videoId)
@@ -213,6 +271,7 @@ export class VideoProcessingProcessor extends WorkerHost {
         ffprobePath,
         profile,
         720,
+        preferMovieLadder,
       );
 
       if (probe.hasVideo) {
@@ -255,6 +314,22 @@ export class VideoProcessingProcessor extends WorkerHost {
           durationSeconds: probe.durationSeconds,
         },
       });
+
+      if (prior?.verticalEpisodeId) {
+        await this.prisma.verticalEpisode.update({
+          where: { id: prior.verticalEpisodeId },
+          data: {
+            status: ContentStatus.ready,
+            videoUrl: masterKey,
+            thumbnailUrl: thumbnailUrl ?? undefined,
+            durationSeconds: probe.durationSeconds,
+          },
+        });
+      }
+
+      if (prior) {
+        void this.notifyCreatorProcessingComplete(videoId, prior);
+      }
 
       if (
         prior &&

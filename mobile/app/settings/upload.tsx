@@ -6,6 +6,7 @@ import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { runVideoUpload } from '@/lib/api/videos';
+import { uploadQueuedBodyFor } from '@/lib/upload-processing-copy';
 import { colors, radius } from '@/theme/tokens';
 
 const UPLOAD_TYPES = {
@@ -59,7 +60,10 @@ export default function SettingsUploadScreen() {
         description: description.trim() || undefined,
         file,
       });
-      Alert.alert('Uploaded', 'Your video is processing and will appear in your library soon.');
+      Alert.alert(
+        'Upload received',
+        uploadQueuedBodyFor(config.videoType === 'short' ? 'short' : config.videoType === 'movie' ? 'movie' : 'video'),
+      );
       setStep(0);
       setTitle('');
       setDescription('');

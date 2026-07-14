@@ -195,6 +195,14 @@ export class VideosService {
       jobId: `video-${dto.videoId}`,
     });
 
+    void this.notifications.notifyVideoProcessingStarted(
+      userId,
+      video.id,
+      video.title,
+      video.type,
+      video.verticalEpisodeId,
+    );
+
     return {
       videoId: dto.videoId,
       status: ContentStatus.processing,

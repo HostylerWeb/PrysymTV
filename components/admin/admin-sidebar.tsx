@@ -7,6 +7,7 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { ADMIN_NAV } from "@/lib/admin/nav"
 import { useAdminBadges } from "@/lib/admin/use-admin-badges"
+import { AdminProcessingBell } from "@/components/admin/admin-processing-bell"
 import { useAuth } from "@/contexts/auth-context"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 
@@ -113,7 +114,10 @@ export function AdminSidebar() {
           </SheetTrigger>
           <SheetContent side="left" className="w-72 p-0 bg-sidebar flex flex-col">
             <SheetHeader className="p-5 border-b border-border text-left shrink-0">
-              <SheetTitle>Prysym Admin</SheetTitle>
+              <div className="flex items-center justify-between gap-3">
+                <SheetTitle>Prysym Admin</SheetTitle>
+                <AdminProcessingBell />
+              </div>
             </SheetHeader>
             <div className="flex-1 overflow-y-auto p-3">
               <AdminNavLinks
@@ -128,14 +132,15 @@ export function AdminSidebar() {
       </div>
 
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 z-50 w-64 flex-col border-r border-border bg-sidebar text-sidebar-foreground">
-        <div className="p-5 border-b border-sidebar-border">
-          <Link href="/admin" className="flex items-center gap-3">
+        <div className="p-5 border-b border-sidebar-border flex items-center justify-between gap-3">
+          <Link href="/admin" className="flex items-center gap-3 min-w-0">
             <img src="/favicon.webp" alt="" className="w-9 h-9" />
-            <div>
+            <div className="min-w-0">
               <p className="font-bold text-sm leading-tight">Prysym Admin</p>
               <p className="text-[10px] text-muted-foreground">Operator console</p>
             </div>
           </Link>
+          <AdminProcessingBell />
         </div>
 
         <div className="flex-1 overflow-y-auto p-3">

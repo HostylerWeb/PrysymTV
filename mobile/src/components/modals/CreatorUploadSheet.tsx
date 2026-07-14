@@ -18,6 +18,7 @@ import { ThemedInput } from '@/components/ui/ThemedInput';
 import { fetchMyPodcastShows, createPodcastShow } from '@/lib/api/podcasts';
 import { uploadPodcastEpisodeFlow, uploadPodcastShowCover } from '@/lib/api/podcasts-upload';
 import { runVideoUpload } from '@/lib/api/videos';
+import { uploadQueuedBodyFor } from '@/lib/upload-processing-copy';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import type { ThemeColors } from '@/theme/tokens';
@@ -83,6 +84,7 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
   const [tags, setTags] = useState('');
   const [file, setFile] = useState<PickedMedia | null>(null);
   const [done, setDone] = useState(false);
+  const [doneMessage, setDoneMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,6 +106,7 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
     setTags('');
     setFile(null);
     setDone(false);
+    setDoneMessage(null);
     setBusy(false);
     setError(null);
     setPodcastMode('new');
@@ -189,6 +192,7 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
           tags: tags.trim() || undefined,
           file,
         });
+        setDoneMessage(uploadQueuedBodyFor(kind));
       } else {
         let targetShowId = showId;
         if (podcastMode === 'new') {
@@ -215,6 +219,9 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
           title.trim(),
           file,
           description.trim() || undefined,
+        );
+        setDoneMessage(
+          "Your podcast episode is ready and published. Check your notifications bell for updates.",
         );
       }
       setDone(true);
@@ -252,8 +259,11 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
             {done ? (
               <View style={styles.doneBox}>
                 <Ionicons name="checkmark-circle" size={48} color={colors.primary} />
-                <Text style={styles.doneTitle}>Upload complete</Text>
-                <Text style={styles.doneSub}>Your content is ready or processing.</Text>
+                <Text style={styles.doneTitle}>Upload received</Text>
+                <Text style={styles.doneSub}>
+                  {doneMessage ??
+                    uploadQueuedBodyFor(kind === 'podcast' ? 'podcast episode' : kind)}
+                </Text>
                 <Button label="Done" onPress={onClose} style={{ marginTop: 16, width: '100%' }} />
               </View>
             ) : (

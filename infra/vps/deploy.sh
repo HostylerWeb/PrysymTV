@@ -156,7 +156,7 @@ write_api_env() {
     JWT_ACCESS_SECRET "$jwt_access" \
     JWT_REFRESH_SECRET "$jwt_refresh" \
     JWT_ACCESS_TTL 15m \
-    JWT_REFRESH_TTL 7d \
+    JWT_REFRESH_TTL 400d \
     STORAGE_DRIVER s3 \
     S3_ENDPOINT "$(resolve_api_secret S3_ENDPOINT "$S3_ENDPOINT")" \
     S3_REGION "$s3_region" \

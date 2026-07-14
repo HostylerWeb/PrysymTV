@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react"
 import {
   X,
   Upload,
-  Check,
   ChevronLeft,
   ChevronRight,
   LayoutGrid,
@@ -25,9 +24,9 @@ import {
 } from "@/lib/api/verticals-admin"
 import {
   getVideoUploadMaxBytes,
-  pollVideoUntilReady,
   uploadVideoFlow,
 } from "@/lib/api/videos"
+import { UploadQueuedSuccess } from "@/components/upload-queued-success"
 
 const GENRES = [
   "Drama",
@@ -69,7 +68,6 @@ export function VerticalSeriesWizard({
   const [loadingSeries, setLoadingSeries] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [processing, setProcessing] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
 
   // Series fields
@@ -270,16 +268,12 @@ export function VerticalSeriesWizard({
         setUploadProgress,
       )
 
-      setBusy(false)
-      setProcessing(true)
-      await pollVideoUntilReady(uploaded.videoId)
       await attachVerticalEpisodeVideo(ep.id, uploaded.videoId)
 
       setMode("done")
       onSuccess?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Episode upload failed")
-      setProcessing(false)
     } finally {
       setBusy(false)
     }
@@ -508,16 +502,7 @@ export function VerticalSeriesWizard({
 
           {mode === "episode" && (
             <div className="space-y-4">
-              {processing ? (
-                <div className="py-12 text-center">
-                  <div className="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                  <p className="font-semibold">Processing episode…</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Transcoding your vertical video for playback.
-                  </p>
-                </div>
-              ) : (
-                <>
+              <>
                   {!createdSeriesSlug && (
                     <div>
                       <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
@@ -715,18 +700,20 @@ export function VerticalSeriesWizard({
                     </Button>
                   )}
                 </>
-              )}
             </div>
           )}
 
           {mode === "done" && (
-            <div className="py-10 text-center">
-              <Check className="w-14 h-14 text-primary mx-auto mb-3" />
-              <p className="font-semibold text-lg">Episode published</p>
-              <p className="text-sm text-muted-foreground mt-2 mb-6">
-                {selectedSeries?.title ?? "Your series"} · Episode {episodeNumber}
-              </p>
-              <div className="flex flex-col gap-2">
+            <div className="py-2">
+              <UploadQueuedSuccess
+                contentLabel="vertical episode"
+                onClose={onClose}
+                closeLabel="Done"
+              />
+              <div className="flex flex-col gap-2 px-1">
+                <p className="text-xs text-center text-muted-foreground mb-2">
+                  {selectedSeries?.title ?? "Your series"} · Episode {episodeNumber}
+                </p>
                 <Button
                   className="rounded-full"
                   onClick={() => {
@@ -737,10 +724,7 @@ export function VerticalSeriesWizard({
                     setMode("episode")
                   }}
                 >
-                  Add another episode
-                </Button>
-                <Button variant="secondary" className="rounded-full" onClick={onClose}>
-                  Done
+                  Upload another episode
                 </Button>
               </div>
             </div>

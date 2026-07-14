@@ -1,16 +1,16 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { X, Upload, Check, Film, Plus, Trash2 } from "lucide-react"
+import { X, Upload, Film, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAdminQuery } from "@/lib/admin/use-admin-query"
 import { fetchAdminMovieGenresConfig } from "@/lib/api/admin"
 import {
   getVideoUploadMaxBytes,
-  pollVideoUntilReady,
   uploadAdminMovieFlow,
   uploadMoviePoster,
 } from "@/lib/api/videos"
+import { UploadQueuedSuccess } from "@/components/upload-queued-success"
 
 const AGE_RATINGS = ["G", "PG", "PG-13", "R", "NC-17", "TV-MA", "NR"]
 
@@ -46,7 +46,6 @@ export function AdminMovieUploadSheet({
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [processing, setProcessing] = useState(false)
   const [done, setDone] = useState(false)
 
   useEffect(() => {
@@ -66,7 +65,6 @@ export function AdminMovieUploadSheet({
     setProgress(0)
     setError(null)
     setBusy(false)
-    setProcessing(false)
     setDone(false)
   }, [isOpen, defaultGenreSlug])
 
@@ -104,7 +102,7 @@ export function AdminMovieUploadSheet({
     setProgress(0)
 
     try {
-      const queued = await uploadAdminMovieFlow(
+      await uploadAdminMovieFlow(
         {
           type: "movie",
           title: title.trim(),
@@ -123,14 +121,10 @@ export function AdminMovieUploadSheet({
         posterFile,
         setProgress,
       )
-      setBusy(false)
-      setProcessing(true)
-      await pollVideoUntilReady(queued.videoId)
       setDone(true)
       onSuccess?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed")
-      setProcessing(false)
     } finally {
       setBusy(false)
     }
@@ -164,24 +158,11 @@ export function AdminMovieUploadSheet({
 
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
           {done ? (
-            <div className="py-10 text-center">
-              <Check className="w-12 h-12 text-primary mx-auto mb-3" />
-              <p className="font-semibold">Movie uploaded</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Processing for playback. It will appear in the catalog when ready.
-              </p>
-              <Button onClick={onClose} className="mt-6 rounded-full w-full">
-                Done
-              </Button>
-            </div>
-          ) : processing ? (
-            <div className="py-10 text-center">
-              <div className="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="font-semibold">Processing…</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Transcoding may take several minutes for long films.
-              </p>
-            </div>
+            <UploadQueuedSuccess
+              contentLabel="movie"
+              onClose={onClose}
+              closeLabel="Upload another"
+            />
           ) : (
             <>
               <input

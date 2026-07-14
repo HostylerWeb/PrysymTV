@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { usePodcastEpisodeDetail } from '@/hooks/api/usePodcastEpisodeDetail';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
+import { useBackNavigation } from '@/hooks/useBackNavigation';
 import {
   togglePodcastLike,
   togglePodcastSave,
@@ -32,6 +33,7 @@ export default function PodcastEpisodeScreen() {
   const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  useBackNavigation('/(tabs)/podcasts');
   const { requireAuth } = useMockAuth();
   const epQuery = usePodcastEpisodeDetail(id);
   const ep = epQuery.data;
@@ -91,7 +93,12 @@ export default function PodcastEpisodeScreen() {
     <>
       <ScrollView style={styles.screen}>
         <View style={styles.pad}>
-          <AppHeader showBack showSearch={false} showNotifications={false} />
+          <AppHeader
+            showBack
+            showSearch={false}
+            showNotifications={false}
+            backFallback="/(tabs)/podcasts"
+          />
           <Pressable onPress={() => router.push('/(tabs)/podcasts')}>
             <Text style={styles.backLink}>‹ Back to Podcasts</Text>
           </Pressable>
@@ -104,6 +111,10 @@ export default function PodcastEpisodeScreen() {
               playbackUrl={ep.playbackSource}
               subtitle={ep.show?.title ?? 'Podcast'}
               showCast
+              nativeControls={false}
+              enableQualityMenu
+              enableFullscreen
+              enablePlayerChrome
             />
           ) : (
             <View style={styles.audio}>

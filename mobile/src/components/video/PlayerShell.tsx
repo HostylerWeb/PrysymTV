@@ -25,6 +25,7 @@ type Props = {
   enableQualityMenu?: boolean;
   enableFullscreen?: boolean;
   seekOnTap?: boolean;
+  enablePlayerChrome?: boolean;
   controlsBottomInset?: number;
   controlsPlacement?: 'bottom' | 'top';
   controlsTopInset?: number;
@@ -49,6 +50,7 @@ export function PlayerShell({
   enableQualityMenu = false,
   enableFullscreen = false,
   seekOnTap = false,
+  enablePlayerChrome = false,
   paused = false,
   controlsBottomInset,
   controlsPlacement,
@@ -68,7 +70,8 @@ export function PlayerShell({
           enableQualityMenu={enableQualityMenu}
           enableFullscreen={enableFullscreen}
           seekOnTap={seekOnTap}
-          tapToToggle={!nativeControls && !seekOnTap}
+          enablePlayerChrome={enablePlayerChrome}
+          tapToToggle={!nativeControls && !seekOnTap && !enablePlayerChrome}
           paused={paused}
           controlsBottomInset={controlsBottomInset}
           controlsPlacement={controlsPlacement}

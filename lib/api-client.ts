@@ -10,8 +10,20 @@ export class ApiError extends Error {
   }
 }
 
+const ACCESS_TOKEN_KEY = "prysymtv_access_token";
+
 let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
+
+function migrateLegacySessionStorageToken(): void {
+  if (typeof window === "undefined") return;
+  const fromSession = sessionStorage.getItem(ACCESS_TOKEN_KEY);
+  if (!fromSession) return;
+  if (!localStorage.getItem(ACCESS_TOKEN_KEY)) {
+    localStorage.setItem(ACCESS_TOKEN_KEY, fromSession);
+  }
+  sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+}
 
 export function getApiBaseUrl(): string {
   const fromEnv = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
@@ -23,20 +35,23 @@ export function getApiBaseUrl(): string {
   return fromEnv;
 }
 
+export const ACCESS_TOKEN_STORAGE_KEY = ACCESS_TOKEN_KEY;
+
 export function setAccessToken(token: string | null) {
   accessToken = token;
   if (typeof window === "undefined") return;
   if (token) {
-    sessionStorage.setItem("prysymtv_access_token", token);
+    localStorage.setItem(ACCESS_TOKEN_KEY, token);
   } else {
-    sessionStorage.removeItem("prysymtv_access_token");
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
   }
 }
 
 export function loadStoredAccessToken(): string | null {
   if (accessToken) return accessToken;
   if (typeof window !== "undefined") {
-    accessToken = sessionStorage.getItem("prysymtv_access_token");
+    migrateLegacySessionStorageToken();
+    accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
   }
   return accessToken;
 }
@@ -63,6 +78,13 @@ function getRefreshOnce(): Promise<string | null> {
     });
   }
   return refreshPromise;
+}
+
+/** Restore session from refresh cookie when access token is missing. */
+export async function ensureAccessToken(): Promise<string | null> {
+  const existing = loadStoredAccessToken();
+  if (existing) return existing;
+  return getRefreshOnce();
 }
 
 export type ApiRequestOptions = {
@@ -101,9 +123,12 @@ export async function apiRequest<T>(
   };
 
   let token = auth ? loadStoredAccessToken() : null;
+  if (auth && !token) {
+    token = await getRefreshOnce();
+  }
   let res = await run(token);
 
-  if (res.status === 401 && auth && token) {
+  if (res.status === 401 && auth) {
     const newToken = await getRefreshOnce();
     if (newToken) {
       token = newToken;
