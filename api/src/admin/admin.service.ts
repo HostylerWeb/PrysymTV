@@ -89,7 +89,7 @@ export class AdminService {
    * Podcast episodes are created as `processing` before upload. Only videos/movies/shorts
    * use the BullMQ transcode queue. Shells with no media are abandoned uploads, not transcoding.
    */
-  private podcastTranscodingWhere() {
+  private podcastTranscodingWhere(): Prisma.PodcastEpisodeWhereInput {
     return {
       status: ContentStatus.processing,
       OR: [{ audioUrl: { not: null } }, { videoUrl: { not: null } }],
@@ -233,7 +233,6 @@ export class AdminService {
           title: true,
           episodeNumber: true,
           createdAt: true,
-          updatedAt: true,
           series: { select: { title: true, slug: true } },
         },
       }),
@@ -245,7 +244,6 @@ export class AdminService {
           id: true,
           title: true,
           createdAt: true,
-          updatedAt: true,
           show: { select: { title: true } },
         },
       }),
@@ -281,7 +279,7 @@ export class AdminService {
         label: 'Vertical episode',
         seriesTitle: ep.series.title,
         episodeNumber: ep.episodeNumber,
-        submittedAt: ep.updatedAt.toISOString(),
+        submittedAt: ep.createdAt.toISOString(),
         stage: 'transcoding' as const,
         adminHref: '/admin/content/verticals',
       })),
@@ -291,7 +289,7 @@ export class AdminService {
         kind: 'podcast_episode',
         label: 'Podcast episode',
         seriesTitle: ep.show.title,
-        submittedAt: ep.updatedAt.toISOString(),
+        submittedAt: ep.createdAt.toISOString(),
         stage: 'transcoding' as const,
         adminHref: '/admin/content/podcasts',
       })),
