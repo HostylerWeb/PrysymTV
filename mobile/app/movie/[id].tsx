@@ -12,6 +12,7 @@ import { CommentsSheet } from '@/components/modals/CommentsSheet';
 import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { GiftModal } from '@/components/modals/GiftModal';
 import { ShareModal } from '@/components/modals/ShareModal';
+import { buildShareUrl } from '@/lib/share-url';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useVideoDetail } from '@/hooks/api/useVideoDetail';
@@ -178,7 +179,12 @@ export default function MovieScreen() {
         receiverName={movie.creator.displayName ?? movie.creator.username}
         videoId={movie.id}
       />
-      <ShareModal visible={shareOpen} onClose={() => setShareOpen(false)} title={movie.title} />
+      <ShareModal
+        visible={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title={movie.title}
+        url={buildShareUrl(`/movie/${movie.id}`)}
+      />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetType="video" targetId={movie.id} />
       <CommentsSheet visible={commentsOpen} onClose={() => setCommentsOpen(false)} videoId={movie.id} videoTitle={movie.title} />
       <AddToPlaylistSheet

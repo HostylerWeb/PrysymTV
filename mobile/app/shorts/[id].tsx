@@ -11,6 +11,7 @@ import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { GiftModal } from '@/components/modals/GiftModal';
 import { CommentsSheet } from '@/components/modals/CommentsSheet';
 import { ShareModal } from '@/components/modals/ShareModal';
+import { buildShareUrl } from '@/lib/share-url';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useVideoDetail } from '@/hooks/api/useVideoDetail';
@@ -165,7 +166,12 @@ export default function ShortDetailScreen() {
         </View>
       </View>
       <CommentsSheet visible={commentsOpen} onClose={() => setCommentsOpen(false)} videoId={short.id} videoTitle={short.title} />
-      <ShareModal visible={shareOpen} onClose={() => setShareOpen(false)} title={short.title} />
+      <ShareModal
+        visible={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title={short.title}
+        url={buildShareUrl(`/shorts/${short.id}`)}
+      />
       <GiftModal
         visible={giftOpen}
         onClose={() => setGiftOpen(false)}

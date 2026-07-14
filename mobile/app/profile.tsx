@@ -20,6 +20,7 @@ import { UnlockFeaturesModal, type CreatorVerificationContext } from '@/componen
 import { StreamerApplicationModal } from '@/components/modals/StreamerApplicationModal';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
 import { ShareModal } from '@/components/modals/ShareModal';
+import { buildCreatorShareUrl } from '@/lib/share-url';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useProfileLibrary } from '@/hooks/api/useProfileLibrary';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
@@ -389,7 +390,7 @@ export default function ProfileScreen() {
         visible={shareOpen}
         onClose={() => setShareOpen(false)}
         title={`${profile.displayName} on Prysym`}
-        url={`https://prysym.tv/creator/${profile.username}`}
+        url={buildCreatorShareUrl(profile.username)}
       />
       {flowHost}
     </>

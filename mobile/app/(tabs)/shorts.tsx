@@ -16,6 +16,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommentsSheet } from '@/components/modals/CommentsSheet';
 import { ShareModal } from '@/components/modals/ShareModal';
+import { buildShareUrl } from '@/lib/share-url';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { GiftModal } from '@/components/modals/GiftModal';
@@ -319,7 +320,12 @@ export default function ShortsScreen() {
         creatorId={current?.creatorId}
       />
       <CommentsSheet visible={commentsOpen} onClose={() => setCommentsOpen(false)} videoId={current?.id} videoTitle={current?.title} />
-      <ShareModal visible={shareOpen} onClose={() => setShareOpen(false)} title={current?.title ?? 'Short'} />
+      <ShareModal
+        visible={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title={current?.title ?? 'Short'}
+        url={current?.id ? buildShareUrl(`/shorts/${current.id}`) : undefined}
+      />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetId={current?.id} />
       <GiftModal
         visible={giftOpen}

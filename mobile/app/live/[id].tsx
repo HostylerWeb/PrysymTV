@@ -11,6 +11,7 @@ import { LiveGiftPanel } from '@/components/live/LiveGiftPanel';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { Button } from '@/components/ui/Button';
 import { ShareModal } from '@/components/modals/ShareModal';
+import { buildShareUrl } from '@/lib/share-url';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { CoinsModal } from '@/components/modals/CoinsModal';
 import { useMockAuth } from '@/context/MockAuthContext';
@@ -286,7 +287,12 @@ export default function LiveScreen() {
         </>
         ) : null}
       </View>
-      <ShareModal visible={shareOpen} onClose={() => setShareOpen(false)} title={stream.title} />
+      <ShareModal
+        visible={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title={stream.title}
+        url={buildShareUrl(`/live/${stream.id}`)}
+      />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetType="stream" targetId={stream.id} />
       <CoinsModal visible={coinsOpen} onClose={() => setCoinsOpen(false)} balance={userCoins} />
     </>

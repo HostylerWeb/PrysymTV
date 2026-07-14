@@ -10,6 +10,7 @@ import { VideoCardTile } from '@/components/feed/VideoCardTile';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { GiftModal } from '@/components/modals/GiftModal';
 import { ShareModal } from '@/components/modals/ShareModal';
+import { buildCreatorShareUrl } from '@/lib/share-url';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { StoreCartLink } from '@/components/store/StoreCartLink';
 import { useMockAuth } from '@/context/MockAuthContext';
@@ -435,7 +436,7 @@ export default function CreatorScreen() {
         visible={shareOpen}
         onClose={() => setShareOpen(false)}
         title={`${profile.displayName ?? profile.username} on Prysym`}
-        url={`https://prysym.tv/creator/${profile.username}`}
+        url={buildCreatorShareUrl(profile.username)}
       />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} />
     </>

@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { buildShareLinks, type SharePlatform } from '@/lib/share-links';
+import { buildShareUrl } from '@/lib/share-url';
 import { radius } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -36,16 +37,17 @@ function shareIconName(id: SharePlatform): keyof typeof Ionicons.glyphMap {
   }
 }
 
-export function ShareModal({ visible, onClose, title, url = 'https://prysym.tv' }: Props) {
+export function ShareModal({ visible, onClose, title, url }: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
-  const links = buildShareLinks(url, title);
+  const shareUrl = url ?? buildShareUrl('/');
+  const links = buildShareLinks(shareUrl, title);
 
   const copyLink = async () => {
     try {
-      await Share.share({ message: url });
+      await Share.share({ message: `${title}\n${shareUrl}` });
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -73,6 +75,9 @@ export function ShareModal({ visible, onClose, title, url = 'https://prysym.tv' 
             </Pressable>
           </View>
           <Text style={styles.preview} numberOfLines={2}>{title}</Text>
+          <Text style={styles.urlPreview} numberOfLines={2} selectable>
+            {shareUrl}
+          </Text>
 
           <View style={styles.grid}>
             {links.map((link) => (
@@ -123,7 +128,8 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    preview: { color: colors.mutedForeground, fontSize: 14, marginBottom: 20, lineHeight: 20 },
+    preview: { color: colors.mutedForeground, fontSize: 14, marginBottom: 8, lineHeight: 20 },
+    urlPreview: { color: colors.primary, fontSize: 12, marginBottom: 20, lineHeight: 18 },
     grid: {
       flexDirection: 'row',
       flexWrap: 'wrap',

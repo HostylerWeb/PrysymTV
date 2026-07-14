@@ -6,6 +6,7 @@ import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/Button';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { ShareModal } from '@/components/modals/ShareModal';
+import { buildShareUrl } from '@/lib/share-url';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { useVerticalSeriesDetail } from '@/hooks/api/useVerticalSeriesDetail';
 import { toggleVerticalSeriesSave } from '@/lib/api/verticals';
@@ -92,7 +93,12 @@ export default function VerticalSeriesScreen() {
           )}
         />
       </View>
-      <ShareModal visible={shareOpen} onClose={() => setShareOpen(false)} title={series.title} />
+      <ShareModal
+        visible={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title={series.title}
+        url={buildShareUrl(`/verticals/${series.slug}`)}
+      />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetType="vertical_series" targetId={series.id} />
     </>
   );

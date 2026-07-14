@@ -13,6 +13,7 @@ import { AdBanner } from '@/components/ads/AdBanner';
 import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { GiftModal } from '@/components/modals/GiftModal';
 import { ShareModal } from '@/components/modals/ShareModal';
+import { buildShareUrl } from '@/lib/share-url';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { Button } from '@/components/ui/Button';
 import { useMockAuth } from '@/context/MockAuthContext';
@@ -256,7 +257,12 @@ export default function WatchScreen() {
         receiverName={video.creator.displayName ?? video.creator.username}
         videoId={video.id}
       />
-      <ShareModal visible={shareOpen} onClose={() => setShareOpen(false)} title={video.title} />
+      <ShareModal
+        visible={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title={video.title}
+        url={buildShareUrl(`/watch/${video.id}`)}
+      />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetType="video" targetId={video.id} />
       <AddToPlaylistSheet
         visible={playlistOpen}

@@ -8,6 +8,7 @@ import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/Button';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { ShareModal } from '@/components/modals/ShareModal';
+import { buildShareUrl } from '@/lib/share-url';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { usePlaylistDetail } from '@/hooks/api/usePlaylistDetail';
 import { removePlaylistItem } from '@/lib/api/playlists';
@@ -123,7 +124,12 @@ export default function PlaylistScreen() {
           )}
         </View>
       </ScrollView>
-      <ShareModal visible={shareOpen} onClose={() => setShareOpen(false)} title={playlist.title} />
+      <ShareModal
+        visible={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title={playlist.title}
+        url={buildShareUrl(`/playlist/${playlist.id}`)}
+      />
     </>
   );
 }

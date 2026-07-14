@@ -20,6 +20,7 @@ import { HlsPlayer } from '@/components/video/HlsPlayer';
 import { VerticalEpisodeAdGate } from '@/components/ads/VerticalEpisodeAdGate';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { ShareModal } from '@/components/modals/ShareModal';
+import { buildShareUrl } from '@/lib/share-url';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { GiftModal } from '@/components/modals/GiftModal';
 import { useMockAuth } from '@/context/MockAuthContext';
@@ -395,6 +396,7 @@ export default function VerticalWatchScreen() {
             visible={shareOpen}
             onClose={() => setShareOpen(false)}
             title={`${data.series.title} Ep ${data.episode.episodeNumber}`}
+            url={buildShareUrl(`/verticals/watch/${slug}/${data.episode.episodeNumber}`)}
           />
           <GiftModal
             visible={giftOpen}

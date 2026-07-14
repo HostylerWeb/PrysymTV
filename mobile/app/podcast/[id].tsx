@@ -9,6 +9,7 @@ import { AudioPlayer } from '@/components/podcasts/AudioPlayer';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { AdPreroll } from '@/components/ads/AdPreroll';
 import { ShareModal } from '@/components/modals/ShareModal';
+import { buildShareUrl } from '@/lib/share-url';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { GiftModal } from '@/components/modals/GiftModal';
@@ -184,7 +185,12 @@ export default function PodcastEpisodeScreen() {
         videoId={ep.id}
         creatorId={ep.creator?.id}
       />
-      <ShareModal visible={shareOpen} onClose={() => setShareOpen(false)} title={ep.title} />
+      <ShareModal
+        visible={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title={ep.title}
+        url={buildShareUrl(`/podcast/${ep.id}`)}
+      />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetType="podcast_episode" targetId={ep.id} />
       <GiftModal
         visible={giftOpen}
