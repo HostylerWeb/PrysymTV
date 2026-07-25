@@ -106,7 +106,6 @@ export function VerticalSeriesWizard({
     if (!isOpen) return
     setError(null)
     setBusy(false)
-    setProcessing(false)
     setUploadProgress(0)
     setSeriesTitle("")
     setSeriesSlug("")
