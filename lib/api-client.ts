@@ -56,7 +56,19 @@ export function loadStoredAccessToken(): string | null {
   return accessToken;
 }
 
+function hasRefreshSessionCookie(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.cookie
+    .split(";")
+    .some((part) => part.trim().startsWith("prysym_refresh="));
+}
+
 async function refreshAccessToken(): Promise<string | null> {
+  if (!hasRefreshSessionCookie()) {
+    setAccessToken(null);
+    return null;
+  }
+
   const res = await fetch(`${getApiBaseUrl()}/auth/refresh`, {
     method: "POST",
     credentials: "include",
@@ -84,6 +96,7 @@ function getRefreshOnce(): Promise<string | null> {
 export async function ensureAccessToken(): Promise<string | null> {
   const existing = loadStoredAccessToken();
   if (existing) return existing;
+  if (!hasRefreshSessionCookie()) return null;
   return getRefreshOnce();
 }
 
@@ -123,12 +136,12 @@ export async function apiRequest<T>(
   };
 
   let token = auth ? loadStoredAccessToken() : null;
-  if (auth && !token) {
+  if (auth && !token && hasRefreshSessionCookie()) {
     token = await getRefreshOnce();
   }
   let res = await run(token);
 
-  if (res.status === 401 && auth) {
+  if (res.status === 401 && auth && hasRefreshSessionCookie()) {
     const newToken = await getRefreshOnce();
     if (newToken) {
       token = newToken;

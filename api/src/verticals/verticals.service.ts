@@ -39,6 +39,44 @@ export class VerticalsService {
     }
   }
 
+  private pickEpisodeThumbnail(
+    episodes: Array<{ thumbnailUrl: string | null }>,
+  ): string | null {
+    for (const episode of episodes) {
+      if (episode.thumbnailUrl) return episode.thumbnailUrl;
+    }
+    return null;
+  }
+
+  private async resolvePosterFallbacks<
+    T extends { id: string; posterUrl: string | null },
+  >(items: T[]): Promise<T[]> {
+    const missing = items.filter((item) => !item.posterUrl);
+    if (!missing.length) return items;
+
+    const episodes = await this.prisma.verticalEpisode.findMany({
+      where: {
+        seriesId: { in: missing.map((item) => item.id) },
+        status: ContentStatus.ready,
+        thumbnailUrl: { not: null },
+      },
+      orderBy: { episodeNumber: 'asc' },
+      select: { seriesId: true, thumbnailUrl: true },
+    });
+
+    const posterBySeriesId = new Map<string, string>();
+    for (const episode of episodes) {
+      if (!posterBySeriesId.has(episode.seriesId) && episode.thumbnailUrl) {
+        posterBySeriesId.set(episode.seriesId, episode.thumbnailUrl);
+      }
+    }
+
+    return items.map((item) => ({
+      ...item,
+      posterUrl: item.posterUrl ?? posterBySeriesId.get(item.id) ?? null,
+    }));
+  }
+
   async listSeries() {
     const items = await this.prisma.verticalSeries.findMany({
       where: { status: VerticalSeriesStatus.published, visibility: 'public' },
@@ -53,7 +91,7 @@ export class VerticalsService {
         totalEpisodes: true,
       },
     });
-    return { items };
+    return { items: await this.resolvePosterFallbacks(items) };
   }
 
   async getSeries(slug: string) {
@@ -78,7 +116,11 @@ export class VerticalsService {
       },
     });
     if (!series) throw new NotFoundException('Series not found');
-    return series;
+    return {
+      ...series,
+      posterUrl:
+        series.posterUrl ?? this.pickEpisodeThumbnail(series.episodes) ?? null,
+    };
   }
 
   async getEpisode(slug: string, episodeNumber: number, viewerId?: string) {
@@ -154,7 +196,7 @@ export class VerticalsService {
         slug: series.slug,
         title: series.title,
         creatorId: series.creatorId,
-        posterUrl: series.posterUrl,
+        posterUrl: series.posterUrl ?? episode.thumbnailUrl ?? null,
         saved: seriesSaved,
       },
       episode: {
@@ -497,16 +539,26 @@ export class VerticalsService {
       throw new ForbiddenException('Invalid video');
     }
 
-    return this.prisma.verticalEpisode.update({
+    const thumbnailUrl = video.thumbnailUrl ?? episode.thumbnailUrl;
+    const updatedEpisode = await this.prisma.verticalEpisode.update({
       where: { id: episodeId },
       data: {
         videoUrl:
           this.storage.resolveVideoHlsMasterKey(video.hlsMasterUrl, video.id) ??
           video.hlsMasterUrl,
-        thumbnailUrl: video.thumbnailUrl ?? episode.thumbnailUrl,
+        thumbnailUrl,
         status: video.status === ContentStatus.ready ? ContentStatus.ready : ContentStatus.processing,
       },
     });
+
+    if (!episode.series.posterUrl && thumbnailUrl) {
+      await this.prisma.verticalSeries.update({
+        where: { id: episode.series.id },
+        data: { posterUrl: thumbnailUrl },
+      });
+    }
+
+    return updatedEpisode;
   }
 
   async listMySeries(creatorId: string) {
