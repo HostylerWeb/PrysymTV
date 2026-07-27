@@ -56,6 +56,11 @@ export function fetchMyVerticalSeries() {
       episodeCount?: number;
       genre?: string | null;
       posterUrl?: string | null;
+      episodes?: Array<{
+        id: string;
+        episodeNumber: number;
+        title: string;
+      }>;
     }>;
   }>('/verticals/me/series');
 }
@@ -91,5 +96,17 @@ export function attachVerticalEpisodeVideo(episodeId: string, videoId: string) {
   return apiRequest<unknown>(`/verticals/episodes/${episodeId}/video`, {
     method: 'PUT',
     body: { videoId },
+  });
+}
+
+export function deleteVerticalEpisode(episodeId: string) {
+  return apiRequest<{ success: boolean }>(`/verticals/episodes/${episodeId}`, {
+    method: 'DELETE',
+  });
+}
+
+export function deleteVerticalSeries(slug: string) {
+  return apiRequest<{ success: boolean }>(`/verticals/series/${slug}`, {
+    method: 'DELETE',
   });
 }

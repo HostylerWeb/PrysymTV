@@ -110,6 +110,21 @@ export function VerticalEpisodeAdGate({
     void Linking.openURL(ad.clickThroughUrl);
   };
 
+  if (!ready) {
+    return (
+      <View style={styles.preload} pointerEvents="none">
+        <AdMedia
+          mediaUrl={mediaUrl}
+          mediaType={ad.mediaType}
+          style={styles.media}
+          contentFit="cover"
+          onReady={() => setReady(true)}
+          onError={() => onCompleteRef.current()}
+        />
+      </View>
+    );
+  }
+
   return (
     <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={() => countdown <= 0 && onComplete()}>
       <View style={styles.screen}>
@@ -141,6 +156,7 @@ export function VerticalEpisodeAdGate({
 }
 
 const styles = StyleSheet.create({
+  preload: { position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' },
   screen: { flex: 1, backgroundColor: '#000' },
   topBar: {
     flexDirection: 'row',

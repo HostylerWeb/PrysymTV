@@ -14,8 +14,11 @@ export function usePublicAdsConfig() {
   });
 
   const isPlacementEnabled = useCallback(
-    (placement: AdPlacement) => query.data?.placements[placement] ?? true,
-    [query.data],
+    (placement: AdPlacement) => {
+      if (query.isLoading) return false;
+      return query.data?.placements[placement] ?? true;
+    },
+    [query.data, query.isLoading],
   );
 
   return {

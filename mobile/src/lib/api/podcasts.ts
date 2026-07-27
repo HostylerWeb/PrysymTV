@@ -63,6 +63,14 @@ export type MyPodcastShow = {
   coverUrl: string | null;
   category: string | null;
   _count: { episodes: number };
+  episodes?: Array<{
+    id: string;
+    title: string;
+    description?: string | null;
+    status: string;
+    durationSeconds: number;
+    publishedAt: string | null;
+  }>;
 };
 
 export function fetchMyPodcastShows() {
@@ -85,5 +93,17 @@ export function createPodcastEpisode(
   return apiRequest<{ id: string }>(`/podcasts/shows/${showId}/episodes`, {
     method: 'POST',
     body,
+  });
+}
+
+export function deletePodcastEpisode(episodeId: string) {
+  return apiRequest<{ success: boolean }>(`/podcasts/episodes/${episodeId}`, {
+    method: 'DELETE',
+  });
+}
+
+export function deletePodcastShow(showId: string) {
+  return apiRequest<{ success: boolean }>(`/podcasts/shows/${showId}`, {
+    method: 'DELETE',
   });
 }

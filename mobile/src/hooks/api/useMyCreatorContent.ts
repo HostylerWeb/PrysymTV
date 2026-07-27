@@ -13,11 +13,20 @@ export type MyContentData = {
     slug: string;
     title: string;
     episodeCount: number;
+    episodes: Array<{
+      id: string;
+      episodeNumber: number;
+      title: string;
+    }>;
   }>;
   podcasts: Array<{
     id: string;
     title: string;
     episodeCount: number;
+    episodes: Array<{
+      id: string;
+      title: string;
+    }>;
   }>;
 };
 
@@ -40,11 +49,20 @@ export function useMyCreatorContent(enabled = true) {
           slug: s.slug,
           title: s.title,
           episodeCount: s.totalEpisodes ?? s.episodeCount ?? 0,
+          episodes: (s.episodes ?? []).map((ep) => ({
+            id: ep.id,
+            episodeNumber: ep.episodeNumber,
+            title: ep.title,
+          })),
         })),
         podcasts: podcastsRes.items.map((s) => ({
           id: s.id,
           title: s.title,
           episodeCount: s._count.episodes,
+          episodes: (s.episodes ?? []).map((ep) => ({
+            id: ep.id,
+            title: ep.title,
+          })),
         })),
       };
     },

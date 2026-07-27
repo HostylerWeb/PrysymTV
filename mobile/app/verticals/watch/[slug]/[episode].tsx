@@ -60,6 +60,7 @@ type EpisodeCellProps = {
   posterUri: string;
   onFullscreenChange: (next: boolean) => void;
   onGateDismissed: (episodeId: string) => void;
+  onGateBlocked: (episodeId: string) => void;
   gateDismissed: boolean;
 };
 
@@ -72,6 +73,7 @@ function VerticalEpisodeCell({
   posterUri,
   onFullscreenChange,
   onGateDismissed,
+  onGateBlocked,
   gateDismissed,
 }: EpisodeCellProps) {
   const { colors } = useTheme();
@@ -89,19 +91,19 @@ function VerticalEpisodeCell({
     if (!active) return;
     setGateOpen(false);
     setGateAd(null);
+    onGateDismissed(episode.id);
     if (!shouldShow || !isPlacementEnabled('vertical_episode')) {
-      onGateDismissed(episode.id);
       return;
     }
-    void fetchServedAd('vertical_episode', { peek: true }).then((peekAd) => {
-      if (!isValidServedAd(peekAd)) {
-        onGateDismissed(episode.id);
-        return;
-      }
-      setGateAd(peekAd);
-      setGateOpen(true);
-    });
-  }, [active, episode.id, shouldShow, isPlacementEnabled, onGateDismissed]);
+    void fetchServedAd('vertical_episode', { peek: true })
+      .then((peekAd) => {
+        if (!isValidServedAd(peekAd)) return;
+        onGateBlocked(episode.id);
+        setGateAd(peekAd);
+        setGateOpen(true);
+      })
+      .catch(() => onGateDismissed(episode.id));
+  }, [active, episode.id, shouldShow, isPlacementEnabled, onGateDismissed, onGateBlocked]);
 
   usePlaybackProgress(
     'vertical_episode',
@@ -146,11 +148,6 @@ function VerticalEpisodeCell({
       ) : (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.videoBackground }]} />
       )}
-      {!gateDismissed && active ? (
-        <View style={[styles.loadingScrim, StyleSheet.absoluteFill]} pointerEvents="none">
-          <ActivityIndicator size="large" color={colors.onVideo} />
-        </View>
-      ) : null}
       {showPlayer ? (
         <View style={styles.playerLayer}>
           <HlsPlayer
@@ -261,6 +258,10 @@ export default function VerticalWatchScreen() {
     setGateDismissedMap((prev) => ({ ...prev, [episodeId]: true }));
   }, []);
 
+  const onGateBlocked = useCallback((episodeId: string) => {
+    setGateDismissedMap((prev) => ({ ...prev, [episodeId]: false }));
+  }, []);
+
   const onFullscreenChange = useCallback((next: boolean) => {
     setImmersive(next);
   }, []);
@@ -284,8 +285,8 @@ export default function VerticalWatchScreen() {
   const posterUri = seriesQuery.data?.posterUrl ?? '';
   const activeEpisode = episodes.find((e) => e.episodeNumber === activeEpNum);
   const activeGateDismissed = activeEpisode
-    ? Boolean(gateDismissedMap[activeEpisode.id])
-    : false;
+    ? gateDismissedMap[activeEpisode.id] !== false
+    : true;
   const hasNext = Boolean(data?.nextEpisode);
   const showChrome = !immersive;
 
@@ -319,7 +320,8 @@ export default function VerticalWatchScreen() {
               posterUri={posterUri}
               onFullscreenChange={onFullscreenChange}
               onGateDismissed={onGateDismissed}
-              gateDismissed={Boolean(gateDismissedMap[item.id])}
+              onGateBlocked={onGateBlocked}
+              gateDismissed={gateDismissedMap[item.id] !== false}
             />
           )}
         />
@@ -453,12 +455,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   center: { alignItems: 'center', justifyContent: 'center' },
-  loadingScrim: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: withAlpha('#000', 0.45),
-    zIndex: 1,
-  },
   playerLayer: { ...StyleSheet.absoluteFillObject, zIndex: 10 },
 });
 

@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { useMyCreatorContent } from '@/hooks/api/useMyCreatorContent';
 import { deleteMyVideo } from '@/lib/api/videos';
+import { deletePodcastEpisode, deletePodcastShow } from '@/lib/api/podcasts';
+import { deleteVerticalEpisode, deleteVerticalSeries } from '@/lib/api/verticals';
 import type { VideoCard } from '@/types/api';
 import type { ThemeColors } from '@/theme/tokens';
 import { radius, spacing } from '@/theme/tokens';
@@ -36,6 +38,10 @@ export function ProfileMyContent({ onOpenVerticalUpload, onOpenPodcastUpload }: 
   const [tab, setTab] = useState<ContentTab>('videos');
   const contentQuery = useMyCreatorContent();
 
+  const refreshContent = () => {
+    void queryClient.invalidateQueries({ queryKey: ['profile', 'my-content'] });
+  };
+
   const confirmDelete = (video: VideoCard) => {
     Alert.alert('Delete content', `Delete "${video.title}"? This cannot be undone.`, [
       { text: 'Cancel', style: 'cancel' },
@@ -46,9 +52,89 @@ export function ProfileMyContent({ onOpenVerticalUpload, onOpenPodcastUpload }: 
           void (async () => {
             try {
               await deleteMyVideo(video.id);
-              void queryClient.invalidateQueries({ queryKey: ['profile', 'my-content'] });
+              refreshContent();
             } catch (e) {
               Alert.alert('Error', e instanceof Error ? e.message : 'Could not delete video');
+            }
+          })();
+        },
+      },
+    ]);
+  };
+
+  const confirmDeletePodcastEpisode = (title: string, episodeId: string) => {
+    Alert.alert('Delete episode', `Delete "${title}"? This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            try {
+              await deletePodcastEpisode(episodeId);
+              refreshContent();
+            } catch (e) {
+              Alert.alert('Error', e instanceof Error ? e.message : 'Could not delete episode');
+            }
+          })();
+        },
+      },
+    ]);
+  };
+
+  const confirmDeletePodcastShow = (title: string, showId: string) => {
+    Alert.alert('Delete show', `Delete "${title}" and all its episodes? This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            try {
+              await deletePodcastShow(showId);
+              refreshContent();
+            } catch (e) {
+              Alert.alert('Error', e instanceof Error ? e.message : 'Could not delete show');
+            }
+          })();
+        },
+      },
+    ]);
+  };
+
+  const confirmDeleteVerticalSeries = (title: string, slug: string) => {
+    Alert.alert('Delete series', `Delete "${title}" and all its episodes? This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            try {
+              await deleteVerticalSeries(slug);
+              refreshContent();
+            } catch (e) {
+              Alert.alert('Error', e instanceof Error ? e.message : 'Could not delete series');
+            }
+          })();
+        },
+      },
+    ]);
+  };
+
+  const confirmDeleteVerticalEpisode = (title: string, episodeId: string) => {
+    Alert.alert('Delete episode', `Delete "${title}"? This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            try {
+              await deleteVerticalEpisode(episodeId);
+              refreshContent();
+            } catch (e) {
+              Alert.alert('Error', e instanceof Error ? e.message : 'Could not delete episode');
             }
           })();
         },
@@ -129,17 +215,34 @@ export function ProfileMyContent({ onOpenVerticalUpload, onOpenPodcastUpload }: 
             <Text style={styles.empty}>No vertical series yet.</Text>
           ) : (
             data.verticals.map((s) => (
-              <Pressable
-                key={s.slug}
-                style={styles.seriesRow}
-                onPress={() => router.push(`/verticals/${s.slug}`)}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.rowTitle}>{s.title}</Text>
-                  <Text style={styles.rowMeta}>{s.episodeCount} episodes</Text>
+              <View key={s.slug} style={styles.seriesBlock}>
+                <View style={styles.seriesRow}>
+                  <Pressable style={{ flex: 1 }} onPress={() => router.push(`/verticals/${s.slug}`)}>
+                    <Text style={styles.rowTitle}>{s.title}</Text>
+                    <Text style={styles.rowMeta}>{s.episodeCount} episodes</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.deleteBtnSmall}
+                    onPress={() => confirmDeleteVerticalSeries(s.title, s.slug)}
+                  >
+                    <Ionicons name="trash-outline" size={16} color={colors.destructive} />
+                  </Pressable>
+                  <Button label="Manage" variant="outline" size="sm" onPress={onOpenVerticalUpload} />
                 </View>
-                <Button label="Manage" variant="outline" size="sm" onPress={onOpenVerticalUpload} />
-              </Pressable>
+                {s.episodes.map((ep) => (
+                  <View key={ep.id} style={styles.episodeRow}>
+                    <Text style={styles.episodeTitle} numberOfLines={1}>
+                      Ep {ep.episodeNumber}: {ep.title}
+                    </Text>
+                    <Pressable
+                      style={styles.deleteBtnSmall}
+                      onPress={() => confirmDeleteVerticalEpisode(ep.title, ep.id)}
+                    >
+                      <Ionicons name="trash-outline" size={14} color={colors.destructive} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
             ))
           )}
           <Button label="Upload vertical episode" variant="ghost" onPress={onOpenVerticalUpload} />
@@ -152,14 +255,35 @@ export function ProfileMyContent({ onOpenVerticalUpload, onOpenPodcastUpload }: 
             <Text style={styles.empty}>No podcast shows yet.</Text>
           ) : (
             data.podcasts.map((s) => (
-              <Pressable key={s.id} style={styles.seriesRow} onPress={() => router.push('/settings/podcasts')}>
-                <Ionicons name="mic-outline" size={20} color={colors.primary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.rowTitle}>{s.title}</Text>
-                  <Text style={styles.rowMeta}>{s.episodeCount} episodes</Text>
+              <View key={s.id} style={styles.seriesBlock}>
+                <View style={styles.seriesRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowTitle}>{s.title}</Text>
+                    <Text style={styles.rowMeta}>{s.episodeCount} episodes</Text>
+                  </View>
+                  <Pressable
+                    style={styles.deleteBtnSmall}
+                    onPress={() => confirmDeletePodcastShow(s.title, s.id)}
+                  >
+                    <Ionicons name="trash-outline" size={16} color={colors.destructive} />
+                  </Pressable>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
-              </Pressable>
+                {s.episodes.map((ep) => (
+                  <View key={ep.id} style={styles.episodeRow}>
+                    <Pressable style={{ flex: 1 }} onPress={() => router.push(`/podcast/${ep.id}`)}>
+                      <Text style={styles.episodeTitle} numberOfLines={1}>
+                        {ep.title}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.deleteBtnSmall}
+                      onPress={() => confirmDeletePodcastEpisode(ep.title, ep.id)}
+                    >
+                      <Ionicons name="trash-outline" size={14} color={colors.destructive} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
             ))
           )}
           <Button label="Upload podcast episode" variant="ghost" onPress={onOpenPodcastUpload} />
@@ -201,15 +325,34 @@ function createStyles(colors: ThemeColors) {
     },
     deleteLabel: { color: colors.destructive, fontSize: 11, fontWeight: '600' },
     list: { gap: spacing.sm },
+    seriesBlock: {
+      borderRadius: radius.lg,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
+      marginBottom: spacing.sm,
+    },
     seriesRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.md,
       padding: spacing.md,
-      borderRadius: radius.lg,
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
+    },
+    episodeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    episodeTitle: { flex: 1, color: colors.foreground, fontSize: 13 },
+    deleteBtnSmall: {
+      padding: 6,
+      borderRadius: radius.md,
+      backgroundColor: colors.destructive + '14',
     },
     rowTitle: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
     rowMeta: { color: colors.mutedForeground, fontSize: 12, marginTop: 2 },

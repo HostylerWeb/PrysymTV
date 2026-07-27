@@ -86,6 +86,15 @@ export class VerticalsController {
     return this.verticals.deleteEpisode(user.id, episodeId);
   }
 
+  @Delete('series/:slug')
+  @UseGuards(JwtAuthGuard)
+  deleteSeries(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('slug') slug: string,
+  ) {
+    return this.verticals.deleteSeries(user.id, slug);
+  }
+
   @Post('episodes/:episodeId/view')
   recordEpisodeView(@Param('episodeId') episodeId: string) {
     return this.verticals.recordEpisodeView(episodeId);

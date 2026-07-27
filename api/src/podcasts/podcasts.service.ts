@@ -18,6 +18,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { probeMedia } from '../queue/ffmpeg.util';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PlaylistsService } from '../playlists/playlists.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { PlaybackService } from '../playback/playback.service';
@@ -34,6 +35,7 @@ export class PodcastsService {
     private readonly config: ConfigService,
     private readonly playback: PlaybackService,
     private readonly notifications: NotificationsService,
+    private readonly playlists: PlaylistsService,
   ) {}
 
   private async mapEpisodeMedia<T extends { audioUrl: string | null; videoUrl: string | null }>(
@@ -310,6 +312,28 @@ export class PodcastsService {
         status: true,
       },
     });
+  }
+
+  async deleteEpisode(userId: string, episodeId: string) {
+    const episode = await this.assertEpisodeOwner(userId, episodeId);
+    await this.playlists.removeContentReferences('podcast_episode', episodeId);
+    await this.storage.purgePodcastEpisodeAssets(episode);
+    await this.prisma.podcastEpisode.delete({ where: { id: episodeId } });
+    return { success: true };
+  }
+
+  async deleteShow(userId: string, showId: string) {
+    const show = await this.assertShowOwner(userId, showId);
+    const episodes = await this.prisma.podcastEpisode.findMany({
+      where: { showId },
+    });
+    for (const episode of episodes) {
+      await this.playlists.removeContentReferences('podcast_episode', episode.id);
+      await this.storage.purgePodcastEpisodeAssets(episode);
+    }
+    await this.storage.purgePodcastShowAssets(show);
+    await this.prisma.podcastShow.delete({ where: { id: showId } });
+    return { success: true };
   }
 
   async uploadInit(
@@ -731,5 +755,16 @@ export class PodcastsService {
       throw new ForbiddenException('Not your episode');
     }
     return episode;
+  }
+
+  private async assertShowOwner(userId: string, showId: string) {
+    const show = await this.prisma.podcastShow.findUnique({
+      where: { id: showId },
+    });
+    if (!show) throw new NotFoundException('Podcast show not found');
+    if (show.creatorId !== userId) {
+      throw new ForbiddenException('Not your show');
+    }
+    return show;
   }
 }

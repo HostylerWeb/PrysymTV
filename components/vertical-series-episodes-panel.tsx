@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import {
   deleteVerticalEpisode,
+  deleteVerticalSeries,
   updateVerticalEpisode,
 } from "@/lib/api/verticals-admin"
 import { notify } from "@/lib/site-notifications"
@@ -90,6 +91,26 @@ export function VerticalSeriesEpisodesPanel({
     }
   }
 
+  const removeSeries = async (s: SeriesRow) => {
+    const ok = await confirm({
+      title: `Delete series "${s.title}"?`,
+      description: `All ${s.episodes.length} episode${s.episodes.length === 1 ? "" : "s"} will be removed permanently.`,
+      confirmLabel: "Delete",
+      variant: "destructive",
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      await deleteVerticalSeries(s.slug)
+      onChanged()
+      notify.success("Series deleted")
+    } catch (e) {
+      notify.error(e instanceof Error ? e.message : "Could not delete series.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const removeEpisode = async (ep: EpisodeRow) => {
     const ok = await confirm({
       title: `Delete episode ${ep.episodeNumber}?`,
@@ -117,12 +138,23 @@ export function VerticalSeriesEpisodesPanel({
         <ul className="space-y-3">
           {series.map((s) => (
             <li key={s.id} className="p-3 rounded-xl bg-secondary/30 text-sm space-y-2">
-              <div>
-                <p className="font-medium">{s.title}</p>
-                <p className="text-xs text-muted-foreground">
-                  /{s.slug} · {s.episodes.length} episode
-                  {s.episodes.length === 1 ? "" : "s"}
-                </p>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-medium">{s.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    /{s.slug} · {s.episodes.length} episode
+                    {s.episodes.length === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void removeSeries(s)}
+                  className="p-1.5 rounded-md hover:bg-destructive/10 text-destructive shrink-0"
+                  aria-label={`Delete series ${s.title}`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
               {s.episodes.length > 0 && (
                 <ul className="space-y-1 border-t border-border/60 pt-2">

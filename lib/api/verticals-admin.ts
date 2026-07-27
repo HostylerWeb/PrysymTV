@@ -71,3 +71,7 @@ export function updateVerticalEpisode(
 export function deleteVerticalEpisode(episodeId: string) {
   return apiRequest(`/verticals/episodes/${episodeId}`, { method: "DELETE" });
 }
+
+export function deleteVerticalSeries(slug: string) {
+  return apiRequest(`/verticals/series/${slug}`, { method: "DELETE" });
+}

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -172,5 +173,23 @@ export class PodcastsController {
     @Body() body: UpdatePodcastEpisodeDto,
   ) {
     return this.podcasts.updateEpisode(user.id, id, body);
+  }
+
+  @Delete('episodes/:id')
+  @UseGuards(JwtAuthGuard)
+  deleteEpisode(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('id') id: string,
+  ) {
+    return this.podcasts.deleteEpisode(user.id, id);
+  }
+
+  @Delete('shows/:id')
+  @UseGuards(JwtAuthGuard)
+  deleteShow(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('id') id: string,
+  ) {
+    return this.podcasts.deleteShow(user.id, id);
   }
 }

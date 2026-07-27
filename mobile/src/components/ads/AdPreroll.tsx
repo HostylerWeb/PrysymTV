@@ -115,6 +115,22 @@ export function AdPreroll({ visible, videoId, creatorId, servedAd, onComplete }:
     void Linking.openURL(ad.clickThroughUrl);
   };
 
+  if (!ready) {
+    return (
+      <View style={styles.preload} pointerEvents="none">
+        <AdMedia
+          mediaUrl={mediaUrl}
+          mediaType={ad.mediaType}
+          style={styles.media}
+          contentFit="contain"
+          onReady={() => setReady(true)}
+          onError={() => onCompleteRef.current()}
+          onEnded={() => onCompleteRef.current()}
+        />
+      </View>
+    );
+  }
+
   return (
     <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={() => canSkip && onComplete()}>
       <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -150,6 +166,7 @@ export function AdPreroll({ visible, videoId, creatorId, servedAd, onComplete }:
 }
 
 const styles = StyleSheet.create({
+  preload: { position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' },
   screen: { flex: 1, backgroundColor: '#000', justifyContent: 'center' },
   player: { width: '100%', aspectRatio: 16 / 9, justifyContent: 'center' },
   media: { width: '100%', height: '100%' },

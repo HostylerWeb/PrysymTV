@@ -20,6 +20,8 @@ import { VerticalSeriesEpisodesPanel } from "@/components/vertical-series-episod
 import {
   fetchMyPodcastShows,
   updatePodcastEpisode,
+  deletePodcastEpisode,
+  deletePodcastShow,
   type MyPodcastShow,
 } from "@/lib/api/podcasts-admin"
 import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-media"
@@ -71,6 +73,11 @@ export function ProfileMyContent({
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<VideoRecord | null>(null)
+  const [pendingDeletePodcast, setPendingDeletePodcast] = useState<{
+    type: "episode" | "show"
+    id: string
+    title: string
+  } | null>(null)
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -166,6 +173,25 @@ export function ProfileMyContent({
     try {
       await deleteMyVideo(video.id)
       setPendingDelete(null)
+      await reload()
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not delete.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const deletePodcast = async () => {
+    if (!pendingDeletePodcast) return
+    setBusy(true)
+    setMessage(null)
+    try {
+      if (pendingDeletePodcast.type === "episode") {
+        await deletePodcastEpisode(pendingDeletePodcast.id)
+      } else {
+        await deletePodcastShow(pendingDeletePodcast.id)
+      }
+      setPendingDeletePodcast(null)
       await reload()
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Could not delete.")
@@ -356,12 +382,29 @@ export function ProfileMyContent({
               <ul className="space-y-4">
                 {myPodcasts.map((show) => (
                   <li key={show.id} className="p-4 rounded-xl border border-border space-y-3">
-                    <div>
-                      <p className="font-medium">{show.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {show._count?.episodes ?? show.episodes.length} episode
-                        {(show._count?.episodes ?? show.episodes.length) === 1 ? "" : "s"}
-                      </p>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-medium">{show.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {show._count?.episodes ?? show.episodes.length} episode
+                          {(show._count?.episodes ?? show.episodes.length) === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          setPendingDeletePodcast({
+                            type: "show",
+                            id: show.id,
+                            title: show.title,
+                          })
+                        }
+                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive disabled:opacity-50"
+                        aria-label={`Delete show ${show.title}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                     {show.episodes.length > 0 ? (
                       <ul className="space-y-2 border-t border-border pt-3">
@@ -376,14 +419,31 @@ export function ProfileMyContent({
                             >
                               {ep.title}
                             </Link>
-                            <button
-                              type="button"
-                              onClick={() => openPodcastEdit(ep)}
-                              className="p-1.5 rounded-md hover:bg-secondary shrink-0"
-                              aria-label={`Edit ${ep.title}`}
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
+                            <span className="flex shrink-0 gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openPodcastEdit(ep)}
+                                className="p-1.5 rounded-md hover:bg-secondary"
+                                aria-label={`Edit ${ep.title}`}
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() =>
+                                  setPendingDeletePodcast({
+                                    type: "episode",
+                                    id: ep.id,
+                                    title: ep.title,
+                                  })
+                                }
+                                className="p-1.5 rounded-md hover:bg-destructive/10 text-destructive disabled:opacity-50"
+                                aria-label={`Delete ${ep.title}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </span>
                           </li>
                         ))}
                       </ul>
@@ -424,6 +484,39 @@ export function ProfileMyContent({
               onClick={() => pendingDelete && void deleteVideo(pendingDelete)}
               disabled={busy || !pendingDelete}
             >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={pendingDeletePodcast != null}
+        onOpenChange={(open) => !open && !busy && setPendingDeletePodcast(null)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {pendingDeletePodcast?.type === "show" ? "Delete this show?" : "Delete this episode?"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-1">
+            {pendingDeletePodcast && (
+              <>
+                <span className="font-medium text-foreground">{pendingDeletePodcast.title}</span>
+                {pendingDeletePodcast.type === "show"
+                  ? " and all its episodes will be permanently removed from Prysym TV."
+                  : " will be permanently removed from Prysym TV."}{" "}
+                This cannot be undone.
+              </>
+            )}
+          </p>
+          {message && <p className="text-xs text-destructive">{message}</p>}
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setPendingDeletePodcast(null)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void deletePodcast()} disabled={busy}>
               Delete
             </Button>
           </DialogFooter>

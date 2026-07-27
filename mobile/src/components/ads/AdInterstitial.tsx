@@ -108,6 +108,21 @@ export function AdInterstitial({ visible, videoId, creatorId, servedAd, onClose 
 
   const canClose = ready && countdown <= 0;
 
+  if (!ready) {
+    return (
+      <View style={styles.preload} pointerEvents="none">
+        <AdMedia
+          mediaUrl={mediaUrl}
+          mediaType={ad.mediaType}
+          style={styles.media}
+          contentFit="cover"
+          onReady={() => setReady(true)}
+          onError={() => onCloseRef.current()}
+        />
+      </View>
+    );
+  }
+
   return (
     <Modal
       visible={visible}
@@ -146,6 +161,7 @@ export function AdInterstitial({ visible, videoId, creatorId, servedAd, onClose 
 }
 
 const styles = StyleSheet.create({
+  preload: { position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' },
   screen: { flex: 1, backgroundColor: '#000' },
   topBar: {
     flexDirection: 'row',

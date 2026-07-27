@@ -43,6 +43,18 @@ export function updatePodcastEpisode(
   );
 }
 
+export function deletePodcastEpisode(episodeId: string) {
+  return apiRequest<{ success: boolean }>(`/podcasts/episodes/${episodeId}`, {
+    method: "DELETE",
+  });
+}
+
+export function deletePodcastShow(showId: string) {
+  return apiRequest<{ success: boolean }>(`/podcasts/shows/${showId}`, {
+    method: "DELETE",
+  });
+}
+
 export function createPodcastEpisode(
   showId: string,
   body: { title: string; description?: string; coverUrl?: string },

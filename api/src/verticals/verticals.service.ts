@@ -644,4 +644,30 @@ export class VerticalsService {
     await this.syncSeriesEpisodeCount(episode.seriesId);
     return { success: true };
   }
+
+  async deleteSeries(creatorId: string, slug: string) {
+    await this.assertVerticalCreatorApproved(creatorId);
+    const series = await this.assertSeriesOwner(creatorId, slug);
+    const episodes = await this.prisma.verticalEpisode.findMany({
+      where: { seriesId: series.id },
+    });
+    for (const episode of episodes) {
+      await this.storage.purgePublicMediaUrl(episode.videoUrl);
+      await this.storage.purgePublicMediaUrl(episode.thumbnailUrl);
+    }
+    await this.storage.purgePublicMediaUrl(series.posterUrl);
+    await this.prisma.verticalSeries.delete({ where: { id: series.id } });
+    return { success: true };
+  }
+
+  private async assertSeriesOwner(creatorId: string, slug: string) {
+    const series = await this.prisma.verticalSeries.findUnique({
+      where: { slug },
+    });
+    if (!series) throw new NotFoundException('Series not found');
+    if (series.creatorId !== creatorId) {
+      throw new ForbiddenException('Not your series');
+    }
+    return series;
+  }
 }
