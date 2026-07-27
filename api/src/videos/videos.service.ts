@@ -152,6 +152,123 @@ export class VideosService {
     };
   }
 
+  private async enqueueVideoProcessing(videoId: string, objectKey: string) {
+    const jobData: VideoProcessingJobData = { videoId, objectKey };
+    const jobId = `video-${videoId}`;
+    const existing = await this.videoQueue.getJob(jobId);
+    if (existing) {
+      await existing.remove().catch(() => undefined);
+    }
+    await this.videoQueue.add('process', jobData, {
+      jobId,
+      removeOnComplete: true,
+    });
+  }
+
+  /**
+   * Resolve vertical episodes stuck after incomplete uploads or missed queue jobs.
+   * Safe to call on series detail reads.
+   */
+  async reconcileVerticalSeriesProcessing(seriesId: string) {
+    const STALE_MS = 10 * 60 * 1000;
+    const now = Date.now();
+
+    const episodes = await this.prisma.verticalEpisode.findMany({
+      where: {
+        seriesId,
+        status: { in: [ContentStatus.processing, ContentStatus.failed] },
+      },
+      select: { id: true, status: true, createdAt: true },
+    });
+    if (!episodes.length) return;
+
+    const episodeIds = episodes.map((e) => e.id);
+    const videos = await this.prisma.video.findMany({
+      where: { verticalEpisodeId: { in: episodeIds } },
+    });
+    const videoByEpisodeId = new Map(
+      videos.map((v) => [v.verticalEpisodeId!, v]),
+    );
+
+    for (const episode of episodes) {
+      const video = videoByEpisodeId.get(episode.id);
+      if (!video) {
+        if (
+          episode.status === ContentStatus.processing &&
+          now - episode.createdAt.getTime() > STALE_MS
+        ) {
+          await this.prisma.verticalEpisode.update({
+            where: { id: episode.id },
+            data: { status: ContentStatus.failed },
+          });
+        }
+        continue;
+      }
+
+      if (video.status === ContentStatus.ready) {
+        continue;
+      }
+
+      const ageMs = now - video.createdAt.getTime();
+      if (ageMs < STALE_MS) continue;
+
+      const rawKey =
+        video.rawObjectKey ?? this.storage.buildRawKey(video.id);
+      const hasRaw = await this.storage.objectExists(rawKey);
+      const hasHls = Boolean(video.hlsMasterUrl?.trim());
+
+      if (video.status === ContentStatus.processing && hasRaw && !hasHls) {
+        await this.enqueueVideoProcessing(video.id, rawKey);
+        continue;
+      }
+
+      if (
+        video.status === ContentStatus.processing &&
+        !hasRaw &&
+        !hasHls
+      ) {
+        await this.markVideoAndEpisodeFailed(video);
+        continue;
+      }
+
+      if (video.status === ContentStatus.failed) {
+        await this.prisma.verticalEpisode.update({
+          where: { id: episode.id },
+          data: { status: ContentStatus.failed },
+        });
+      }
+    }
+  }
+
+  private async markVideoAndEpisodeFailed(
+    video: {
+      id: string;
+      creatorId: string;
+      title: string;
+      type: VideoType;
+      verticalEpisodeId: string | null;
+      status: ContentStatus;
+    },
+  ) {
+    if (video.status === ContentStatus.failed) return;
+    await this.prisma.video.update({
+      where: { id: video.id },
+      data: { status: ContentStatus.failed },
+    });
+    if (video.verticalEpisodeId) {
+      await this.prisma.verticalEpisode.update({
+        where: { id: video.verticalEpisodeId },
+        data: { status: ContentStatus.failed },
+      });
+    }
+    void this.notifications.notifyVideoProcessingFailed(
+      video.creatorId,
+      video.id,
+      video.title,
+      video.type,
+    );
+  }
+
   async uploadComplete(userId: string, dto: UploadCompleteDto) {
     const video = await this.prisma.video.findUnique({
       where: { id: dto.videoId },
@@ -187,13 +304,7 @@ export class VideosService {
       );
     }
 
-    const jobData: VideoProcessingJobData = {
-      videoId: dto.videoId,
-      objectKey,
-    };
-    await this.videoQueue.add('process', jobData, {
-      jobId: `video-${dto.videoId}`,
-    });
+    await this.enqueueVideoProcessing(dto.videoId, objectKey);
 
     void this.notifications.notifyVideoProcessingStarted(
       userId,

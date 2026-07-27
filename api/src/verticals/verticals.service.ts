@@ -15,6 +15,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { PlaybackService } from '../playback/playback.service';
+import { VideosService } from '../videos/videos.service';
 import { AttachEpisodeVideoDto } from './dto/attach-episode-video.dto';
 import { CreateVerticalEpisodeDto } from './dto/create-vertical-episode.dto';
 import { CreateVerticalSeriesDto } from './dto/create-vertical-series.dto';
@@ -25,6 +26,7 @@ export class VerticalsService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly playback: PlaybackService,
+    private readonly videos: VideosService,
   ) {}
 
   private async assertVerticalCreatorApproved(creatorId: string) {
@@ -46,6 +48,55 @@ export class VerticalsService {
       if (episode.thumbnailUrl) return episode.thumbnailUrl;
     }
     return null;
+  }
+
+  /** Published (ready) episode count shown on cards and series detail. */
+  private async syncSeriesPublishedEpisodeCount(seriesId: string) {
+    const count = await this.prisma.verticalEpisode.count({
+      where: { seriesId, status: ContentStatus.ready },
+    });
+    await this.prisma.verticalSeries.update({
+      where: { id: seriesId },
+      data: { totalEpisodes: count },
+    });
+    return count;
+  }
+
+  /** Promote episodes stuck in processing when their linked video finished transcoding. */
+  private async reconcileStuckEpisodes(seriesId: string) {
+    await this.videos.reconcileVerticalSeriesProcessing(seriesId);
+
+    const processing = await this.prisma.verticalEpisode.findMany({
+      where: { seriesId, status: ContentStatus.processing },
+      select: { id: true },
+    });
+    if (!processing.length) return;
+
+    const videos = await this.prisma.video.findMany({
+      where: {
+        verticalEpisodeId: { in: processing.map((e) => e.id) },
+        status: ContentStatus.ready,
+      },
+    });
+
+    for (const video of videos) {
+      if (!video.verticalEpisodeId) continue;
+      await this.prisma.verticalEpisode.update({
+        where: { id: video.verticalEpisodeId },
+        data: {
+          status: ContentStatus.ready,
+          videoUrl:
+            this.storage.resolveVideoHlsMasterKey(video.hlsMasterUrl, video.id) ??
+            video.hlsMasterUrl,
+          thumbnailUrl: video.thumbnailUrl ?? undefined,
+          durationSeconds: video.durationSeconds ?? undefined,
+        },
+      });
+    }
+
+    if (videos.length > 0) {
+      await this.syncSeriesPublishedEpisodeCount(seriesId);
+    }
   }
 
   private async resolvePosterFallbacks<
@@ -78,7 +129,7 @@ export class VerticalsService {
   }
 
   async listSeries() {
-    const items = await this.prisma.verticalSeries.findMany({
+    const rows = await this.prisma.verticalSeries.findMany({
       where: { status: VerticalSeriesStatus.published, visibility: 'public' },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -88,18 +139,39 @@ export class VerticalsService {
         tagline: true,
         posterUrl: true,
         genre: true,
-        totalEpisodes: true,
+        _count: {
+          select: {
+            episodes: { where: { status: ContentStatus.ready } },
+          },
+        },
       },
     });
+    const items = rows.map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      tagline: row.tagline,
+      posterUrl: row.posterUrl,
+      genre: row.genre,
+      totalEpisodes: row._count.episodes,
+    }));
     return { items: await this.resolvePosterFallbacks(items) };
   }
 
   async getSeries(slug: string) {
-    const series = await this.prisma.verticalSeries.findFirst({
+    const seriesMeta = await this.prisma.verticalSeries.findFirst({
       where: { slug, status: VerticalSeriesStatus.published },
+      select: { id: true },
+    });
+    if (!seriesMeta) throw new NotFoundException('Series not found');
+
+    await this.reconcileStuckEpisodes(seriesMeta.id);
+
+    const series = await this.prisma.verticalSeries.findFirst({
+      where: { id: seriesMeta.id },
       include: {
         episodes: {
-          where: { status: 'ready' },
+          where: { status: ContentStatus.ready },
           orderBy: { episodeNumber: 'asc' },
           select: {
             id: true,
@@ -118,6 +190,7 @@ export class VerticalsService {
     if (!series) throw new NotFoundException('Series not found');
     return {
       ...series,
+      totalEpisodes: series.episodes.length,
       posterUrl:
         series.posterUrl ?? this.pickEpisodeThumbnail(series.episodes) ?? null,
     };
@@ -129,6 +202,8 @@ export class VerticalsService {
       select: { id: true, slug: true, title: true, creatorId: true, posterUrl: true },
     });
     if (!series) throw new NotFoundException('Series not found');
+
+    await this.reconcileStuckEpisodes(series.id);
 
     const episode = await this.prisma.verticalEpisode.findFirst({
       where: {
@@ -508,12 +583,9 @@ export class VerticalsService {
       },
     });
 
-    const count = await this.prisma.verticalEpisode.count({
-      where: { seriesId: series.id },
-    });
     await this.prisma.verticalSeries.update({
       where: { id: series.id },
-      data: { totalEpisodes: count, creatorId: series.creatorId ?? creatorId },
+      data: { creatorId: series.creatorId ?? creatorId },
     });
 
     return episode;
@@ -540,16 +612,34 @@ export class VerticalsService {
     }
 
     const thumbnailUrl = video.thumbnailUrl ?? episode.thumbnailUrl;
+    const resolvedVideoUrl =
+      this.storage.resolveVideoHlsMasterKey(video.hlsMasterUrl, video.id) ??
+      video.hlsMasterUrl;
+    const episodeStatus =
+      video.status === ContentStatus.ready
+        ? ContentStatus.ready
+        : ContentStatus.processing;
+
+    if (video.verticalEpisodeId !== episodeId) {
+      await this.prisma.video.update({
+        where: { id: dto.videoId },
+        data: { verticalEpisodeId: episodeId },
+      });
+    }
+
     const updatedEpisode = await this.prisma.verticalEpisode.update({
       where: { id: episodeId },
       data: {
-        videoUrl:
-          this.storage.resolveVideoHlsMasterKey(video.hlsMasterUrl, video.id) ??
-          video.hlsMasterUrl,
+        videoUrl: resolvedVideoUrl,
         thumbnailUrl,
-        status: video.status === ContentStatus.ready ? ContentStatus.ready : ContentStatus.processing,
+        status: episodeStatus,
+        durationSeconds: video.durationSeconds ?? episode.durationSeconds,
       },
     });
+
+    if (episodeStatus === ContentStatus.ready) {
+      await this.syncSeriesPublishedEpisodeCount(episode.series.id);
+    }
 
     if (!episode.series.posterUrl && thumbnailUrl) {
       await this.prisma.verticalSeries.update({
@@ -586,13 +676,7 @@ export class VerticalsService {
   }
 
   private async syncSeriesEpisodeCount(seriesId: string) {
-    const count = await this.prisma.verticalEpisode.count({
-      where: { seriesId },
-    });
-    await this.prisma.verticalSeries.update({
-      where: { id: seriesId },
-      data: { totalEpisodes: count },
-    });
+    await this.syncSeriesPublishedEpisodeCount(seriesId);
   }
 
   async updateEpisode(

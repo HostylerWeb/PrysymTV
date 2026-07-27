@@ -94,12 +94,25 @@ export class SearchService {
               title: true,
               posterUrl: true,
               tagline: true,
-              totalEpisodes: true,
+              _count: {
+                select: {
+                  episodes: { where: { status: ContentStatus.ready } },
+                },
+              },
             },
           }),
     ]);
 
-    return { query, videos, creators, podcasts, streams, verticals };
+    const verticalHits = verticals.map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      posterUrl: row.posterUrl,
+      tagline: row.tagline,
+      totalEpisodes: row._count.episodes,
+    }));
+
+    return { query, videos, creators, podcasts, streams, verticals: verticalHits };
   }
 
   async suggest(q: string, type?: string) {

@@ -45,6 +45,21 @@ export class VideoProcessingProcessor extends WorkerHost {
     return 'ffprobe';
   }
 
+  private async syncVerticalSeriesEpisodeCount(verticalEpisodeId: string) {
+    const episode = await this.prisma.verticalEpisode.findUnique({
+      where: { id: verticalEpisodeId },
+      select: { seriesId: true },
+    });
+    if (!episode) return;
+    const count = await this.prisma.verticalEpisode.count({
+      where: { seriesId: episode.seriesId, status: ContentStatus.ready },
+    });
+    await this.prisma.verticalSeries.update({
+      where: { id: episode.seriesId },
+      data: { totalEpisodes: count },
+    });
+  }
+
   async process(job: Job<VideoProcessingJobData>): Promise<void> {
     const { videoId, objectKey } = job.data;
     const settings = getVideoProcessingSettings(this.config);
@@ -163,6 +178,7 @@ export class VideoProcessingProcessor extends WorkerHost {
           durationSeconds,
         },
       });
+      await this.syncVerticalSeriesEpisodeCount(prior.verticalEpisodeId);
     }
 
     if (prior) {
@@ -325,6 +341,7 @@ export class VideoProcessingProcessor extends WorkerHost {
             durationSeconds: probe.durationSeconds,
           },
         });
+        await this.syncVerticalSeriesEpisodeCount(prior.verticalEpisodeId);
       }
 
       if (prior) {

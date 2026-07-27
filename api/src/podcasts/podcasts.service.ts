@@ -62,7 +62,13 @@ export class PodcastsService {
         take: limit,
         include: {
           creator: { select: { username: true, displayName: true } },
-          _count: { select: { episodes: true } },
+          _count: {
+            select: {
+              episodes: {
+                where: { status: ContentStatus.ready, visibility: Visibility.public },
+              },
+            },
+          },
         },
       }),
       this.prisma.podcastShow.count({ where: { visibility: Visibility.public } }),
@@ -84,7 +90,13 @@ export class PodcastsService {
             _count: { select: { followers: true } },
           },
         },
-        _count: { select: { episodes: true } },
+        _count: {
+          select: {
+            episodes: {
+              where: { status: ContentStatus.ready, visibility: Visibility.public },
+            },
+          },
+        },
         episodes: {
           where: { status: ContentStatus.ready },
           orderBy: { publishedAt: 'desc' },
@@ -130,7 +142,13 @@ export class PodcastsService {
           orderBy: { publishedAt: 'desc' },
           take: 1,
         },
-        _count: { select: { episodes: true } },
+        _count: {
+          select: {
+            episodes: {
+              where: { status: ContentStatus.ready, visibility: Visibility.public },
+            },
+          },
+        },
       },
     });
     if (!show) return { show: null };
@@ -153,7 +171,13 @@ export class PodcastsService {
           where: { status: ContentStatus.ready, visibility: Visibility.public },
           orderBy: { publishedAt: 'desc' },
         },
-        _count: { select: { episodes: true } },
+        _count: {
+          select: {
+            episodes: {
+              where: { status: ContentStatus.ready, visibility: Visibility.public },
+            },
+          },
+        },
       },
     });
     if (!show) throw new NotFoundException('Podcast show not found');
