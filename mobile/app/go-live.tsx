@@ -312,23 +312,58 @@ export default function GoLiveScreen() {
                 </View>
               ) : null}
 
-              <TextInput
-                style={styles.input}
-                placeholder="Stream title"
-                placeholderTextColor={colors.mutedForeground}
-                value={title}
-                onChangeText={setTitle}
-              />
-              <View style={styles.categoryRow}>
-                {CATEGORIES.map((c) => (
-                  <Pressable
-                    key={c}
-                    style={[styles.categoryChip, category === c && styles.categoryChipOn]}
-                    onPress={() => setCategory(c)}
-                  >
-                    <Text style={[styles.categoryText, category === c && styles.categoryTextOn]}>{c}</Text>
-                  </Pressable>
-                ))}
+              <View style={styles.detailsSection}>
+                <View style={styles.requiredBadge}>
+                  <Text style={styles.requiredBadgeText}>REQUIRED</Text>
+                </View>
+                <Text style={styles.detailsTitle}>Stream details</Text>
+                <Text style={styles.detailsSub}>
+                  Add a title and category so viewers know what your broadcast is about.
+                </Text>
+
+                <View style={styles.fieldBlock}>
+                  <View style={styles.fieldLabelRow}>
+                    <Ionicons name="text-outline" size={18} color="#10b981" />
+                    <Text style={styles.fieldLabel}>Stream title *</Text>
+                  </View>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      styles.inputProminent,
+                      !title.trim() && styles.inputAttention,
+                    ]}
+                    placeholder="e.g. Friday night gaming session"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={title}
+                    onChangeText={setTitle}
+                  />
+                  {!title.trim() ? (
+                    <Text style={styles.fieldHintWarn}>
+                      Required — shown on your live card and in browse.
+                    </Text>
+                  ) : null}
+                </View>
+
+                <View style={styles.fieldBlock}>
+                  <View style={styles.fieldLabelRow}>
+                    <Ionicons name="grid-outline" size={18} color="#10b981" />
+                    <Text style={styles.fieldLabel}>Category *</Text>
+                  </View>
+                  <View style={styles.categoryRow}>
+                    {CATEGORIES.map((c) => (
+                      <Pressable
+                        key={c}
+                        style={[styles.categoryChip, category === c && styles.categoryChipOn]}
+                        onPress={() => setCategory(c)}
+                      >
+                        <Text style={[styles.categoryText, category === c && styles.categoryTextOn]}>{c}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Text style={styles.fieldHint}>
+                    Tap a category so viewers can find your stream in browse.
+                  </Text>
+                </View>
               </View>
 
               {mode === 'obs' && streamKey ? (
@@ -523,6 +558,35 @@ const styles = StyleSheet.create({
   paidPriceHint: { color: colors.mutedForeground, fontSize: 12, lineHeight: 17 },
   paidPriceError: { color: colors.destructive, fontSize: 12, lineHeight: 17, fontWeight: '600' },
   sectionLabel: { color: colors.foreground, fontSize: 14, fontWeight: '700', marginBottom: 8, marginTop: 4 },
+  detailsSection: {
+    marginBottom: 20,
+    padding: 16,
+    borderRadius: radius.xl,
+    borderWidth: 2,
+    borderColor: '#10b98166',
+    backgroundColor: '#10b98112',
+    gap: 10,
+  },
+  requiredBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#059669',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  requiredBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  detailsTitle: { color: colors.foreground, fontSize: 18, fontWeight: '800', marginTop: 2 },
+  detailsSub: { color: colors.mutedForeground, fontSize: 13, lineHeight: 19, marginBottom: 4 },
+  fieldBlock: { gap: 8, marginTop: 4 },
+  fieldLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  fieldLabel: { color: colors.foreground, fontSize: 14, fontWeight: '700' },
+  fieldHint: { color: colors.mutedForeground, fontSize: 12, lineHeight: 17 },
+  fieldHintWarn: { color: '#d97706', fontSize: 12, lineHeight: 17, fontWeight: '600' },
   modeRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   modeCard: {
     flex: 1,
@@ -538,21 +602,36 @@ const styles = StyleSheet.create({
   modeTitleOn: { color: colors.primary },
   modeHint: { color: colors.mutedForeground, fontSize: 11, lineHeight: 15, marginTop: 4 },
   input: {
-    padding: 12,
+    padding: 14,
     borderRadius: radius.lg,
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.background,
     color: colors.foreground,
-    marginBottom: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    borderWidth: 2,
+    borderColor: '#10b98155',
   },
-  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  inputProminent: {
+    minHeight: 52,
+  },
+  inputAttention: {
+    borderColor: '#f59e0b88',
+    backgroundColor: '#f59e0b0a',
+  },
+  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   categoryChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: radius.full,
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.background,
+    borderWidth: 2,
+    borderColor: colors.border,
   },
-  categoryChipOn: { backgroundColor: colors.primary + '22' },
-  categoryText: { color: colors.mutedForeground, fontSize: 12, fontWeight: '600' },
+  categoryChipOn: {
+    backgroundColor: colors.primary + '22',
+    borderColor: colors.primary,
+  },
+  categoryText: { color: colors.mutedForeground, fontSize: 13, fontWeight: '700' },
   categoryTextOn: { color: colors.primary },
   rtmpBox: {
     marginTop: 12,

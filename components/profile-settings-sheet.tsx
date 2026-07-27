@@ -36,6 +36,8 @@ import {
   Coins,
   Lock,
   Globe,
+  Type,
+  LayoutGrid,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -1947,34 +1949,90 @@ function GoLivePanel({
           {ingestHealth.hint}
         </div>
       )}
-      <div className="flex flex-col gap-3 md:grid md:grid-cols-2 md:gap-4">
-        <input
-          value={title}
-          onChange={(e) => onTitleChange(e.target.value)}
-          placeholder="Stream title"
-          className="w-full h-11 md:h-12 px-4 rounded-xl bg-secondary text-sm md:text-base md:col-span-2"
-        />
-        <select
-          value={category}
-          onChange={(e) => onCategoryChange(e.target.value)}
-          className="w-full h-11 md:h-12 px-4 rounded-xl bg-secondary text-sm md:text-base md:col-span-2"
-        >
-          {(categoryOptions.length > 0
-            ? categoryOptions
-            : [
-                { slug: "gaming", label: "Gaming" },
-                { slug: "music", label: "Music" },
-                { slug: "technology", label: "Technology" },
-                { slug: "fitness", label: "Fitness" },
-                { slug: "talk", label: "Talk" },
-              ]
-          ).map((c) => (
-            <option key={c.slug} value={c.label}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      <section
+        aria-labelledby="go-live-stream-details-heading"
+        className="rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-500/10 via-card to-secondary/20 p-4 md:p-5 space-y-4 shadow-md ring-1 ring-emerald-500/15"
+      >
+        <div>
+          <span className="inline-flex items-center rounded-full bg-emerald-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+            Required
+          </span>
+          <h3
+            id="go-live-stream-details-heading"
+            className="text-lg md:text-xl font-bold text-foreground mt-2"
+          >
+            Stream details
+          </h3>
+          <p className="text-sm text-muted-foreground mt-1 max-w-lg">
+            Add a clear <strong className="text-foreground font-semibold">title</strong> and{" "}
+            <strong className="text-foreground font-semibold">category</strong> so viewers know what
+            your broadcast is about.
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <label className="block space-y-2">
+            <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Type className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              Stream title
+              <span className="text-destructive" aria-hidden>
+                *
+              </span>
+            </span>
+            <input
+              value={title}
+              onChange={(e) => onTitleChange(e.target.value)}
+              placeholder="e.g. Friday night gaming session"
+              aria-required
+              className={cn(
+                "w-full h-12 md:h-14 px-4 rounded-xl bg-background text-sm md:text-base font-medium border-2 transition-colors",
+                title.trim()
+                  ? "border-emerald-500/50 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/25"
+                  : "border-amber-500/50 ring-1 ring-amber-500/20 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/25",
+              )}
+            />
+            {!title.trim() ? (
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                Required — shown on your live card and in browse.
+              </p>
+            ) : null}
+          </label>
+
+          <label className="block space-y-2">
+            <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <LayoutGrid className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              Category
+              <span className="text-destructive" aria-hidden>
+                *
+              </span>
+            </span>
+            <select
+              value={category}
+              onChange={(e) => onCategoryChange(e.target.value)}
+              aria-required
+              className="w-full h-12 md:h-14 px-4 rounded-xl bg-background text-sm md:text-base font-medium border-2 border-emerald-500/50 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/25 transition-colors"
+            >
+              {(categoryOptions.length > 0
+                ? categoryOptions
+                : [
+                    { slug: "gaming", label: "Gaming" },
+                    { slug: "music", label: "Music" },
+                    { slug: "technology", label: "Technology" },
+                    { slug: "fitness", label: "Fitness" },
+                    { slug: "talk", label: "Talk" },
+                  ]
+              ).map((c) => (
+                <option key={c.slug} value={c.label}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Helps viewers find your stream in the right browse section.
+            </p>
+          </label>
+        </div>
+      </section>
       {mode === "obs" && (
         <div className="p-3 md:p-4 rounded-xl bg-secondary/30 text-xs md:text-sm space-y-1 font-mono break-all">
           <p>
