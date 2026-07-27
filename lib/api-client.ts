@@ -11,9 +11,43 @@ export class ApiError extends Error {
 }
 
 const ACCESS_TOKEN_KEY = "prysymtv_access_token";
+const SESSION_HINT_KEY = "prysymtv_session_hint";
 
 let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
+
+function markSessionHint(active: boolean): void {
+  if (typeof window === "undefined") return;
+  if (active) {
+    localStorage.setItem(SESSION_HINT_KEY, "1");
+  } else {
+    localStorage.removeItem(SESSION_HINT_KEY);
+  }
+}
+
+function hasSessionHint(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(SESSION_HINT_KEY) === "1";
+}
+
+function migrateSessionHint(): void {
+  if (typeof window === "undefined") return;
+  if (!hasSessionHint() && localStorage.getItem(ACCESS_TOKEN_KEY)) {
+    markSessionHint(true);
+  }
+}
+
+function isAccessTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1] ?? "")) as {
+      exp?: number;
+    };
+    if (!payload.exp) return false;
+    return payload.exp * 1000 <= Date.now() + 30_000;
+  } catch {
+    return false;
+  }
+}
 
 function migrateLegacySessionStorageToken(): void {
   if (typeof window === "undefined") return;
@@ -42,8 +76,10 @@ export function setAccessToken(token: string | null) {
   if (typeof window === "undefined") return;
   if (token) {
     localStorage.setItem(ACCESS_TOKEN_KEY, token);
+    markSessionHint(true);
   } else {
     localStorage.removeItem(ACCESS_TOKEN_KEY);
+    markSessionHint(false);
   }
 }
 
@@ -51,24 +87,13 @@ export function loadStoredAccessToken(): string | null {
   if (accessToken) return accessToken;
   if (typeof window !== "undefined") {
     migrateLegacySessionStorageToken();
+    migrateSessionHint();
     accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
   }
   return accessToken;
 }
 
-function hasRefreshSessionCookie(): boolean {
-  if (typeof document === "undefined") return false;
-  return document.cookie
-    .split(";")
-    .some((part) => part.trim().startsWith("prysym_refresh="));
-}
-
 async function refreshAccessToken(): Promise<string | null> {
-  if (!hasRefreshSessionCookie()) {
-    setAccessToken(null);
-    return null;
-  }
-
   const res = await fetch(`${getApiBaseUrl()}/auth/refresh`, {
     method: "POST",
     credentials: "include",
@@ -92,12 +117,17 @@ function getRefreshOnce(): Promise<string | null> {
   return refreshPromise;
 }
 
-/** Restore session from refresh cookie when access token is missing. */
+/** Restore session from refresh cookie when access token is missing or expired. */
 export async function ensureAccessToken(): Promise<string | null> {
   const existing = loadStoredAccessToken();
-  if (existing) return existing;
-  if (!hasRefreshSessionCookie()) return null;
+  if (existing && !isAccessTokenExpired(existing)) return existing;
+  if (!existing && !hasSessionHint()) return null;
   return getRefreshOnce();
+}
+
+/** Force a refresh using the HttpOnly session cookie. */
+export async function refreshSession(): Promise<string | null> {
+  return refreshAccessToken();
 }
 
 export type ApiRequestOptions = {
@@ -136,12 +166,15 @@ export async function apiRequest<T>(
   };
 
   let token = auth ? loadStoredAccessToken() : null;
-  if (auth && !token && hasRefreshSessionCookie()) {
+  if (auth && token && isAccessTokenExpired(token)) {
+    token = null;
+  }
+  if (auth && !token && hasSessionHint()) {
     token = await getRefreshOnce();
   }
   let res = await run(token);
 
-  if (res.status === 401 && auth && hasRefreshSessionCookie()) {
+  if (res.status === 401 && auth) {
     const newToken = await getRefreshOnce();
     if (newToken) {
       token = newToken;

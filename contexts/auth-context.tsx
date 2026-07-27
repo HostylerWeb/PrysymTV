@@ -12,6 +12,7 @@ import {
   ApiError,
   ACCESS_TOKEN_STORAGE_KEY,
   ensureAccessToken,
+  refreshSession,
   setAccessToken,
 } from "@/lib/api-client"
 import * as authApi from "@/lib/api/auth"
@@ -114,8 +115,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const me = await fetchMe()
         if (!cancelled) setUser(mapMeToUser(me))
       } catch {
-        setAccessToken(null)
-        if (!cancelled) setUser(null)
+        try {
+          const refreshed = await refreshSession()
+          if (!refreshed) throw new Error("refresh failed")
+          const me = await fetchMe()
+          if (!cancelled) setUser(mapMeToUser(me))
+        } catch {
+          setAccessToken(null)
+          if (!cancelled) setUser(null)
+        }
       } finally {
         if (!cancelled) setIsLoading(false)
       }
