@@ -571,6 +571,48 @@ export class VerticalsService {
       throw new ForbiddenException('Not your series');
     }
 
+    const existing = await this.prisma.verticalEpisode.findUnique({
+      where: {
+        seriesId_episodeNumber: {
+          seriesId: series.id,
+          episodeNumber: dto.episodeNumber,
+        },
+      },
+    });
+
+    if (existing) {
+      if (existing.status === ContentStatus.ready) {
+        throw new ConflictException(
+          `Episode ${dto.episodeNumber} is already published. Delete it first to replace.`,
+        );
+      }
+
+      await this.prisma.video.updateMany({
+        where: { verticalEpisodeId: existing.id },
+        data: { verticalEpisodeId: null },
+      });
+
+      const episode = await this.prisma.verticalEpisode.update({
+        where: { id: existing.id },
+        data: {
+          title: dto.title,
+          description: dto.description,
+          cliffhanger: dto.cliffhanger,
+          durationSeconds: dto.durationSeconds ?? 120,
+          status: ContentStatus.processing,
+          videoUrl: null,
+          thumbnailUrl: null,
+        },
+      });
+
+      await this.prisma.verticalSeries.update({
+        where: { id: series.id },
+        data: { creatorId: series.creatorId ?? creatorId },
+      });
+
+      return episode;
+    }
+
     const episode = await this.prisma.verticalEpisode.create({
       data: {
         seriesId: series.id,
