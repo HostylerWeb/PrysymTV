@@ -51,6 +51,8 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const defaultSuggestionsQuery = useDefaultSearchSuggestions(isOpen && !scope)
+  const defaultSuggestions = defaultSuggestionsQuery.data
+  const defaultSuggestionsLoading = defaultSuggestionsQuery.isLoading
 
   useEffect(() => {
     if (isOpen) {
