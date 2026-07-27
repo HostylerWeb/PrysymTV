@@ -325,29 +325,18 @@ export class StorageService implements OnModuleInit {
     this.assertMimeAllowed(mimeType);
     const objectKey = this.buildRawKey(videoId, fileName);
     const expiresIn = this.settings.presignExpiresSeconds;
+    const base = this.settings.apiPublicUrl.replace(/\/$/, '');
 
-    if (this.settings.driver === 's3' && this.s3 && this.settings.s3) {
-      const command = new PutObjectCommand({
-        Bucket: this.settings.s3.bucket,
-        Key: objectKey,
-        ContentType: mimeType,
+    if (this.settings.driver === 'local') {
+      await mkdir(dirname(this.getLocalAbsolutePath(objectKey)), {
+        recursive: true,
       });
-      const uploadUrl = await getSignedUrl(this.s3, command, { expiresIn });
-      return {
-        objectKey,
-        uploadUrl,
-        uploadMethod: 'PUT',
-        uploadHeaders: { 'Content-Type': mimeType },
-        expiresIn,
-      };
     }
 
-    const base = this.settings.apiPublicUrl.replace(/\/$/, '');
-    const uploadUrl = `${base}/media/upload/${videoId}`;
-    await mkdir(dirname(this.getLocalAbsolutePath(objectKey)), { recursive: true });
+    // Route uploads through the API so files land in storage reliably (R2/S3 or local).
     return {
       objectKey,
-      uploadUrl,
+      uploadUrl: `${base}/media/upload/${videoId}`,
       uploadMethod: 'POST',
       uploadHeaders: {},
       expiresIn,

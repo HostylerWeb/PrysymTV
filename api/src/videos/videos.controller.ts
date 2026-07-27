@@ -41,6 +41,15 @@ export class VideosController {
     return this.videos.uploadComplete(user.id, body);
   }
 
+  @Post('upload/abandon')
+  @UseGuards(JwtAuthGuard)
+  abandonUpload(
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: { videoId: string },
+  ) {
+    return this.videos.abandonUpload(user.id, body.videoId);
+  }
+
   @Post(':id/poster/upload/init')
   @UseGuards(JwtAuthGuard)
   posterUploadInit(

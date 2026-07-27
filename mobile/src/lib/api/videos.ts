@@ -68,6 +68,13 @@ export function completeVideoUpload(body: { videoId: string; objectKey?: string 
   });
 }
 
+export function abandonVideoUpload(videoId: string) {
+  return apiRequest<{ success: boolean; status: string }>(
+    '/videos/upload/abandon',
+    { method: 'POST', body: { videoId } },
+  );
+}
+
 export async function uploadVideoFile(
   init: UploadInitResponse,
   file: { uri: string; name?: string | null; mimeType?: string | null },
@@ -99,8 +106,13 @@ export async function runVideoUpload(params: {
     fileName: params.file.name ?? 'video.mp4',
     verticalEpisodeId: params.verticalEpisodeId,
   });
-  await uploadVideoFile(init, params.file, params.onProgress);
-  return completeVideoUpload({ videoId: init.videoId, objectKey: init.objectKey });
+  try {
+    await uploadVideoFile(init, params.file, params.onProgress);
+    return await completeVideoUpload({ videoId: init.videoId, objectKey: init.objectKey });
+  } catch (err) {
+    await abandonVideoUpload(init.videoId).catch(() => undefined);
+    throw err;
+  }
 }
 
 export async function pollVideoUntilReady(

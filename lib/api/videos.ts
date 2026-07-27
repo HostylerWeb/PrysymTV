@@ -86,7 +86,14 @@ export async function completeVideoUpload(body: UploadCompleteBody) {
   });
 }
 
-/** Upload bytes to the URL returned by init (presigned PUT or local multipart). */
+export function abandonVideoUpload(videoId: string) {
+  return apiRequest<{ success: boolean; status: string }>(
+    "/videos/upload/abandon",
+    { method: "POST", body: { videoId } },
+  );
+}
+
+/** Upload bytes to the URL returned by init (API multipart or presigned PUT). */
 export async function uploadVideoFile(
   init: UploadInitResponse,
   file: File,
@@ -148,11 +155,16 @@ export async function uploadVideoFlow(
     mimeType: body.mimeType || file.type,
     fileName: body.fileName ?? file.name,
   });
-  await uploadVideoFile(init, file, onProgress);
-  return completeVideoUpload({
-    videoId: init.videoId,
-    objectKey: init.objectKey,
-  });
+  try {
+    await uploadVideoFile(init, file, onProgress);
+    return await completeVideoUpload({
+      videoId: init.videoId,
+      objectKey: init.objectKey,
+    });
+  } catch (err) {
+    await abandonVideoUpload(init.videoId).catch(() => undefined);
+    throw err;
+  }
 }
 
 type PosterUploadInit = {

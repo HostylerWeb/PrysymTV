@@ -10,7 +10,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
+import { memoryStorage, diskStorage } from 'multer';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -19,9 +19,27 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { writeFile } from 'fs/promises';
+import { mkdirSync } from 'fs';
+import { rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { randomUUID } from 'crypto';
 
-/** Local storage only: multipart upload of raw file bytes. */
+const videoUploadStorage = diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = join(tmpdir(), 'prysym-video-uploads');
+    mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = file.originalname?.includes('.')
+      ? file.originalname.slice(file.originalname.lastIndexOf('.'))
+      : '.mp4';
+    cb(null, `${randomUUID()}${ext}`);
+  },
+});
+
+/** Multipart video upload (local disk or S3/R2 via API). */
 @Controller('media')
 export class MediaController {
   constructor(
@@ -33,7 +51,10 @@ export class MediaController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: memoryStorage(),
+      storage: videoUploadStorage,
+      limits: {
+        fileSize: Number(process.env.UPLOAD_MAX_BYTES ?? 2 * 1024 ** 3),
+      },
     }),
   )
   async uploadRaw(
@@ -41,12 +62,7 @@ export class MediaController {
     @CurrentUser() user: AuthUserPayload,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    if (this.storage.getSettings().driver !== 'local') {
-      throw new ForbiddenException(
-        'Multipart media upload is only available when STORAGE_DRIVER=local',
-      );
-    }
-    if (!file?.buffer?.length) {
+    if (!file?.path) {
       throw new ForbiddenException('Missing file');
     }
 
@@ -58,12 +74,26 @@ export class MediaController {
 
     const max = this.storage.getSettings().maxUploadBytes;
     if (file.size > max) {
+      await rm(file.path, { force: true }).catch(() => undefined);
       throw new ForbiddenException('File exceeds maximum upload size');
     }
 
     const objectKey =
       video.rawObjectKey ?? this.storage.buildRawKey(videoId, file.originalname);
-    await this.storage.writeLocalRaw(videoId, objectKey, file.buffer);
+
+    try {
+      const mimeType = file.mimetype?.trim() || 'application/octet-stream';
+      if (this.storage.getSettings().driver === 'local') {
+        const { readFile } = await import('fs/promises');
+        const buffer = await readFile(file.path);
+        await this.storage.writeLocalRaw(videoId, objectKey, buffer);
+      } else {
+        await this.storage.uploadFromFile(objectKey, file.path, mimeType);
+      }
+    } finally {
+      await rm(file.path, { force: true }).catch(() => undefined);
+    }
+
     if (!video.rawObjectKey) {
       await this.prisma.video.update({
         where: { id: videoId },

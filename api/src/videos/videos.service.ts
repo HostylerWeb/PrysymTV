@@ -3,7 +3,9 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import {
   ContentStatus,
@@ -42,7 +44,10 @@ import { UploadCompleteDto } from './dto/upload-complete.dto';
 import { UploadInitDto } from './dto/upload-init.dto';
 
 @Injectable()
-export class VideosService {
+export class VideosService implements OnModuleInit {
+  private readonly logger = new Logger(VideosService.name);
+  private reconcileTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
@@ -53,6 +58,14 @@ export class VideosService {
     private readonly playback: PlaybackService,
     @InjectQueue(VIDEO_PROCESSING_QUEUE) private readonly videoQueue: Queue,
   ) {}
+
+  onModuleInit() {
+    const intervalMs = 15 * 60 * 1000;
+    this.reconcileTimer = setInterval(() => {
+      void this.reconcileAllStuckProcessingVideos();
+    }, intervalMs);
+    void this.reconcileAllStuckProcessingVideos();
+  }
 
   private mapUploadType(type: UploadInitDto['type']): VideoType {
     if (type === 'podcast') return VideoType.video;
@@ -165,14 +178,13 @@ export class VideosService {
     });
   }
 
+  private static readonly UPLOAD_STALE_MS = 10 * 60 * 1000;
+
   /**
    * Resolve vertical episodes stuck after incomplete uploads or missed queue jobs.
    * Safe to call on series detail reads.
    */
   async reconcileVerticalSeriesProcessing(seriesId: string) {
-    const STALE_MS = 10 * 60 * 1000;
-    const now = Date.now();
-
     const episodes = await this.prisma.verticalEpisode.findMany({
       where: {
         seriesId,
@@ -195,7 +207,7 @@ export class VideosService {
       if (!video) {
         if (
           episode.status === ContentStatus.processing &&
-          now - episode.createdAt.getTime() > STALE_MS
+          Date.now() - episode.createdAt.getTime() > VideosService.UPLOAD_STALE_MS
         ) {
           await this.prisma.verticalEpisode.update({
             where: { id: episode.id },
@@ -204,40 +216,83 @@ export class VideosService {
         }
         continue;
       }
+      await this.reconcileProcessingVideo(video);
+    }
+  }
 
-      if (video.status === ContentStatus.ready) {
-        continue;
-      }
-
-      const ageMs = now - video.createdAt.getTime();
-      if (ageMs < STALE_MS) continue;
-
-      const rawKey =
-        video.rawObjectKey ?? this.storage.buildRawKey(video.id);
-      const hasRaw = await this.storage.objectExists(rawKey);
-      const hasHls = Boolean(video.hlsMasterUrl?.trim());
-
-      if (video.status === ContentStatus.processing && hasRaw && !hasHls) {
-        await this.enqueueVideoProcessing(video.id, rawKey);
-        continue;
-      }
-
-      if (
-        video.status === ContentStatus.processing &&
-        !hasRaw &&
-        !hasHls
-      ) {
-        await this.markVideoAndEpisodeFailed(video);
-        continue;
-      }
-
-      if (video.status === ContentStatus.failed) {
-        await this.prisma.verticalEpisode.update({
-          where: { id: episode.id },
-          data: { status: ContentStatus.failed },
-        });
+  /** Background sweep for uploads that never finished or transcoding jobs that were never queued. */
+  async reconcileAllStuckProcessingVideos() {
+    const cutoff = new Date(Date.now() - VideosService.UPLOAD_STALE_MS);
+    const videos = await this.prisma.video.findMany({
+      where: {
+        status: { in: [ContentStatus.processing, ContentStatus.failed] },
+        createdAt: { lt: cutoff },
+      },
+      take: 100,
+      orderBy: { createdAt: 'asc' },
+    });
+    for (const video of videos) {
+      try {
+        await this.reconcileProcessingVideo(video);
+      } catch (err) {
+        this.logger.warn(
+          `Reconcile failed for video ${video.id}: ${err instanceof Error ? err.message : err}`,
+        );
       }
     }
+  }
+
+  private async reconcileProcessingVideo(video: {
+    id: string;
+    creatorId: string;
+    title: string;
+    type: VideoType;
+    verticalEpisodeId: string | null;
+    status: ContentStatus;
+    rawObjectKey: string | null;
+    hlsMasterUrl: string | null;
+    createdAt: Date;
+  }) {
+    if (video.status === ContentStatus.ready) return;
+
+    const ageMs = Date.now() - video.createdAt.getTime();
+    if (ageMs < VideosService.UPLOAD_STALE_MS) return;
+
+    const rawKey =
+      video.rawObjectKey ?? this.storage.buildRawKey(video.id);
+    const hasRaw = await this.storage.objectExists(rawKey);
+    const hasHls = Boolean(video.hlsMasterUrl?.trim());
+
+    if (video.status === ContentStatus.processing && hasRaw && !hasHls) {
+      await this.enqueueVideoProcessing(video.id, rawKey);
+      return;
+    }
+
+    if (video.status === ContentStatus.processing && !hasRaw && !hasHls) {
+      await this.markVideoAndEpisodeFailed(video);
+      return;
+    }
+
+    if (video.status === ContentStatus.failed && video.verticalEpisodeId) {
+      await this.prisma.verticalEpisode.update({
+        where: { id: video.verticalEpisodeId },
+        data: { status: ContentStatus.failed },
+      });
+    }
+  }
+
+  /** Client-reported failed upload — marks video and linked vertical episode as failed. */
+  async abandonUpload(userId: string, videoId: string) {
+    const video = await this.prisma.video.findUnique({ where: { id: videoId } });
+    if (!video) throw new NotFoundException('Video not found');
+    if (video.creatorId !== userId) {
+      throw new ForbiddenException('Not your upload');
+    }
+    if (video.status === ContentStatus.ready) {
+      return { success: true, status: video.status };
+    }
+    await this.markVideoAndEpisodeFailed(video);
+    return { success: true, status: ContentStatus.failed };
   }
 
   private async markVideoAndEpisodeFailed(
