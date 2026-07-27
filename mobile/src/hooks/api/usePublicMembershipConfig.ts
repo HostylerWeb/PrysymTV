@@ -11,6 +11,7 @@ export function usePublicMembershipConfig() {
   return {
     membership: query.data?.membership,
     insider: query.data?.insider,
+    channelMembership: query.data?.channelMembership,
     isLoading: query.isLoading,
   };
 }

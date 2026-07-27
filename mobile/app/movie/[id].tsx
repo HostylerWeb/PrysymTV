@@ -17,6 +17,7 @@ import { ReportModal } from '@/components/modals/ReportModal';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useVideoDetail } from '@/hooks/api/useVideoDetail';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
+import { useWatchAnalytics } from '@/hooks/useWatchAnalytics';
 import { useBackNavigation } from '@/hooks/useBackNavigation';
 import { toggleVideoLike, toggleVideoSave } from '@/lib/api/videos';
 import { bumpLikeCount } from '@/utils/engagement-count';
@@ -28,7 +29,7 @@ export default function MovieScreen() {
   const styles = useThemedStyles(createStyles);
   const isFocused = useIsFocused();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { requireAuth } = useMockAuth();
+  const { requireAuth, user } = useMockAuth();
   useBackNavigation('/(tabs)/movies');
   const movieQuery = useVideoDetail(id);
   const movie = movieQuery.data;
@@ -60,6 +61,12 @@ export default function MovieScreen() {
     progress.duration || movie?.durationSeconds || 0,
     playing && isFocused && Boolean(movie?.playbackSource),
   );
+
+  useWatchAnalytics(movie?.id, {
+    creatorId: movie?.creator?.id,
+    viewerUserId: user?.id,
+    enabled: playing && isFocused && Boolean(movie?.playbackSource),
+  });
 
   const onProgress = useCallback((seconds: number, duration: number) => {
     setProgress({ seconds, duration });
@@ -184,6 +191,7 @@ export default function MovieScreen() {
         onClose={() => setShareOpen(false)}
         title={movie.title}
         url={buildShareUrl(`/movie/${movie.id}`)}
+        targetId={movie.id}
       />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetType="video" targetId={movie.id} />
       <CommentsSheet visible={commentsOpen} onClose={() => setCommentsOpen(false)} videoId={movie.id} videoTitle={movie.title} />

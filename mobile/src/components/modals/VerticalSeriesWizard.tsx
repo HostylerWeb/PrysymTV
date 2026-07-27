@@ -11,11 +11,12 @@ import * as ImagePicker from 'expo-image-picker';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
 import { createVerticalSeries, createVerticalEpisode, attachVerticalEpisodeVideo } from '@/lib/api/verticals';
+import { fetchMovieGenres } from '@/lib/api/categories';
 import { runVideoUpload } from '@/lib/api/videos';
 import { uploadQueuedBodyFor } from '@/lib/upload-processing-copy';
 import { colors, radius } from '@/theme/tokens';
 
-const GENRES = ['Drama', 'Romance', 'Thriller', 'Comedy', 'Fantasy', 'Action', 'Mystery'];
+const FALLBACK_VERTICAL_GENRES = ['Drama', 'Romance', 'Thriller', 'Comedy', 'Fantasy', 'Action', 'Mystery'];
 
 type Props = {
   visible: boolean;
@@ -53,6 +54,7 @@ export function VerticalSeriesWizard({
   const [tagline, setTagline] = useState('');
   const [description, setDescription] = useState('');
   const [genre, setGenre] = useState('Drama');
+  const [genreOptions, setGenreOptions] = useState<string[]>(FALLBACK_VERTICAL_GENRES);
   const [posterUri, setPosterUri] = useState<string | null>(null);
   const [episodeNumber, setEpisodeNumber] = useState('1');
   const [episodeTitle, setEpisodeTitle] = useState('');
@@ -63,6 +65,17 @@ export function VerticalSeriesWizard({
   const [busy, setBusy] = useState(false);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    void fetchMovieGenres()
+      .then((res) => {
+        if (res.items.length > 0) {
+          setGenreOptions(res.items.map((g) => g.label));
+        }
+      })
+      .catch(() => setGenreOptions(FALLBACK_VERTICAL_GENRES));
+  }, [visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -215,7 +228,7 @@ export function VerticalSeriesWizard({
           <Input value={description} onChangeText={setDescription} placeholder="Series description" multiline />
           <Label>Genre</Label>
           <View style={styles.chipRow}>
-            {GENRES.map((g) => (
+            {genreOptions.map((g) => (
               <Pressable key={g} style={[styles.chip, genre === g && styles.chipOn]} onPress={() => setGenre(g)}>
                 <Text style={styles.chipText}>{g}</Text>
               </Pressable>

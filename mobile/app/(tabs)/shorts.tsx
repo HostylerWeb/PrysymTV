@@ -21,6 +21,7 @@ import { ReportModal } from '@/components/modals/ReportModal';
 import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { GiftModal } from '@/components/modals/GiftModal';
 import { AdInterstitial } from '@/components/ads/AdInterstitial';
+import { fetchServedAd, isValidServedAd, type ServedAd } from '@/lib/api/ads';
 import { HlsPlayer } from '@/components/video/HlsPlayer';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
@@ -32,6 +33,7 @@ import { toggleVideoLike, toggleVideoSave } from '@/lib/api/videos';
 import { colors, radius, withAlpha } from '@/theme/tokens';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
+import { useWatchAnalytics } from '@/hooks/useWatchAnalytics';
 import { bumpLikeCount } from '@/utils/engagement-count';
 import { formatViewCount } from '@/utils/format-media';
 
@@ -64,9 +66,14 @@ export default function ShortsScreen() {
   const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
   const [adOpen, setAdOpen] = useState(false);
+  const [interstitialAd, setInterstitialAd] = useState<ServedAd | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const swipeCount = useRef(0);
   const current = shorts[index];
+
+  useWatchAnalytics(isFocused ? current?.id : undefined, {
+    creatorId: current?.creatorId,
+  });
 
   useEffect(() => {
     if (!current) return;
@@ -95,11 +102,12 @@ export default function ShortsScreen() {
     });
   }, [start, feedHeight, shorts]);
 
-  const { shortsInterstitialEveryNSwipes, shortsInterstitialEnabled } = usePublicAdsConfig();
+  const { shortsInterstitialEveryNSwipes, shortsInterstitialEnabled, isPlacementEnabled } =
+    usePublicAdsConfig();
   const adEveryRef = useRef(shortsInterstitialEveryNSwipes);
-  const adsEnabledRef = useRef(shortsInterstitialEnabled);
+  const adsEnabledRef = useRef(shortsInterstitialEnabled && isPlacementEnabled('shorts_interstitial'));
   adEveryRef.current = shortsInterstitialEveryNSwipes;
-  adsEnabledRef.current = shortsInterstitialEnabled;
+  adsEnabledRef.current = shortsInterstitialEnabled && isPlacementEnabled('shorts_interstitial');
 
   const indexRef = useRef(0);
   const shortsLenRef = useRef(0);
@@ -115,7 +123,11 @@ export default function ShortsScreen() {
       swipeCount.current > 0 &&
       swipeCount.current % adEveryRef.current === 0
     ) {
-      setAdOpen(true);
+      void fetchServedAd('shorts_interstitial', { peek: true }).then((peekAd) => {
+        if (!isValidServedAd(peekAd)) return;
+        setInterstitialAd(peekAd);
+        setAdOpen(true);
+      });
     }
     setIndex(next);
     if (next >= shortsLenRef.current - 3 && shortsQuery.hasNextPage && !shortsQuery.isFetchingNextPage) {
@@ -315,7 +327,11 @@ export default function ShortsScreen() {
       </View>
       <AdInterstitial
         visible={adOpen}
-        onClose={() => setAdOpen(false)}
+        servedAd={interstitialAd}
+        onClose={() => {
+          setAdOpen(false);
+          setInterstitialAd(null);
+        }}
         videoId={current?.id}
         creatorId={current?.creatorId}
       />
@@ -325,6 +341,7 @@ export default function ShortsScreen() {
         onClose={() => setShareOpen(false)}
         title={current?.title ?? 'Short'}
         url={current?.id ? buildShareUrl(`/shorts/${current.id}`) : undefined}
+        targetId={current?.id}
       />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetId={current?.id} />
       <GiftModal

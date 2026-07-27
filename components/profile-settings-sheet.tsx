@@ -1302,11 +1302,31 @@ function NotificationsPanel({
 }
 
 function HelpPanel() {
+  const [memberPrice, setMemberPrice] = useState("4.99")
+  const [vipPrice, setVipPrice] = useState("9.99")
+
+  useEffect(() => {
+    void fetchPublicConfig()
+      .then((cfg) => {
+        setMemberPrice(cfg.channelMembership.basic.priceUsd.toFixed(2))
+        setVipPrice(cfg.channelMembership.premium.priceUsd.toFixed(2))
+      })
+      .catch(() => {})
+  }, [])
+
+  const faqs = [
+    ...FAQS,
+    {
+      q: "How do channel memberships work?",
+      a: `Subscribe on a creator profile as Member ($${memberPrice}) or VIP ($${vipPrice}) to support that creator.`,
+    },
+  ]
+
   return (
     <div className="pt-2 md:pt-3 space-y-4 md:space-y-5">
       <p className="text-sm md:text-base text-muted-foreground">Quick answers to common questions.</p>
       <div className="md:grid md:grid-cols-2 md:gap-4">
-      {FAQS.map((f) => (
+      {faqs.map((f) => (
         <div key={f.q} className="p-3 md:p-4 rounded-xl bg-secondary/30 border border-border">
           <p className="font-semibold text-sm md:text-base mb-1">{f.q}</p>
           <p className="text-xs md:text-sm text-muted-foreground leading-relaxed">{f.a}</p>

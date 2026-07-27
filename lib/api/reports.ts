@@ -6,7 +6,8 @@ export type ReportTargetType =
   | "stream"
   | "user"
   | "podcast_episode"
-  | "vertical_episode";
+  | "vertical_episode"
+  | "vertical_series";
 
 export type ReportReason =
   | "spam"

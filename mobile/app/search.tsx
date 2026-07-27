@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -9,13 +9,14 @@ import {
   isSearchScope,
   type SearchScope,
 } from '@/lib/search-scope';
+import { useDefaultSearchSuggestions } from '@/hooks/api/useDefaultSearchSuggestions';
 import { useSearch, type SearchResultTab } from '@/hooks/api/useSearch';
+import { clearRecentSearches, loadRecentSearches, saveRecentSearch } from '@/lib/search-recent';
 import { radius } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 
-const SUGGESTIONS = ['studio tour', 'live', 'podcast', 'city lights'];
 const TABS: SearchResultTab[] = ['All', 'Videos', 'Creators', 'Podcasts', 'Movies', 'Live', 'Shorts', 'Verticals'];
 
 const SCOPE_TAB: Partial<Record<SearchScope, SearchResultTab>> = {
@@ -37,7 +38,12 @@ export default function SearchScreen() {
 
   const [q, setQ] = useState('');
   const [tab, setTab] = useState<SearchResultTab>(scope ? (SCOPE_TAB[scope] ?? 'All') : 'All');
-  const [recent, setRecent] = useState(['studio tour', 'democreator', 'midnight signal']);
+  const [recent, setRecent] = useState<string[]>([]);
+  const defaultSuggestionsQuery = useDefaultSearchSuggestions(!scope);
+
+  useEffect(() => {
+    void loadRecentSearches().then(setRecent);
+  }, []);
 
   const visibleTabs = useMemo<SearchResultTab[]>(() => {
     if (scope === 'short') return ['Shorts'];
@@ -52,16 +58,21 @@ export default function SearchScreen() {
 
   const pickRecent = (term: string) => {
     setQ(term);
-    setRecent((prev) => [term, ...prev.filter((r) => r !== term)].slice(0, 6));
+    void saveRecentSearch(term).then(setRecent);
   };
 
   const openResult = (route: string) => {
-    if (q.trim()) pickRecent(q.trim());
+    if (q.trim()) {
+      void saveRecentSearch(q.trim()).then(setRecent);
+    }
     router.push(route as never);
   };
 
   const placeholder = scopeConfig?.placeholder ?? 'Search Prysym TV';
-  const suggestionItems = q.trim().length > 0 && suggestions.length > 0 ? suggestions : SUGGESTIONS;
+  const suggestionItems =
+    q.trim().length > 0 && suggestions.length > 0
+      ? suggestions
+      : (defaultSuggestionsQuery.data ?? []);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
@@ -94,7 +105,11 @@ export default function SearchScreen() {
           <View style={styles.recentHeader}>
             <Text style={styles.label}>Recent searches</Text>
             {recent.length > 0 && (
-              <Pressable onPress={() => setRecent([])}>
+              <Pressable
+                onPress={() => {
+                  void clearRecentSearches().then(() => setRecent([]));
+                }}
+              >
                 <Text style={styles.clear}>Clear</Text>
               </Pressable>
             )}
@@ -112,12 +127,16 @@ export default function SearchScreen() {
           {!scope && (
             <>
               <Text style={[styles.label, { marginTop: 16 }]}>Suggestions</Text>
-              {suggestionItems.map((s) => (
-                <Pressable key={s} style={styles.recentRow} onPress={() => pickRecent(s)}>
-                  <Ionicons name="trending-up" size={16} color={colors.primary} />
-                  <Text style={styles.suggestItem}>{s}</Text>
-                </Pressable>
-              ))}
+              {defaultSuggestionsQuery.isLoading ? (
+                <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} />
+              ) : (
+                suggestionItems.map((s) => (
+                  <Pressable key={s} style={styles.recentRow} onPress={() => pickRecent(s)}>
+                    <Ionicons name="trending-up" size={16} color={colors.primary} />
+                    <Text style={styles.suggestItem}>{s}</Text>
+                  </Pressable>
+                ))
+              )}
             </>
           )}
         </View>

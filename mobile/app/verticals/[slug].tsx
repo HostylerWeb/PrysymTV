@@ -98,6 +98,7 @@ export default function VerticalSeriesScreen() {
         onClose={() => setShareOpen(false)}
         title={series.title}
         url={buildShareUrl(`/verticals/${series.slug}`)}
+        targetId={series.id}
       />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetType="vertical_series" targetId={series.id} />
     </>

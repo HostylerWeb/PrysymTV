@@ -159,6 +159,7 @@ enum ReportTargetType {
   user
   podcast_episode
   vertical_episode
+  vertical_series
 }
 
 enum ReportReason {

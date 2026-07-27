@@ -18,15 +18,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { HlsPlayer } from '@/components/video/HlsPlayer';
 import { VerticalEpisodeAdGate } from '@/components/ads/VerticalEpisodeAdGate';
+import { fetchServedAd, isValidServedAd, type ServedAd } from '@/lib/api/ads';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { ShareModal } from '@/components/modals/ShareModal';
 import { buildShareUrl } from '@/lib/share-url';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { GiftModal } from '@/components/modals/GiftModal';
+import { useShouldShowAds } from '@/hooks/useShouldShowAds';
+import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useVerticalEpisodePlayback } from '@/hooks/api/useVerticalEpisodePlayback';
 import { useVerticalSeriesDetail } from '@/hooks/api/useVerticalSeriesDetail';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
+import { useWatchAnalytics } from '@/hooks/useWatchAnalytics';
 import { useBackNavigation } from '@/hooks/useBackNavigation';
 import { navigateBack } from '@/lib/navigation';
 import {
@@ -72,15 +76,32 @@ function VerticalEpisodeCell({
 }: EpisodeCellProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const shouldShow = useShouldShowAds();
+  const { isPlacementEnabled } = usePublicAdsConfig();
+  const { user } = useMockAuth();
   const playbackQuery = useVerticalEpisodePlayback(slug, episode.episodeNumber);
   const data = playbackQuery.data;
-  const [gateOpen, setGateOpen] = useState(true);
+  const [gateOpen, setGateOpen] = useState(false);
+  const [gateAd, setGateAd] = useState<ServedAd | null>(null);
   const [progress, setProgress] = useState({ seconds: 0, duration: 0 });
 
   React.useEffect(() => {
     if (!active) return;
-    setGateOpen(true);
-  }, [active, episode.id]);
+    setGateOpen(false);
+    setGateAd(null);
+    if (!shouldShow || !isPlacementEnabled('vertical_episode')) {
+      onGateDismissed(episode.id);
+      return;
+    }
+    void fetchServedAd('vertical_episode', { peek: true }).then((peekAd) => {
+      if (!isValidServedAd(peekAd)) {
+        onGateDismissed(episode.id);
+        return;
+      }
+      setGateAd(peekAd);
+      setGateOpen(true);
+    });
+  }, [active, episode.id, shouldShow, isPlacementEnabled, onGateDismissed]);
 
   usePlaybackProgress(
     'vertical_episode',
@@ -89,6 +110,12 @@ function VerticalEpisodeCell({
     progress.duration || data?.episode.durationSeconds || 0,
     active && screenFocused && gateDismissed && Boolean(data?.playbackSource),
   );
+
+  useWatchAnalytics(data?.episode.id, {
+    creatorId: data?.series.creatorId ?? undefined,
+    viewerUserId: user?.id,
+    enabled: active && screenFocused && gateDismissed && Boolean(data?.playbackSource),
+  });
 
   const onProgress = useCallback((seconds: number, duration: number) => {
     setProgress({ seconds, duration });
@@ -147,9 +174,10 @@ function VerticalEpisodeCell({
           />
         </View>
       ) : null}
-      {active && !gateDismissed && gateOpen ? (
+      {active && gateOpen && gateAd ? (
         <VerticalEpisodeAdGate
           visible={gateOpen}
+          servedAd={gateAd}
           videoId={data.episode.id}
           creatorId={data.series.creatorId ?? undefined}
           onComplete={() => {
@@ -397,6 +425,7 @@ export default function VerticalWatchScreen() {
             onClose={() => setShareOpen(false)}
             title={`${data.series.title} Ep ${data.episode.episodeNumber}`}
             url={buildShareUrl(`/verticals/watch/${slug}/${data.episode.episodeNumber}`)}
+            targetId={data.episode.id}
           />
           <GiftModal
             visible={giftOpen}

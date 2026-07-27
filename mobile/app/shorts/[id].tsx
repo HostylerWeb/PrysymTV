@@ -16,6 +16,7 @@ import { ReportModal } from '@/components/modals/ReportModal';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useVideoDetail } from '@/hooks/api/useVideoDetail';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
+import { useWatchAnalytics } from '@/hooks/useWatchAnalytics';
 import { followUser, unfollowUser } from '@/lib/api/users';
 import { toggleVideoLike, toggleVideoSave } from '@/lib/api/videos';
 import { colors, withAlpha } from '@/theme/tokens';
@@ -59,6 +60,10 @@ export default function ShortDetailScreen() {
     progress.duration || short?.durationSeconds || 0,
     isFocused && Boolean(short?.playbackSource),
   );
+
+  useWatchAnalytics(isFocused ? short?.id : undefined, {
+    creatorId: short?.creator?.id,
+  });
 
   const onProgress = useCallback((seconds: number, duration: number) => {
     setProgress({ seconds, duration });
@@ -171,6 +176,7 @@ export default function ShortDetailScreen() {
         onClose={() => setShareOpen(false)}
         title={short.title}
         url={buildShareUrl(`/shorts/${short.id}`)}
+        targetId={short.id}
       />
       <GiftModal
         visible={giftOpen}

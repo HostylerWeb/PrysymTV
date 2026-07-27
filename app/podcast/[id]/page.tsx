@@ -26,6 +26,7 @@ import { AddToPlaylistSheet } from "@/components/add-to-playlist-sheet"
 import { RelativeTime } from "@/components/relative-time"
 import { userAvatarUrl } from "@/lib/user-avatar"
 import { PodcastEpisodeSkeleton } from "@/components/content-skeletons"
+import { useWatchAnalytics } from "@/lib/hooks/use-watch-analytics"
 
 function toPlayerCard(
   ep: ReturnType<typeof mapPodcastEpisodeDetail>,
@@ -88,6 +89,8 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
       cancelled = true
     }
   }, [id, authLoading, isAuthenticated])
+
+  useWatchAnalytics(episode?.id, { creatorId: episode?.creatorId })
 
   useEffect(() => {
     if (!episode || playRecorded.current) return

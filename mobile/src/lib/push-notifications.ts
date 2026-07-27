@@ -1,8 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, InteractionManager, Linking, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import {
+  devicePushEndpoint,
+  registerPushSubscription,
+  unregisterPushSubscription,
+} from '@/lib/api/push';
+import { loadStoredAccessToken } from '@/lib/api/client';
 
 const PUSH_PREF_KEY = 'prysym_push_notifications_enabled';
+const PUSH_ENDPOINT_KEY = 'prysym_push_endpoint';
 const PUSH_POST_LOGIN_ASKED_KEY = 'prysym_push_post_login_asked';
 
 export type PushPermissionState = {
@@ -10,6 +17,14 @@ export type PushPermissionState = {
   osGranted: boolean;
   canAskAgain: boolean;
 };
+
+async function ensureAndroidChannel() {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync('default', {
+    name: 'Default',
+    importance: Notifications.AndroidImportance.DEFAULT,
+  });
+}
 
 export async function loadPushPreference(): Promise<PushPermissionState> {
   const stored = await AsyncStorage.getItem(PUSH_PREF_KEY);
@@ -38,6 +53,58 @@ async function getOsPermissionStatus(): Promise<{
 
 async function persistPushEnabled(enabled: boolean): Promise<void> {
   await AsyncStorage.setItem(PUSH_PREF_KEY, enabled ? 'true' : 'false');
+}
+
+async function persistPushEndpoint(endpoint: string | null): Promise<void> {
+  if (endpoint) await AsyncStorage.setItem(PUSH_ENDPOINT_KEY, endpoint);
+  else await AsyncStorage.removeItem(PUSH_ENDPOINT_KEY);
+}
+
+async function loadPushEndpoint(): Promise<string | null> {
+  return AsyncStorage.getItem(PUSH_ENDPOINT_KEY);
+}
+
+async function getDevicePushToken(): Promise<string | null> {
+  await ensureAndroidChannel();
+
+  try {
+    const tokenResult = await Notifications.getDevicePushTokenAsync();
+    if (!tokenResult.data) return null;
+    return devicePushEndpoint(
+      tokenResult.data,
+      tokenResult.type === 'ios' ? 'ios' : 'android',
+    );
+  } catch {
+    return null;
+  }
+}
+
+async function registerTokenWithBackend(endpoint: string): Promise<boolean> {
+  const accessToken = await loadStoredAccessToken();
+  if (!accessToken) return false;
+
+  await registerPushSubscription({
+    endpoint,
+    keys: { p256dh: 'device', auth: 'device' },
+    expirationTime: null,
+  });
+  await persistPushEndpoint(endpoint);
+  return true;
+}
+
+async function unregisterTokenFromBackend(): Promise<void> {
+  const endpoint = await loadPushEndpoint();
+  if (!endpoint) return;
+
+  const accessToken = await loadStoredAccessToken();
+  if (accessToken) {
+    try {
+      await unregisterPushSubscription(endpoint);
+    } catch {
+      /* non-blocking */
+    }
+  }
+  await persistPushEndpoint(null);
 }
 
 function showEnableExplainer(): Promise<boolean> {
@@ -70,10 +137,6 @@ function showDeniedMessage(): void {
   );
 }
 
-/**
- * Mock push flow for UI: explainer alert → OS permission prompt → local preference.
- * Real FCM/APNs token registration comes in a later backend phase.
- */
 export async function enablePushNotifications(): Promise<boolean> {
   const proceed = await showEnableExplainer();
   if (!proceed) return false;
@@ -102,11 +165,29 @@ export async function enablePushNotifications(): Promise<boolean> {
     return false;
   }
 
+  const endpoint = await getDevicePushToken();
+  if (!endpoint) {
+    Alert.alert(
+      'Push unavailable',
+      'Could not register this device for push notifications. Ensure google-services.json is configured (Android) and try again on a physical device.',
+    );
+    await persistPushEnabled(false);
+    return false;
+  }
+
+  const registered = await registerTokenWithBackend(endpoint);
+  if (!registered) {
+    Alert.alert('Sign in required', 'Sign in to enable push notifications on this device.');
+    await persistPushEnabled(false);
+    return false;
+  }
+
   await persistPushEnabled(true);
   return true;
 }
 
 export async function disablePushNotifications(): Promise<void> {
+  await unregisterTokenFromBackend();
   await persistPushEnabled(false);
 }
 
@@ -128,6 +209,8 @@ export async function promptPushNotificationsAfterLogin(): Promise<void> {
   const os = await getOsPermissionStatus();
   if (os.granted) {
     await AsyncStorage.setItem(PUSH_POST_LOGIN_ASKED_KEY, 'true');
+    const endpoint = await getDevicePushToken();
+    if (endpoint) await registerTokenWithBackend(endpoint);
     await persistPushEnabled(true);
     return;
   }
@@ -140,4 +223,18 @@ export function schedulePushPromptAfterLogin(): void {
   InteractionManager.runAfterInteractions(() => {
     void promptPushNotificationsAfterLogin();
   });
+}
+
+/** Re-register the device push token after login when push was already enabled. */
+export async function syncPushSubscriptionAfterLogin(): Promise<void> {
+  const stored = await AsyncStorage.getItem(PUSH_PREF_KEY);
+  if (stored !== 'true') return;
+
+  const os = await getOsPermissionStatus();
+  if (!os.granted) return;
+
+  const endpoint = await getDevicePushToken();
+  if (!endpoint) return;
+
+  await registerTokenWithBackend(endpoint);
 }

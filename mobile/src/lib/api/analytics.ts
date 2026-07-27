@@ -88,10 +88,40 @@ export function fetchCreatorDashboard() {
   return apiRequest<CreatorDashboardResponse>('/analytics/creators/me/dashboard');
 }
 
-export function trackAnalyticsEvents(events: unknown[]) {
-  return apiRequest<unknown>('/analytics/track', {
+export type AnalyticsEventType = 'view' | 'share' | 'watch_time' | 'ad_impression' | 'ad_click';
+
+export function trackAnalyticsEvents(
+  events: Array<{
+    eventType: AnalyticsEventType;
+    targetId?: string;
+    metadata?: Record<string, unknown>;
+  }>,
+) {
+  return apiRequest<{ success: boolean; recorded: number }>('/analytics/track', {
     method: 'POST',
     body: { events },
     auth: false,
   });
+}
+
+export function trackView(targetId: string, metadata?: Record<string, unknown>) {
+  return trackAnalyticsEvents([{ eventType: 'view', targetId, metadata }]).catch(() => {});
+}
+
+export function trackWatchTime(
+  targetId: string,
+  seconds: number,
+  metadata?: Record<string, unknown>,
+) {
+  return trackAnalyticsEvents([
+    {
+      eventType: 'watch_time',
+      targetId,
+      metadata: { ...metadata, seconds },
+    },
+  ]).catch(() => {});
+}
+
+export function trackShare(targetId: string, metadata?: Record<string, unknown>) {
+  return trackAnalyticsEvents([{ eventType: 'share', targetId, metadata }]).catch(() => {});
 }

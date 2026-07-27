@@ -81,6 +81,13 @@ export class ReportsService {
         if (!episode) throw new NotFoundException('Vertical episode not found');
         return;
       }
+      case ReportTargetType.vertical_series: {
+        const series = await this.prisma.verticalSeries.findUnique({
+          where: { id: targetId },
+        });
+        if (!series) throw new NotFoundException('Vertical series not found');
+        return;
+      }
       default:
         throw new BadRequestException('Invalid report target');
     }

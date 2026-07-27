@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchPublicConfig } from '@/lib/api/public-config';
+import type { AdPlacement } from '@/lib/api/ads';
+import { useCallback } from 'react';
 
 export function usePublicAdsConfig() {
   const query = useQuery({
@@ -11,11 +13,17 @@ export function usePublicAdsConfig() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const isPlacementEnabled = useCallback(
+    (placement: AdPlacement) => query.data?.placements[placement] ?? true,
+    [query.data],
+  );
+
   return {
     config: query.data,
     isLoading: query.isLoading,
     shortsInterstitialEveryNSwipes: query.data?.shortsInterstitialEveryNSwipes ?? 5,
     shortsInterstitialEnabled: query.data?.shortsInterstitialEnabled ?? true,
     platformCreatorId: query.data?.platformCreatorId ?? undefined,
+    isPlacementEnabled,
   };
 }

@@ -22,6 +22,7 @@ import {
   SEARCH_SCOPE_CONFIG,
   type SearchScope,
 } from "@/lib/search-scope"
+import { useDefaultSearchSuggestions } from "@/lib/hooks/use-default-search-suggestions"
 
 interface SearchModalProps {
   isOpen: boolean
@@ -49,6 +50,7 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const defaultSuggestionsQuery = useDefaultSearchSuggestions(isOpen && !scope)
 
   useEffect(() => {
     if (isOpen) {
@@ -266,9 +268,29 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
                         <TrendingUp className="w-4 h-4 text-primary" />
                         Try searching
                       </h3>
-                      <p className="text-sm text-muted-foreground">
-                        Find videos, movies, live streams, podcasts, and creators.
-                      </p>
+                      {defaultSuggestionsQuery.isLoading ? (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Loading suggestions…
+                        </div>
+                      ) : (defaultSuggestionsQuery.data?.length ?? 0) > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {defaultSuggestionsQuery.data!.map((label) => (
+                            <button
+                              key={label}
+                              type="button"
+                              onClick={() => handleSubmitSearch(label)}
+                              className="px-4 py-2 rounded-full text-sm font-medium bg-secondary/60 text-foreground transition-transform active:scale-95"
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Find videos, movies, live streams, podcasts, and creators.
+                        </p>
+                      )}
                     </div>
                   )}
                 </>

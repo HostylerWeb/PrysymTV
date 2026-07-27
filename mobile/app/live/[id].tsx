@@ -292,6 +292,7 @@ export default function LiveScreen() {
         onClose={() => setShareOpen(false)}
         title={stream.title}
         url={buildShareUrl(`/live/${stream.id}`)}
+        targetId={stream.id}
       />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetType="stream" targetId={stream.id} />
       <CoinsModal visible={coinsOpen} onClose={() => setCoinsOpen(false)} balance={userCoins} />

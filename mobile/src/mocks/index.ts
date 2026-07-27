@@ -146,10 +146,10 @@ export const mockLiveStreams: LiveStream[] = [
 ];
 
 export const mockPodcastShows: PodcastShow[] = [
-  { id: 'show-1', title: 'Money Moves', coverUrl: mockThumb('finance', 0, 400, 400), creatorName: 'Prysym Finance', episodeCount: 48 },
-  { id: 'show-2', title: 'The Learning Lab', coverUrl: mockThumb('education', 1, 400, 400), creatorName: 'Prysym Academy', episodeCount: 36 },
-  { id: 'show-3', title: 'Kitchen Sessions', coverUrl: mockThumb('cooking', 2, 400, 400), creatorName: 'Chef Morgan', episodeCount: 22 },
-  { id: 'show-4', title: 'Game Day Podcast', coverUrl: mockThumb('sports', 3, 400, 400), creatorName: 'Demo Creator', episodeCount: 64 },
+  { id: 'show-1', title: 'Money Moves', coverUrl: mockThumb('finance', 0, 400, 400), creatorName: 'Prysym Finance', episodeCount: 48, category: 'Business' },
+  { id: 'show-2', title: 'The Learning Lab', coverUrl: mockThumb('education', 1, 400, 400), creatorName: 'Prysym Academy', episodeCount: 36, category: 'Education' },
+  { id: 'show-3', title: 'Kitchen Sessions', coverUrl: mockThumb('cooking', 2, 400, 400), creatorName: 'Chef Morgan', episodeCount: 22, category: 'Lifestyle' },
+  { id: 'show-4', title: 'Game Day Podcast', coverUrl: mockThumb('sports', 3, 400, 400), creatorName: 'Demo Creator', episodeCount: 64, category: 'Sports' },
 ];
 
 export const mockPodcastEpisodes: PodcastEpisode[] = Array.from({ length: 8 }, (_, i) => ({

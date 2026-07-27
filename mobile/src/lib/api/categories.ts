@@ -26,12 +26,27 @@ const FALLBACK_VIDEO_CATEGORIES: ContentCategory[] = [
   { slug: 'fashion', label: 'Fashion & Beauty', vertical: 'general' },
 ];
 
+const FALLBACK_MOVIE_GENRES: CategoryItem[] = [
+  { slug: 'action', label: 'Action' },
+  { slug: 'comedy', label: 'Comedy' },
+  { slug: 'drama', label: 'Drama' },
+  { slug: 'thriller', label: 'Thriller' },
+  { slug: 'sci-fi', label: 'Sci-Fi' },
+  { slug: 'horror', label: 'Horror' },
+  { slug: 'romance', label: 'Romance' },
+  { slug: 'documentary', label: 'Documentary' },
+];
+
 const FALLBACK_PODCAST_CATEGORIES: CategoryItem[] = [
-  { slug: 'general', label: 'General' },
-  { slug: 'tech', label: 'Tech' },
   { slug: 'true-crime', label: 'True Crime' },
+  { slug: 'tech', label: 'Tech' },
+  { slug: 'business', label: 'Business' },
+  { slug: 'comedy', label: 'Comedy' },
+  { slug: 'health', label: 'Health' },
+  { slug: 'society', label: 'Society' },
+  { slug: 'science', label: 'Science' },
   { slug: 'sports', label: 'Sports' },
-  { slug: 'education', label: 'Education' },
+  { slug: 'music', label: 'Music' },
 ];
 
 export function fetchVideoCategories() {
@@ -42,8 +57,17 @@ export function fetchVideoCategories() {
 
 export function fetchMovieGenres() {
   return apiRequest<{ items: CategoryItem[] }>('/categories/movies', { auth: false }).catch(
-    () => ({ items: [] as CategoryItem[] }),
+    () => ({ items: FALLBACK_MOVIE_GENRES }),
   );
+}
+
+export function genreLabel(
+  slug: string | null | undefined,
+  genres: CategoryItem[],
+): string {
+  if (!slug) return 'Drama';
+  const match = genres.find((g) => g.slug === slug);
+  return match?.label ?? slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export function fetchPodcastCategories() {

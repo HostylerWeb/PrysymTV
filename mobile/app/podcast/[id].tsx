@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { usePodcastEpisodeDetail } from '@/hooks/api/usePodcastEpisodeDetail';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
+import { useWatchAnalytics } from '@/hooks/useWatchAnalytics';
 import { useBackNavigation } from '@/hooks/useBackNavigation';
 import {
   togglePodcastLike,
@@ -35,7 +36,7 @@ export default function PodcastEpisodeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   useBackNavigation('/(tabs)/podcasts');
-  const { requireAuth } = useMockAuth();
+  const { requireAuth, user } = useMockAuth();
   const epQuery = usePodcastEpisodeDetail(id);
   const ep = epQuery.data;
 
@@ -62,6 +63,12 @@ export default function PodcastEpisodeScreen() {
     ep?.durationSeconds ?? 0,
     started,
   );
+
+  useWatchAnalytics(ep?.id, {
+    creatorId: ep?.creator?.id,
+    viewerUserId: user?.id,
+    enabled: started,
+  });
 
   const onAudioProgress = useCallback((seconds: number) => {
     setProgressSeconds(seconds);
@@ -190,6 +197,7 @@ export default function PodcastEpisodeScreen() {
         onClose={() => setShareOpen(false)}
         title={ep.title}
         url={buildShareUrl(`/podcast/${ep.id}`)}
+        targetId={ep.id}
       />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetType="podcast_episode" targetId={ep.id} />
       <GiftModal

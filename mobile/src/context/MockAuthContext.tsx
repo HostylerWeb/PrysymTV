@@ -24,7 +24,7 @@ import {
   getAuthErrorMessage,
 } from '@/lib/api/client';
 import { isApiEnabled, isMockAuthEnabled } from '@/lib/api/config';
-import { schedulePushPromptAfterLogin } from '@/lib/push-notifications';
+import { schedulePushPromptAfterLogin, syncPushSubscriptionAfterLogin, disablePushNotifications } from '@/lib/push-notifications';
 import {
   isPreviewOAuthToken,
   MOCK_APPLE_TOKEN,
@@ -144,6 +144,7 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
     const cb = pendingSuccess.current;
     pendingSuccess.current = null;
     cb?.();
+    void syncPushSubscriptionAfterLogin();
     schedulePushPromptAfterLogin();
   }, []);
 
@@ -307,6 +308,7 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    await disablePushNotifications().catch(() => {});
     if (isApiEnabled()) {
       try {
         await authApi.logoutApi();

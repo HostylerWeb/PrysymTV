@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,6 +15,7 @@ import { usePodcastPlayer } from '@/context/PodcastPlayerContext';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
 import { usePodcastsCatalog } from '@/hooks/api/usePodcastsCatalog';
+import { fetchPodcastCategories } from '@/lib/api/categories';
 import type { PodcastShow } from '@/types/api';
 import { radius, typography, withAlpha } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
@@ -22,7 +23,18 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatDuration } from '@/utils/format-media';
 
-const CATEGORIES = ['All', 'Business', 'Education', 'Lifestyle', 'Sports'] as const;
+const FALLBACK_PODCAST_FILTER_CATEGORIES = [
+  'All',
+  'True Crime',
+  'Tech',
+  'Business',
+  'Comedy',
+  'Health',
+  'Society',
+  'Science',
+  'Sports',
+  'Music',
+];
 
 type PodcastStyles = ReturnType<typeof createPodcastStyles>;
 
@@ -61,20 +73,37 @@ export default function PodcastsScreen() {
   const { requireAuth } = useMockAuth();
   const { trigger, flowHost } = useCreateFlow();
   const { playEpisode, episode: playingEpisode } = usePodcastPlayer();
-  const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('All');
+  const [category, setCategory] = useState('All');
+  const [categories, setCategories] = useState<string[]>(FALLBACK_PODCAST_FILTER_CATEGORIES);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    void fetchPodcastCategories()
+      .then((res) => {
+        if (res.items.length > 0) {
+          setCategories(['All', ...res.items.map((c) => c.label)]);
+        }
+      })
+      .catch(() => setCategories(FALLBACK_PODCAST_FILTER_CATEGORIES));
+  }, []);
 
   const catalogQuery = usePodcastsCatalog();
   const catalog = catalogQuery.data;
   const featuredShow = catalog?.featuredShow ?? catalog?.shows[0] ?? null;
   const featuredEpisode = catalog?.episodes[0] ?? null;
 
+  const filteredShows = useMemo(() => {
+    const shows = catalog?.trendingShows ?? [];
+    if (category === 'All') return shows;
+    return shows.filter((s) => s.category === category);
+  }, [catalog?.trendingShows, category]);
+
   const filteredEpisodes = useMemo(() => {
     const episodes = catalog?.episodes ?? [];
     if (category === 'All') return episodes;
-    const idx = CATEGORIES.indexOf(category) - 1;
-    return episodes.filter((_, i) => i % (CATEGORIES.length - 1) === idx);
-  }, [catalog?.episodes, category]);
+    const showTitles = new Set(filteredShows.map((s) => s.title));
+    return episodes.filter((e) => showTitles.has(e.showTitle));
+  }, [catalog?.episodes, category, filteredShows]);
 
   const openShow = (show: PodcastShow) => {
     const ep = catalog?.episodes.find((e) => e.showTitle === show.title) ?? catalog?.episodes[0];
@@ -154,13 +183,18 @@ export default function PodcastsScreen() {
             ) : null}
 
             <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
-              {CATEGORIES.map((c) => (
+              {categories.map((c) => (
                 <FilterChip key={c} label={c} active={category === c} onPress={() => setCategory(c)} style={styles.catChip} />
               ))}
             </ScrollView>
 
-            <ShowRail title="Trending shows" shows={catalog?.trendingShows.slice(0, 3) ?? []} onShowPress={openShow} styles={styles} />
-            <ShowRail title="Featured shows" shows={catalog?.shows ?? []} onShowPress={openShow} styles={styles} />
+            <ShowRail title="Trending shows" shows={filteredShows.slice(0, 3)} onShowPress={openShow} styles={styles} />
+            <ShowRail
+              title="Featured shows"
+              shows={category === 'All' ? (catalog?.shows ?? []) : filteredShows}
+              onShowPress={openShow}
+              styles={styles}
+            />
 
             <Text style={styles.section}>Latest episodes</Text>
           </View>

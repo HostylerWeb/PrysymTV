@@ -3,12 +3,18 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
 import { useMockAuth } from '@/context/MockAuthContext';
-import { postReport } from '@/lib/api/reports';
+import { postReport, type ReportReason } from '@/lib/api/reports';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import type { ThemeColors } from '@/theme/tokens';
 import { radius } from '@/theme/tokens';
 
-const REASONS = ['Spam', 'Harassment', 'Misinformation', 'Copyright', 'Other'];
+const REASONS: { id: ReportReason; label: string }[] = [
+  { id: 'spam', label: 'Spam or misleading' },
+  { id: 'nudity', label: 'Sexual content' },
+  { id: 'violence', label: 'Violence or dangerous acts' },
+  { id: 'harassment', label: 'Harassment or bullying' },
+  { id: 'other', label: 'Other' },
+];
 
 type Props = {
   visible: boolean;
@@ -20,7 +26,7 @@ type Props = {
 export function ReportModal({ visible, onClose, targetType = 'video', targetId }: Props) {
   const styles = useThemedStyles(createStyles);
   const { isAuthenticated, requireAuth } = useMockAuth();
-  const [reason, setReason] = useState<string | null>(null);
+  const [reason, setReason] = useState<ReportReason | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
@@ -52,11 +58,11 @@ export function ReportModal({ visible, onClose, targetType = 'video', targetId }
           <Text style={styles.sub}>Why are you reporting this content?</Text>
           {REASONS.map((r) => (
             <Pressable
-              key={r}
-              style={[styles.row, reason === r && styles.rowOn]}
-              onPress={() => setReason(r)}
+              key={r.id}
+              style={[styles.row, reason === r.id && styles.rowOn]}
+              onPress={() => setReason(r.id)}
             >
-              <Text style={[styles.rowText, reason === r && styles.rowTextOn]}>{r}</Text>
+              <Text style={[styles.rowText, reason === r.id && styles.rowTextOn]}>{r.label}</Text>
             </Pressable>
           ))}
           <Button

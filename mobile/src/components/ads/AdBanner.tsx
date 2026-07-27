@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
 import {
   buildAdAttribution,
   fetchServedAd,
@@ -8,6 +7,7 @@ import {
   trackAdImpression,
   type ServedAd,
 } from '@/lib/api/ads';
+import { AdMedia } from '@/components/ads/AdMedia';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
 import { useShouldShowAds } from '@/hooks/useShouldShowAds';
@@ -20,11 +20,11 @@ type Props = { onPress?: () => void };
 export function AdBanner({ onPress }: Props) {
   const shouldShow = useShouldShowAds();
   const { user } = useMockAuth();
-  const { platformCreatorId } = usePublicAdsConfig();
+  const { platformCreatorId, isPlacementEnabled } = usePublicAdsConfig();
   const [ad, setAd] = useState<ServedAd | null>(null);
 
   useEffect(() => {
-    if (!shouldShow) {
+    if (!shouldShow || !isPlacementEnabled('home_banner')) {
       setAd(null);
       return;
     }
@@ -41,7 +41,7 @@ export function AdBanner({ onPress }: Props) {
         );
       }
     });
-  }, [shouldShow, platformCreatorId, user?.id]);
+  }, [shouldShow, platformCreatorId, user?.id, isPlacementEnabled]);
 
   if (!ad) return null;
 
@@ -67,7 +67,14 @@ export function AdBanner({ onPress }: Props) {
     <View style={styles.wrap}>
       <Text style={styles.eyebrow}>Sponsored</Text>
       <Pressable style={[styles.banner, { height: bannerSize.mobileHeight }]} onPress={openAd}>
-        <Image source={{ uri: mediaUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
+        <AdMedia
+          mediaUrl={mediaUrl}
+          mediaType={ad.mediaType}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          onReady={() => {}}
+          onError={() => setAd(null)}
+        />
         <View style={styles.scrim} />
         <Text style={styles.title}>{ad.title}</Text>
       </Pressable>

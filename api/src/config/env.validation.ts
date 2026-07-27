@@ -229,6 +229,11 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   VAPID_SUBJECT?: string;
+
+  /** Firebase Cloud Messaging (Android) — JSON service account for native push delivery */
+  @IsOptional()
+  @IsString()
+  FIREBASE_SERVICE_ACCOUNT_JSON?: string;
 }
 
 const WEAK_SECRET_MARKERS = [

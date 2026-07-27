@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -28,31 +28,14 @@ import { FilterSelect } from '@/components/ui/FilterSelect';
 import { Button } from '@/components/ui/Button';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { useMoviesFeed } from '@/hooks/api/useMoviesFeed';
+import { fetchMovieGenres, genreLabel, type CategoryItem } from '@/lib/api/categories';
 import { radius, withAlpha } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatDuration, formatViewCount } from '@/utils/format-media';
 
-const GENRES = [
-  { slug: 'all', label: 'All' },
-  { slug: 'action', label: 'Action' },
-  { slug: 'drama', label: 'Drama' },
-  { slug: 'comedy', label: 'Comedy' },
-  { slug: 'sci-fi', label: 'Sci-Fi' },
-  { slug: 'horror', label: 'Horror' },
-] as const;
-
-const YEARS = ['All Years', '2024', '2023', '2022', '2021'] as const;
 const SORTS = ['Popularity', 'Top Rated', 'Newest', 'A-Z'] as const;
-
-const GENRE_LABELS: Record<string, string> = {
-  action: 'Action',
-  drama: 'Drama',
-  comedy: 'Comedy',
-  'sci-fi': 'Sci-Fi',
-  horror: 'Horror',
-};
 
 export default function MoviesScreen() {
   const styles = useThemedStyles(createMoviesStyles);
@@ -61,7 +44,8 @@ export default function MoviesScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [genre, setGenre] = useState('all');
-  const [year, setYear] = useState<(typeof YEARS)[number]>('All Years');
+  const [genreOptions, setGenreOptions] = useState<CategoryItem[]>([]);
+  const [year, setYear] = useState('All Years');
   const [sort, setSort] = useState<(typeof SORTS)[number]>('Popularity');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -70,6 +54,24 @@ export default function MoviesScreen() {
 
   const moviesQuery = useMoviesFeed();
   const allMovies = moviesQuery.data?.items ?? [];
+
+  useEffect(() => {
+    void fetchMovieGenres().then((res) => setGenreOptions(res.items));
+  }, []);
+
+  const genreFilters = useMemo(
+    () => [{ slug: 'all', label: 'All' }, ...genreOptions],
+    [genreOptions],
+  );
+
+  const yearOptions = useMemo(() => {
+    const years = new Set<number>();
+    for (const movie of allMovies) {
+      if (movie.releaseYear) years.add(movie.releaseYear);
+    }
+    const sorted = [...years].sort((a, b) => b - a);
+    return ['All Years', ...sorted.map(String)];
+  }, [allMovies]);
   const featuredCandidate = moviesQuery.data?.featured;
   const featured =
     featuredCandidate?.id ? featuredCandidate : allMovies[0];
@@ -99,7 +101,9 @@ export default function MoviesScreen() {
   }, [allMovies, search, genre, year, sort]);
 
   const posterWidth = Math.floor((width - 32 - 24) / 3);
-  const featuredGenre = featured ? (GENRE_LABELS[featured.category ?? 'drama'] ?? 'Drama') : 'Drama';
+  const featuredGenre = featured
+    ? genreLabel(featured.category ?? 'drama', genreOptions)
+    : 'Drama';
   const isLoading = moviesQuery.isLoading && !moviesQuery.data;
 
   const onRefresh = async () => {
@@ -175,7 +179,7 @@ export default function MoviesScreen() {
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.genreRow}>
-        {GENRES.map((g) => (
+        {genreFilters.map((g) => (
           <FilterChip
             key={g.slug}
             label={g.label}
@@ -235,14 +239,14 @@ export default function MoviesScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
           <FilterSelect
             label="Genre"
-            value={GENRES.find((g) => g.slug === genre)?.label ?? 'All Genres'}
-            options={['All Genres', ...GENRES.filter((g) => g.slug !== 'all').map((g) => g.label)]}
+            value={genreFilters.find((g) => g.slug === genre)?.label ?? 'All Genres'}
+            options={['All Genres', ...genreFilters.filter((g) => g.slug !== 'all').map((g) => g.label)]}
             onChange={(v) => {
-              const match = GENRES.find((g) => g.label === v);
+              const match = genreFilters.find((g) => g.label === v);
               setGenre(match?.slug ?? 'all');
             }}
           />
-          <FilterSelect label="Year" value={year} options={[...YEARS]} onChange={(v) => setYear(v as typeof year)} />
+          <FilterSelect label="Year" value={year} options={yearOptions} onChange={setYear} />
           <FilterSelect
             label="Sort"
             value={`Sort: ${sort}`}

@@ -2,8 +2,9 @@
 
 import { use, useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ChevronLeft, ChevronUp, Heart, Bookmark, Flag, Gift } from "lucide-react"
+import { ChevronLeft, ChevronUp, Heart, Bookmark, Flag, Gift, Share2 } from "lucide-react"
 import { GiftSheet } from "@/components/gift-sheet"
+import { ShareSheet } from "@/components/share-sheet"
 import { cn } from "@/lib/utils"
 import { VerticalEpisodeAdGate } from "@/components/vertical-episode-ad-gate"
 import { CastMediaButton } from "@/components/cast-media-button"
@@ -25,6 +26,7 @@ import { ReportModal } from "@/components/report-modal"
 import { fetchServedAd, isValidServedAd, type ServedAd } from "@/lib/api/ads"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
+import { useWatchAnalytics } from "@/lib/hooks/use-watch-analytics"
 
 export default function VerticalWatchPage({
   params,
@@ -46,6 +48,7 @@ export default function VerticalWatchPage({
   const [seriesSaved, setSeriesSaved] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isReportOpen, setIsReportOpen] = useState(false)
+  const [isShareOpen, setIsShareOpen] = useState(false)
   const [isGiftOpen, setIsGiftOpen] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const viewRecorded = useRef(false)
@@ -77,6 +80,11 @@ export default function VerticalWatchPage({
       })
       .catch(() => setError("Episode not found"))
   }, [slug, episodeNum, authLoading, isAuthenticated, prepareEpisodeGate])
+
+  useWatchAnalytics(data?.episode.id, {
+    creatorId: data?.series.creatorId ?? undefined,
+    enabled: canPlay && Boolean(data?.episode.id),
+  })
 
   const onAdComplete = () => {
     setShowAd(false)
@@ -226,6 +234,14 @@ export default function VerticalWatchPage({
               </button>
               <button
                 type="button"
+                onClick={() => setIsShareOpen(true)}
+                className="w-9 h-9 rounded-full bg-black/50 flex items-center justify-center"
+                aria-label="Share"
+              >
+                <Share2 className="w-4 h-4 text-white" />
+              </button>
+              <button
+                type="button"
                 onClick={() => requireAuth(() => setIsGiftOpen(true))}
                 className="w-9 h-9 rounded-full bg-black/50 flex items-center justify-center"
                 aria-label="Send gift"
@@ -332,6 +348,14 @@ export default function VerticalWatchPage({
       )}
 
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      {data && (
+        <ShareSheet
+          isOpen={isShareOpen}
+          onClose={() => setIsShareOpen(false)}
+          title={`${data.series.title} · Ep ${data.episode.episodeNumber}`}
+          targetId={data.episode.id}
+        />
+      )}
       {data && (
         <ReportModal
           isOpen={isReportOpen}

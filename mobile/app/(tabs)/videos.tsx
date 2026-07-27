@@ -20,27 +20,28 @@ import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useVideosFeed } from '@/hooks/api/useVideosFeed';
+import { fetchVideoCategories } from '@/lib/api/categories';
+import {
+  FALLBACK_VIDEO_CATEGORIES,
+  verticalForCategorySlug,
+  type VideoCategory,
+} from '@/lib/constants/video-categories';
 import type { VideoCard } from '@/types/api';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, typography } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 
-const CATEGORIES = ['All', 'Gaming', 'Music', 'Talk', 'Education', 'Sports'] as const;
 const MODES = ['All', 'Videos', 'Live'] as const;
 const SORTS = ['Popular', 'Newest'] as const;
-
-const CATEGORY_VERTICAL: Partial<Record<(typeof CATEGORIES)[number], string>> = {
-  Education: 'education',
-  Sports: 'sports',
-};
 
 export default function VideosScreen() {
   const styles = useThemedStyles(createVideosStyles);
   const { colors } = useTheme();
   const { requireAuth } = useMockAuth();
   const { trigger, flowHost } = useCreateFlow();
-  const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('All');
+  const [category, setCategory] = useState('all');
+  const [categories, setCategories] = useState<VideoCategory[]>(FALLBACK_VIDEO_CATEGORIES);
   const [mode, setMode] = useState<(typeof MODES)[number]>('All');
   const [sort, setSort] = useState<(typeof SORTS)[number]>('Popular');
   const [search, setSearch] = useState('');
@@ -53,12 +54,32 @@ export default function VideosScreen() {
     setAllVideos([]);
   }, [search, category, mode, sort]);
 
+  useEffect(() => {
+    void fetchVideoCategories()
+      .then((res) =>
+        setCategories([
+          { slug: 'all', label: 'All', vertical: null },
+          ...res.items.map((c) => ({
+            slug: c.slug,
+            label: c.label,
+            vertical: c.vertical ?? null,
+          })),
+        ]),
+      )
+      .catch(() => setCategories(FALLBACK_VIDEO_CATEGORIES));
+  }, []);
+
+  const vertical = useMemo(
+    () => verticalForCategorySlug(category, categories),
+    [category, categories],
+  );
+
   const browseMode = mode === 'Live' ? 'live' : mode === 'Videos' ? 'videos' : 'all';
 
   const feedQuery = useVideosFeed({
     page,
     limit: 24,
-    vertical: CATEGORY_VERTICAL[category],
+    vertical,
     sort: sort === 'Newest' ? 'newest' : 'views',
     mode: browseMode,
     q: search,
@@ -76,12 +97,13 @@ export default function VideosScreen() {
 
   const videos = useMemo(() => {
     let list = allVideos;
-    if (category !== 'All' && !CATEGORY_VERTICAL[category]) {
-      const label = category.toLowerCase();
+    if (category !== 'all' && !vertical) {
+      const selected = categories.find((c) => c.slug === category);
+      const label = selected?.label.toLowerCase() ?? category.toLowerCase();
       list = list.filter((v) => v.category?.toLowerCase().includes(label));
     }
     return list;
-  }, [allVideos, category]);
+  }, [allVideos, category, vertical, categories]);
 
   const liveStreams = feedQuery.data?.live ?? [];
   const showLive = mode !== 'Videos';
@@ -131,13 +153,13 @@ export default function VideosScreen() {
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-            {CATEGORIES.map((c) => (
+            {categories.map((c) => (
               <FilterChip
-                key={c}
-                label={c}
-                active={category === c}
+                key={c.slug}
+                label={c.label}
+                active={category === c.slug}
                 variant="primary"
-                onPress={() => setCategory(c)}
+                onPress={() => setCategory(c.slug)}
                 style={styles.chipGap}
               />
             ))}

@@ -234,6 +234,7 @@ export type PodcastShow = {
   coverUrl: string | null;
   creatorName: string;
   episodeCount: number;
+  category: string;
 };
 
 export type PodcastEpisode = {

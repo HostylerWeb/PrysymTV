@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/Button';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useVideoDetail } from '@/hooks/api/useVideoDetail';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
+import { useWatchAnalytics } from '@/hooks/useWatchAnalytics';
 import { useBackNavigation } from '@/hooks/useBackNavigation';
 import { fetchFeedTrending } from '@/lib/api/feed';
 import { mapVideoCard } from '@/lib/api/map-content';
@@ -40,7 +41,7 @@ export default function WatchScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const isFocused = useIsFocused();
-  const { requireAuth } = useMockAuth();
+  const { requireAuth, user } = useMockAuth();
   useBackNavigation('/(tabs)/home');
   const videoQuery = useVideoDetail(id);
   const video = videoQuery.data;
@@ -74,6 +75,12 @@ export default function WatchScreen() {
     progress.duration || video?.durationSeconds || 0,
     Boolean(video?.playbackSource) && isFocused,
   );
+
+  useWatchAnalytics(video?.id, {
+    creatorId: video?.creator?.id,
+    viewerUserId: user?.id,
+    enabled: Boolean(video?.playbackSource) && isFocused,
+  });
 
   const relatedQuery = useQuery({
     queryKey: ['feed', 'trending', 'related', id],
@@ -262,6 +269,7 @@ export default function WatchScreen() {
         onClose={() => setShareOpen(false)}
         title={video.title}
         url={buildShareUrl(`/watch/${video.id}`)}
+        targetId={video.id}
       />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetType="video" targetId={video.id} />
       <AddToPlaylistSheet

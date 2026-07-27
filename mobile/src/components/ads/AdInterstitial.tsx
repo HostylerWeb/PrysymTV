@@ -1,14 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   buildAdAttribution,
   fetchServedAd,
+  isValidServedAd,
   trackAdClick,
   trackAdImpression,
   type ServedAd,
 } from '@/lib/api/ads';
+import { AdMedia } from '@/components/ads/AdMedia';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
 import { useShouldShowAds } from '@/hooks/useShouldShowAds';
@@ -19,46 +20,61 @@ type Props = {
   visible: boolean;
   videoId?: string;
   creatorId?: string;
+  servedAd?: ServedAd | null;
   onClose: () => void;
 };
 
-export function AdInterstitial({ visible, videoId, creatorId, onClose }: Props) {
+export function AdInterstitial({ visible, videoId, creatorId, servedAd, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const shouldShow = useShouldShowAds();
   const { user } = useMockAuth();
-  const { platformCreatorId } = usePublicAdsConfig();
-  const [ad, setAd] = useState<ServedAd | null>(null);
+  const { platformCreatorId, isPlacementEnabled } = usePublicAdsConfig();
+  const [ad, setAd] = useState<ServedAd | null | undefined>(undefined);
   const [countdown, setCountdown] = useState(5);
   const [ready, setReady] = useState(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      setAd(undefined);
+      return;
+    }
     setReady(false);
-    if (!shouldShow) {
+    if (!shouldShow || !isPlacementEnabled('shorts_interstitial')) {
       onCloseRef.current();
       return;
     }
-    void fetchServedAd('shorts_interstitial').then((served) => {
-      if (!served) {
-        onCloseRef.current();
-        return;
-      }
-      setAd(served);
-      setCountdown(served.skipAfterSeconds);
-      void trackAdImpression(
-        buildAdAttribution({
-          campaignId: served.id,
-          placement: 'shorts_interstitial',
-          creatorId,
-          platformCreatorId,
-          videoId,
-          viewerUserId: user?.id,
-        }),
-      );
-    });
-  }, [visible, shouldShow, creatorId, videoId, platformCreatorId, user?.id]);
+
+    if (servedAd !== undefined) {
+      const valid = isValidServedAd(servedAd) ? servedAd : null;
+      setAd(valid);
+      if (!valid) onCloseRef.current();
+      return;
+    }
+
+    void fetchServedAd('shorts_interstitial', { peek: true })
+      .then((peek) => {
+        const valid = isValidServedAd(peek) ? peek : null;
+        setAd(valid);
+        if (!valid) onCloseRef.current();
+      })
+      .catch(() => onCloseRef.current());
+  }, [visible, shouldShow, servedAd, isPlacementEnabled]);
+
+  useEffect(() => {
+    if (!ad) return;
+    void trackAdImpression(
+      buildAdAttribution({
+        campaignId: ad.id,
+        placement: 'shorts_interstitial',
+        creatorId,
+        platformCreatorId,
+        videoId,
+        viewerUserId: user?.id,
+      }),
+    );
+  }, [ad, creatorId, videoId, platformCreatorId, user?.id]);
 
   useEffect(() => {
     if (!visible || !ad || !ready || countdown <= 0) return;
@@ -67,12 +83,11 @@ export function AdInterstitial({ visible, videoId, creatorId, onClose }: Props) 
   }, [visible, ad, ready, countdown]);
 
   useEffect(() => {
-    if (!visible || !ad) return;
-    const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
-    if (!mediaUrl) onCloseRef.current();
-  }, [visible, ad]);
+    if (!visible || ad === undefined) return;
+    if (ad && ready) setCountdown(ad.skipAfterSeconds);
+  }, [visible, ad, ready]);
 
-  if (!visible || !ad) return null;
+  if (!visible || ad === undefined || !ad) return null;
 
   const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
   if (!mediaUrl) return null;
@@ -117,11 +132,13 @@ export function AdInterstitial({ visible, videoId, creatorId, onClose }: Props) 
             <Text style={styles.countdown}>Loading…</Text>
           )}
         </View>
-        <Image
-          source={{ uri: mediaUrl }}
+        <AdMedia
+          mediaUrl={mediaUrl}
+          mediaType={ad.mediaType}
           style={styles.media}
           contentFit="cover"
-          onLoad={() => setReady(true)}
+          onReady={() => setReady(true)}
+          onError={() => onCloseRef.current()}
         />
       </View>
     </Modal>

@@ -20,6 +20,7 @@ import { OAuthConfigProvider } from '@/context/OAuthConfigContext';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { PodcastPlayerProvider } from '@/context/PodcastPlayerContext';
 import { AuthPromptSheet } from '@/components/auth/AuthPromptSheet';
+import { PushNotificationSetup } from '@/components/settings/PushNotificationSetup';
 import { CompleteProfileBanner } from '@/components/auth/CompleteProfileBanner';
 import { ThemedStatusBar } from '@/components/layout/ThemedStatusBar';
 import { StoreCartProvider } from '@/context/StoreCartContext';
@@ -90,6 +91,7 @@ function RootStack() {
         </Stack>
       </View>
       <AuthPromptSheet />
+      <PushNotificationSetup />
     </View>
   );
 }

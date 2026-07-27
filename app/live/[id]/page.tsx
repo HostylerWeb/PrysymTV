@@ -907,7 +907,12 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
         targetId={stream.id}
         targetLabel={stream.title}
       />
-      <ShareSheet isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} title={stream.title} />
+      <ShareSheet
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        title={stream.title}
+        targetId={stream.id}
+      />
     </main>
   )
 }

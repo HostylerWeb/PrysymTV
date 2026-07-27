@@ -146,6 +146,7 @@ type ApiPodcastShow = {
   id: string;
   title: string;
   coverUrl?: string | null;
+  category?: string | null;
   creator?: { username: string; displayName?: string | null };
   _count?: { episodes: number };
 };
@@ -157,6 +158,7 @@ export function mapPodcastShow(raw: ApiPodcastShow): PodcastShow {
     coverUrl: mediaThumb(raw.coverUrl),
     creatorName: raw.creator?.displayName ?? raw.creator?.username ?? 'Host',
     episodeCount: raw._count?.episodes ?? 0,
+    category: raw.category ?? 'General',
   };
 }
 

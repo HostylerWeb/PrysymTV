@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { buildShareLinks, type SharePlatform } from '@/lib/share-links';
 import { buildShareUrl } from '@/lib/share-url';
+import { trackShare } from '@/lib/api/analytics';
 import { radius } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -22,6 +23,7 @@ type Props = {
   onClose: () => void;
   title: string;
   url?: string;
+  targetId?: string;
 };
 
 function shareIconName(id: SharePlatform): keyof typeof Ionicons.glyphMap {
@@ -37,7 +39,7 @@ function shareIconName(id: SharePlatform): keyof typeof Ionicons.glyphMap {
   }
 }
 
-export function ShareModal({ visible, onClose, title, url }: Props) {
+export function ShareModal({ visible, onClose, title, url, targetId }: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
@@ -47,6 +49,9 @@ export function ShareModal({ visible, onClose, title, url }: Props) {
 
   const copyLink = async () => {
     try {
+      if (targetId) {
+        void trackShare(targetId, { platform: 'copy', title });
+      }
       await Share.share({ message: `${title}\n${shareUrl}` });
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -55,8 +60,11 @@ export function ShareModal({ visible, onClose, title, url }: Props) {
     }
   };
 
-  const openLink = async (href: string) => {
+  const openLink = async (href: string, platform?: SharePlatform) => {
     try {
+      if (targetId) {
+        void trackShare(targetId, { platform, title });
+      }
       await Linking.openURL(href);
       onClose();
     } catch {
@@ -81,7 +89,7 @@ export function ShareModal({ visible, onClose, title, url }: Props) {
 
           <View style={styles.grid}>
             {links.map((link) => (
-              <Pressable key={link.id} style={styles.gridItem} onPress={() => openLink(link.href)}>
+              <Pressable key={link.id} style={styles.gridItem} onPress={() => openLink(link.href, link.id)}>
                 <View style={[styles.iconCircle, { backgroundColor: link.color }]}>
                   <Ionicons name={shareIconName(link.id)} size={22} color="#fff" />
                 </View>

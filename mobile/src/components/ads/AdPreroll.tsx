@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
   buildAdAttribution,
   fetchServedAd,
+  isValidServedAd,
   trackAdClick,
   trackAdImpression,
   type ServedAd,
 } from '@/lib/api/ads';
+import { AdMedia } from '@/components/ads/AdMedia';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
 import { useShouldShowAds } from '@/hooks/useShouldShowAds';
@@ -20,46 +21,67 @@ type Props = {
   visible: boolean;
   videoId?: string;
   creatorId?: string;
+  servedAd?: ServedAd | null;
   onComplete: () => void;
 };
 
-export function AdPreroll({ visible, videoId, creatorId, onComplete }: Props) {
+export function AdPreroll({ visible, videoId, creatorId, servedAd, onComplete }: Props) {
   const insets = useSafeAreaInsets();
   const shouldShow = useShouldShowAds();
   const { user } = useMockAuth();
-  const { platformCreatorId } = usePublicAdsConfig();
-  const [ad, setAd] = useState<ServedAd | null>(null);
+  const { platformCreatorId, isPlacementEnabled } = usePublicAdsConfig();
+  const [ad, setAd] = useState<ServedAd | null | undefined>(undefined);
   const [countdown, setCountdown] = useState(5);
   const [ready, setReady] = useState(false);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      setAd(undefined);
+      return;
+    }
     setReady(false);
-    if (!shouldShow) {
+    if (!shouldShow || !isPlacementEnabled('movie_preroll')) {
       onCompleteRef.current();
       return;
     }
-    void fetchServedAd('movie_preroll').then((served) => {
-      if (!served) {
-        onCompleteRef.current();
-        return;
-      }
-      setAd(served);
-      setCountdown(served.skipAfterSeconds);
-      void trackAdImpression(
-        buildAdAttribution({
-          campaignId: served.id,
-          placement: 'movie_preroll',
-          creatorId,
-          platformCreatorId,
-          videoId,
-          viewerUserId: user?.id,
-        }),
-      );
-    });
-  }, [visible, shouldShow, creatorId, videoId, platformCreatorId, user?.id]);
+
+    if (servedAd !== undefined) {
+      const valid = isValidServedAd(servedAd) ? servedAd : null;
+      setAd(valid);
+      if (!valid) onCompleteRef.current();
+      return;
+    }
+
+    void fetchServedAd('movie_preroll', { peek: true })
+      .then((peek) => {
+        if (!isValidServedAd(peek)) {
+          onCompleteRef.current();
+          return;
+        }
+        return fetchServedAd('movie_preroll').then((served) => {
+          const valid = isValidServedAd(served) ? served : null;
+          setAd(valid);
+          if (!valid) onCompleteRef.current();
+        });
+      })
+      .catch(() => onCompleteRef.current());
+  }, [visible, shouldShow, servedAd, isPlacementEnabled]);
+
+  useEffect(() => {
+    if (!ad) return;
+    void trackAdImpression(
+      buildAdAttribution({
+        campaignId: ad.id,
+        placement: 'movie_preroll',
+        creatorId,
+        platformCreatorId,
+        videoId,
+        viewerUserId: user?.id,
+      }),
+    );
+  }, [ad, creatorId, videoId, platformCreatorId, user?.id]);
 
   useEffect(() => {
     if (!visible || !ad || !ready || countdown <= 0) return;
@@ -68,12 +90,11 @@ export function AdPreroll({ visible, videoId, creatorId, onComplete }: Props) {
   }, [visible, ad, ready, countdown]);
 
   useEffect(() => {
-    if (!visible || !ad) return;
-    const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
-    if (!mediaUrl) onCompleteRef.current();
-  }, [visible, ad]);
+    if (!visible || ad === undefined) return;
+    if (ad && ready) setCountdown(ad.skipAfterSeconds);
+  }, [visible, ad, ready]);
 
-  if (!visible || !ad) return null;
+  if (!visible || ad === undefined || !ad) return null;
 
   const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
   if (!mediaUrl) return null;
@@ -98,11 +119,14 @@ export function AdPreroll({ visible, videoId, creatorId, onComplete }: Props) {
     <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={() => canSkip && onComplete()}>
       <View style={[styles.screen, { paddingTop: insets.top }]}>
         <View style={styles.player}>
-          <Image
-            source={{ uri: mediaUrl }}
+          <AdMedia
+            mediaUrl={mediaUrl}
+            mediaType={ad.mediaType}
             style={styles.media}
             contentFit="contain"
-            onLoad={() => setReady(true)}
+            onReady={() => setReady(true)}
+            onError={() => onCompleteRef.current()}
+            onEnded={() => onCompleteRef.current()}
           />
           {ready && canSkip ? (
             <Pressable style={styles.skipBtn} onPress={onComplete}>

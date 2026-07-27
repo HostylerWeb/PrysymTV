@@ -5,15 +5,19 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { AdCampaignStatus, Prisma } from '@prisma/client';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
+import { CreateAdvertiserCampaignDto } from './dto/create-advertiser-campaign.dto';
+import { UpdateAdvertiserCampaignDto } from './dto/update-advertiser-campaign.dto';
 
 @Injectable()
 export class AdvertisersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly platformSettings: PlatformSettingsService,
+    private readonly storage: StorageService,
   ) {}
 
   async register(ownerUserId: string, body: {
@@ -224,6 +228,135 @@ export class AdvertisersService {
         budgetRemainingUsd: Math.max(0, budgetUsd - spentUsd),
         cpmUsd,
       },
+    };
+  }
+
+  private async assertVerifiedOwner(accountId: string, userId: string) {
+    const row = await this.assertOwner(accountId, userId);
+    if (!row.isVerified) {
+      throw new ForbiddenException('Advertiser account must be verified to manage campaigns');
+    }
+    return row;
+  }
+
+  async createCampaign(
+    ownerUserId: string,
+    accountId: string,
+    dto: CreateAdvertiserCampaignDto,
+  ) {
+    const account = await this.assertVerifiedOwner(accountId, ownerUserId);
+    const startsAt = new Date(dto.startsAt);
+    const endsAt = new Date(dto.endsAt);
+    if (endsAt <= startsAt) {
+      throw new BadRequestException('endsAt must be after startsAt');
+    }
+
+    return this.prisma.adCampaign.create({
+      data: {
+        advertiserAccountId: account.id,
+        advertiserName: account.companyName,
+        title: dto.title.trim(),
+        mediaUrl: dto.mediaUrl,
+        clickThroughUrl: dto.clickThroughUrl,
+        placement: dto.placement,
+        ...(dto.bannerSize !== undefined && { bannerSize: dto.bannerSize }),
+        targetImpressions: dto.targetImpressions,
+        budgetUsd: dto.budgetUsd,
+        status: AdCampaignStatus.draft,
+        startsAt,
+        endsAt,
+        revenueRuleKey: 'ad_gaf_allocation',
+      },
+    });
+  }
+
+  async updateCampaign(
+    ownerUserId: string,
+    accountId: string,
+    campaignId: string,
+    dto: UpdateAdvertiserCampaignDto,
+  ) {
+    await this.assertVerifiedOwner(accountId, ownerUserId);
+    const campaign = await this.prisma.adCampaign.findFirst({
+      where: { id: campaignId, advertiserAccountId: accountId },
+    });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+
+    if (campaign.status === AdCampaignStatus.completed) {
+      throw new BadRequestException('Completed campaigns cannot be edited');
+    }
+
+    const data: Prisma.AdCampaignUpdateInput = {};
+    const editableStatuses: AdCampaignStatus[] = [
+      AdCampaignStatus.draft,
+      AdCampaignStatus.paused,
+    ];
+    const canEditFields = editableStatuses.includes(campaign.status);
+
+    if (dto.status !== undefined) {
+      if (
+        dto.status === AdCampaignStatus.active &&
+        campaign.status !== AdCampaignStatus.draft &&
+        campaign.status !== AdCampaignStatus.paused
+      ) {
+        throw new BadRequestException('Only draft or paused campaigns can be activated');
+      }
+      if (
+        dto.status === AdCampaignStatus.paused &&
+        campaign.status !== AdCampaignStatus.active
+      ) {
+        throw new BadRequestException('Only active campaigns can be paused');
+      }
+      data.status = dto.status;
+    }
+
+    if (!canEditFields) {
+      if (Object.keys(data).length === 0) {
+        throw new BadRequestException('Active campaigns can only be paused');
+      }
+      return this.prisma.adCampaign.update({ where: { id: campaignId }, data });
+    }
+
+    if (dto.title !== undefined) data.title = dto.title.trim();
+    if (dto.mediaUrl !== undefined) data.mediaUrl = dto.mediaUrl;
+    if (dto.clickThroughUrl !== undefined) data.clickThroughUrl = dto.clickThroughUrl;
+    if (dto.placement !== undefined) data.placement = dto.placement;
+    if (dto.bannerSize !== undefined) {
+      (data as Prisma.AdCampaignUpdateInput & { bannerSize?: typeof dto.bannerSize }).bannerSize =
+        dto.bannerSize;
+    }
+    if (dto.targetImpressions !== undefined) data.targetImpressions = dto.targetImpressions;
+    if (dto.budgetUsd !== undefined) data.budgetUsd = dto.budgetUsd;
+    if (dto.startsAt !== undefined) data.startsAt = new Date(dto.startsAt);
+    if (dto.endsAt !== undefined) data.endsAt = new Date(dto.endsAt);
+
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('No changes provided');
+    }
+
+    return this.prisma.adCampaign.update({ where: { id: campaignId }, data });
+  }
+
+  async initAdMediaUpload(
+    ownerUserId: string,
+    accountId: string,
+    body: { mimeType: string; fileName?: string },
+  ) {
+    await this.assertVerifiedOwner(accountId, ownerUserId);
+    if (!body.mimeType?.trim()) {
+      throw new BadRequestException('mimeType is required');
+    }
+    const target = await this.storage.createAdMediaUploadTarget(
+      body.mimeType.trim(),
+      body.fileName,
+    );
+    return {
+      objectKey: target.objectKey,
+      uploadUrl: target.uploadUrl,
+      uploadMethod: target.uploadMethod,
+      uploadHeaders: target.uploadHeaders,
+      expiresIn: target.expiresIn,
+      publicUrl: this.storage.getPublicUrl(target.objectKey),
     };
   }
 }

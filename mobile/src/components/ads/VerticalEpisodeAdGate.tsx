@@ -1,14 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   buildAdAttribution,
-  fetchServedAd,
+  isValidServedAd,
   trackAdClick,
   trackAdImpression,
   type ServedAd,
 } from '@/lib/api/ads';
+import { AdMedia } from '@/components/ads/AdMedia';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
 import { useShouldShowAds } from '@/hooks/useShouldShowAds';
@@ -19,86 +19,79 @@ type Props = {
   visible: boolean;
   videoId?: string;
   creatorId?: string;
+  servedAd?: ServedAd | null;
   onComplete: () => void;
 };
 
-export function VerticalEpisodeAdGate({ visible, videoId, creatorId, onComplete }: Props) {
+export function VerticalEpisodeAdGate({
+  visible,
+  videoId,
+  creatorId,
+  servedAd,
+  onComplete,
+}: Props) {
   const insets = useSafeAreaInsets();
   const shouldShow = useShouldShowAds();
   const { user } = useMockAuth();
-  const { platformCreatorId } = usePublicAdsConfig();
-  const [ad, setAd] = useState<ServedAd | null>(null);
+  const { platformCreatorId, isPlacementEnabled } = usePublicAdsConfig();
+  const [ad, setAd] = useState<ServedAd | null | undefined>(undefined);
   const [countdown, setCountdown] = useState(5);
   const [ready, setReady] = useState(false);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      setAd(undefined);
+      return;
+    }
     setReady(false);
-    let cancelled = false;
-    if (!shouldShow) {
+    if (!shouldShow || !isPlacementEnabled('vertical_episode')) {
       onCompleteRef.current();
       return;
     }
-    const failSafe = setTimeout(() => {
-      if (!cancelled) onCompleteRef.current();
-    }, 2500);
-    void fetchServedAd('vertical_episode', { peek: true })
-      .then((served) => {
-        if (cancelled) return;
-        if (!served) {
-          clearTimeout(failSafe);
-          onCompleteRef.current();
-          return;
-        }
-        clearTimeout(failSafe);
-        setAd(served);
-        setCountdown(served.skipAfterSeconds);
-        void trackAdImpression(
-          buildAdAttribution({
-            campaignId: served.id,
-            placement: 'vertical_episode',
-            creatorId,
-            platformCreatorId,
-            videoId,
-            viewerUserId: user?.id,
-          }),
-        );
-      })
-      .catch(() => {
-        if (cancelled) return;
-        clearTimeout(failSafe);
-        onCompleteRef.current();
-      });
-    return () => {
-      cancelled = true;
-      clearTimeout(failSafe);
-    };
-  }, [visible, shouldShow, creatorId, videoId, platformCreatorId, user?.id]);
+
+    if (servedAd !== undefined) {
+      const valid = isValidServedAd(servedAd) ? servedAd : null;
+      setAd(valid);
+      if (!valid) onCompleteRef.current();
+      return;
+    }
+
+    onCompleteRef.current();
+  }, [visible, shouldShow, servedAd, isPlacementEnabled]);
+
+  useEffect(() => {
+    if (!ad) return;
+    void trackAdImpression(
+      buildAdAttribution({
+        campaignId: ad.id,
+        placement: 'vertical_episode',
+        creatorId,
+        platformCreatorId,
+        videoId,
+        viewerUserId: user?.id,
+      }),
+    );
+  }, [ad, creatorId, videoId, platformCreatorId, user?.id]);
 
   useEffect(() => {
     if (!visible || !ad) return;
-    const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
-    if (!mediaUrl) {
+    if (ready && countdown <= 0) {
       onCompleteRef.current();
       return;
     }
-    const loadTimeout = setTimeout(() => setReady(true), 3000);
-    return () => clearTimeout(loadTimeout);
-  }, [visible, ad]);
-
-  useEffect(() => {
-    if (!visible || !ad || !ready) return;
-    if (countdown <= 0) {
-      onCompleteRef.current();
-      return;
-    }
+    if (!ready || countdown <= 0) return;
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
   }, [visible, ad, ready, countdown]);
 
-  if (!visible || !ad) return null;
+  useEffect(() => {
+    if (!visible || ad === undefined) return;
+    if (ad && ready) setCountdown(ad.skipAfterSeconds);
+  }, [visible, ad, ready]);
+
+  if (!visible || ad === undefined || !ad) return null;
 
   const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
   if (!mediaUrl) return null;
@@ -134,7 +127,14 @@ export function VerticalEpisodeAdGate({ visible, videoId, creatorId, onComplete 
             <Text style={styles.countdown}>Loading…</Text>
           )}
         </View>
-        <Image source={{ uri: mediaUrl }} style={styles.media} contentFit="cover" onLoad={() => setReady(true)} />
+        <AdMedia
+          mediaUrl={mediaUrl}
+          mediaType={ad.mediaType}
+          style={styles.media}
+          contentFit="cover"
+          onReady={() => setReady(true)}
+          onError={() => onCompleteRef.current()}
+        />
       </View>
     </Modal>
   );

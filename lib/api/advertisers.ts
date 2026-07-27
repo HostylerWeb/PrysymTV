@@ -84,6 +84,48 @@ export function fetchAdvertiserCampaignAnalytics(
   );
 }
 
+export function createAdvertiserCampaign(
+  accountId: string,
+  body: {
+    title: string;
+    mediaUrl: string;
+    clickThroughUrl: string;
+    placement: string;
+    targetImpressions: number;
+    budgetUsd: number;
+    startsAt: string;
+    endsAt: string;
+    bannerSize?: "strip" | "standard" | "hero";
+  },
+) {
+  return apiRequest<AdvertiserCampaign>(`/advertisers/me/${accountId}/campaigns`, {
+    method: "POST",
+    body,
+  });
+}
+
+export function updateAdvertiserCampaign(
+  accountId: string,
+  campaignId: string,
+  body: Partial<{
+    title: string;
+    mediaUrl: string;
+    clickThroughUrl: string;
+    placement: string;
+    targetImpressions: number;
+    budgetUsd: number;
+    startsAt: string;
+    endsAt: string;
+    bannerSize: "strip" | "standard" | "hero" | null;
+    status: "draft" | "active" | "paused";
+  }>,
+) {
+  return apiRequest<AdvertiserCampaign>(
+    `/advertisers/me/${accountId}/campaigns/${campaignId}`,
+    { method: "PUT", body },
+  );
+}
+
 export function cancelAdvertiserRegistration(id: string) {
   return apiRequest<{ ok: true }>(`/advertisers/me/${id}`, {
     method: "DELETE",

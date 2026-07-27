@@ -3668,6 +3668,18 @@ export class AdminService {
           creatorId: e.series.creatorId,
         };
       }
+      case ReportTargetType.vertical_series: {
+        const s = await this.prisma.verticalSeries.findUnique({
+          where: { id: targetId },
+        });
+        if (!s) throw new NotFoundException('Target not found');
+        return {
+          title: s.title,
+          excerpt: s.description,
+          creatorId: s.creatorId,
+          thumbnailUrl: s.posterUrl,
+        };
+      }
       default:
         return { title: 'Unknown', excerpt: null, creatorId: null };
     }
@@ -3703,6 +3715,9 @@ export class AdminService {
         return;
       case ReportTargetType.vertical_episode:
         await this.prisma.verticalEpisode.delete({ where: { id: targetId } });
+        return;
+      case ReportTargetType.vertical_series:
+        await this.prisma.verticalSeries.delete({ where: { id: targetId } });
         return;
       case ReportTargetType.user:
         await this.setUserBanned(targetId, true);
