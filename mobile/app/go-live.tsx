@@ -8,13 +8,12 @@ import { Card } from '@/components/ui/Card';
 import { StreamerApplicationModal } from '@/components/modals/StreamerApplicationModal';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { fetchPublicConfig } from '@/lib/api/public-config';
+import { fetchVideoCategories, type ContentCategory } from '@/lib/api/categories';
 import { fetchStreamIngestHealth, initStream, type StreamIngestHealth } from '@/lib/api/streams';
 import { colors, radius } from '@/theme/tokens';
 
 type StreamMode = 'camera' | 'obs';
 type AccessType = 'free' | 'paid';
-
-const CATEGORIES = ['Gaming', 'Music', 'Technology', 'Fitness', 'Talk'];
 
 export default function GoLiveScreen() {
   const { user } = useMockAuth();
@@ -25,7 +24,8 @@ export default function GoLiveScreen() {
   const [entryPriceUsd, setEntryPriceUsd] = useState('');
   const [minPaidStreamUsd, setMinPaidStreamUsd] = useState(5);
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('Gaming');
+  const [categoryOptions, setCategoryOptions] = useState<ContentCategory[]>([]);
+  const [category, setCategory] = useState('');
   const [streamKey, setStreamKey] = useState('');
   const [serverUrl, setServerUrl] = useState('');
   const [streamId, setStreamId] = useState<string | null>(null);
@@ -38,6 +38,16 @@ export default function GoLiveScreen() {
       .then((cfg) => {
         if (cfg.live?.minPaidStreamUsd != null) {
           setMinPaidStreamUsd(cfg.live.minPaidStreamUsd);
+        }
+      })
+      .catch(() => {});
+    void fetchVideoCategories()
+      .then((res) => {
+        if (res.items.length > 0) {
+          setCategoryOptions(res.items);
+          setCategory((prev) =>
+            res.items.some((item) => item.label === prev) ? prev : res.items[0].label,
+          );
         }
       })
       .catch(() => {});
@@ -350,13 +360,15 @@ export default function GoLiveScreen() {
                     <Text style={styles.fieldLabel}>Category *</Text>
                   </View>
                   <View style={styles.categoryRow}>
-                    {CATEGORIES.map((c) => (
+                    {categoryOptions.map((c) => (
                       <Pressable
-                        key={c}
-                        style={[styles.categoryChip, category === c && styles.categoryChipOn]}
-                        onPress={() => setCategory(c)}
+                        key={c.slug}
+                        style={[styles.categoryChip, category === c.label && styles.categoryChipOn]}
+                        onPress={() => setCategory(c.label)}
                       >
-                        <Text style={[styles.categoryText, category === c && styles.categoryTextOn]}>{c}</Text>
+                        <Text style={[styles.categoryText, category === c.label && styles.categoryTextOn]}>
+                          {c.label}
+                        </Text>
                       </Pressable>
                     ))}
                   </View>
