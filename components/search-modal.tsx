@@ -270,14 +270,14 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
                         <TrendingUp className="w-4 h-4 text-primary" />
                         Try searching
                       </h3>
-                      {defaultSuggestionsQuery.isLoading ? (
+                      {defaultSuggestionsLoading ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                           <Loader2 className="w-4 h-4 animate-spin" />
                           Loading suggestions…
                         </div>
-                      ) : (defaultSuggestionsQuery.data?.length ?? 0) > 0 ? (
+                      ) : (defaultSuggestions?.length ?? 0) > 0 ? (
                         <div className="flex flex-wrap gap-2">
-                          {defaultSuggestionsQuery.data!.map((label) => (
+                          {defaultSuggestions!.map((label) => (
                             <button
                               key={label}
                               type="button"

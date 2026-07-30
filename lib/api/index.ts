@@ -1,5 +1,6 @@
 /** API modules — import from here or from individual files. */
 export * from "./auth";
+export * from "./tv-auth";
 export * from "./users";
 export * from "./videos";
 export * from "./videos-feed";

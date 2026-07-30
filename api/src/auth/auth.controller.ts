@@ -1,7 +1,8 @@
-import { Body, Controller, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
+import { TvAuthService } from './tv-auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -10,6 +11,10 @@ import { GoogleOAuthDto } from './dto/google-oauth.dto';
 import { AppleOAuthDto } from './dto/apple-oauth.dto';
 import { FacebookOAuthDto } from './dto/facebook-oauth.dto';
 import { RefreshDto } from './dto/refresh.dto';
+import { ApproveTvDto } from './dto/approve-tv.dto';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthUserPayload } from '../common/types/auth-user.payload';
 
 const REFRESH_COOKIE = 'prysym_refresh';
 
@@ -21,7 +26,10 @@ function readRefreshCookie(req: Request): string | undefined {
 
 @Controller('auth')
 export class AuthController {
-  constructor(private auth: AuthService) {}
+  constructor(
+    private auth: AuthService,
+    private tvAuth: TvAuthService,
+  ) {}
 
   @Post('register')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
@@ -93,5 +101,29 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.auth.resetPassword(dto);
+  }
+
+  @Post('tv/start')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  tvStart() {
+    return this.tvAuth.startSession();
+  }
+
+  @Post('tv/approve')
+  @UseGuards(JwtAuthGuard)
+  approveTv(
+    @Body() dto: ApproveTvDto,
+    @CurrentUser() user: AuthUserPayload,
+  ) {
+    return this.tvAuth.approve(dto.userCode, user.id);
+  }
+
+  @Get('tv/poll')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  tvPoll(
+    @Query('sessionId') sessionId: string,
+    @Query('pollToken') pollToken: string,
+  ) {
+    return this.tvAuth.poll(sessionId, pollToken);
   }
 }

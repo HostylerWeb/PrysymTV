@@ -128,6 +128,24 @@ export class AuthService {
     return this.issueTokens(user.id, user.email, user.username, user.role, res);
   }
 
+  async issueTokensForClient(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.isBanned) {
+      throw new UnauthorizedException('User not found or suspended');
+    }
+    const tokens = await this.createTokens(
+      user.id,
+      user.email,
+      user.username,
+      user.role,
+    );
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: this.config.get<string>('JWT_ACCESS_TTL', '15m'),
+    };
+  }
+
   async refresh(refreshToken: string | undefined, res: Response) {
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token missing');
@@ -243,6 +261,28 @@ export class AuthService {
     role: UserRole,
     res: Response,
   ) {
+    const tokens = await this.createTokens(userId, email, username, role);
+    const refreshExpires = this.parseTtlMs(
+      this.config.get('JWT_REFRESH_TTL', '400d'),
+    );
+
+    this.setRefreshCookie(res, tokens.refreshToken, refreshExpires);
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      tokenType: 'Bearer',
+      expiresIn: this.config.get<string>('JWT_ACCESS_TTL', '15m'),
+      user: { id: userId, email, username, role },
+    };
+  }
+
+  private async createTokens(
+    userId: string,
+    email: string,
+    username: string,
+    role: UserRole,
+  ) {
     const payload: JwtPayload = { sub: userId, email, username, role };
     const accessTtl = this.config.get<string>('JWT_ACCESS_TTL', '15m');
     const accessToken = await this.jwt.signAsync(payload, {
@@ -263,14 +303,9 @@ export class AuthService {
       },
     });
 
-    this.setRefreshCookie(res, refreshRaw, refreshExpires);
-
     return {
       accessToken,
       refreshToken: refreshRaw,
-      tokenType: 'Bearer',
-      expiresIn: this.config.get<string>('JWT_ACCESS_TTL', '15m'),
-      user: { id: userId, email, username, role },
     };
   }
 
