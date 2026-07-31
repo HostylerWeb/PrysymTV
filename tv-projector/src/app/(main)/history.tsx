@@ -7,13 +7,16 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { ContentRow } from '@/components/tv/ContentRow';
 import { useHistoryFeed } from '@/hooks/api/useHistory';
+import { prefetchWatchItem } from '@/hooks/useOpenWatch';
 import { historyItemPath } from '@/lib/tv-routes';
 import { colors, spacing, typography } from '@/theme/tokens';
 
 export default function HistoryScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data, isLoading, error } = useHistoryFeed();
 
   const items = (data?.items ?? []).map((item) => ({
@@ -40,6 +43,12 @@ export default function HistoryScreen() {
           onItemPress={(card) => {
             const item = data?.items.find((h) => h.contentId === card.id);
             if (!item) return;
+            if (item.contentType === 'video' && item.video) {
+              prefetchWatchItem(queryClient, {
+                id: item.video.id,
+                thumbnailUrl: item.video.thumbnailUrl,
+              });
+            }
             const route = historyItemPath(item);
             router.push({
               pathname: route.pathname as never,

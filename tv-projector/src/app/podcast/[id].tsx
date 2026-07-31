@@ -14,41 +14,46 @@ import { AudioPlayer } from '@/components/podcasts/AudioPlayer';
 import { PlayerShell } from '@/components/video/PlayerShell';
 import { usePodcastEpisodeDetail } from '@/hooks/api/usePodcastEpisodeDetail';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
+import { useTvAdGate } from '@/hooks/useTvAdGate';
 import { colors, spacing, typography } from '@/theme/tokens';
 
 export default function PodcastEpisodeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading, error } = usePodcastEpisodeDetail(id);
-  const [prerollOpen, setPrerollOpen] = useState(false);
-  const [started, setStarted] = useState(false);
+  const [playRequested, setPlayRequested] = useState(false);
   const [progressSeconds, setProgressSeconds] = useState(0);
+
+  const isVideo = data?.mediaType === 'video' && data.playbackSource;
+  const adGate = useTvAdGate(
+    'movie_preroll',
+    data?.id,
+    Boolean(playRequested && data?.id && (isVideo || data?.playbackSource)),
+  );
 
   usePlaybackProgress(
     'podcast_episode',
     data?.id,
     progressSeconds,
     data?.durationSeconds ?? 0,
-    started,
+    adGate.canPlay && playRequested,
   );
 
   const begin = () => {
-    if (!started) setPrerollOpen(true);
+    if (!playRequested) setPlayRequested(true);
   };
 
-  const isVideo = data?.mediaType === 'video' && data.playbackSource;
+  const showBrowse = !playRequested || adGate.checking;
 
   return (
     <View style={styles.root}>
       <Stack.Screen options={{ headerShown: false }} />
       <TvAdOverlay
-        visible={prerollOpen}
+        visible={adGate.showOverlay}
         placement="movie_preroll"
         videoId={data?.id}
         creatorId={data?.creator?.id}
-        onComplete={() => {
-          setPrerollOpen(false);
-          setStarted(true);
-        }}
+        servedAd={adGate.servedAd}
+        onComplete={adGate.completeAd}
       />
       {isLoading ? (
         <View style={styles.center}>
@@ -58,32 +63,34 @@ export default function PodcastEpisodeScreen() {
         <View style={styles.center}>
           <Text style={styles.error}>Could not load episode.</Text>
         </View>
-      ) : (
+      ) : adGate.canPlay && playRequested && isVideo ? (
+        <PlayerShell title={data.title} playbackUrl={data.playbackSource} />
+      ) : adGate.canPlay && playRequested && !isVideo && data.playbackSource ? (
+        <View style={styles.audioWrap}>
+          <AudioPlayer
+            source={data.playbackSource}
+            title={data.title}
+            durationSeconds={data.durationSeconds}
+            autoPlay
+            onProgress={setProgressSeconds}
+          />
+        </View>
+      ) : showBrowse ? (
         <ScrollView contentContainerStyle={styles.content}>
           {data.coverUrl ? (
             <Image source={{ uri: data.coverUrl }} style={styles.cover} resizeMode="cover" />
           ) : null}
           <Text style={styles.title}>{data.title}</Text>
           <Text style={styles.show}>{data.show?.title}</Text>
-          {!started ? (
+          {adGate.checking ? (
+            <ActivityIndicator size="large" color={colors.primary} style={styles.checking} />
+          ) : (
             <Pressable focusable hasTVPreferredFocus onPress={begin} style={styles.playBtn}>
               <Text style={styles.playPrompt}>▶ Play episode</Text>
             </Pressable>
-          ) : null}
-          {started && isVideo ? (
-            <PlayerShell title={data.title} playbackUrl={data.playbackSource} />
-          ) : null}
-          {started && !isVideo && data.playbackSource ? (
-            <AudioPlayer
-              source={data.playbackSource}
-              title={data.title}
-              durationSeconds={data.durationSeconds}
-              autoPlay
-              onProgress={setProgressSeconds}
-            />
-          ) : null}
+          )}
         </ScrollView>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -91,6 +98,7 @@ export default function PodcastEpisodeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  audioWrap: { flex: 1, justifyContent: 'center', padding: spacing.xl },
   content: { padding: spacing.xl, alignItems: 'center' },
   cover: {
     width: 280,
@@ -119,5 +127,6 @@ const styles = StyleSheet.create({
     fontSize: typography.heading,
     fontWeight: '700',
   },
+  checking: { marginTop: spacing.lg },
   error: { color: '#ff6b6b', fontSize: typography.body },
 });

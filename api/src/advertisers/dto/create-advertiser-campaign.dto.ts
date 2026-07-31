@@ -18,6 +18,10 @@ export class CreateAdvertiserCampaignDto {
   @IsUrl()
   mediaUrl!: string;
 
+  @IsOptional()
+  @IsIn(['image', 'video'])
+  mediaType?: 'image' | 'video';
+
   @IsUrl()
   clickThroughUrl!: string;
 

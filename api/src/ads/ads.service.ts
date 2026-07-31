@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { AdCampaign, AdCampaignStatus, AdPlacement, Prisma } from '@prisma/client';
+import { AdCampaign, AdCampaignStatus, AdMediaType, AdPlacement, Prisma } from '@prisma/client';
 import { isPremiumActive } from '../common/utils/premium.util';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolveAdMediaType } from './ad-media.util';
 
 export type ServedAd = {
   id: string;
@@ -129,9 +130,10 @@ export class AdsService {
     placement: AdPlacement,
     adsConfig: Awaited<ReturnType<PlatformSettingsService['getAds']>>,
   ): ServedAd {
-    const mediaType = /\.(mp4|webm)(\?|$)/i.test(picked.mediaUrl)
-      ? 'video'
-      : 'image';
+    const mediaType = resolveAdMediaType(
+      picked.mediaUrl,
+      picked.mediaType as 'image' | 'video',
+    );
 
     return {
       id: picked.id,

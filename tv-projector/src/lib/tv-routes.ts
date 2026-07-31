@@ -1,3 +1,4 @@
+import { watchVideoParams } from '@/lib/watch-params';
 import type { ContinueWatchingItem, HistoryItemRecord } from '@/types/api';
 
 export function continueWatchingPath(item: ContinueWatchingItem): {
@@ -5,7 +6,14 @@ export function continueWatchingPath(item: ContinueWatchingItem): {
   params?: Record<string, string>;
 } {
   if (item.contentType === 'video') {
-    return { pathname: '/watch/[id]', params: { id: item.contentId, title: item.title } };
+    return {
+      pathname: '/watch/[id]',
+      params: watchVideoParams({
+        id: item.contentId,
+        title: item.title,
+        thumbnailUrl: item.thumbnailUrl,
+      }),
+    };
   }
   if (item.contentType === 'podcast_episode') {
     return { pathname: '/podcast/[id]', params: { id: item.contentId } };
@@ -30,7 +38,11 @@ export function historyItemPath(item: HistoryItemRecord): {
   if (item.contentType === 'video' && item.video) {
     return {
       pathname: '/watch/[id]',
-      params: { id: item.video.id, title: item.video.title },
+      params: watchVideoParams({
+        id: item.video.id,
+        title: item.video.title,
+        thumbnailUrl: item.video.thumbnailUrl,
+      }),
     };
   }
   if (item.contentType === 'podcast_episode' && item.podcastEpisode) {

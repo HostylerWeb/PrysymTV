@@ -9,6 +9,7 @@ import {
   type ServedAd,
 } from "@/lib/api/ads"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
+import { AdMediaDisplay } from "@/components/ad-media-display"
 import { getHomeBannerSizeConfig } from "@/lib/ad-banner-size"
 import { getViewerGeo } from "@/lib/viewer-geo"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
@@ -89,11 +90,14 @@ export function AdBanner({ creatorId, videoId, platformCreatorId: platformCreato
           }}
           className={`block relative w-full ${bannerSize.webAspectClass} rounded-xl overflow-hidden border border-border hover:opacity-95 transition-opacity cursor-pointer`}
         >
-          {ad.mediaType === "video" ? (
-            <video src={ad.mediaUrl} className="w-full h-full object-cover" muted autoPlay playsInline />
-          ) : (
-            <img src={ad.mediaUrl} alt={ad.title} className="w-full h-full object-cover" />
-          )}
+          <AdMediaDisplay
+            mediaUrl={ad.mediaUrl}
+            mediaType={ad.mediaType}
+            alt={ad.title}
+            className="w-full h-full object-cover"
+            onReady={() => {}}
+            onError={() => {}}
+          />
         </a>
       </div>
     </section>

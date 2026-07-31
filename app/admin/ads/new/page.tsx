@@ -36,6 +36,7 @@ export default function AdminAdsNewPage() {
     advertiserName: "",
     title: "",
     mediaUrl: "",
+    mediaType: "image" as "image" | "video",
     clickThroughUrl: "",
     placement: "home_banner",
     bannerSize: "strip" as "strip" | "standard" | "hero",
@@ -64,7 +65,11 @@ export default function AdminAdsNewPage() {
         headers: { "Content-Type": file.type },
       })
       if (!put.ok) throw new Error("Upload failed")
-      setForm((f) => ({ ...f, mediaUrl: init.publicUrl }))
+      setForm((f) => ({
+        ...f,
+        mediaUrl: init.publicUrl,
+        mediaType: init.mediaType === "video" ? "video" : "image",
+      }))
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed")
     } finally {
@@ -84,6 +89,7 @@ export default function AdminAdsNewPage() {
         advertiserName: selectedAdvertiser?.companyName ?? form.advertiserName,
         title: form.title,
         mediaUrl: form.mediaUrl,
+        mediaType: form.mediaType,
         clickThroughUrl: form.clickThroughUrl,
         placement: form.placement,
         ...(form.placement === "home_banner" ? { bannerSize: form.bannerSize } : {}),

@@ -3,6 +3,8 @@ import { StyleSheet, type ImageStyle, type StyleProp } from 'react-native';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView, type VideoContentFit } from 'expo-video';
 
+const AD_MEDIA_TIMEOUT_MS = 2500;
+
 type Props = {
   mediaUrl: string;
   mediaType: 'image' | 'video';
@@ -28,15 +30,31 @@ function AdVideoMedia({
   });
 
   useEffect(() => {
+    let finished = false;
+    const fail = () => {
+      if (finished) return;
+      finished = true;
+      onError();
+    };
+
+    const timeout = setTimeout(fail, AD_MEDIA_TIMEOUT_MS);
+
     const statusSub = player.addListener('statusChange', ({ status, error }) => {
-      if (status === 'readyToPlay') onReady();
-      if (status === 'error') onError();
-      if (error) onError();
+      if (status === 'readyToPlay') {
+        finished = true;
+        clearTimeout(timeout);
+        onReady();
+      }
+      if (status === 'error' || error) {
+        clearTimeout(timeout);
+        fail();
+      }
     });
     const endSub = player.addListener('playToEnd', () => {
       onEnded?.();
     });
     return () => {
+      clearTimeout(timeout);
       statusSub.remove();
       endSub.remove();
     };
@@ -61,6 +79,21 @@ export function AdMedia({
   onError,
   onEnded,
 }: Props) {
+  useEffect(() => {
+    if (mediaType !== 'image') return;
+    let finished = false;
+    const fail = () => {
+      if (finished) return;
+      finished = true;
+      onError();
+    };
+    const timeout = setTimeout(fail, AD_MEDIA_TIMEOUT_MS);
+    return () => {
+      finished = true;
+      clearTimeout(timeout);
+    };
+  }, [mediaType, mediaUrl, onError]);
+
   if (mediaType === 'video') {
     return (
       <AdVideoMedia

@@ -21,6 +21,10 @@ export class UpdateAdvertiserCampaignDto {
   mediaUrl?: string;
 
   @IsOptional()
+  @IsIn(['image', 'video'])
+  mediaType?: 'image' | 'video';
+
+  @IsOptional()
   @IsUrl()
   clickThroughUrl?: string;
 

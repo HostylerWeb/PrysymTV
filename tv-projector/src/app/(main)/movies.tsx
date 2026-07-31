@@ -5,22 +5,14 @@ import {
   StyleSheet,
   Text,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { ContentRow } from '@/components/tv/ContentRow';
+import { useOpenWatch } from '@/hooks/useOpenWatch';
 import { useMoviesFeed } from '@/hooks/api/useMoviesFeed';
 import { colors, spacing, typography } from '@/theme/tokens';
-import type { VideoCard } from '@/types/api';
 
 export default function MoviesScreen() {
-  const router = useRouter();
+  const openWatch = useOpenWatch();
   const { data, isLoading, error } = useMoviesFeed();
-
-  const openWatch = (item: VideoCard) => {
-    router.push({
-      pathname: '/watch/[id]',
-      params: { id: item.id, title: item.title, playbackUrl: item.playbackUrl ?? '' },
-    });
-  };
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>

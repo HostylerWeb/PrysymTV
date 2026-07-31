@@ -9,6 +9,7 @@ import {
   trackAdImpression,
   type ServedAd,
 } from "@/lib/api/ads"
+import { AdMediaDisplay } from "@/components/ad-media-display"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 import { useAuth } from "@/contexts/auth-context"
@@ -142,27 +143,15 @@ export function AdPreroll({
   return (
     <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
       <div className="relative w-full max-w-5xl aspect-video">
-        {ad.mediaType === "image" ? (
-          <img
-            src={ad.mediaUrl}
-            alt={ad.title}
-            className="w-full h-full object-contain"
-            onLoad={markReady}
-            onError={complete}
-          />
-        ) : (
-          <video
-            src={ad.mediaUrl}
-            className="w-full h-full object-contain"
-            autoPlay
-            muted
-            playsInline
-            onPlaying={markReady}
-            onCanPlay={markReady}
-            onEnded={complete}
-            onError={complete}
-          />
-        )}
+        <AdMediaDisplay
+          mediaUrl={ad.mediaUrl}
+          mediaType={ad.mediaType}
+          alt={ad.title}
+          className="w-full h-full object-contain"
+          onReady={markReady}
+          onError={complete}
+          onEnded={complete}
+        />
         {mediaReady && canSkip && (
           <button
             type="button"

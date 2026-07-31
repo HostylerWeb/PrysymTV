@@ -42,13 +42,13 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
             <Stack.Screen name="login" />
             <Stack.Screen name="(main)" />
-            <Stack.Screen name="watch/[id]" options={{ presentation: 'fullScreenModal' }} />
-            <Stack.Screen name="shorts/[id]" options={{ presentation: 'fullScreenModal' }} />
-            <Stack.Screen name="live/[id]" options={{ presentation: 'fullScreenModal' }} />
-            <Stack.Screen name="podcast/[id]" options={{ presentation: 'fullScreenModal' }} />
+            <Stack.Screen name="watch/[id]" options={{ animation: 'none' }} />
+            <Stack.Screen name="shorts/[id]" options={{ animation: 'none' }} />
+            <Stack.Screen name="live/[id]" options={{ animation: 'none' }} />
+            <Stack.Screen name="podcast/[id]" options={{ animation: 'none' }} />
             <Stack.Screen
               name="verticals/watch/[slug]/[episode]"
-              options={{ presentation: 'fullScreenModal' }}
+              options={{ animation: 'none' }}
             />
           </Stack>
         </AuthGate>

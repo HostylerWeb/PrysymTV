@@ -9,6 +9,7 @@ import {
   trackAdImpression,
   type ServedAd,
 } from "@/lib/api/ads"
+import { AdMediaDisplay } from "@/components/ad-media-display"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 import { useAuth } from "@/contexts/auth-context"
@@ -143,25 +144,13 @@ export function VerticalEpisodeAdGate({
           <span className="text-sm text-white/50">Loading…</span>
         )}
       </div>
-      {ad.mediaType === "video" ? (
-        <video
-          src={ad.mediaUrl}
-          autoPlay
-          muted
-          playsInline
-          onLoadedData={onMediaReady}
-          onError={() => complete()}
-          className="flex-1 w-full object-cover"
-        />
-      ) : (
-        <img
-          src={ad.mediaUrl}
-          alt=""
-          onLoad={onMediaReady}
-          onError={() => complete()}
-          className="flex-1 w-full object-cover"
-        />
-      )}
+      <AdMediaDisplay
+        mediaUrl={ad.mediaUrl}
+        mediaType={ad.mediaType}
+        className="flex-1 w-full object-cover"
+        onReady={onMediaReady}
+        onError={() => complete()}
+      />
     </div>
   )
 }

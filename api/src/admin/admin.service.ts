@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   AdCampaignStatus,
+  AdMediaType,
   AnalyticsEventType,
   ApplicationStatus,
   ContentStatus,
@@ -33,6 +34,10 @@ import { PlatformSettingsService } from '../platform-settings/platform-settings.
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { AuditLogService } from './audit-log.service';
+import {
+  inferAdMediaTypeFromMime,
+  inferAdMediaTypeFromUrl,
+} from '../ads/ad-media.util';
 import { AdCampaignQueryDto } from './dto/ad-campaign-query.dto';
 import { CreateAdCampaignDto } from './dto/create-ad-campaign.dto';
 import { UpdateAdCampaignDto } from './dto/update-ad-campaign.dto';
@@ -2924,11 +2929,14 @@ export class AdminService {
   }
 
   createAdCampaign(dto: CreateAdCampaignDto) {
+    const mediaKind = dto.mediaType ?? inferAdMediaTypeFromUrl(dto.mediaUrl);
     return this.prisma.adCampaign.create({
       data: {
         advertiserName: dto.advertiserName,
         title: dto.title,
         mediaUrl: dto.mediaUrl,
+        mediaType:
+          mediaKind === 'video' ? AdMediaType.video : AdMediaType.image,
         clickThroughUrl: dto.clickThroughUrl,
         placement: dto.placement,
         ...(dto.bannerSize !== undefined && { bannerSize: dto.bannerSize }),
@@ -2974,7 +2982,19 @@ export class AdminService {
     }
     if (dto.advertiserName !== undefined) data.advertiserName = dto.advertiserName.trim();
     if (dto.title !== undefined) data.title = dto.title.trim();
-    if (dto.mediaUrl !== undefined) data.mediaUrl = dto.mediaUrl;
+    if (dto.mediaUrl !== undefined) {
+      data.mediaUrl = dto.mediaUrl;
+      if (dto.mediaType === undefined) {
+        data.mediaType =
+          inferAdMediaTypeFromUrl(dto.mediaUrl) === 'video'
+            ? AdMediaType.video
+            : AdMediaType.image;
+      }
+    }
+    if (dto.mediaType !== undefined) {
+      data.mediaType =
+        dto.mediaType === 'video' ? AdMediaType.video : AdMediaType.image;
+    }
     if (dto.clickThroughUrl !== undefined) data.clickThroughUrl = dto.clickThroughUrl;
     if (dto.placement !== undefined) data.placement = dto.placement;
     if (dto.bannerSize !== undefined) data.bannerSize = dto.bannerSize;
@@ -3047,6 +3067,7 @@ export class AdminService {
       uploadHeaders: target.uploadHeaders,
       expiresIn: target.expiresIn,
       publicUrl: this.storage.getPublicUrl(target.objectKey),
+      mediaType: inferAdMediaTypeFromMime(body.mimeType.trim()),
     };
   }
 

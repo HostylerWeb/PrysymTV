@@ -7,39 +7,36 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { ContentRow } from '@/components/tv/ContentRow';
 import { ContentCard } from '@/components/tv/ContentCard';
 import { useHomeFeed } from '@/hooks/api/useHomeFeed';
 import { useVerticalsList } from '@/hooks/api/useVerticalsList';
 import { usePodcastsCatalog } from '@/hooks/api/usePodcastsCatalog';
 import { flattenShortsPages, useShortsFeed } from '@/hooks/api/useShortsFeed';
+import { useOpenShort, useOpenWatch, prefetchWatchItem } from '@/hooks/useOpenWatch';
 import { continueWatchingPath } from '@/lib/tv-routes';
 import { colors, spacing, typography } from '@/theme/tokens';
 import type { ContinueWatchingItem, LiveStream, VideoCard } from '@/types/api';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const openWatch = useOpenWatch();
+  const openShort = useOpenShort();
   const { data, isLoading, error } = useHomeFeed();
   const verticalsQuery = useVerticalsList();
   const podcastsQuery = usePodcastsCatalog(1, 12);
   const shortsQuery = useShortsFeed(12);
   const shorts = flattenShortsPages(shortsQuery.data?.pages);
 
-  const openWatch = (item: VideoCard) => {
-    router.push({
-      pathname: '/watch/[id]',
-      params: { id: item.id, title: item.title, playbackUrl: item.playbackUrl ?? '' },
-    });
-  };
-
-  const openShort = (item: VideoCard) => {
-    router.push({
-      pathname: '/shorts/[id]',
-      params: { id: item.id, title: item.title, playbackUrl: item.playbackUrl ?? '' },
-    });
-  };
-
   const openContinue = (item: ContinueWatchingItem) => {
+    if (item.contentType === 'video') {
+      prefetchWatchItem(queryClient, {
+        id: item.contentId,
+        thumbnailUrl: item.thumbnailUrl,
+      });
+    }
     const route = continueWatchingPath(item);
     router.push({
       pathname: route.pathname as never,

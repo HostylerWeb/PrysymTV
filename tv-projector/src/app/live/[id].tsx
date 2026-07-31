@@ -45,25 +45,13 @@ export default function LiveWatchScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1, backgroundColor: colors.videoBackground },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
-  },
-  title: {
-    color: colors.foreground,
-    fontSize: typography.heading,
-    fontWeight: '700',
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  message: {
-    color: colors.mutedForeground,
-    fontSize: typography.body,
-    textAlign: 'center',
-    maxWidth: 480,
+    backgroundColor: colors.videoBackground,
   },
   error: { color: '#ff6b6b', fontSize: typography.body },
 });

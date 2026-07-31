@@ -5,10 +5,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AdCampaignStatus, Prisma } from '@prisma/client';
+import { AdCampaignStatus, AdMediaType, Prisma } from '@prisma/client';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import {
+  inferAdMediaTypeFromMime,
+  inferAdMediaTypeFromUrl,
+} from '../ads/ad-media.util';
 import { CreateAdvertiserCampaignDto } from './dto/create-advertiser-campaign.dto';
 import { UpdateAdvertiserCampaignDto } from './dto/update-advertiser-campaign.dto';
 
@@ -251,12 +255,17 @@ export class AdvertisersService {
       throw new BadRequestException('endsAt must be after startsAt');
     }
 
+    const mediaKind =
+      dto.mediaType ?? inferAdMediaTypeFromUrl(dto.mediaUrl);
+
     return this.prisma.adCampaign.create({
       data: {
         advertiserAccountId: account.id,
         advertiserName: account.companyName,
         title: dto.title.trim(),
         mediaUrl: dto.mediaUrl,
+        mediaType:
+          mediaKind === 'video' ? AdMediaType.video : AdMediaType.image,
         clickThroughUrl: dto.clickThroughUrl,
         placement: dto.placement,
         ...(dto.bannerSize !== undefined && { bannerSize: dto.bannerSize }),
@@ -318,7 +327,19 @@ export class AdvertisersService {
     }
 
     if (dto.title !== undefined) data.title = dto.title.trim();
-    if (dto.mediaUrl !== undefined) data.mediaUrl = dto.mediaUrl;
+    if (dto.mediaUrl !== undefined) {
+      data.mediaUrl = dto.mediaUrl;
+      if (dto.mediaType === undefined) {
+        data.mediaType =
+          inferAdMediaTypeFromUrl(dto.mediaUrl) === 'video'
+            ? AdMediaType.video
+            : AdMediaType.image;
+      }
+    }
+    if (dto.mediaType !== undefined) {
+      data.mediaType =
+        dto.mediaType === 'video' ? AdMediaType.video : AdMediaType.image;
+    }
     if (dto.clickThroughUrl !== undefined) data.clickThroughUrl = dto.clickThroughUrl;
     if (dto.placement !== undefined) data.placement = dto.placement;
     if (dto.bannerSize !== undefined) {
@@ -357,6 +378,7 @@ export class AdvertisersService {
       uploadHeaders: target.uploadHeaders,
       expiresIn: target.expiresIn,
       publicUrl: this.storage.getPublicUrl(target.objectKey),
+      mediaType: inferAdMediaTypeFromMime(body.mimeType.trim()),
     };
   }
 }

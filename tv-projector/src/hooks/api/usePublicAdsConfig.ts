@@ -15,7 +15,7 @@ export function usePublicAdsConfig() {
 
   const isPlacementEnabled = useCallback(
     (placement: AdPlacement) => {
-      if (query.isLoading) return false;
+      if (query.isLoading) return true;
       return query.data?.placements[placement] ?? true;
     },
     [query.data, query.isLoading],

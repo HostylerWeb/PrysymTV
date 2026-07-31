@@ -736,6 +736,7 @@ export function createAdminAdCampaign(body: {
   advertiserName: string;
   title: string;
   mediaUrl: string;
+  mediaType?: "image" | "video";
   clickThroughUrl: string;
   placement: string;
   bannerSize?: "strip" | "standard" | "hero";
@@ -785,6 +786,7 @@ export function initAdminAdMediaUpload(body: {
     uploadUrl: string;
     publicUrl: string;
     objectKey: string;
+    mediaType?: "image" | "video";
   }>("/admin/ads/media/upload", { method: "POST", body });
 }
 

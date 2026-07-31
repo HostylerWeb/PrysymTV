@@ -247,6 +247,7 @@ async function main() {
       title: 'Stream the Future',
       mediaUrl:
         'https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=1170&auto=format&fit=crop',
+      mediaType: 'image' as const,
       clickThroughUrl: 'https://prysym.tv',
       placement: 'home_banner' as const,
       targetImpressions: 500_000,
@@ -256,8 +257,8 @@ async function main() {
       id: 'a1000000-0000-4000-8000-000000000002',
       advertiserName: 'Prysym',
       title: 'Premium Headphones',
-      mediaUrl:
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      mediaUrl: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+      mediaType: 'video' as const,
       clickThroughUrl: 'https://prysym.tv',
       placement: 'shorts_interstitial' as const,
       targetImpressions: 200_000,
@@ -267,8 +268,8 @@ async function main() {
       id: 'a1000000-0000-4000-8000-000000000003',
       advertiserName: 'Prysym',
       title: 'Prysym TV Premium',
-      mediaUrl:
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+      mediaUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
+      mediaType: 'video' as const,
       clickThroughUrl: 'https://prysym.tv',
       placement: 'movie_preroll' as const,
       targetImpressions: 100_000,
@@ -288,6 +289,7 @@ async function main() {
       update: {
         title: c.title,
         mediaUrl: c.mediaUrl,
+        mediaType: c.mediaType,
         status: 'active',
       },
     });
@@ -299,8 +301,8 @@ async function main() {
       id: 'a1000000-0000-4000-8000-000000000004',
       advertiserName: 'Prysym',
       title: 'Next episode brought to you by Prysym',
-      mediaUrl:
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      mediaUrl: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+      mediaType: 'video' as const,
       clickThroughUrl: 'https://prysym.tv',
       placement: 'vertical_episode',
       targetImpressions: 500_000,
@@ -309,7 +311,7 @@ async function main() {
       startsAt: now,
       endsAt: inOneYear,
     },
-    update: { status: 'active' },
+    update: { status: 'active', mediaType: 'video' },
   });
 
   const passwordHash = await argon2.hash('Demo1234!', { type: argon2.argon2id });

@@ -25,6 +25,7 @@ import {
   resolveObjectKey,
   type StorageSettings,
 } from '../config/storage-env';
+import { extensionFromAdMime } from '../ads/ad-media.util';
 import type { UploadTarget } from './storage.types';
 
 @Injectable()
@@ -142,8 +143,10 @@ export class StorageService implements OnModuleInit {
     return `uploads/podcasts/${episodeId}${extension}`;
   }
 
-  buildAdMediaKey(fileName?: string): string {
-    const extension = this.extensionFromFileName(fileName) || '';
+  buildAdMediaKey(fileName?: string, mimeType?: string): string {
+    const fromName = this.extensionFromFileName(fileName);
+    const extension =
+      fromName || (mimeType ? extensionFromAdMime(mimeType) : '') || '';
     return `uploads/ads/${randomUUID()}${extension}`;
   }
 
@@ -158,7 +161,7 @@ export class StorageService implements OnModuleInit {
     fileName?: string,
   ): Promise<UploadTarget> {
     this.assertAdMediaMime(mimeType);
-    const objectKey = this.buildAdMediaKey(fileName);
+    const objectKey = this.buildAdMediaKey(fileName, mimeType);
     const key = objectKey.replace(/^\/+/, '');
     const expiresIn = this.settings.presignExpiresSeconds;
 

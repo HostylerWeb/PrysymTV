@@ -15,6 +15,7 @@ type Props = {
   onPress?: () => void;
   hasTVPreferredFocus?: boolean;
   aspectRatio?: number;
+  onBeforeNavigate?: () => void;
 };
 
 export function ContentCard({
@@ -24,12 +25,18 @@ export function ContentCard({
   onPress,
   hasTVPreferredFocus,
   aspectRatio = 16 / 9,
+  onBeforeNavigate,
 }: Props) {
+  const handlePress = () => {
+    onBeforeNavigate?.();
+    onPress?.();
+  };
+
   return (
     <Pressable
       focusable
       hasTVPreferredFocus={hasTVPreferredFocus}
-      onPress={onPress}
+      onPress={handlePress}
       style={({ focused }) => [styles.card, focused && styles.cardFocused]}
     >
       <View style={styles.posterWrap}>

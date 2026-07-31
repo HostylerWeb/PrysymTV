@@ -10,10 +10,13 @@ import {
 import { useRouter } from 'expo-router';
 import { ContentCard } from '@/components/tv/ContentCard';
 import { useSearch } from '@/hooks/api/useSearch';
+import { useOpenShort, useOpenWatch } from '@/hooks/useOpenWatch';
 import { colors, spacing, typography } from '@/theme/tokens';
 
 export default function SearchScreen() {
   const router = useRouter();
+  const openWatch = useOpenWatch();
+  const openShort = useOpenShort();
   const [query, setQuery] = useState('');
   const { data, isFetching } = useSearch(query);
 
@@ -46,12 +49,7 @@ export default function SearchScreen() {
                 thumbnailUrl={item.thumbnailUrl}
                 subtitle="Movie"
                 hasTVPreferredFocus={index === 0 && !data?.videos.length}
-                onPress={() =>
-                  router.push({
-                    pathname: '/watch/[id]',
-                    params: { id: item.id, title: item.title },
-                  })
-                }
+                onPress={() => openWatch(item)}
               />
             ))}
           </View>
@@ -68,12 +66,7 @@ export default function SearchScreen() {
                 title={item.title}
                 thumbnailUrl={item.thumbnailUrl}
                 aspectRatio={9 / 16}
-                onPress={() =>
-                  router.push({
-                    pathname: '/shorts/[id]',
-                    params: { id: item.id, title: item.title },
-                  })
-                }
+                onPress={() => openShort(item)}
               />
             ))}
           </View>
@@ -91,12 +84,7 @@ export default function SearchScreen() {
                 thumbnailUrl={item.thumbnailUrl}
                 subtitle={item.type}
                 hasTVPreferredFocus={index === 0}
-                onPress={() =>
-                  router.push({
-                    pathname: '/watch/[id]',
-                    params: { id: item.id, title: item.title },
-                  })
-                }
+                onPress={() => openWatch(item)}
               />
             ))}
           </View>
@@ -162,7 +150,14 @@ export default function SearchScreen() {
         </View>
       ) : null}
 
-      {hasQuery && !isFetching && !data?.videos.length && !data?.movies?.length && !data?.shorts?.length && !data?.verticals.length && !data?.podcasts.length && !data?.streams.length ? (
+      {hasQuery &&
+      !isFetching &&
+      !data?.videos.length &&
+      !data?.movies?.length &&
+      !data?.shorts?.length &&
+      !data?.verticals.length &&
+      !data?.podcasts.length &&
+      !data?.streams.length ? (
         <Text style={styles.empty}>No results for "{query}"</Text>
       ) : null}
     </ScrollView>
@@ -171,23 +166,23 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.xl },
+  content: { paddingVertical: spacing.xl },
   heading: {
     color: colors.foreground,
     fontSize: typography.title,
     fontWeight: '800',
+    paddingHorizontal: spacing.lg,
     marginBottom: spacing.lg,
   },
   input: {
-    backgroundColor: colors.secondary,
-    color: colors.foreground,
-    borderRadius: 10,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: typography.body,
+    marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
-    borderWidth: 2,
-    borderColor: colors.border,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    color: colors.foreground,
+    fontSize: typography.body,
   },
   loader: { marginVertical: spacing.lg },
   section: { marginBottom: spacing.xl },
@@ -195,16 +190,18 @@ const styles = StyleSheet.create({
     color: colors.foreground,
     fontSize: typography.heading,
     fontWeight: '700',
+    paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
   },
   results: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    paddingHorizontal: spacing.lg,
     gap: spacing.md,
   },
   empty: {
     color: colors.mutedForeground,
     fontSize: typography.body,
-    marginTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
   },
 });

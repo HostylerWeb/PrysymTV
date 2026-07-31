@@ -197,6 +197,11 @@ enum VerticalSeriesStatus {
   published
 }
 
+enum AdMediaType {
+  image
+  video
+}
+
 enum AdCampaignStatus {
   draft
   active
@@ -1021,6 +1026,7 @@ model AdCampaign {
   advertiserName       String           @map("advertiser_name")
   title                String
   mediaUrl             String           @map("media_url")
+  mediaType            AdMediaType      @default(image) @map("media_type")
   clickThroughUrl      String           @map("click_through_url")
   placement            AdPlacement
   bannerSize           HomeBannerSize?  @map("banner_size")

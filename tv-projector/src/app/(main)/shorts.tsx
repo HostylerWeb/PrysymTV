@@ -9,10 +9,11 @@ import {
 import { useRouter } from 'expo-router';
 import { ContentCard } from '@/components/tv/ContentCard';
 import { flattenShortsPages, useShortsFeed } from '@/hooks/api/useShortsFeed';
+import { useOpenShort } from '@/hooks/useOpenWatch';
 import { colors, spacing, typography } from '@/theme/tokens';
 
 export default function ShortsScreen() {
-  const router = useRouter();
+  const openShort = useOpenShort();
   const shortsQuery = useShortsFeed(32);
   const shorts = flattenShortsPages(shortsQuery.data?.pages);
 
@@ -32,12 +33,7 @@ export default function ShortsScreen() {
               subtitle={item.channel}
               aspectRatio={9 / 16}
               hasTVPreferredFocus={index === 0}
-              onPress={() =>
-                router.push({
-                  pathname: '/shorts/[id]',
-                  params: { id: item.id, title: item.title, playbackUrl: item.playbackUrl ?? '' },
-                })
-              }
+              onPress={() => openShort(item)}
             />
           ))}
         </View>
@@ -50,13 +46,12 @@ export default function ShortsScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  content: { paddingVertical: spacing.xl, paddingRight: spacing.lg },
+  content: { paddingVertical: spacing.xl },
   heading: {
     color: colors.foreground,
     fontSize: typography.title,
     fontWeight: '800',
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xs,
   },
   sub: {
     color: colors.mutedForeground,

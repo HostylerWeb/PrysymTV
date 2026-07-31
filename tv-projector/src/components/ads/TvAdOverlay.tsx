@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Modal, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
 import {
   buildAdAttribution,
   fetchServedAd,
@@ -45,9 +45,12 @@ export function TvAdOverlay({
   useEffect(() => {
     if (!visible) {
       setAd(undefined);
+      setReady(false);
       return;
     }
+
     setReady(false);
+
     if (!shouldShow || !isPlacementEnabled(placement)) {
       onCompleteRef.current();
       return;
@@ -60,19 +63,28 @@ export function TvAdOverlay({
       return;
     }
 
+    let cancelled = false;
     void fetchServedAd(placement, { peek: true })
       .then((peek) => {
+        if (cancelled) return;
         if (!isValidServedAd(peek)) {
           onCompleteRef.current();
           return;
         }
         return fetchServedAd(placement).then((served) => {
+          if (cancelled) return;
           const valid = isValidServedAd(served) ? served : null;
           setAd(valid);
           if (!valid) onCompleteRef.current();
         });
       })
-      .catch(() => onCompleteRef.current());
+      .catch(() => {
+        if (!cancelled) onCompleteRef.current();
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [visible, shouldShow, servedAd, isPlacementEnabled, placement]);
 
   useEffect(() => {
@@ -100,6 +112,12 @@ export function TvAdOverlay({
     if (ad && ready) setCountdown(ad.skipAfterSeconds);
   }, [visible, ad, ready]);
 
+  useEffect(() => {
+    if (!visible || ad === undefined || !ad) return;
+    const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
+    if (!mediaUrl) onCompleteRef.current();
+  }, [visible, ad]);
+
   if (!visible || ad === undefined || !ad) return null;
 
   const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
@@ -108,7 +126,12 @@ export function TvAdOverlay({
   const canSkip = ready && countdown <= 0;
 
   return (
-    <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={() => canSkip && onComplete()}>
+    <Modal
+      visible
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => canSkip && onComplete()}
+    >
       <View style={styles.screen}>
         <View style={styles.player}>
           <AdMedia
@@ -120,6 +143,11 @@ export function TvAdOverlay({
             onError={() => onCompleteRef.current()}
             onEnded={() => onCompleteRef.current()}
           />
+          {!ready ? (
+            <View style={styles.loadingOverlay} pointerEvents="none">
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          ) : null}
           {ready && canSkip ? (
             <TvFocusButton
               label="Skip ad"
@@ -150,11 +178,16 @@ const styles = StyleSheet.create({
   },
   player: {
     width: '100%',
-    maxWidth: 1200,
-    aspectRatio: 16 / 9,
+    height: '100%',
     justifyContent: 'center',
   },
   media: { width: '100%', height: '100%' },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000',
+  },
   skipBtn: {
     position: 'absolute',
     top: spacing.lg,

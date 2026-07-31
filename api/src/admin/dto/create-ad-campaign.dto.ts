@@ -2,6 +2,7 @@ import { AdCampaignStatus, AdPlacement, HomeBannerSize } from '@prisma/client';
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -20,6 +21,10 @@ export class CreateAdCampaignDto {
 
   @IsUrl()
   mediaUrl!: string;
+
+  @IsOptional()
+  @IsIn(['image', 'video'])
+  mediaType?: 'image' | 'video';
 
   @IsUrl()
   clickThroughUrl!: string;
