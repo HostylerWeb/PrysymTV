@@ -230,7 +230,20 @@ export function HlsVideoPlayer({
     } else {
       el.src = src
       tryPlay()
-      publishQualityControl(null)
+      const onNativeMetadata = () => {
+        const height = el.videoHeight ?? 0
+        if (height <= 0) {
+          publishQualityControl(null)
+          return
+        }
+        publishQualityControl({
+          levels: [{ index: 0, height, label: labelForHeight(height) }],
+          currentLevel: 0,
+          setLevel: () => {},
+        })
+      }
+      el.addEventListener("loadedmetadata", onNativeMetadata)
+      onVideoMetadata = onNativeMetadata
     }
 
     return () => {

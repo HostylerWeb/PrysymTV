@@ -122,18 +122,28 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
           <ChevronLeft className="w-4 h-4" /> Back to Podcasts
         </Link>
 
-        {!isVideoEpisode && (
+        {isVideoEpisode ? (
+          <PodcastPlayerBar
+            episodes={[playerCard]}
+            currentIndex={0}
+            onIndexChange={() => {}}
+            onShare={() => setIsShareOpen(true)}
+            onToggleLike={(episodeId) => {
+              void togglePodcastLike(episodeId)
+                .then((r) => setLiked(r.liked))
+                .catch(() => {})
+            }}
+            isAuthenticated={isAuthenticated}
+            onAuthRequired={() => setIsAuthModalOpen(true)}
+            singleEpisode
+            inlineVideo
+          />
+        ) : (
           <img
             src={episode.cover}
             alt=""
             className="w-full max-w-sm aspect-square rounded-2xl object-cover mx-auto mb-6 shadow-xl"
           />
-        )}
-
-        {isVideoEpisode && (
-          <p className="text-center text-sm text-muted-foreground mb-4">
-            Video episode — use the player at the bottom of the screen.
-          </p>
         )}
 
         <p className="text-sm text-primary font-medium text-center mb-1">
@@ -220,20 +230,22 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
         )}
       </div>
 
-      <PodcastPlayerBar
-        episodes={[playerCard]}
-        currentIndex={0}
-        onIndexChange={() => {}}
-        onShare={() => setIsShareOpen(true)}
-        onToggleLike={(episodeId) => {
-          void togglePodcastLike(episodeId)
-            .then((r) => setLiked(r.liked))
-            .catch(() => {})
-        }}
-        isAuthenticated={isAuthenticated}
-        onAuthRequired={() => setIsAuthModalOpen(true)}
-        singleEpisode
-      />
+      {!isVideoEpisode ? (
+        <PodcastPlayerBar
+          episodes={[playerCard]}
+          currentIndex={0}
+          onIndexChange={() => {}}
+          onShare={() => setIsShareOpen(true)}
+          onToggleLike={(episodeId) => {
+            void togglePodcastLike(episodeId)
+              .then((r) => setLiked(r.liked))
+              .catch(() => {})
+          }}
+          isAuthenticated={isAuthenticated}
+          onAuthRequired={() => setIsAuthModalOpen(true)}
+          singleEpisode
+        />
+      ) : null}
 
       <Footer />
       <BottomNavigation activeTab={navTab} onTabChange={setNavTab} />

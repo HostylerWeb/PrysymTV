@@ -186,6 +186,7 @@ export default function PodcastsPage() {
     latestEpisodes.find((e) => e.podcast === showTitle) ?? latestEpisodes[0]
 
   const nowPlaying = playIndex !== null ? latestEpisodes[playIndex] : null
+  const videoNowPlaying = isVideoEpisode(nowPlaying)
 
   const filteredShows =
     activeCategory === "All"
@@ -210,7 +211,12 @@ export default function PodcastsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-background pb-32 md:pb-20 md:pl-20">
+      <main
+      className={cn(
+        "min-h-screen bg-background md:pb-20 md:pl-20",
+        videoNowPlaying ? "pb-[calc(56vw+5.5rem)] md:pb-[calc(28rem+4rem)]" : "pb-32",
+      )}
+    >
         <Header
           onSearchClick={() => setIsSearchOpen(true)}
           onCreateClick={uploadPodcast}
@@ -224,7 +230,12 @@ export default function PodcastsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background pb-32 md:pb-20 md:pl-20">
+    <main
+      className={cn(
+        "min-h-screen bg-background md:pb-20 md:pl-20",
+        videoNowPlaying ? "pb-[calc(56vw+5.5rem)] md:pb-[calc(28rem+4rem)]" : "pb-32",
+      )}
+    >
       <Header
         onSearchClick={() => setIsSearchOpen(true)}
         onCreateClick={uploadPodcast}
