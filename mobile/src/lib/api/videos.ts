@@ -31,10 +31,13 @@ export function fetchVideo(id: string) {
 }
 
 export function postVideoView(id: string) {
-  return apiRequest<{ success?: boolean; viewsCount: number }>(`/videos/${id}/view`, {
-    method: 'POST',
-    auth: false,
-  });
+  return apiRequest<{ success?: boolean; viewsCount: number; deduped?: boolean }>(
+    `/videos/${id}/view`,
+    {
+      method: 'POST',
+      auth: false,
+    },
+  );
 }
 
 export function toggleVideoLike(id: string) {

@@ -7,6 +7,7 @@ React Native app for PrysymTV, built with [Expo](https://expo.dev).
 - Expo SDK **54**
 - React **19**
 - React Native **0.81**
+- TanStack Query for API caching
 
 ## Test on device — APK builds
 
@@ -34,6 +35,8 @@ npm install
 npx expo install --fix
 npm run prebuild:clean
 ```
+
+Copy `mobile/.env.example` to `mobile/.env` and set `EXPO_PUBLIC_API_URL`.
 
 ---
 
@@ -79,20 +82,14 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 npm run log:android
 ```
 
-Or manually:
-
-```bash
-adb logcat ReactNativeJS:V ReactNative:V unknown:ReactHost:E AndroidRuntime:E '*:S'
-```
-
 ---
 
 ## API & references
 
-- **Endpoints:** [`../guides-md-files/api.md`](../guides-md-files/api.md)
+- **Canonical API docs:** [`../guides-md-files/api.md`](../guides-md-files/api.md)
+- **Run guide (API + web):** [`../guides-md-files/how-to-run.md`](../guides-md-files/how-to-run.md)
 - **Web UX reference:** `app/`, `components/`, `lib/api/` in repo root
-- **Implementation plan:** [`DEVELOPMENT-PLAN.md`](./DEVELOPMENT-PLAN.md)
-
-**Current status:** Phase B complete (mock UI). Phase C = API integration.
 
 Production API: `https://srv1765056.hstgr.cloud/api/v1`
+
+The mobile app uses the same REST endpoints as the website (`/feed/home`, `/videos/:id`, `/analytics/track`, etc.). See `mobile/src/lib/api/` for client modules.

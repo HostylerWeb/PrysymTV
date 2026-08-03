@@ -74,7 +74,7 @@
 | `POST` | `/videos/comments/:commentId/like` | ✅ Toggle comment like |
 | `DELETE` | `/videos/comments/:commentId` | ✅ Author deletes own comment |
 | `GET` | `/videos/:id` | ✅ Optional JWT → `liked`, `saved`, `disliked`, `isFollowing`, `dislikesCount` |
-| `POST` | `/videos/:id/view` | ✅ Increment `viewsCount` on play |
+| `POST` | `/videos/:id/view` | ✅ Increment `viewsCount` on play (deduped 1/h per user or IP) |
 | `POST` | `/videos/:id/like` | ✅ Toggle (clears dislike) |
 | `POST` | `/videos/:id/dislike` | ✅ Toggle (clears like) |
 | `POST` | `/videos/:id/save` | ✅ |
@@ -109,8 +109,8 @@
 | `POST` | `/streams/:id/unlock` | ✅ Bearer — deduct coins for paid VIP stream; creates entitlement |
 | `GET` | `/streams/ingest/health` | ✅ No auth — RTMP/HLS reachability for Go Live (OBS mode) |
 | `POST` | `/streams/mediamtx/auth` | ✅ MediaMTX HTTP auth (no Bearer) |
-| `POST` | `/streams/webhooks/ready` | ✅ |
-| `POST` | `/streams/webhooks/done` | ✅ |
+| `POST` | `/streams/webhooks/ready` | ✅ **Webhook secret required** — `x-mediamtx-webhook-secret` header or `?secret=` |
+| `POST` | `/streams/webhooks/done` | ✅ **Webhook secret required** — same as `ready` |
 | `GET` | `/streams/live` | ✅ |
 | `POST` | `/streams/:id/end` | ✅ Bearer — stream owner ends broadcast; kicks RTMP + notifies viewers |
 | `GET` | `/streams/:id` | ✅ Optional Bearer — UUID or creator `username`; paid streams redact playback unless entitled; owner always gets `studio` + playback |
@@ -157,7 +157,7 @@
 | `GET` | `/ads/serve` | ✅ `?placement=&peek=1` — optional Bearer; `peek=1` returns ad without burning an impression |
 | `POST` | `/ads/track/impression` | ✅ |
 | `POST` | `/ads/track/click` | ✅ |
-| `POST` | `/analytics/track` | ✅ Optional JWT — batch `share`, `view`, etc. |
+| `POST` | `/analytics/track` | ✅ Optional JWT — batch `share`, `view`, etc. (max **50** events) |
 | `GET` | `/analytics/creators/me/dashboard` | ✅ |
 | `GET` | `/analytics/creators/me/stats` | ✅ |
 | `GET` | `/analytics/creators/me/content` | ✅ |
@@ -398,7 +398,7 @@ Live streams: `GET /streams/:id` returns `hlsPlaybackUrl` (MediaMTX HLS). Poll o
 
 Podcasts: `mediaType: "audio"` → `audioUrl`; `mediaType: "video"` → `videoUrl` (HLS or direct URL after upload).
 
-Call `POST /videos/:id/view` (or vertical/podcast play endpoints) when playback starts for analytics.
+Call `POST /videos/:id/view` (or vertical/podcast play endpoints) when playback starts for analytics. Repeated calls within **1 hour** for the same video return `{ success: true, deduped: true, viewsCount }` without incrementing again.
 
 ### File uploads
 
@@ -519,7 +519,14 @@ Dev mode (no `STRIPE_SECRET_KEY`): coins, premium, and insider grant instantly w
 
 ### Rate limits
 
-Global default: `THROTTLE_LIMIT` requests per `THROTTLE_TTL_MS` per IP. Auth routes are stricter (e.g. login 10/min, register 5/min). Expect `429 Too Many Requests` — back off and retry.
+Global default: `THROTTLE_LIMIT` requests per `THROTTLE_TTL_MS` per IP (default **1000/min**). Auth routes are stricter (e.g. login 10/min, register 5/min). Additional per-route limits:
+
+| Route | Limit | Notes |
+|-------|-------|--------|
+| `POST /videos/:id/view` | **30/min** per IP | View dedupe: same video counts at most once per hour per user or IP |
+| `POST /analytics/track` | **60/min** per IP | Max **50 events** per request body |
+
+Expect `429 Too Many Requests` — back off and retry. Mobile/web clients should call `POST /videos/:id/view` once when playback starts (not on every seek).
 
 ### Recommended screen → API map
 
@@ -694,6 +701,8 @@ See [React Native integration — deep links](#push--in-app-notification-deep-li
 
 **Auth:** Optional Bearer — when sent, includes personalized `continueWatching`.
 
+**Caching:** Responses are cached in Redis for **45 seconds** per user (or guest). Live stream status is updated by a background job every **30 seconds** (not on every home request).
+
 Aggregates:
 
 | Key | Source / algorithm |
@@ -710,7 +719,9 @@ Guests: no `continueWatching` from API (web uses `localStorage` for vertical pro
 
 ### `GET /feed/trending` ✅
 
-**Query:** `page`, `limit`
+**Query:** `page`, `limit` (max **100** per page)
+
+Ranks videos by **7-day view events** in `analytics_events` (SQL aggregation). Falls back to all-time `viewsCount` when no recent analytics exist.
 
 ---
 
@@ -726,7 +737,7 @@ Guests: no `continueWatching` from API (web uses `localStorage` for vertical pro
 | `GET /videos/feed/movies` | ✅ `?page=&limit=` |
 | `GET /videos/feed/movies/featured` | ✅ |
 | `GET /videos/:id` | ✅ Optional Bearer → `liked`, `saved`, `disliked`, `isFollowing`, `dislikesCount` |
-| `POST /videos/:id/view` | ✅ Increment `viewsCount` (call on playback start) |
+| `POST /videos/:id/view` | ✅ Increment `viewsCount` once per hour per viewer (user or IP). Response: `{ success, viewsCount, deduped? }` |
 | `GET /videos/:id/comments` | ✅ `?page=&limit=` — optional Bearer → `liked` on each comment/reply |
 | `POST /videos/:id/comments` | ✅ `{ body, parentId? }` — notifies video owner (`comment` pref) or parent author on reply |
 | `POST /videos/comments/:commentId/like` | ✅ Toggle comment like — notifies comment author (`like` pref) |
@@ -870,11 +881,11 @@ Bearer required.
 | `POST /streams/:id/unlock` | ✅ Bearer — spend coins to watch a paid VIP stream; idempotent if already entitled |
 | `GET /streams/ingest/health` | ✅ No auth — `{ rtmpUrl, hlsPublicUrl, rtmpReachable, mediamtxRequired, hint }` for Go Live diagnostics (show in OBS mode only) |
 | `POST /streams/mediamtx/auth` | ✅ MediaMTX HTTP auth (no Bearer) |
-| `POST /streams/webhooks/ready` | ✅ `?path=live/{streamKey}` — marks stream live; notifies `creator_live_alerts` subscribers |
-| `POST /streams/webhooks/done` | ✅ Ends stream |
-| `GET /streams/live` | ✅ All `live` streams; optional Bearer for per-viewer `hasAccess` on paid items |
+| `POST /streams/webhooks/ready` | ✅ `?path=live/{streamKey}` — marks stream live; notifies `creator_live_alerts` subscribers. **Auth:** header `x-mediamtx-webhook-secret: <MEDIAMTX_WEBHOOK_SECRET>` or query `?secret=` (required in production) |
+| `POST /streams/webhooks/done` | ✅ Ends stream. Same webhook secret as `ready` |
+| `GET /streams/live` | ✅ All `live` streams; optional Bearer for per-viewer `hasAccess` on paid items. Stream status synced by background job (~30s) |
 | `POST /streams/:id/end` | ✅ Bearer — owner ends stream; disconnects publisher via MediaMTX API; Socket.IO `streamEnded` to room |
-| `GET /streams/:id` | ✅ By stream UUID **or** creator `username`; optional Bearer for entitlements; syncs HLS if webhook missed |
+| `GET /streams/:id` | ✅ By stream UUID **or** creator `username`; optional Bearer for entitlements; may sync single stream from HLS if webhook missed |
 
 **`POST /streams/init` body (paid VIP):**
 ```json
@@ -1228,7 +1239,7 @@ Platform ads config adds `impressionRevenueCpmUsd`. `GET /config/public` include
 
 | Route | Notes |
 |-------|--------|
-| `POST /analytics/track` | Batch events; header `X-Country-Code` for geography |
+| `POST /analytics/track` | Batch events (max **50** per request, **60/min** per IP); header `X-Country-Code` for geography |
 | `GET /admin/analytics/revenue` | Revenue breakdown by range |
 | `GET /admin/analytics/content` | Top content, likes, dislikes by range |
 | `GET /admin/analytics/geography` | Viewer countries from event metadata |
@@ -1236,7 +1247,7 @@ Platform ads config adds `impressionRevenueCpmUsd`. `GET /config/public` include
 | `GET /admin/gaf/ledger` | GAF inflow/outflow |
 | `GET /admin/audit-logs` | Admin action log |
 
-`POST /videos/:id/view` writes `analytics_events` (view). Trending feed uses 7-day views. Creator dashboard: `GET /analytics/creators/me/dashboard`.
+`POST /videos/:id/view` writes `analytics_events` (view) when not deduped. `GET /feed/trending` uses 7-day view analytics (paginated SQL). Admin `GET /admin/analytics/timeseries` computes DAU via SQL aggregation. Creator dashboard: `GET /analytics/creators/me/dashboard`.
 
 ---
 
@@ -1640,6 +1651,7 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 | `VIDEO_PROCESSING_TMP_DIR` | No | — | Temp dir for transcodes |
 | `RTMP_INGEST_URL` | No | `rtmp://localhost:1935/live` | RTMP server URL returned from `POST /streams/init` |
 | `MEDIAMTX_HLS_PUBLIC_URL` | No | `http://localhost:8888` | Base URL for HLS playback (`{base}/live/{streamKey}/index.m3u8`) |
+| `MEDIAMTX_WEBHOOK_SECRET` | **Yes in production** | — | Shared secret for `POST /streams/webhooks/ready` and `/done`. Send as header `x-mediamtx-webhook-secret` or query `?secret=`. Optional in development (webhooks allowed without secret) |
 | `AUTO_APPROVE_STREAMER` | No | `false` | `true` / `1` in **non-production** only — skip admin queue for streamer applications (off by default) |
 | `AUTO_APPROVE_VERTICAL_CREATOR` | No | `false` | `true` / `1` in **non-production** only — skip admin queue for vertical creator applications |
 | `GOOGLE_CLIENT_ID` | For OAuth | — | Comma-separated client IDs: `web,ios,android` — also served via `GET /config/public` → `auth.google` |
@@ -1650,7 +1662,7 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 | `STRIPE_WEBHOOK_SECRET` | No | — | Required with Stripe; see [`stripe-production.md`](./stripe-production.md) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | No | — | Password-reset email |
 
-**Live stack:** `docker compose up -d mediamtx` (custom image `prysymtv-mediamtx:local` includes `curl` for webhooks) exposes RTMP `:1935` and HLS `:8888`. MediaMTX calls `POST /streams/mediamtx/auth` and `POST /streams/webhooks/ready|done` on the API (no Bearer). Run the API on the host so the container can reach `host.docker.internal:4000`. See [how-to-run.md](./how-to-run.md) § Live streaming.
+**Live stack:** `docker compose up -d mediamtx` (custom image `prysymtv-mediamtx:local` includes `curl` for webhooks) exposes RTMP `:1935` and HLS `:8888`. MediaMTX calls `POST /streams/mediamtx/auth` and `POST /streams/webhooks/ready|done` on the API. Configure MediaMTX to send `x-mediamtx-webhook-secret` matching `MEDIAMTX_WEBHOOK_SECRET`. Run the API on the host so the container can reach `host.docker.internal:4000`. See [how-to-run.md](./how-to-run.md) § Live streaming.
 
 **Profile images:** Avatar/banner use `POST /users/me/avatar/upload` and `/banner/upload`, then multipart `POST /media/profile-upload` (`file` + `objectKey`) for both local and R2.
 
