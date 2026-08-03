@@ -145,6 +145,7 @@ export class PlaybackService {
       tagline: v.tagline,
       channel: v.creator.displayName ?? v.creator.username,
       channelSlug: v.creator.username,
+      channelAvatar: this.resolvePublicAssetUrl(v.creator.avatarUrl),
       creatorId: v.creator.id,
       playbackUrl: null as string | null,
       videoUrl: null as string | null,

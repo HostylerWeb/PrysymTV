@@ -15,15 +15,24 @@ import type { UserGenderValue } from "@/lib/user-gender";
 
 export async function register(input: {
   email: string;
-  username: string;
+  username?: string;
   password: string;
   displayName: string;
   gender: UserGenderValue;
 }) {
+  const body = {
+    email: input.email,
+    password: input.password,
+    displayName: input.displayName,
+    gender: input.gender,
+    ...(input.username?.trim()
+      ? { username: input.username.trim().toLowerCase() }
+      : {}),
+  };
   const data = await apiRequest<AuthSessionResponse>("/auth/register", {
     method: "POST",
     auth: false,
-    body: input,
+    body,
   });
   setAccessToken(data.accessToken);
   return data;

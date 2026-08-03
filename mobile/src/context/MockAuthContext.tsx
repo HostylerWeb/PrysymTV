@@ -191,20 +191,19 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
     ) => {
       if (isApiEnabled()) {
         try {
-          const derived =
-            username?.trim() ||
-            email.split('@')[0].replace(/[^a-z0-9_]/g, '') ||
-            'user';
           if (!gender) {
             throw new Error('Gender is required.');
           }
-          await authApi.register({
+          const payload: Parameters<typeof authApi.register>[0] = {
             email,
-            username: derived,
             password,
             displayName: name,
             gender,
-          });
+          };
+          if (username?.trim()) {
+            payload.username = username.trim().toLowerCase();
+          }
+          await authApi.register(payload);
           const me = await fetchMe();
           setUser(me);
           await persistMode('user');

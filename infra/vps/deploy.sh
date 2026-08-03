@@ -112,7 +112,7 @@ validate_api_env() {
 
 write_api_env() {
   local jwt_access jwt_refresh
-  local s3_region stripe_key stripe_wh playback_ttl google_oauth apple_oauth facebook_app_id facebook_app_secret vapid_public vapid_private vapid_subject
+  local s3_region stripe_key stripe_wh playback_ttl google_oauth apple_oauth facebook_app_id facebook_app_secret vapid_public vapid_private vapid_subject mediamtx_webhook_secret
 
   jwt_access="$(resolve_api_secret JWT_ACCESS_SECRET "$(grep ^JWT_ACCESS_SECRET= "$API_ENV_TEMPLATE" | cut -d= -f2-)")"
   jwt_refresh="$(resolve_api_secret JWT_REFRESH_SECRET "$(grep ^JWT_REFRESH_SECRET= "$API_ENV_TEMPLATE" | cut -d= -f2-)")"
@@ -132,6 +132,10 @@ write_api_env() {
   vapid_public="$(resolve_api_secret VAPID_PUBLIC_KEY "")"
   vapid_private="$(resolve_api_secret VAPID_PRIVATE_KEY "")"
   vapid_subject="$(resolve_api_secret VAPID_SUBJECT "mailto:support@prysym.tv")"
+  mediamtx_webhook_secret="$(resolve_api_secret MEDIAMTX_WEBHOOK_SECRET "")"
+  if [[ -z "$mediamtx_webhook_secret" ]]; then
+    mediamtx_webhook_secret="$(openssl rand -hex 32)"
+  fi
 
   if [[ -f "$API_ENV" ]] && [[ -s "$API_ENV" ]]; then
     log "Updating api/.env in place (preserving existing secrets)..."
@@ -179,6 +183,7 @@ write_api_env() {
     MEDIAMTX_HLS_PUBLIC_URL "${BASE_URL}/hls" \
     MEDIAMTX_WEBRTC_PUBLIC_URL "${BASE_URL}/webrtc" \
     MEDIAMTX_API_URL http://127.0.0.1:9997 \
+    MEDIAMTX_WEBHOOK_SECRET "$mediamtx_webhook_secret" \
     AUTO_APPROVE_STREAMER false \
     BILLING_DEV_GRANTS false \
     SEED_DEMO_CONTENT false \
@@ -245,15 +250,17 @@ write_api_env
 write_frontend_env
 
 # Persist app secrets for future deploys / disaster recovery (never printed).
-grep -E '^(S3_|SMTP_|STRIPE_)' "$API_ENV" >"$APP_SECRETS" || true
+grep -E '^(S3_|SMTP_|STRIPE_|MEDIAMTX_WEBHOOK_)' "$API_ENV" >"$APP_SECRETS" || true
 chmod 600 "$APP_SECRETS"
 
 log "Updating MediaMTX for ${HOST}..."
 MTX=/opt/prysym/stack/mediamtx.yml
+MTX_WEBHOOK_SECRET="$(read_env_file "$API_ENV" MEDIAMTX_WEBHOOK_SECRET)"
 if [[ -f "$APP/infra/vps/mediamtx.prod.yml" ]]; then
   sed -e "s|PRYSYM_PUBLIC_ORIGIN|${BASE_URL}|g" \
       -e "s|PRYSYM_PUBLIC_HOST|${HOST}|g" \
       -e "s|PRYSYM_PUBLIC_IP|${PUBLIC_IP}|g" \
+      -e "s|PRYSYM_MEDIAMTX_WEBHOOK_SECRET|${MTX_WEBHOOK_SECRET}|g" \
       "$APP/infra/vps/mediamtx.prod.yml" > "$MTX"
 else
   sed -i "s|http://localhost:3001|${BASE_URL}|g" "$MTX" 2>/dev/null || true
@@ -292,8 +299,11 @@ su - "$DEPLOY_USER" -c "cd '$APP/api' && npm run db:seed" || true
 log "Installing & building frontend..."
 su - "$DEPLOY_USER" -c "cd '$APP' && rm -rf .next/cache"
 su - "$DEPLOY_USER" -c "cd '$APP' && pnpm install --ignore-scripts=false"
-su - "$DEPLOY_USER" -c "cd '$APP' && node node_modules/next/dist/bin/next build"
-su - "$DEPLOY_USER" -c "cd '$APP' && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public"
+su - "$DEPLOY_USER" -c "cd '$APP' && pnpm run build"
+if [[ ! -f "$APP/.next/standalone/server.js" ]]; then
+  log "ERROR: Next.js standalone build missing at $APP/.next/standalone/server.js"
+  exit 1
+fi
 
 chown -R "$DEPLOY_USER:$DEPLOY_USER" "$APP"
 

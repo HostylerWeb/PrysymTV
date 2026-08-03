@@ -30,6 +30,8 @@ type Props = {
   controlsPlacement?: 'bottom' | 'top';
   controlsTopInset?: number;
   paused?: boolean;
+  /** Live HLS stream — keeps playback at the live edge. */
+  isLive?: boolean;
 };
 
 export function PlayerShell({
@@ -55,6 +57,7 @@ export function PlayerShell({
   controlsBottomInset,
   controlsPlacement,
   controlsTopInset,
+  isLive = false,
 }: Props) {
   const showTopActions = showCast || onShare || onReport;
   const showPoster = posterOnly || !playbackUrl;
@@ -76,6 +79,7 @@ export function PlayerShell({
           controlsBottomInset={controlsBottomInset}
           controlsPlacement={controlsPlacement}
           controlsTopInset={controlsTopInset}
+          isLive={isLive}
         />
       ) : (
         <Pressable style={styles.posterWrap} onPress={onPlayPress} disabled={!onPlayPress}>

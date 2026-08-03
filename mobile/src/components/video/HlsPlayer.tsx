@@ -60,6 +60,8 @@ type Props = {
   controlsPlacement?: 'bottom' | 'top';
   controlsTopInset?: number;
   onMutedChange?: (muted: boolean) => void;
+  /** Live HLS (e.g. MediaMTX): keep at live edge; do not pause on segment end. */
+  isLive?: boolean;
 };
 
 function formatTime(seconds: number) {
@@ -170,6 +172,7 @@ export function HlsPlayer({
   controlsPlacement = 'bottom',
   controlsTopInset,
   onMutedChange,
+  isLive = false,
 }: Props) {
   const insets = useSafeAreaInsets();
   const masterSource = useMemo(() => source, [source]);
@@ -199,6 +202,24 @@ export function HlsPlayer({
       p.timeUpdateEventInterval = 0.25;
     },
   );
+
+  const seekToLiveEdge = useCallback(() => {
+    try {
+      const total = player.duration;
+      if (!Number.isFinite(total) || total <= 0) return;
+      const lag = total - player.currentTime;
+      if (lag > 3 || player.currentTime < 0.25) {
+        player.currentTime = Math.max(0, total - 1.5);
+      }
+      if (!player.playing) {
+        player.play();
+        setPlaying(true);
+        setEnded(false);
+      }
+    } catch {
+      // Native player may already be released during navigation.
+    }
+  }, [player]);
 
   useEffect(() => {
     setActiveSource(source);
@@ -335,6 +356,10 @@ export function HlsPlayer({
 
   useEffect(() => {
     const sub = player.addListener('playToEnd', () => {
+      if (isLive) {
+        seekToLiveEdge();
+        return;
+      }
       const total = player.duration;
       if (total > 0.15) {
         player.currentTime = total - 0.1;
@@ -345,7 +370,15 @@ export function HlsPlayer({
       onEnded?.();
     });
     return () => sub.remove();
-  }, [player, onEnded]);
+  }, [player, onEnded, isLive, seekToLiveEdge]);
+
+  useEffect(() => {
+    if (!isLive || paused || !appActive) return;
+    const interval = setInterval(() => {
+      seekToLiveEdge();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [isLive, paused, appActive, seekToLiveEdge]);
 
   const togglePlay = () => {
     if (nativeControls) return;
@@ -354,8 +387,12 @@ export function HlsPlayer({
       setPlaying(false);
     } else {
       if (ended) {
-        player.currentTime = 0;
-        setEnded(false);
+        if (isLive) {
+          seekToLiveEdge();
+        } else {
+          player.currentTime = 0;
+          setEnded(false);
+        }
       }
       player.play();
       setPlaying(true);
@@ -480,7 +517,13 @@ export function HlsPlayer({
 
   const showLoading = (!ready || buffering) && !playing && !nativeControls;
   const showPausedOverlay =
-    !nativeControls && ready && !playing && !buffering && !chromeVisible && !enablePlayerChrome;
+    !nativeControls &&
+    ready &&
+    !playing &&
+    !buffering &&
+    !chromeVisible &&
+    !enablePlayerChrome &&
+    !isLive;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const showChromeControls = !nativeControls && chromeVisible && (seekOnTap || enablePlayerChrome);
   const showCornerControls =
@@ -506,7 +549,7 @@ export function HlsPlayer({
             : { aspectRatio },
       ]}
     >
-      {posterUrl && (!ready || (!playing && !ended)) ? (
+      {posterUrl && (!ready || (!isLive && !playing && !ended)) ? (
         <Image source={{ uri: posterUrl }} style={StyleSheet.absoluteFill} contentFit={contentFit} />
       ) : null}
       <VideoView

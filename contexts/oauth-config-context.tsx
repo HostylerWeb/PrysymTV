@@ -8,6 +8,11 @@ import {
 } from "react";
 import type { PublicOAuthConfig } from "@/lib/api/config";
 import { selectPublicAuth, usePublicConfig } from "@/lib/hooks/use-public-config";
+import {
+  sanitizeAppleClientId,
+  sanitizeFacebookAppId,
+  sanitizeGoogleClientId,
+} from "@/lib/oauth-placeholders";
 
 type OAuthConfigContextValue = {
   auth: PublicOAuthConfig | null;
@@ -36,11 +41,15 @@ export function OAuthConfigProvider({ children }: { children: ReactNode }) {
   const auth = data ? selectPublicAuth(data) : null;
 
   const value = useMemo<OAuthConfigContextValue>(() => {
-    const googleWebClientId =
-      auth?.google.webClientId?.trim() || envGoogleClientId;
-    const appleWebClientId =
-      auth?.apple.webClientId?.trim() || envAppleClientId;
-    const facebookAppId = auth?.facebook.appId?.trim() || envFacebookAppId;
+    const googleWebClientId = sanitizeGoogleClientId(
+      auth?.google.webClientId?.trim() || envGoogleClientId,
+    );
+    const appleWebClientId = sanitizeAppleClientId(
+      auth?.apple.webClientId?.trim() || envAppleClientId,
+    );
+    const facebookAppId = sanitizeFacebookAppId(
+      auth?.facebook.appId?.trim() || envFacebookAppId,
+    );
 
     const isOAuthAvailable = Boolean(
       (auth?.google.enabled && googleWebClientId) ||

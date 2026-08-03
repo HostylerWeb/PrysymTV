@@ -36,5 +36,5 @@ authHTTPAddress: http://127.0.0.1:4000/api/v1/streams/mediamtx/auth
 paths:
   ~^live/(.+)$:
     source: publisher
-    runOnReady: curl -fsS -X POST "http://127.0.0.1:4000/api/v1/streams/webhooks/ready?path=$MTX_PATH"
-    runOnNotReady: curl -fsS -X POST "http://127.0.0.1:4000/api/v1/streams/webhooks/done?path=$MTX_PATH"
+    runOnReady: 'curl -fsS -X POST -H "x-mediamtx-webhook-secret: PRYSYM_MEDIAMTX_WEBHOOK_SECRET" "http://127.0.0.1:4000/api/v1/streams/webhooks/ready?path=$MTX_PATH"'
+    runOnNotReady: 'curl -fsS -X POST -H "x-mediamtx-webhook-secret: PRYSYM_MEDIAMTX_WEBHOOK_SECRET" "http://127.0.0.1:4000/api/v1/streams/webhooks/done?path=$MTX_PATH"'

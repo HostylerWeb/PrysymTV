@@ -8,6 +8,7 @@ export type PodcastShowCard = {
   title: string;
   host: string;
   hostSlug: string;
+  hostAvatar?: string | null;
   cover: string;
   category: string;
   followers: string;
@@ -42,7 +43,7 @@ type ApiShow = {
   coverUrl?: string | null;
   category?: string | null;
   followersCount?: number;
-  creator?: { username: string; displayName?: string | null };
+  creator?: { username: string; displayName?: string | null; avatarUrl?: string | null };
   _count?: { episodes: number };
 };
 
@@ -71,6 +72,7 @@ function mapShow(raw: ApiShow): PodcastShowCard {
     title: raw.title,
     host,
     hostSlug,
+    hostAvatar: raw.creator?.avatarUrl ?? null,
     cover: videoThumbnail(raw.coverUrl),
     category: raw.category ?? "General",
     followers: formatViewCount(raw.followersCount ?? 0),
@@ -193,6 +195,7 @@ export function mapPodcastEpisodeDetail(raw: ApiEpisode & { liked?: boolean; sav
       : null,
     hostSlug: raw.creator?.username,
     hostName: raw.creator?.displayName ?? raw.creator?.username ?? "Host",
+    hostAvatar: raw.creator?.avatarUrl ?? null,
     creatorId: (raw.creator as { id?: string } | undefined)?.id,
     liked: raw.liked ?? false,
     saved: raw.saved ?? false,

@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, withAlpha } from '@/theme/tokens';
 import { formatViewCount } from '@/utils/format-media';
+import { resolveAvatarUrl } from '@/lib/media-url';
 import type { LiveStream } from '@/types/api';
 
 export function LiveStreamCard({ stream, featured }: { stream: LiveStream; featured?: boolean }) {
@@ -26,8 +27,17 @@ export function LiveStreamCard({ stream, featured }: { stream: LiveStream; featu
         </View>
       ) : null}
       <View style={styles.body}>
-        <Text style={styles.title} numberOfLines={2}>{stream.title}</Text>
-        <Text style={styles.meta}>{stream.streamer} · {formatViewCount(stream.viewerCount)} watching</Text>
+        <View style={styles.bodyRow}>
+          <Image
+            source={{ uri: resolveAvatarUrl(stream.avatarUrl, stream.streamerSlug ?? stream.streamer) }}
+            style={styles.avatar}
+            contentFit="cover"
+          />
+          <View style={styles.bodyText}>
+            <Text style={styles.title} numberOfLines={2}>{stream.title}</Text>
+            <Text style={styles.meta}>{stream.streamer} · {formatViewCount(stream.viewerCount)} watching</Text>
+          </View>
+        </View>
       </View>
     </Pressable>
   );
@@ -82,6 +92,9 @@ const styles = StyleSheet.create({
   },
   vipText: { color: '#000', fontSize: 10, fontWeight: '800' },
   body: { padding: 12 },
+  bodyRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.secondary },
+  bodyText: { flex: 1 },
   title: { color: colors.foreground, fontSize: 15, fontWeight: '700' },
   meta: { color: colors.mutedForeground, fontSize: 12, marginTop: 4 },
 });

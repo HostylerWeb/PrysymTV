@@ -60,6 +60,7 @@ export type VideoCard = {
   vertical?: string | null;
   channel: string;
   channelSlug: string;
+  channelAvatar?: string | null;
   creatorId: string;
   playbackUrl?: string | null;
   videoUrl?: string | null;

@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useVideoComments } from '@/hooks/api/useVideoComments';
@@ -19,6 +20,7 @@ import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatRelativeTime, formatViewCount } from '@/utils/format-media';
+import { resolveAvatarUrl } from '@/lib/media-url';
 
 type Props = {
   visible: boolean;
@@ -80,11 +82,13 @@ export function CommentsSheet({ visible, onClose, videoId, count, videoTitle }: 
                       </View>
                     ) : null}
                     <View style={styles.inputRow}>
-                      <View style={styles.avatar}>
-                        <Text style={styles.avatarLetter}>
-                          {(user?.username ?? 'Y')[0]?.toUpperCase()}
-                        </Text>
-                      </View>
+                      <Image
+                        source={{
+                          uri: resolveAvatarUrl(user?.avatarUrl, user?.username ?? user?.email ?? 'user'),
+                        }}
+                        style={styles.avatar}
+                        contentFit="cover"
+                      />
                       <TextInput
                         style={styles.input}
                         placeholder={replyingTo ? 'Add a reply…' : 'Add a comment…'}
@@ -119,11 +123,13 @@ export function CommentsSheet({ visible, onClose, videoId, count, videoTitle }: 
                     comments.map((c) => (
                       <View key={c.id}>
                         <View style={styles.comment}>
-                          <View style={styles.commentAvatar}>
-                            <Text style={styles.commentAvatarLetter}>
-                              {c.user.username[0]?.toUpperCase()}
-                            </Text>
-                          </View>
+                          <Image
+                            source={{
+                              uri: resolveAvatarUrl(c.user.avatarUrl, c.user.username),
+                            }}
+                            style={styles.commentAvatar}
+                            contentFit="cover"
+                          />
                           <View style={styles.commentBody}>
                             <View style={styles.commentHeader}>
                               <Text style={styles.author}>@{c.user.username}</Text>
@@ -157,11 +163,13 @@ export function CommentsSheet({ visible, onClose, videoId, count, videoTitle }: 
                         </View>
                         {(c.replies ?? []).map((reply) => (
                           <View key={reply.id} style={[styles.comment, styles.replyComment]}>
-                            <View style={styles.commentAvatar}>
-                              <Text style={styles.commentAvatarLetter}>
-                                {reply.user.username[0]?.toUpperCase()}
-                              </Text>
-                            </View>
+                            <Image
+                              source={{
+                                uri: resolveAvatarUrl(reply.user.avatarUrl, reply.user.username),
+                              }}
+                              style={styles.commentAvatar}
+                              contentFit="cover"
+                            />
                             <View style={styles.commentBody}>
                               <View style={styles.commentHeader}>
                                 <Text style={styles.author}>@{reply.user.username}</Text>
@@ -233,11 +241,8 @@ function createStyles(colors: ThemeColors) {
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: withAlpha(colors.primary, 0.2),
-      alignItems: 'center',
-      justifyContent: 'center',
+      backgroundColor: colors.secondary,
     },
-    avatarLetter: { color: colors.primary, fontWeight: '800' },
     input: {
       flex: 1,
       borderBottomWidth: 1,
@@ -263,10 +268,7 @@ function createStyles(colors: ThemeColors) {
       height: 36,
       borderRadius: 18,
       backgroundColor: colors.secondary,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
-    commentAvatarLetter: { color: colors.foreground, fontWeight: '700', fontSize: 13 },
     commentBody: { flex: 1 },
     commentHeader: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 4 },
     author: { color: colors.foreground, fontWeight: '700', fontSize: 14 },

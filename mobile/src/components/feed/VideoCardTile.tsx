@@ -7,6 +7,7 @@ import { radius, withAlpha } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatDuration, formatViewCount } from '@/utils/format-media';
+import { resolveAvatarUrl } from '@/lib/media-url';
 import type { VideoCard } from '@/types/api';
 
 type Props = {
@@ -91,9 +92,13 @@ export function VideoCardTile({ video, variant = 'grid', width, onPress }: Props
         ) : null}
       </View>
       <View style={styles.infoRow}>
-        <View style={styles.channelAvatar}>
-          <Text style={styles.channelInitial}>{(video.channel ?? '?')[0]}</Text>
-        </View>
+        <Image
+          source={{
+            uri: resolveAvatarUrl(video.channelAvatar, video.channelSlug ?? video.channel ?? 'creator'),
+          }}
+          style={styles.channelAvatar}
+          contentFit="cover"
+        />
         <View style={styles.info}>
           <Text style={styles.title} numberOfLines={2}>{video.title}</Text>
           <Text style={styles.meta} numberOfLines={1}>
@@ -212,10 +217,7 @@ function createVideoCardStyles(colors: ThemeColors) {
       height: 36,
       borderRadius: 18,
       backgroundColor: colors.muted,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
-    channelInitial: { color: colors.foreground, fontWeight: '700', fontSize: 14 },
     info: { flex: 1, gap: 2 },
     title: { color: colors.foreground, fontSize: 14, fontWeight: '600', lineHeight: 18 },
     meta: { color: colors.mutedForeground, fontSize: 12 },

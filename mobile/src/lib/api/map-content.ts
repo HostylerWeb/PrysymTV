@@ -35,6 +35,7 @@ export function mapVideoCard(raw: VideoCardDetail | Record<string, unknown>): Vi
     category: r.category ?? undefined,
     channel: r.channel ?? 'Creator',
     channelSlug: r.channelSlug ?? 'creator',
+    channelAvatar: mediaThumb(r.channelAvatar),
     creatorId: r.creatorId,
     releaseYear: r.releaseYear,
     ageRating: r.ageRating,
@@ -147,7 +148,7 @@ type ApiPodcastShow = {
   title: string;
   coverUrl?: string | null;
   category?: string | null;
-  creator?: { username: string; displayName?: string | null };
+  creator?: { username: string; displayName?: string | null; avatarUrl?: string | null };
   _count?: { episodes: number };
 };
 
@@ -157,6 +158,7 @@ export function mapPodcastShow(raw: ApiPodcastShow): PodcastShow {
     title: raw.title,
     coverUrl: mediaThumb(raw.coverUrl),
     creatorName: raw.creator?.displayName ?? raw.creator?.username ?? 'Host',
+    hostAvatar: mediaThumb(raw.creator?.avatarUrl),
     episodeCount: raw._count?.episodes ?? 0,
     category: raw.category ?? 'General',
   };

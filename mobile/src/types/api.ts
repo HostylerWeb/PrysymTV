@@ -33,6 +33,7 @@ export type VideoCard = {
   category?: string;
   channel: string;
   channelSlug: string;
+  channelAvatar?: string | null;
   creatorId?: string;
   releaseYear?: number | null;
   ageRating?: string | null;
@@ -233,6 +234,7 @@ export type PodcastShow = {
   title: string;
   coverUrl: string | null;
   creatorName: string;
+  hostAvatar?: string | null;
   episodeCount: number;
   category: string;
 };

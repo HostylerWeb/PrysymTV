@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -43,13 +44,31 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto, res: Response) {
+    const email = dto.email.toLowerCase();
+    const existingEmail = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (existingEmail) {
+      throw new ConflictException(
+        'An account with this email already exists. Sign in instead.',
+      );
+    }
+
+    const preferredUsername =
+      dto.username?.trim().toLowerCase() ??
+      this.deriveRegistrationUsername(dto.displayName, email);
+    const username = dto.username?.trim()
+      ? await this.requireAvailableUsername(preferredUsername)
+      : await this.resolveAvailableUsername(preferredUsername);
+
     const passwordHash = await argon2.hash(dto.password, {
       type: argon2.argon2id,
     });
     const user = await this.prisma.user.create({
       data: {
-        email: dto.email.toLowerCase(),
-        username: dto.username.toLowerCase(),
+        email,
+        username,
         displayName: dto.displayName,
         passwordHash,
         gender: dto.gender,
@@ -60,6 +79,63 @@ export class AuthService {
       },
     });
     return this.issueTokens(user.id, user.email, user.username, user.role, res);
+  }
+
+  private deriveRegistrationUsername(
+    displayName: string,
+    email: string,
+  ): string {
+    const fromName = displayName
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .slice(0, 30);
+    if (fromName.length >= 3) return fromName;
+    const fromEmail = email
+      .split('@')[0]
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '')
+      .slice(0, 30);
+    return fromEmail.length >= 3 ? fromEmail : 'user';
+  }
+
+  private async requireAvailableUsername(username: string): Promise<string> {
+    const taken = await this.prisma.user.findUnique({
+      where: { username },
+      select: { id: true },
+    });
+    if (taken) {
+      throw new ConflictException(
+        'This username is already taken. Choose a different one.',
+      );
+    }
+    return username;
+  }
+
+  private async resolveAvailableUsername(preferred: string): Promise<string> {
+    const base =
+      preferred
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '')
+        .slice(0, 24) || 'user';
+    let candidate = base.slice(0, 30);
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const taken = await this.prisma.user.findUnique({
+        where: { username: candidate },
+        select: { id: true },
+      });
+      if (!taken) return candidate;
+      const suffix = generateSecureToken(3)
+        .replace(/[^a-z0-9]/g, '')
+        .slice(0, 5);
+      candidate = `${base.slice(0, Math.max(3, 30 - suffix.length - 1))}_${suffix}`;
+    }
+    throw new ConflictException(
+      'Could not create a unique username. Try a different display name or email.',
+    );
   }
 
   async login(dto: LoginDto, res: Response) {

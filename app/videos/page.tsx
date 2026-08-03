@@ -135,7 +135,7 @@ function VideosBrowseContent() {
     duration: formatDuration(v.durationSeconds),
     views: formatViewCount(v.viewsCount),
     channel: v.channel,
-    channelAvatar: userAvatarUrl(null, v.channel),
+    channelAvatar: userAvatarUrl(v.channelAvatar, v.channelSlug ?? v.channel),
     type: "video" as const,
   })
 

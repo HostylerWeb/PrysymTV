@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -20,12 +20,6 @@ import type { UserGenderValue } from '@/lib/user-gender';
 import { useMockAuth, getAuthErrorMessage } from '@/context/MockAuthContext';
 import { colors, spacing, typography } from '@/theme/tokens';
 
-function deriveUsername(email: string, explicit?: string): string {
-  const trimmed = explicit?.trim();
-  if (trimmed) return trimmed.replace(/^@/, '').toLowerCase();
-  return email.split('@')[0]?.replace(/[^a-z0-9_]/g, '') || 'user';
-}
-
 export default function RegisterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -37,11 +31,6 @@ export default function RegisterScreen() {
   const [gender, setGender] = useState<UserGenderValue | ''>('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-
-  const resolvedUsername = useMemo(
-    () => deriveUsername(email, username),
-    [email, username],
-  );
 
   const finish = () => {
     router.replace('/(tabs)/home');
@@ -74,7 +63,7 @@ export default function RegisterScreen() {
         displayName.trim(),
         email.trim(),
         password,
-        resolvedUsername,
+        username.trim() || undefined,
         gender,
       );
       finish();

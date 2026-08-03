@@ -92,7 +92,7 @@ function mapShortFromApi(card: ShortVideoCard): ShortItem {
     thumbnailUrl: videoThumbnail(card.thumbnailUrl),
     username: `@${card.channelSlug}`,
     userSlug: card.channelSlug,
-    userAvatar: userAvatarUrl(null, card.channelSlug),
+    userAvatar: userAvatarUrl(card.channelAvatar, card.channelSlug),
     caption: card.title,
     likes: formatViewCount(card.likesCount ?? 0),
     comments: formatViewCount(card.commentsCount ?? 0),

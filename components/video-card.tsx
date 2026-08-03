@@ -122,12 +122,12 @@ export function VideoCard({
         <div className="flex gap-3">
           {(type === "video" || type === "live") && (
             <div className="w-9 h-9 rounded-full bg-muted flex-shrink-0 overflow-hidden">
-              <CachedImage
-                src={channelAvatar ?? userAvatarUrl(null, channel ?? "creator")}
+              <img
+                src={userAvatarUrl(channelAvatar, channel ?? "creator")}
                 alt={channel ?? "Creator"}
-                width={36}
-                height={36}
                 className="w-full h-full object-cover"
+                loading="lazy"
+                decoding="async"
               />
             </div>
           )}

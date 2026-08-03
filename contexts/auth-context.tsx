@@ -165,10 +165,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
     gender: UserGenderValue,
   ) => {
-    const username = authApi.deriveUsername(name, email)
     await authApi.register({
       email,
-      username,
       password,
       displayName: name,
       gender,

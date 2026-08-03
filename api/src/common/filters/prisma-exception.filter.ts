@@ -14,9 +14,21 @@ export class PrismaExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
 
     if (exception.code === 'P2002') {
+      const target = exception.meta?.target;
+      const fields = Array.isArray(target)
+        ? target.map(String)
+        : typeof target === 'string'
+          ? [target]
+          : [];
+      let message = 'Resource already exists';
+      if (fields.includes('email')) {
+        message = 'An account with this email already exists. Sign in instead.';
+      } else if (fields.includes('username')) {
+        message = 'This username is already taken. Choose a different one.';
+      }
       response.status(HttpStatus.CONFLICT).json({
         statusCode: HttpStatus.CONFLICT,
-        message: 'Resource already exists',
+        message,
         error: 'Conflict',
       });
       return;

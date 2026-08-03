@@ -197,6 +197,7 @@ export function MobileLiveStudioPanel({ stream, mode, viewerCount, playbackUrl }
           autoPlay
           posterUrl={stream.thumbnail}
           contentFit="contain"
+          isLive
         />
       );
     }

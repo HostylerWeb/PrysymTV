@@ -684,7 +684,7 @@ export class StreamsService {
       thumbnail: this.playback.resolvePublicAssetUrl(s.thumbnailUrl),
       streamer: s.creator.displayName ?? s.creator.username,
       streamerSlug: s.creator.username,
-      streamerAvatar: s.creator.avatarUrl,
+      streamerAvatar: this.playback.resolvePublicAssetUrl(s.creator.avatarUrl),
       viewers: this.formatCount(
         s.status === StreamStatus.live ? s.viewerCount : 0,
       ),

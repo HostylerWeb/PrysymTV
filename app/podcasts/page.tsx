@@ -168,7 +168,7 @@ export default function PodcastsPage() {
         slug: s.hostSlug,
         name: s.host,
         handle: `@${s.hostSlug}`,
-        avatar: userAvatarUrl(null, s.hostSlug),
+        avatar: userAvatarUrl(s.hostAvatar, s.hostSlug),
         shows: 1,
         followers: s.followers,
         isVerified: i < 2,

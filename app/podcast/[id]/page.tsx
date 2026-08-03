@@ -219,7 +219,7 @@ export default function PodcastEpisodePage({ params }: { params: Promise<{ id: s
             className="flex items-center gap-3 p-4 rounded-xl bg-secondary/30 hover:bg-secondary/60 transition-colors"
           >
             <img
-              src={userAvatarUrl(null, hostSlug)}
+              src={userAvatarUrl(episode.hostAvatar, hostSlug ?? episode.hostName)}
               alt=""
               className="w-10 h-10 rounded-full object-cover"
             />

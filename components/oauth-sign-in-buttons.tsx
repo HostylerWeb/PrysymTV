@@ -18,6 +18,11 @@ import {
 import {
   canUseFacebookWebLogin,
 } from "@/lib/oauth-mock"
+import {
+  sanitizeAppleClientId,
+  sanitizeFacebookAppId,
+  sanitizeGoogleClientId,
+} from "@/lib/oauth-placeholders"
 
 const envGoogleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim()
 const envAppleClientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID?.trim()
@@ -352,9 +357,15 @@ export function OAuthSignInButtons({
   className,
 }: OAuthSignInButtonsProps) {
   const { googleWebClientId, appleWebClientId, facebookAppId } = useOAuthConfig()
-  const googleClientId = googleWebClientId ?? envGoogleClientId ?? null
-  const appleClientId = appleWebClientId ?? envAppleClientId ?? null
-  const facebookId = facebookAppId ?? envFacebookAppId ?? null
+  const googleClientId = sanitizeGoogleClientId(
+    googleWebClientId ?? envGoogleClientId,
+  );
+  const appleClientId = sanitizeAppleClientId(
+    appleWebClientId ?? envAppleClientId,
+  );
+  const facebookId = sanitizeFacebookAppId(
+    facebookAppId ?? envFacebookAppId,
+  );
   const [googleBusy, setGoogleBusy] = useState(false)
 
   const handleGoogleSuccess = useCallback(
@@ -424,7 +435,11 @@ export function OAuthSignInButtons({
 }
 
 export function isOAuthConfigured(): boolean {
-  return Boolean(envGoogleClientId || envAppleClientId || envFacebookAppId)
+  return Boolean(
+    sanitizeGoogleClientId(envGoogleClientId) ||
+      sanitizeAppleClientId(envAppleClientId) ||
+      sanitizeFacebookAppId(envFacebookAppId),
+  )
 }
 
 export function useOAuthButtonsAvailable(): boolean {

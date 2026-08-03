@@ -26,15 +26,24 @@ export async function login(email: string, password: string) {
 
 export async function register(input: {
   email: string;
-  username: string;
+  username?: string;
   password: string;
   displayName: string;
   gender: string;
 }) {
+  const body = {
+    email: input.email,
+    password: input.password,
+    displayName: input.displayName,
+    gender: input.gender,
+    ...(input.username?.trim()
+      ? { username: input.username.trim().toLowerCase() }
+      : {}),
+  };
   const data = await apiRequest<AuthSessionResponse>('/auth/register', {
     method: 'POST',
     auth: false,
-    body: input,
+    body,
   });
   await persistSession(data);
   return data;

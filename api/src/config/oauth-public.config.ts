@@ -5,7 +5,19 @@ function parseCommaList(raw: string | undefined): string[] {
   return raw
     .split(',')
     .map((id) => id.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((id) => !isPlaceholderOAuthId(id));
+}
+
+function isPlaceholderOAuthId(id: string): boolean {
+  const value = id.toLowerCase();
+  return (
+    value.includes('your-web-client-id') ||
+    value.includes('your-facebook-app-id') ||
+    value.includes('your-apple') ||
+    value.includes('placeholder') ||
+    value.includes('example.apps.googleusercontent.com')
+  );
 }
 
 export type PublicOAuthConfig = {

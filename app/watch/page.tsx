@@ -84,7 +84,7 @@ function WatchBrowseContent() {
                 title={video.title}
                 thumbnail={videoThumbnail(video.thumbnailUrl)}
                 channel={video.channel}
-                channelAvatar={userAvatarUrl(null, video.channelSlug)}
+                channelAvatar={userAvatarUrl(video.channelAvatar, video.channelSlug)}
                 views={formatViewCount(video.viewsCount)}
                 duration={formatDuration(video.durationSeconds)}
                 type="video"

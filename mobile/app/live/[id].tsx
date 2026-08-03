@@ -22,6 +22,7 @@ import { unlockStream } from '@/lib/api/streams';
 import { followUser, toggleLiveAlerts, unfollowUser } from '@/lib/api/users';
 import { colors, radius, spacing } from '@/theme/tokens';
 import { formatViewCount } from '@/utils/format-media';
+import { resolveAvatarUrl } from '@/lib/media-url';
 
 export default function LiveScreen() {
   const { id, studio: studioParam } = useLocalSearchParams<{ id: string; studio?: string }>();
@@ -205,9 +206,14 @@ export default function LiveScreen() {
             badge={stream.isPaid ? 'VIP' : 'LIVE'}
             contentFit="contain"
             paused={!isFocused}
+            isLive={stream.status === 'live'}
           />
         )}
         <View style={styles.streamerRow}>
+          <Image
+            source={{ uri: resolveAvatarUrl(stream.avatarUrl, stream.streamerSlug ?? stream.streamer) }}
+            style={styles.streamerAvatar}
+          />
           <View style={styles.streamerInfo}>
             <Text style={styles.streamerName}>{stream.streamer}</Text>
             <Text style={styles.streamerSub}>
@@ -331,6 +337,12 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: spacing.page,
     marginBottom: 8,
+  },
+  streamerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.secondary,
   },
   streamerInfo: { flex: 1 },
   streamerName: { color: colors.foreground, fontWeight: '700', fontSize: 15 },

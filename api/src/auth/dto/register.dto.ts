@@ -1,6 +1,7 @@
 import {
   IsEmail,
   IsIn,
+  IsOptional,
   IsString,
   Matches,
   MaxLength,
@@ -12,13 +13,14 @@ export class RegisterDto {
   @IsEmail()
   email!: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(3)
   @MaxLength(30)
   @Matches(/^[a-zA-Z0-9_]+$/, {
     message: 'username must be alphanumeric or underscore',
   })
-  username!: string;
+  username?: string;
 
   @IsString()
   @MinLength(8)

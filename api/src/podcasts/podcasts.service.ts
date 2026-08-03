@@ -61,7 +61,7 @@ export class PodcastsService {
         skip,
         take: limit,
         include: {
-          creator: { select: { username: true, displayName: true } },
+          creator: { select: { username: true, displayName: true, avatarUrl: true } },
           _count: {
             select: {
               episodes: {
@@ -87,6 +87,7 @@ export class PodcastsService {
           select: {
             username: true,
             displayName: true,
+            avatarUrl: true,
             _count: { select: { followers: true } },
           },
         },
@@ -136,7 +137,7 @@ export class PodcastsService {
       },
       orderBy: { followersCount: 'desc' },
       include: {
-        creator: { select: { username: true, displayName: true } },
+        creator: { select: { username: true, displayName: true, avatarUrl: true } },
         episodes: {
           where: { status: ContentStatus.ready },
           orderBy: { publishedAt: 'desc' },
@@ -469,7 +470,7 @@ export class PodcastsService {
         take: limit,
         include: {
           show: { select: { id: true, title: true, coverUrl: true } },
-          creator: { select: { username: true, displayName: true } },
+          creator: { select: { username: true, displayName: true, avatarUrl: true } },
         },
       }),
       this.prisma.podcastEpisode.count({
