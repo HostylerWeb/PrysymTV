@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -14,6 +14,8 @@ import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
 import { useShouldShowAds } from '@/hooks/useShouldShowAds';
 import { resolveAdMediaUrl } from '@/lib/ad-media';
 import { radius } from '@/theme/tokens';
+
+const POST_END_SKIP_MS = 3000;
 
 type Props = {
   visible: boolean;
@@ -38,11 +40,29 @@ export function VerticalEpisodeAdGate({
   const [countdown, setCountdown] = useState(5);
   const [ready, setReady] = useState(false);
   const onCompleteRef = useRef(onComplete);
+  const postEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   onCompleteRef.current = onComplete;
+
+  const finish = useCallback(() => {
+    if (postEndTimerRef.current) {
+      clearTimeout(postEndTimerRef.current);
+      postEndTimerRef.current = null;
+    }
+    onCompleteRef.current();
+  }, []);
+
+  const schedulePostEndSkip = useCallback(() => {
+    if (postEndTimerRef.current) clearTimeout(postEndTimerRef.current);
+    postEndTimerRef.current = setTimeout(() => {
+      postEndTimerRef.current = null;
+      onCompleteRef.current();
+    }, POST_END_SKIP_MS);
+  }, []);
 
   useEffect(() => {
     if (!visible) {
       setAd(undefined);
+      setReady(false);
       return;
     }
     setReady(false);
@@ -62,6 +82,12 @@ export function VerticalEpisodeAdGate({
   }, [visible, shouldShow, servedAd, isPlacementEnabled]);
 
   useEffect(() => {
+    return () => {
+      if (postEndTimerRef.current) clearTimeout(postEndTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!ad) return;
     void trackAdImpression(
       buildAdAttribution({
@@ -78,13 +104,13 @@ export function VerticalEpisodeAdGate({
   useEffect(() => {
     if (!visible || !ad) return;
     if (ready && countdown <= 0) {
-      onCompleteRef.current();
+      finish();
       return;
     }
     if (!ready || countdown <= 0) return;
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
-  }, [visible, ad, ready, countdown]);
+  }, [visible, ad, ready, countdown, finish]);
 
   useEffect(() => {
     if (!visible || ad === undefined) return;
@@ -110,34 +136,26 @@ export function VerticalEpisodeAdGate({
     void Linking.openURL(ad.clickThroughUrl);
   };
 
-  if (!ready) {
-    return (
-      <View style={styles.preload} pointerEvents="none">
-        <AdMedia
-          mediaUrl={mediaUrl}
-          mediaType={ad.mediaType}
-          style={styles.media}
-          contentFit="cover"
-          onReady={() => setReady(true)}
-          onError={() => onCompleteRef.current()}
-        />
-      </View>
-    );
-  }
+  const canSkip = ready && countdown <= 0;
 
   return (
-    <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={() => countdown <= 0 && onComplete()}>
+    <Modal
+      visible={visible}
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => canSkip && finish()}
+    >
       <View style={styles.screen}>
         <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-          <Pressable onPress={openAd}>
-            <Text style={styles.sponsor} numberOfLines={1}>Sponsored · {ad.title}</Text>
+          <Pressable onPress={openAd} style={styles.sponsorPress}>
+            <Text style={styles.sponsor}>Sponsored</Text>
           </Pressable>
-          {ready && countdown <= 0 ? (
-            <Pressable style={styles.continueBtn} onPress={onComplete}>
-              <Text style={styles.continueText}>Continue</Text>
+          {canSkip ? (
+            <Pressable style={styles.skipBtn} onPress={finish}>
+              <Text style={styles.skipText}>Skip Ad</Text>
             </Pressable>
           ) : ready ? (
-            <Text style={styles.countdown}>Continue in {countdown}s</Text>
+            <Text style={styles.countdown}>Skip in {countdown}s</Text>
           ) : (
             <Text style={styles.countdown}>Loading…</Text>
           )}
@@ -148,7 +166,8 @@ export function VerticalEpisodeAdGate({
           style={styles.media}
           contentFit="cover"
           onReady={() => setReady(true)}
-          onError={() => onCompleteRef.current()}
+          onError={finish}
+          onEnded={schedulePostEndSkip}
         />
       </View>
     </Modal>
@@ -156,7 +175,6 @@ export function VerticalEpisodeAdGate({
 }
 
 const styles = StyleSheet.create({
-  preload: { position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' },
   screen: { flex: 1, backgroundColor: '#000' },
   topBar: {
     flexDirection: 'row',
@@ -166,14 +184,15 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     gap: 12,
   },
-  sponsor: { flex: 1, color: 'rgba(255,255,255,0.75)', fontSize: 12, textDecorationLine: 'underline' },
-  continueBtn: {
+  sponsorPress: { flexShrink: 0 },
+  sponsor: { color: 'rgba(255,255,255,0.75)', fontSize: 12, textDecorationLine: 'underline' },
+  skipBtn: {
     backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: radius.full,
   },
-  continueText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  skipText: { color: '#fff', fontWeight: '800', fontSize: 13 },
   countdown: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
   media: { flex: 1, width: '100%' },
 });

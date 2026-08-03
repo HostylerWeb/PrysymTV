@@ -14,6 +14,8 @@ import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 import { useAuth } from "@/contexts/auth-context"
 
+const POST_END_SKIP_MS = 3000
+
 type VerticalEpisodeAdGateProps = {
   creatorId?: string
   /** When provided, skips the serve request (parent already peeked). */
@@ -31,14 +33,27 @@ export function VerticalEpisodeAdGate({
   const { user } = useAuth()
   const { isPlacementEnabled, platformCreatorId } = usePublicAdsConfig()
   const onCompleteRef = useRef(onComplete)
-  onCompleteRef.current = onComplete
   const finishedRef = useRef(false)
+  const postEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  onCompleteRef.current = onComplete
 
   const complete = useCallback(() => {
     if (finishedRef.current) return
     finishedRef.current = true
+    if (postEndTimerRef.current) {
+      clearTimeout(postEndTimerRef.current)
+      postEndTimerRef.current = null
+    }
     onCompleteRef.current()
   }, [])
+
+  const schedulePostEndSkip = useCallback(() => {
+    if (postEndTimerRef.current) clearTimeout(postEndTimerRef.current)
+    postEndTimerRef.current = setTimeout(() => {
+      postEndTimerRef.current = null
+      complete()
+    }, POST_END_SKIP_MS)
+  }, [complete])
 
   const [ad, setAd] = useState<ServedAd | null | undefined>(
     servedAd !== undefined
@@ -56,6 +71,12 @@ export function VerticalEpisodeAdGate({
     finishedRef.current = false
     setMediaReady(false)
   }, [servedAd?.id])
+
+  useEffect(() => {
+    return () => {
+      if (postEndTimerRef.current) clearTimeout(postEndTimerRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (servedAd !== undefined) {
@@ -115,6 +136,8 @@ export function VerticalEpisodeAdGate({
     setCountdown(ad.skipAfterSeconds || 5)
   }
 
+  const canSkip = mediaReady && countdown <= 0
+
   return (
     <div className="fixed inset-0 z-[100] bg-black flex flex-col max-w-lg mx-auto">
       <div className="flex items-center justify-between px-4 py-3">
@@ -126,20 +149,20 @@ export function VerticalEpisodeAdGate({
             e.preventDefault()
             openAdDestination(ad.clickThroughUrl, attr)
           }}
-          className="text-xs text-white/70 hover:text-white underline truncate max-w-[70%]"
+          className="text-xs text-white/70 hover:text-white underline shrink-0"
         >
-          Sponsored · {ad.title}
+          Sponsored
         </a>
-        {mediaReady && countdown <= 0 ? (
+        {canSkip ? (
           <button
             type="button"
             onClick={complete}
             className="text-sm font-bold text-white bg-white/20 px-4 py-1.5 rounded-full"
           >
-            Continue
+            Skip Ad
           </button>
         ) : mediaReady ? (
-          <span className="text-sm text-white/70">Continue in {countdown}s</span>
+          <span className="text-sm text-white/70">Skip in {countdown}s</span>
         ) : (
           <span className="text-sm text-white/50">Loading…</span>
         )}
@@ -150,6 +173,7 @@ export function VerticalEpisodeAdGate({
         className="flex-1 w-full object-cover"
         onReady={onMediaReady}
         onError={() => complete()}
+        onEnded={schedulePostEndSkip}
       />
     </div>
   )

@@ -267,7 +267,7 @@ export function HlsVideoPlayer({
         loop={loop}
       />
       {showBuiltInQuality ? (
-        <div className="absolute bottom-12 right-3 z-20 pointer-events-auto">
+        <div className="absolute bottom-2 right-2 z-20 pointer-events-auto flex items-center">
           <VideoQualityMenu control={qualityControl} variant="overlay" />
         </div>
       ) : null}

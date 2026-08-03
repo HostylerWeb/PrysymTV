@@ -3,6 +3,9 @@ import { StyleSheet, type ImageStyle, type StyleProp } from 'react-native';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView, type VideoContentFit } from 'expo-video';
 
+const AD_MEDIA_TIMEOUT_MS = 2500;
+const MIN_PLAY_SECONDS = 0.15;
+
 type Props = {
   mediaUrl: string;
   mediaType: 'image' | 'video';
@@ -24,20 +27,65 @@ function AdVideoMedia({
   const player = useVideoPlayer(mediaUrl, (instance) => {
     instance.loop = false;
     instance.muted = true;
+    instance.timeUpdateEventInterval = 0.25;
     instance.play();
   });
 
   useEffect(() => {
+    let finished = false;
+    let readySignaled = false;
+
+    const fail = () => {
+      if (finished) return;
+      finished = true;
+      onError();
+    };
+
+    const signalReady = () => {
+      if (finished || readySignaled) return;
+      readySignaled = true;
+      finished = true;
+      clearTimeout(timeout);
+      onReady();
+    };
+
+    const timeout = setTimeout(fail, AD_MEDIA_TIMEOUT_MS);
+
     const statusSub = player.addListener('statusChange', ({ status, error }) => {
-      if (status === 'readyToPlay') onReady();
-      if (status === 'error') onError();
-      if (error) onError();
+      if (status === 'error' || error) {
+        clearTimeout(timeout);
+        fail();
+        return;
+      }
+      if (status === 'readyToPlay') {
+        void player.play();
+      }
     });
+
+    const playingSub = player.addListener('playingChange', ({ isPlaying }) => {
+      if (isPlaying && player.currentTime >= MIN_PLAY_SECONDS) {
+        signalReady();
+      }
+    });
+
+    const timeSub = player.addListener('timeUpdate', ({ currentTime }) => {
+      if (player.playing && currentTime >= MIN_PLAY_SECONDS) {
+        signalReady();
+      }
+    });
+
     const endSub = player.addListener('playToEnd', () => {
       onEnded?.();
     });
+
+    void player.play();
+
     return () => {
+      finished = true;
+      clearTimeout(timeout);
       statusSub.remove();
+      playingSub.remove();
+      timeSub.remove();
       endSub.remove();
     };
   }, [player, onReady, onError, onEnded]);
@@ -61,6 +109,21 @@ export function AdMedia({
   onError,
   onEnded,
 }: Props) {
+  useEffect(() => {
+    if (mediaType !== 'image') return;
+    let finished = false;
+    const fail = () => {
+      if (finished) return;
+      finished = true;
+      onError();
+    };
+    const timeout = setTimeout(fail, AD_MEDIA_TIMEOUT_MS);
+    return () => {
+      finished = true;
+      clearTimeout(timeout);
+    };
+  }, [mediaType, mediaUrl, onError]);
+
   if (mediaType === 'video') {
     return (
       <AdVideoMedia
