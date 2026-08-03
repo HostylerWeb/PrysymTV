@@ -15,6 +15,7 @@ function isPlaceholderOAuthId(id: string): boolean {
     value.includes('your-web-client-id') ||
     value.includes('your-facebook-app-id') ||
     value.includes('your-apple') ||
+    value === 'com.prysym.web' ||
     value.includes('placeholder') ||
     value.includes('example.apps.googleusercontent.com')
   );
@@ -44,7 +45,9 @@ export function buildPublicOAuthConfig(
 ): PublicOAuthConfig {
   const googleIds = parseCommaList(config.get<string>('GOOGLE_CLIENT_ID'));
   const appleIds = parseCommaList(config.get<string>('APPLE_CLIENT_ID'));
-  const facebookAppId = config.get<string>('FACEBOOK_APP_ID')?.trim() || null;
+  const facebookRaw = config.get<string>('FACEBOOK_APP_ID')?.trim() || null;
+  const facebookAppId =
+    facebookRaw && !isPlaceholderOAuthId(facebookRaw) ? facebookRaw : null;
 
   return {
     google: {
