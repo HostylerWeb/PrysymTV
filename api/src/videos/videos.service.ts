@@ -20,6 +20,7 @@ import {
   StreamStatus,
   VideoType,
 } from '@prisma/client';
+import { RedisCacheService } from '../common/cache/redis-cache.service';
 import {
   enrichCreatorFollowForViewer,
   enrichVideoCardsForViewer,
@@ -56,6 +57,7 @@ export class VideosService implements OnModuleInit {
     private readonly streams: StreamsService,
     private readonly playlists: PlaylistsService,
     private readonly playback: PlaybackService,
+    private readonly cache: RedisCacheService,
     @InjectQueue(VIDEO_PROCESSING_QUEUE) private readonly videoQueue: Queue,
   ) {}
 
@@ -858,11 +860,6 @@ export class VideosService implements OnModuleInit {
       meta: { page, limit, total: 0 },
     };
     const emptyLive = { items: [] as Array<Record<string, unknown>> };
-
-    if (mode === 'live' || mode === 'all') {
-      await this.streams.syncStreamsFromIngest();
-    }
-
     if (mode === 'live') {
       const streams = await this.prisma.stream.findMany({
         where: streamWhere,
@@ -1007,11 +1004,19 @@ export class VideosService implements OnModuleInit {
     videoId: string,
     userId?: string,
     countryCode?: string,
+    viewerKey?: string,
   ) {
     const video = await this.prisma.video.findUnique({ where: { id: videoId } });
     if (!video || video.status !== ContentStatus.ready) {
       throw new NotFoundException('Video not found');
     }
+
+    const dedupeKey = `view:dedupe:${videoId}:${userId ?? viewerKey ?? 'anon'}`;
+    const isNewView = await this.cache.setIfAbsent(dedupeKey, 3600);
+    if (!isNewView) {
+      return { success: true, viewsCount: video.viewsCount, deduped: true };
+    }
+
     await this.prisma.video.update({
       where: { id: videoId },
       data: { viewsCount: { increment: 1 } },
@@ -1022,7 +1027,7 @@ export class VideosService implements OnModuleInit {
       userId,
       countryCode,
     });
-    return { success: true, viewsCount: video.viewsCount + 1 };
+    return { success: true, viewsCount: video.viewsCount + 1, deduped: false };
   }
 
   async toggleLike(userId: string, videoId: string) {

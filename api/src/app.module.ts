@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
+import { RedisCacheModule } from './common/cache/redis-cache.module';
 import { validateEnv } from './config/env.validation';
 import { MailModule } from './mail/mail.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -71,6 +72,7 @@ import { GafModule } from './gaf/gaf.module';
       },
     }),
     StorageModule,
+    RedisCacheModule,
     RevenueModule,
     QueueModule,
     ThrottlerModule.forRootAsync({

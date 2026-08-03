@@ -7,14 +7,25 @@ import { OAuthConfigProvider } from '@/contexts/oauth-config-context'
 import { ThemeProvider } from '@/components/theme-provider'
 import { WebPushRegistrar } from '@/components/web-push-registrar'
 import { Toaster } from '@/components/ui/sonner'
+import { QueryProvider } from '@/providers/query-provider'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const geistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 export const metadata: Metadata = {
   title: 'Prysym TV - Movies, Live & Videos',
   description: 'Your ultimate streaming destination for movies, live streams, and videos',
+  openGraph: {
+    title: 'Prysym TV - Movies, Live & Videos',
+    description: 'Your ultimate streaming destination for movies, live streams, and videos',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Prysym TV - Movies, Live & Videos',
+    description: 'Your ultimate streaming destination for movies, live streams, and videos',
+  },
   icons: {
     icon: [
       {
@@ -33,18 +44,20 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="font-sans antialiased" suppressHydrationWarning>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="prysym-theme">
-          <OAuthConfigProvider>
-            <AuthProvider>
-              <ConfirmProvider>
-                <WebPushRegistrar />
-                {children}
-                <Toaster />
-              </ConfirmProvider>
-            </AuthProvider>
-          </OAuthConfigProvider>
-        </ThemeProvider>
+      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`} suppressHydrationWarning>
+        <QueryProvider>
+          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="prysym-theme">
+            <OAuthConfigProvider>
+              <AuthProvider>
+                <ConfirmProvider>
+                  <WebPushRegistrar />
+                  {children}
+                  <Toaster />
+                </ConfirmProvider>
+              </AuthProvider>
+            </OAuthConfigProvider>
+          </ThemeProvider>
+        </QueryProvider>
         {process.env.VERCEL === "1" && <Analytics />}
       </body>
     </html>

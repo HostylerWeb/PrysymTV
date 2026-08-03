@@ -3,15 +3,11 @@
 import {
   createContext,
   useContext,
-  useEffect,
   useMemo,
-  useState,
   type ReactNode,
 } from "react";
-import {
-  fetchPublicConfig,
-  type PublicOAuthConfig,
-} from "@/lib/api/config";
+import type { PublicOAuthConfig } from "@/lib/api/config";
+import { selectPublicAuth, usePublicConfig } from "@/lib/hooks/use-public-config";
 
 type OAuthConfigContextValue = {
   auth: PublicOAuthConfig | null;
@@ -36,55 +32,34 @@ const envAppleClientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID?.trim() || null
 const envFacebookAppId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID?.trim() || null;
 
 export function OAuthConfigProvider({ children }: { children: ReactNode }) {
-  const [auth, setAuth] = useState<PublicOAuthConfig | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchPublicConfig()
-      .then((cfg) => {
-        if (!cancelled) setAuth(cfg.auth);
-      })
-      .catch(() => {
-        /* fall back to env below */
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { data, isLoading } = usePublicConfig();
+  const auth = data ? selectPublicAuth(data) : null;
 
   const value = useMemo<OAuthConfigContextValue>(() => {
     const googleWebClientId =
-      auth?.google.webClientId ?? envGoogleClientId;
+      auth?.google.webClientId?.trim() || envGoogleClientId;
     const appleWebClientId =
-      auth?.apple.webClientId ?? envAppleClientId;
-    const facebookAppId =
-      auth?.facebook.appId ?? envFacebookAppId;
+      auth?.apple.webClientId?.trim() || envAppleClientId;
+    const facebookAppId = auth?.facebook.appId?.trim() || envFacebookAppId;
+
     const isOAuthAvailable = Boolean(
-      googleWebClientId ||
-        appleWebClientId ||
-        facebookAppId ||
-        auth?.google.enabled ||
-        auth?.apple.enabled ||
-        auth?.facebook.enabled,
+      (auth?.google.enabled && googleWebClientId) ||
+        (auth?.apple.enabled && appleWebClientId) ||
+        (auth?.facebook.enabled && facebookAppId),
     );
+
     return {
       auth,
-      loading,
+      loading: isLoading,
       googleWebClientId,
       appleWebClientId,
       facebookAppId,
       isOAuthAvailable,
     };
-  }, [auth, loading]);
+  }, [auth, isLoading]);
 
   return (
-    <OAuthConfigContext.Provider value={value}>
-      {children}
-    </OAuthConfigContext.Provider>
+    <OAuthConfigContext.Provider value={value}>{children}</OAuthConfigContext.Provider>
   );
 }
 

@@ -136,7 +136,10 @@ export default function LiveWatchPage({ params }: { params: Promise<{ id: string
     }
 
     void loadStream()
-    const poll = setInterval(() => void loadStream(), 3_000)
+    const poll = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return
+      void loadStream()
+    }, 3_000)
 
     void fetchGiftCatalog().then((items) => {
       if (!cancelled && items.length) {

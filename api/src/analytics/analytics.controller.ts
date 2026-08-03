@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Headers, Post, Req, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Request } from 'express';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -15,6 +16,7 @@ export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 
   @Post('track')
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @UseGuards(OptionalJwtAuthGuard)
   track(
     @Req() req: Request & { user?: AuthUserPayload | null },

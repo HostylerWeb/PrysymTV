@@ -11,6 +11,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
@@ -163,13 +164,19 @@ export class VideosController {
   }
 
   @Post(':id/view')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @UseGuards(OptionalJwtAuthGuard)
   recordView(
     @Param('id') id: string,
     @Req() req: Request & { user?: AuthUserPayload | null },
     @Headers('x-country-code') countryCode?: string,
   ) {
-    return this.videos.recordView(id, req.user?.id, countryCode);
+    const viewerKey =
+      req.ip ||
+      (typeof req.headers['x-forwarded-for'] === 'string'
+        ? req.headers['x-forwarded-for'].split(',')[0]?.trim()
+        : undefined);
+    return this.videos.recordView(id, req.user?.id, countryCode, viewerKey);
   }
 
   @Get(':id')

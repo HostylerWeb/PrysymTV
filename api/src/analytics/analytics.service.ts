@@ -57,15 +57,24 @@ export class AnalyticsService {
       })),
     });
 
-    for (const e of dto.events) {
-      if (e.eventType === 'share' && e.targetId) {
-        await this.prisma.video
-          .update({
-            where: { id: e.targetId },
-            data: { sharesCount: { increment: 1 } },
-          })
-          .catch(() => {});
-      }
+    const shareTargetIds = [
+      ...new Set(
+        dto.events
+          .filter((e) => e.eventType === 'share' && e.targetId)
+          .map((e) => e.targetId as string),
+      ),
+    ];
+    if (shareTargetIds.length > 0) {
+      await Promise.all(
+        shareTargetIds.map((targetId) =>
+          this.prisma.video
+            .update({
+              where: { id: targetId },
+              data: { sharesCount: { increment: 1 } },
+            })
+            .catch(() => undefined),
+        ),
+      );
     }
 
     return { success: true, recorded: dto.events.length };

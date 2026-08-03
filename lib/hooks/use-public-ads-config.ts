@@ -1,40 +1,28 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { fetchPublicConfig, type PublicAdsConfig } from "@/lib/api/config";
+import { useCallback } from "react";
 import type { AdPlacement } from "@/lib/api/ads";
+import type { PublicAdsConfig } from "@/lib/api/config";
+import { selectPublicAds, usePublicConfig } from "@/lib/hooks/use-public-config";
+
+const FALLBACK_ADS: PublicAdsConfig = {
+  shortsInterstitialEveryNSwipes: 5,
+  shortsInterstitialEnabled: true,
+  shortsSkipSeconds: 5,
+  moviePrerollSkipSeconds: 15,
+  impressionRevenueCpmUsd: 0,
+  platformCreatorId: null,
+  placements: {
+    home_banner: true,
+    shorts_interstitial: true,
+    movie_preroll: true,
+    vertical_episode: true,
+  },
+};
 
 export function usePublicAdsConfig() {
-  const [config, setConfig] = useState<PublicAdsConfig | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchPublicConfig()
-      .then((res) => {
-        if (!cancelled) setConfig(res.ads);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setConfig({
-            shortsInterstitialEveryNSwipes: 5,
-            shortsInterstitialEnabled: true,
-            shortsSkipSeconds: 5,
-            moviePrerollSkipSeconds: 15,
-            impressionRevenueCpmUsd: 0,
-            platformCreatorId: null,
-            placements: {
-              home_banner: true,
-              shorts_interstitial: true,
-              movie_preroll: true,
-              vertical_episode: true,
-            },
-          });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { data, isLoading } = usePublicConfig();
+  const config = data ? selectPublicAds(data) : null;
 
   const isPlacementEnabled = useCallback(
     (placement: AdPlacement) => config?.placements[placement] ?? true,
@@ -42,8 +30,8 @@ export function usePublicAdsConfig() {
   );
 
   return {
-    config,
-    loading: config === null,
+    config: config ?? FALLBACK_ADS,
+    loading: isLoading && !config,
     isPlacementEnabled,
     platformCreatorId: config?.platformCreatorId ?? undefined,
   };

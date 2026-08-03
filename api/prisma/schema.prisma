@@ -683,6 +683,8 @@ model Video {
 
   @@index([creatorId])
   @@index([type, status])
+  @@index([status, visibility, viewsCount])
+  @@index([status, visibility, createdAt])
   @@map("videos")
 }
 
@@ -769,6 +771,8 @@ model Stream {
   accesses             StreamAccess[]
 
   @@index([creatorId, status])
+  @@index([status, viewerCount])
+  @@index([temporaryStreamToken])
   @@map("streams")
 }
 
@@ -796,6 +800,7 @@ model Follow {
   following   User     @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@id([followerId, followingId])
+  @@index([followingId])
   @@map("follows")
 }
 
@@ -923,6 +928,7 @@ model WatchHistory {
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, contentType, contentId])
+  @@index([userId, updatedAt])
   @@map("watch_history")
 }
 
@@ -1085,6 +1091,7 @@ model AnalyticsEvent {
   createdAt DateTime           @default(now()) @map("created_at")
 
   @@index([eventType, createdAt])
+  @@index([eventType, createdAt, targetId])
   @@map("analytics_events")
 }
 

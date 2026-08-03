@@ -1,5 +1,6 @@
 "use client"
 
+import { CachedImage } from "@/components/cached-image"
 import { Heart, Play } from "lucide-react"
 import Link from "next/link"
 import { formatViewCount } from "@/lib/format-media"
@@ -19,10 +20,12 @@ export function MovieCard({ id, title, poster, year, rating, genre }: MovieCardP
       <div className="group flex-shrink-0 w-[140px] md:w-[160px] cursor-pointer">
         {/* Poster */}
         <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-muted mb-2">
-          <img
+          <CachedImage
             src={poster}
             alt={title}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            fill
+            sizes="160px"
+            className="transition-transform duration-300 group-hover:scale-105"
           />
           
           {/* Overlay on hover */}

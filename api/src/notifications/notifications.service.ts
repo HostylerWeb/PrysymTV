@@ -234,20 +234,62 @@ export class NotificationsService {
     });
     if (alerts.length === 0) return;
 
-    for (const alert of alerts) {
-      if (alert.userId === creatorId) continue;
-      if (!(await this.isPrefEnabled(alert.userId, 'live'))) continue;
-      if (await this.alreadySent(alert.userId, `live:${streamId}`)) continue;
+    const candidateIds = alerts
+      .map((alert) => alert.userId)
+      .filter((userId) => userId !== creatorId);
+    if (candidateIds.length === 0) return;
 
-      await this.persistNotification({
-        userId: alert.userId,
+    const [disabledPrefs, existing] = await Promise.all([
+      this.prisma.userNotificationPreference.findMany({
+        where: {
+          userId: { in: candidateIds },
+          type: 'live',
+          enabled: false,
+        },
+        select: { userId: true },
+      }),
+      this.prisma.notification.findMany({
+        where: {
+          userId: { in: candidateIds },
+          type: 'live',
+          referenceId: streamId,
+        },
+        select: { userId: true },
+      }),
+    ]);
+
+    const disabled = new Set(disabledPrefs.map((p) => p.userId));
+    const alreadySent = new Set(existing.map((n) => n.userId));
+    const recipients = candidateIds.filter(
+      (userId) => !disabled.has(userId) && !alreadySent.has(userId),
+    );
+    if (recipients.length === 0) return;
+
+    const message = `${creatorName} is live now`;
+    const metadata = { dedupeKey: `live:${streamId}` } as Prisma.InputJsonValue;
+
+    await this.prisma.notification.createMany({
+      data: recipients.map((userId) => ({
+        userId,
         type: 'live',
         actorId: creatorId,
         referenceId: streamId,
-        message: `${creatorName} is live now`,
-        metadata: { dedupeKey: `live:${streamId}` },
-      });
-    }
+        message,
+        metadata,
+      })),
+    });
+
+    const created = await this.prisma.notification.findMany({
+      where: {
+        userId: { in: recipients },
+        type: 'live',
+        referenceId: streamId,
+      },
+      include: {
+        actor: { select: { username: true, displayName: true } },
+      },
+    });
+    await Promise.all(created.map((n) => this.push.sendForNotification(n)));
   }
 
   async notifyFollowersOfUpload(
@@ -470,21 +512,61 @@ export class NotificationsService {
     });
     if (followers.length === 0) return;
 
-    for (const follower of followers) {
-      if (follower.followerId === params.creatorId) continue;
-      if (!(await this.isPrefEnabled(follower.followerId, 'upload'))) continue;
-      if (await this.alreadySent(follower.followerId, params.dedupeKey)) {
-        continue;
-      }
+    const candidateIds = followers
+      .map((follower) => follower.followerId)
+      .filter((followerId) => followerId !== params.creatorId);
+    if (candidateIds.length === 0) return;
 
-      await this.persistNotification({
-        userId: follower.followerId,
+    const [disabledPrefs, existing] = await Promise.all([
+      this.prisma.userNotificationPreference.findMany({
+        where: {
+          userId: { in: candidateIds },
+          type: 'upload',
+          enabled: false,
+        },
+        select: { userId: true },
+      }),
+      this.prisma.notification.findMany({
+        where: {
+          userId: { in: candidateIds },
+          type: 'upload',
+          referenceId: params.referenceId,
+        },
+        select: { userId: true },
+      }),
+    ]);
+
+    const disabled = new Set(disabledPrefs.map((p) => p.userId));
+    const alreadySent = new Set(existing.map((n) => n.userId));
+    const recipients = candidateIds.filter(
+      (userId) => !disabled.has(userId) && !alreadySent.has(userId),
+    );
+    if (recipients.length === 0) return;
+
+    const message = `${name} posted "${params.title}"`;
+    const metadata = params.metadata as Prisma.InputJsonValue;
+
+    await this.prisma.notification.createMany({
+      data: recipients.map((userId) => ({
+        userId,
         type: 'upload',
         actorId: params.creatorId,
         referenceId: params.referenceId,
-        message: `${name} posted "${params.title}"`,
-        metadata: params.metadata as Prisma.InputJsonValue,
-      });
-    }
+        message,
+        metadata,
+      })),
+    });
+
+    const created = await this.prisma.notification.findMany({
+      where: {
+        userId: { in: recipients },
+        type: 'upload',
+        referenceId: params.referenceId,
+      },
+      include: {
+        actor: { select: { username: true, displayName: true } },
+      },
+    });
+    await Promise.all(created.map((n) => this.push.sendForNotification(n)));
   }
 }

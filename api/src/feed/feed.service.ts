@@ -1,9 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { AnalyticsEventType, ContentStatus, StreamStatus, VideoType } from '@prisma/client';
+import { ContentStatus, StreamStatus, VideoType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { RedisCacheService } from '../common/cache/redis-cache.service';
+import { VIDEO_CARD_SELECT } from '../common/mappers/content.mapper';
+import {
+  clampLimit,
+  clampPage,
+  paginationSkip,
+} from '../common/utils/pagination.util';
+import { PlaybackService } from '../playback/playback.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StreamsService } from '../streams/streams.service';
-import { VIDEO_CARD_SELECT } from '../common/mappers/content.mapper';
-import { PlaybackService } from '../playback/playback.service';
+
+const HOME_FEED_CACHE_TTL_SECONDS = 45;
 
 @Injectable()
 export class FeedService {
@@ -11,11 +20,22 @@ export class FeedService {
     private readonly prisma: PrismaService,
     private readonly streams: StreamsService,
     private readonly playback: PlaybackService,
+    private readonly cache: RedisCacheService,
   ) {}
 
   async home(userId?: string) {
-    await this.streams.syncStreamsFromIngest();
+    const cacheKey = `feed:home:${userId ?? 'anon'}`;
+    const cached = await this.cache.getJson<Awaited<ReturnType<FeedService['buildHome']>>>(
+      cacheKey,
+    );
+    if (cached) return cached;
 
+    const payload = await this.buildHome(userId);
+    await this.cache.setJson(cacheKey, payload, HOME_FEED_CACHE_TTL_SECONDS);
+    return payload;
+  }
+
+  private async buildHome(userId?: string) {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     const [liveStreams, movies, newReleaseMovies, videos, newestMovie, topMovie, continueWatching] =
@@ -232,30 +252,44 @@ export class FeedService {
     return items.slice(0, limit);
   }
 
-  async trending(page = 1, limit = 20) {
-    const skip = (page - 1) * limit;
+  async trending(pageInput = 1, limitInput = 20) {
+    const page = clampPage(pageInput);
+    const limit = clampLimit(limitInput);
+    const skip = paginationSkip(page, limit);
     const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    const grouped = await this.prisma.analyticsEvent.groupBy({
-      by: ['targetId'],
-      where: {
-        eventType: AnalyticsEventType.view,
-        createdAt: { gte: since7d },
-        targetId: { not: null },
-      },
-      _count: { _all: true },
-      orderBy: { _count: { targetId: 'desc' } },
-    });
+    const [rankedRows, totalRow] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ target_id: string; cnt: bigint }>>(Prisma.sql`
+        SELECT target_id, COUNT(*)::bigint AS cnt
+        FROM analytics_events
+        WHERE event_type = 'view'
+          AND created_at >= ${since7d}
+          AND target_id IS NOT NULL
+        GROUP BY target_id
+        ORDER BY cnt DESC
+        OFFSET ${skip}
+        LIMIT ${limit}
+      `),
+      this.prisma.$queryRaw<Array<{ total: bigint }>>(Prisma.sql`
+        SELECT COUNT(*)::bigint AS total
+        FROM (
+          SELECT target_id
+          FROM analytics_events
+          WHERE event_type = 'view'
+            AND created_at >= ${since7d}
+            AND target_id IS NOT NULL
+          GROUP BY target_id
+        ) ranked
+      `),
+    ]);
 
-    const rankedIds = grouped
-      .map((row) => row.targetId)
-      .filter((id): id is string => !!id);
+    const rankedIds = rankedRows.map((row) => row.target_id).filter(Boolean);
+    const rankedTotal = Number(totalRow[0]?.total ?? 0);
 
     if (rankedIds.length > 0) {
-      const pageIds = rankedIds.slice(skip, skip + limit);
       const videos = await this.prisma.video.findMany({
         where: {
-          id: { in: pageIds },
+          id: { in: rankedIds },
           status: ContentStatus.ready,
           visibility: 'public',
         },
@@ -263,14 +297,14 @@ export class FeedService {
       });
       const byId = new Map(videos.map((video) => [video.id, video]));
       const items = await this.playback.mapVideoCardsWithPlayback(
-        pageIds
+        rankedIds
           .map((id) => byId.get(id))
           .filter((video): video is NonNullable<typeof video> => !!video),
       );
 
       return {
         items,
-        meta: { page, limit, total: rankedIds.length },
+        meta: { page, limit, total: rankedTotal },
       };
     }
 

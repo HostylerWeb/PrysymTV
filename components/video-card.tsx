@@ -1,5 +1,6 @@
 "use client"
 
+import { CachedImage } from "@/components/cached-image"
 import { Coins, Play } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -68,10 +69,12 @@ export function VideoCard({
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
           ) : (
-            <img
+            <CachedImage
               src={thumbnail}
               alt={title}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              fill
+              sizes="(max-width: 768px) 280px, 320px"
+              className="transition-transform duration-300 group-hover:scale-105"
             />
           )}
           
@@ -119,9 +122,11 @@ export function VideoCard({
         <div className="flex gap-3">
           {(type === "video" || type === "live") && (
             <div className="w-9 h-9 rounded-full bg-muted flex-shrink-0 overflow-hidden">
-              <img
+              <CachedImage
                 src={channelAvatar ?? userAvatarUrl(null, channel ?? "creator")}
                 alt={channel ?? "Creator"}
+                width={36}
+                height={36}
                 className="w-full h-full object-cover"
               />
             </div>

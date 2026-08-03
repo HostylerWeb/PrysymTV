@@ -74,8 +74,6 @@ export class StreamsService {
   ) {}
 
   async listLive(viewerId?: string) {
-    await this.syncStreamsFromIngest();
-
     const items = await this.prisma.stream.findMany({
       where: { status: StreamStatus.live },
       orderBy: { viewerCount: 'desc' },

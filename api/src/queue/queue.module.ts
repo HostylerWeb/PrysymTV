@@ -4,7 +4,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { getVideoProcessingSettings } from '../config/storage-env';
 import { PrismaModule } from '../prisma/prisma.module';
 import { StorageModule } from '../storage/storage.module';
-import { VIDEO_PROCESSING_QUEUE } from './queue.constants';
+import { StreamsModule } from '../streams/streams.module';
+import { STREAM_SYNC_QUEUE, VIDEO_PROCESSING_QUEUE } from './queue.constants';
+import { StreamSyncProcessor } from './stream-sync.processor';
+import { StreamSyncScheduler } from './stream-sync.scheduler';
 import { VideoProcessingProcessor } from './video-processing.processor';
 
 @Module({
@@ -12,6 +15,7 @@ import { VideoProcessingProcessor } from './video-processing.processor';
     ConfigModule,
     PrismaModule,
     StorageModule,
+    StreamsModule,
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -35,8 +39,15 @@ import { VideoProcessingProcessor } from './video-processing.processor';
         };
       },
     }),
+    BullModule.registerQueue({
+      name: STREAM_SYNC_QUEUE,
+      defaultJobOptions: {
+        removeOnComplete: true,
+        removeOnFail: 50,
+      },
+    }),
   ],
-  providers: [VideoProcessingProcessor],
+  providers: [VideoProcessingProcessor, StreamSyncProcessor, StreamSyncScheduler],
   exports: [BullModule],
 })
 export class QueueModule {}

@@ -189,6 +189,11 @@ export class EnvironmentVariables {
   @IsString()
   MEDIAMTX_HLS_PUBLIC_URL?: string;
 
+  /** Shared secret for MediaMTX ready/done webhooks (header: x-mediamtx-webhook-secret). */
+  @IsOptional()
+  @IsString()
+  MEDIAMTX_WEBHOOK_SECRET?: string;
+
   /** Dev only: auto-approve streamer applications (`true` / `1`) */
   @IsOptional()
   @IsString()
@@ -260,6 +265,11 @@ function assertStrongSecrets(validated: EnvironmentVariables) {
         `${key} must be a unique random secret (≥32 chars), not a placeholder, in production`,
       );
     }
+  }
+  if (!validated.MEDIAMTX_WEBHOOK_SECRET?.trim()) {
+    throw new Error(
+      'MEDIAMTX_WEBHOOK_SECRET must be set in production to secure stream webhooks',
+    );
   }
 }
 

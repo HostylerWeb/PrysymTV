@@ -1539,19 +1539,21 @@ export class AdminService {
     const { start, end, label, buckets } = resolveAdminDateRange(query);
 
     const [
-      analyticsEvents,
+      dauRows,
       signups,
       revenueBatches,
       endedStreams,
       premiumSubscribers,
     ] = await Promise.all([
-      this.prisma.analyticsEvent.findMany({
-        where: {
-          createdAt: { gte: start, lte: end },
-          userId: { not: null },
-        },
-        select: { userId: true, createdAt: true },
-      }),
+      this.prisma.$queryRaw<Array<{ day: Date; dau: bigint }>>(Prisma.sql`
+        SELECT DATE(created_at) AS day, COUNT(DISTINCT user_id)::bigint AS dau
+        FROM analytics_events
+        WHERE created_at >= ${start}
+          AND created_at <= ${end}
+          AND user_id IS NOT NULL
+        GROUP BY DATE(created_at)
+        ORDER BY day
+      `),
       this.prisma.user.findMany({
         where: { createdAt: { gte: start, lte: end } },
         select: { createdAt: true },
@@ -1571,12 +1573,13 @@ export class AdminService {
 
     const topContent = await this.topContentInPeriod(start, 8, end);
 
-    const dauByDay = new Map<string, Set<string>>();
-    for (const b of buckets) dauByDay.set(b, new Set());
-    for (const e of analyticsEvents) {
-      if (!e.userId) continue;
-      const key = this.dateKey(e.createdAt);
-      dauByDay.get(key)?.add(e.userId);
+    const dauByDay = new Map<string, number>();
+    for (const b of buckets) dauByDay.set(b, 0);
+    for (const row of dauRows) {
+      const key = this.dateKey(row.day);
+      if (dauByDay.has(key)) {
+        dauByDay.set(key, Number(row.dau));
+      }
     }
 
     const signupsByDay = new Map(buckets.map((b) => [b, 0]));
@@ -1616,7 +1619,7 @@ export class AdminService {
       dateTo: buckets[buckets.length - 1],
       buckets,
       series: {
-        dau: buckets.map((b) => dauByDay.get(b)?.size ?? 0),
+        dau: buckets.map((b) => dauByDay.get(b) ?? 0),
         signups: buckets.map((b) => signupsByDay.get(b) ?? 0),
         revenueUsd: buckets.map((b) =>
           Math.round((revenueByDay.get(b) ?? 0) * 100) / 100,

@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { MediamtxWebhookGuard } from '../common/guards/mediamtx-webhook.guard';
 import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
@@ -58,12 +59,14 @@ export class StreamsController {
   }
 
   @Post('webhooks/ready')
+  @UseGuards(MediamtxWebhookGuard)
   @HttpCode(200)
   mediamtxReady(@Query('path') path: string) {
     return this.streams.mediamtxReady(path ?? '');
   }
 
   @Post('webhooks/done')
+  @UseGuards(MediamtxWebhookGuard)
   @HttpCode(200)
   mediamtxDone(@Query('path') path: string) {
     return this.streams.mediamtxDone(path ?? '');

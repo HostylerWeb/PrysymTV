@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsEnum,
   IsObject,
@@ -25,6 +26,7 @@ export class AnalyticsTrackItemDto {
 
 export class TrackEventsDto {
   @IsArray()
+  @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => AnalyticsTrackItemDto)
   events!: AnalyticsTrackItemDto[];
