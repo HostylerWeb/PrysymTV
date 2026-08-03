@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
-import { X } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   buildAdAttribution,
   fetchServedAd,
@@ -13,6 +12,12 @@ import { AdMediaDisplay } from "@/components/ad-media-display"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 import { useAuth } from "@/contexts/auth-context"
+import {
+  canSkipImageAd,
+  canSkipVideoAd,
+  POST_END_SKIP_MS,
+  videoAdSkipSecondsRemaining,
+} from "@/lib/ad-skip-timing"
 
 function isValidServedAd(ad: ServedAd | null | undefined): ad is ServedAd {
   return Boolean(ad?.mediaUrl?.trim())
@@ -25,6 +30,8 @@ interface AdPrerollProps {
   videoId?: string
   /** When provided, skips the serve request (parent already fetched). */
   servedAd?: ServedAd
+  /** `inline` fills the parent player frame (YouTube-style). `fullscreen` covers the viewport. */
+  variant?: "fullscreen" | "inline"
 }
 
 export function AdPreroll({
@@ -33,19 +40,33 @@ export function AdPreroll({
   creatorId,
   videoId,
   servedAd,
+  variant = "fullscreen",
 }: AdPrerollProps) {
   const showAds = useShouldShowAds()
   const { user } = useAuth()
   const { isPlacementEnabled, platformCreatorId } = usePublicAdsConfig()
   const onCompleteRef = useRef(onComplete)
-  onCompleteRef.current = onComplete
   const finishedRef = useRef(false)
+  const postEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  onCompleteRef.current = onComplete
 
   const complete = useCallback(() => {
     if (finishedRef.current) return
     finishedRef.current = true
+    if (postEndTimerRef.current) {
+      clearTimeout(postEndTimerRef.current)
+      postEndTimerRef.current = null
+    }
     onCompleteRef.current()
   }, [])
+
+  const schedulePostEndSkip = useCallback(() => {
+    if (postEndTimerRef.current) clearTimeout(postEndTimerRef.current)
+    postEndTimerRef.current = setTimeout(() => {
+      postEndTimerRef.current = null
+      complete()
+    }, POST_END_SKIP_MS)
+  }, [complete])
 
   const [ad, setAd] = useState<ServedAd | null | undefined>(
     servedAd !== undefined
@@ -55,15 +76,26 @@ export function AdPreroll({
       : undefined,
   )
   const [mediaReady, setMediaReady] = useState(false)
-  const [countdown, setCountdown] = useState(15)
-  const [canSkip, setCanSkip] = useState(skippable)
+  const [imageCountdown, setImageCountdown] = useState(5)
+  const [adCurrentTime, setAdCurrentTime] = useState(0)
+  const [adDuration, setAdDuration] = useState(0)
 
   const placementEnabled = isPlacementEnabled("movie_preroll")
+  const inline = variant === "inline"
+  const isVideoAd = ad?.mediaType === "video"
 
   useEffect(() => {
     finishedRef.current = false
     setMediaReady(false)
+    setAdCurrentTime(0)
+    setAdDuration(0)
   }, [servedAd?.id])
+
+  useEffect(() => {
+    return () => {
+      if (postEndTimerRef.current) clearTimeout(postEndTimerRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (servedAd !== undefined) {
@@ -100,23 +132,16 @@ export function AdPreroll({
   }, [ad, creatorId, platformCreatorId, videoId, user?.id])
 
   useEffect(() => {
-    if (!ad || !mediaReady) return
-    setCountdown(ad.skipAfterSeconds || 15)
-  }, [ad, mediaReady])
+    if (!ad || !mediaReady || isVideoAd) return
+    setImageCountdown(ad.skipAfterSeconds || 5)
+  }, [ad, mediaReady, isVideoAd])
 
   useEffect(() => {
-    if (!ad || !mediaReady) return
-    if (skippable) {
-      setCanSkip(true)
-      return
-    }
-    if (countdown <= 0) {
-      setCanSkip(true)
-      return
-    }
-    const t = setTimeout(() => setCountdown((c) => c - 1), 1000)
+    if (!ad || !mediaReady || isVideoAd || skippable) return
+    if (imageCountdown <= 0) return
+    const t = setTimeout(() => setImageCountdown((c) => c - 1), 1000)
     return () => clearTimeout(t)
-  }, [ad, mediaReady, countdown, skippable])
+  }, [ad, mediaReady, imageCountdown, skippable, isVideoAd])
 
   useEffect(() => {
     if (!ad) return
@@ -138,48 +163,67 @@ export function AdPreroll({
     viewerUserId: user?.id,
   })
 
-  const markReady = () => setMediaReady(true)
+  const canSkip = isVideoAd
+    ? canSkipVideoAd(mediaReady, adCurrentTime, adDuration, skippable)
+    : canSkipImageAd(mediaReady, imageCountdown) || skippable
+
+  const skipLabel = (() => {
+    if (!mediaReady) return "Loading…"
+    if (canSkip) return null
+    if (isVideoAd) {
+      if (adDuration <= 0) return "Loading…"
+      const remaining = videoAdSkipSecondsRemaining(adCurrentTime, adDuration)
+      return `Skip in ${remaining}s`
+    }
+    return `Skip in ${imageCountdown}s`
+  })()
+
+  const shellClass = inline
+    ? "absolute inset-0 z-50 flex flex-col bg-black"
+    : "fixed inset-0 z-50 bg-black flex items-center justify-center"
+
+  const mediaWrapClass = inline
+    ? "relative flex-1 min-h-0 w-full"
+    : "relative w-full max-w-5xl aspect-video"
 
   return (
-    <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
-      <div className="relative w-full max-w-5xl aspect-video">
+    <div className={shellClass}>
+      <div className="flex items-center justify-between px-4 py-3 shrink-0">
+        <button
+          type="button"
+          className="text-xs text-white/70 hover:text-white underline shrink-0"
+          onClick={() => openAdDestination(ad.clickThroughUrl, attr)}
+        >
+          Sponsored
+        </button>
+        {canSkip ? (
+          <button
+            type="button"
+            onClick={complete}
+            className="text-sm font-bold text-white bg-white/20 px-4 py-1.5 rounded-full"
+          >
+            Skip Ad
+          </button>
+        ) : skipLabel ? (
+          <span className="text-sm text-white/70">{skipLabel}</span>
+        ) : null}
+      </div>
+      <div className={mediaWrapClass}>
         <AdMediaDisplay
           mediaUrl={ad.mediaUrl}
           mediaType={ad.mediaType}
           alt={ad.title}
-          className="w-full h-full object-contain"
-          onReady={markReady}
+          className="w-full h-full object-contain bg-black"
+          onReady={() => setMediaReady(true)}
           onError={complete}
-          onEnded={complete}
+          onEnded={schedulePostEndSkip}
+          onTimeUpdate={(currentTime, duration) => {
+            setAdCurrentTime(currentTime)
+            if (Number.isFinite(duration) && duration > 0) {
+              setAdDuration(duration)
+            }
+          }}
         />
-        {mediaReady && canSkip && (
-          <button
-            type="button"
-            onClick={complete}
-            className="absolute top-4 right-4 bg-black/70 text-white px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2"
-          >
-            Skip <X className="w-4 h-4" />
-          </button>
-        )}
-        {mediaReady && !canSkip && (
-          <div className="absolute top-4 right-4 bg-black/70 text-white px-3 py-1 rounded text-sm">
-            Skip in {countdown}s
-          </div>
-        )}
-        {mediaReady && (
-          <a
-            href={ad.clickThroughUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="absolute bottom-4 left-4 text-white/80 text-sm underline"
-            onClick={(e) => {
-              e.preventDefault()
-              openAdDestination(ad.clickThroughUrl, attr)
-            }}
-          >
-            {ad.title}
-          </a>
-        )}
       </div>
     </div>
   )

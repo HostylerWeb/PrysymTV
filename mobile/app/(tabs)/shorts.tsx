@@ -226,6 +226,7 @@ export default function ShortsScreen() {
                     tapToToggle={false}
                     autoPlay={isActive}
                     paused={!isFocused || !isActive}
+                    onMutedChange={setMuted}
                   />
                 ) : null}
                 <LinearGradient
@@ -238,9 +239,6 @@ export default function ShortsScreen() {
                 <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
                   <Text style={styles.topTitle}>Shorts</Text>
                   <View style={styles.topActions}>
-                    <Pressable onPress={() => setMuted(!muted)} hitSlop={8}>
-                      <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={22} color={colors.onVideo} />
-                    </Pressable>
                     <Pressable onPress={() => requireAuth(() => trigger('short'))} hitSlop={8}>
                       <Ionicons name="add" size={24} color={colors.onVideo} />
                     </Pressable>

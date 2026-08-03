@@ -59,6 +59,7 @@ type Props = {
   /** Place corner controls at the top to avoid system nav bars on full-screen players. */
   controlsPlacement?: 'bottom' | 'top';
   controlsTopInset?: number;
+  onMutedChange?: (muted: boolean) => void;
 };
 
 function formatTime(seconds: number) {
@@ -71,6 +72,9 @@ function formatTime(seconds: number) {
 function PlayerOverlayControls({
   enableQualityMenu,
   enableFullscreen,
+  enableMute,
+  isMuted,
+  onToggleMute,
   isFullscreen,
   onToggleFullscreen,
   variants,
@@ -80,6 +84,9 @@ function PlayerOverlayControls({
 }: {
   enableQualityMenu: boolean;
   enableFullscreen: boolean;
+  enableMute?: boolean;
+  isMuted?: boolean;
+  onToggleMute?: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
   variants: HlsVariant[];
@@ -87,7 +94,7 @@ function PlayerOverlayControls({
   onQualitySelect: (variant: HlsVariant | null) => void;
   inline?: boolean;
 }) {
-  if (!enableQualityMenu && !enableFullscreen) return null;
+  if (!enableQualityMenu && !enableFullscreen && !enableMute) return null;
 
   return (
     <View style={[styles.controlsRow, inline && styles.controlsRowInline]} pointerEvents="box-none">
@@ -97,6 +104,24 @@ function PlayerOverlayControls({
           selectedUri={selectedVariantUri}
           onSelect={onQualitySelect}
         />
+      ) : null}
+      {enableMute ? (
+        <Pressable
+          style={styles.fullscreenBtn}
+          onPress={(e) => {
+            e.stopPropagation();
+            onToggleMute?.();
+          }}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={isMuted ? 'Unmute' : 'Mute'}
+        >
+          <Ionicons
+            name={isMuted ? 'volume-mute' : 'volume-high'}
+            size={18}
+            color={colors.onVideo}
+          />
+        </Pressable>
       ) : null}
       {enableFullscreen ? (
         <Pressable
@@ -144,6 +169,7 @@ export function HlsPlayer({
   controlsBottomInset,
   controlsPlacement = 'bottom',
   controlsTopInset,
+  onMutedChange,
 }: Props) {
   const insets = useSafeAreaInsets();
   const masterSource = useMemo(() => source, [source]);
@@ -159,6 +185,7 @@ export function HlsPlayer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isVolumeMuted, setIsVolumeMuted] = useState(muted);
   const wasPlayingRef = useRef(false);
   const chromeHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fullscreenOn = externalFullscreen ?? isFullscreen;
@@ -217,7 +244,15 @@ export function HlsPlayer({
 
   useEffect(() => {
     player.muted = muted;
+    setIsVolumeMuted(muted);
   }, [player, muted]);
+
+  const toggleVolumeMute = useCallback(() => {
+    const next = !player.muted;
+    player.muted = next;
+    setIsVolumeMuted(next);
+    onMutedChange?.(next);
+  }, [player, onMutedChange]);
 
   useEffect(() => {
     player.loop = loop;
@@ -445,6 +480,11 @@ export function HlsPlayer({
     !seekOnTap &&
     !enablePlayerChrome &&
     (!fullscreenOn || (fullscreenPresentation === 'inline' && !playing));
+  const showSeekAccessoryControls =
+    !nativeControls &&
+    seekOnTap &&
+    !enablePlayerChrome &&
+    (enableQualityMenu || enableFullscreen);
 
   const renderPlayerSurface = (fullscreen: boolean) => (
     <View
@@ -568,6 +608,26 @@ export function HlsPlayer({
           />
         </View>
       ) : null}
+      {showSeekAccessoryControls ? (
+        <View
+          style={[styles.seekAccessoryRow, { bottom: cornerBottom }]}
+          pointerEvents="box-none"
+        >
+          <PlayerOverlayControls
+            enableQualityMenu={enableQualityMenu}
+            enableFullscreen={enableFullscreen}
+            enableMute
+            isMuted={isVolumeMuted}
+            onToggleMute={toggleVolumeMute}
+            isFullscreen={fullscreenOn}
+            onToggleFullscreen={toggleFullscreen}
+            variants={variants}
+            selectedVariantUri={selectedVariantUri}
+            onQualitySelect={onQualitySelect}
+            inline
+          />
+        </View>
+      ) : null}
       {fullscreen ? (
         <Pressable
           style={[styles.fullscreenClose, { top: insets.top + 8 }]}
@@ -683,6 +743,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 12,
     zIndex: 5,
+  },
+  seekAccessoryRow: {
+    position: 'absolute',
+    right: 12,
+    zIndex: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: withAlpha('#000', 0.55),
   },
   controlsRow: {
     flexDirection: 'row',

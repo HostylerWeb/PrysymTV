@@ -9,10 +9,6 @@ import {
   Music2,
   MoreVertical,
   Plus,
-  Play,
-  Pause,
-  Volume2,
-  VolumeX,
   ChevronUp,
   ChevronDown,
   Gift,
@@ -172,12 +168,6 @@ function ShortVideo({
 }: ShortVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [isMuted, setIsMuted] = useState(false)
-  const [showControls, setShowControls] = useState(false)
-  const [scrubberOpen, setScrubberOpen] = useState(false)
-  const [currentTime, setCurrentTime] = useState(0)
-  const [duration, setDuration] = useState(0)
-  const wasPlayingRef = useRef(false)
   const [isBuffering, setIsBuffering] = useState(true)
 
   useEffect(() => {
@@ -207,11 +197,9 @@ function ShortVideo({
   useEffect(() => {
     if (videoRef.current) {
       if (isActive) {
-        videoRef.current.muted = isMuted
         videoRef.current.play().catch(() => {
           if (videoRef.current) {
             videoRef.current.muted = true
-            setIsMuted(true)
             void videoRef.current.play().catch(() => {})
           }
         })
@@ -222,41 +210,7 @@ function ShortVideo({
         setIsPlaying(false)
       }
     }
-  }, [isActive, isMuted])
-
-  const togglePlay = () => {
-    const el = videoRef.current
-    if (!el) return
-    if (!scrubberOpen) {
-      wasPlayingRef.current = isPlaying
-      el.pause()
-      setIsPlaying(false)
-      setScrubberOpen(true)
-      return
-    }
-    setScrubberOpen(false)
-    if (wasPlayingRef.current) {
-      void el.play()
-      setIsPlaying(true)
-    }
-  }
-
-  const seekToClientX = (clientX: number, track: HTMLDivElement) => {
-    const el = videoRef.current
-    if (!el || !duration) return
-    const rect = track.getBoundingClientRect()
-    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-    el.currentTime = ratio * duration
-    setCurrentTime(el.currentTime)
-  }
-
-  const toggleMute = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted
-      setIsMuted(!isMuted)
-    }
-  }
+  }, [isActive])
 
   const handleAction = (action: () => void) => {
     if (!isAuthenticated) {
@@ -284,89 +238,16 @@ function ShortVideo({
         poster={short.thumbnailUrl}
         className="w-full h-full object-contain"
         controls={false}
-        muted={isMuted}
+        showQualitySelector
         playsInline
         loop
         videoRef={videoRef}
-        onTimeUpdate={(t, d) => {
-          setCurrentTime(t)
-          setDuration(d)
-        }}
       />
       {isActive && isBuffering ? (
         <div className="absolute inset-0 z-[2] flex items-center justify-center pointer-events-none">
           <div className="w-12 h-12 rounded-full border-2 border-white/30 border-t-white animate-spin" />
         </div>
       ) : null}
-      <button type="button" className="absolute inset-0 z-[1]" onClick={togglePlay} aria-label="Show timeline" />
-
-      {scrubberOpen ? (
-        <div
-          className="absolute left-3 right-3 bottom-24 z-[25] pointer-events-auto"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center gap-2 text-white text-xs font-semibold mb-2">
-            <button
-              type="button"
-              className="p-1"
-              onClick={() => {
-                const el = videoRef.current
-                if (!el) return
-                if (isPlaying) {
-                  el.pause()
-                  setIsPlaying(false)
-                } else {
-                  void el.play()
-                  setIsPlaying(true)
-                }
-              }}
-            >
-              {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-            </button>
-            <span>
-              {Math.floor(currentTime / 60)}:{String(Math.floor(currentTime % 60)).padStart(2, "0")} /{" "}
-              {Math.floor(duration / 60)}:{String(Math.floor(duration % 60)).padStart(2, "0")}
-            </span>
-          </div>
-          <div
-            role="slider"
-            aria-valuemin={0}
-            aria-valuemax={duration || 0}
-            aria-valuenow={currentTime}
-            className="h-1 rounded-full bg-white/30 cursor-pointer"
-            onClick={(e) => seekToClientX(e.clientX, e.currentTarget)}
-            onPointerDown={(e) => {
-              const track = e.currentTarget
-              seekToClientX(e.clientX, track)
-              const move = (ev: PointerEvent) => seekToClientX(ev.clientX, track)
-              const up = () => {
-                window.removeEventListener("pointermove", move)
-                window.removeEventListener("pointerup", up)
-              }
-              window.addEventListener("pointermove", move)
-              window.addEventListener("pointerup", up)
-            }}
-          >
-            <div
-              className="h-full rounded-full bg-primary"
-              style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : "0%" }}
-            />
-          </div>
-        </div>
-      ) : null}
-
-      {/* Play/Pause Indicator */}
-      {showControls && !scrubberOpen && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-20 h-20 rounded-full bg-black/50 flex items-center justify-center animate-in fade-in zoom-in duration-200">
-            {isPlaying ? (
-              <Pause className="w-10 h-10 text-white fill-white" />
-            ) : (
-              <Play className="w-10 h-10 text-white fill-white ml-1" />
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Gradient Overlays */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60 pointer-events-none" />
@@ -389,18 +270,6 @@ function ShortVideo({
               <Plus className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </button>
           )}
-          <button
-            type="button"
-            onClick={toggleMute}
-            className="p-2 relative z-20"
-            aria-label={isMuted ? "Unmute" : "Mute"}
-          >
-            {isMuted ? (
-              <VolumeX className="w-5 h-5 md:w-6 md:h-6 text-white" />
-            ) : (
-              <Volume2 className="w-5 h-5 md:w-6 md:h-6 text-white" />
-            )}
-          </button>
           <button
             type="button"
             onClick={onReport}

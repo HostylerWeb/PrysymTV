@@ -47,14 +47,6 @@ export default function PodcastEpisodeScreen() {
   return (
     <View style={styles.root}>
       <Stack.Screen options={{ headerShown: false }} />
-      <TvAdOverlay
-        visible={adGate.showOverlay}
-        placement="movie_preroll"
-        videoId={data?.id}
-        creatorId={data?.creator?.id}
-        servedAd={adGate.servedAd}
-        onComplete={adGate.completeAd}
-      />
       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -64,7 +56,18 @@ export default function PodcastEpisodeScreen() {
           <Text style={styles.error}>Could not load episode.</Text>
         </View>
       ) : adGate.canPlay && playRequested && isVideo ? (
-        <PlayerShell title={data.title} playbackUrl={data.playbackSource} />
+        <View style={styles.playerSlot}>
+          <TvAdOverlay
+            inline
+            visible={adGate.showOverlay}
+            placement="movie_preroll"
+            videoId={data?.id}
+            creatorId={data?.creator?.id}
+            servedAd={adGate.servedAd}
+            onComplete={adGate.completeAd}
+          />
+          <PlayerShell title={data.title} playbackUrl={data.playbackSource} />
+        </View>
       ) : adGate.canPlay && playRequested && !isVideo && data.playbackSource ? (
         <View style={styles.audioWrap}>
           <AudioPlayer
@@ -97,6 +100,7 @@ export default function PodcastEpisodeScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
+  playerSlot: { flex: 1, position: 'relative' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   audioWrap: { flex: 1, justifyContent: 'center', padding: spacing.xl },
   content: { padding: spacing.xl, alignItems: 'center' },

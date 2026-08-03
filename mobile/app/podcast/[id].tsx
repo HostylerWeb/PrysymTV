@@ -124,6 +124,27 @@ export default function PodcastEpisodeScreen() {
               enableFullscreen
               enablePlayerChrome
             />
+          ) : prerollOpen ? (
+            <View style={styles.prerollSlot}>
+              <PlayerShell
+                title={ep.title}
+                thumbnailUrl={ep.coverUrl}
+                playbackUrl={ep.playbackSource}
+                subtitle={ep.show?.title ?? 'Podcast'}
+                showCast
+                posterOnly
+              />
+              <AdPreroll
+                inline
+                visible={prerollOpen}
+                onComplete={() => {
+                  setPrerollOpen(false);
+                  setStarted(true);
+                }}
+                videoId={ep.id}
+                creatorId={ep.creator?.id}
+              />
+            </View>
           ) : (
             <View style={styles.audio}>
               <Text style={styles.audioTitle}>{ep.title}</Text>
@@ -186,12 +207,17 @@ export default function PodcastEpisodeScreen() {
           <IconBtn icon="flag-outline" label="Report" onPress={() => requireAuth(() => setReportOpen(true))} />
         </View>
       </ScrollView>
-      <AdPreroll
-        visible={prerollOpen}
-        onComplete={() => { setPrerollOpen(false); setStarted(true); }}
-        videoId={ep.id}
-        creatorId={ep.creator?.id}
-      />
+      {ep.mediaType !== 'video' ? (
+        <AdPreroll
+          visible={prerollOpen}
+          onComplete={() => {
+            setPrerollOpen(false);
+            setStarted(true);
+          }}
+          videoId={ep.id}
+          creatorId={ep.creator?.id}
+        />
+      ) : null}
       <ShareModal
         visible={shareOpen}
         onClose={() => setShareOpen(false)}
@@ -242,6 +268,7 @@ function IconBtn({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
+    prerollSlot: { position: 'relative', width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000' },
     center: { alignItems: 'center', justifyContent: 'center' },
     pad: { paddingHorizontal: 16 },
     backLink: { color: colors.primary, fontWeight: '600', marginBottom: 8 },

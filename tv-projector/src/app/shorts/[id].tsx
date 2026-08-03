@@ -58,30 +58,33 @@ export default function ShortWatchScreen() {
   return (
     <View style={styles.root}>
       <Stack.Screen options={{ headerShown: false, animation: 'none' }} />
-      <TvAdOverlay
-        visible={adGate.showOverlay}
-        placement="movie_preroll"
-        videoId={params.id}
-        creatorId={detail?.creator?.id}
-        servedAd={adGate.servedAd}
-        onComplete={adGate.completeAd}
-      />
       {canMountPlayer ? (
-        <View
-          style={[styles.playerSlot, !videoVisible ? styles.playerHidden : null]}
-          pointerEvents={videoVisible && !adGate.showOverlay ? 'auto' : 'none'}
-        >
-          <PlayerShell
-            title={title}
-            playbackUrl={playbackUrl!}
-            autoPlay={shouldPlay}
-            contentFit="cover"
-            onProgress={(seconds, duration) => {
-              setProgressSeconds(seconds);
-              if (duration > 0) setDurationSeconds(duration);
-              if (adGate.canPlay && seconds >= 0.15) setVideoVisible(true);
-            }}
+        <View style={styles.playerSlot}>
+          <TvAdOverlay
+            inline
+            visible={adGate.showOverlay}
+            placement="movie_preroll"
+            videoId={params.id}
+            creatorId={detail?.creator?.id}
+            servedAd={adGate.servedAd}
+            onComplete={adGate.completeAd}
           />
+          <View
+            style={[styles.playerFill, !videoVisible ? styles.playerHidden : null]}
+            pointerEvents={videoVisible && !adGate.showOverlay ? 'auto' : 'none'}
+          >
+            <PlayerShell
+              title={title}
+              playbackUrl={playbackUrl!}
+              autoPlay={shouldPlay}
+              contentFit="cover"
+              onProgress={(seconds, duration) => {
+                setProgressSeconds(seconds);
+                if (duration > 0) setDurationSeconds(duration);
+                if (adGate.canPlay && seconds >= 0.15) setVideoVisible(true);
+              }}
+            />
+          </View>
         </View>
       ) : null}
       {showSpinner ? (
@@ -100,6 +103,10 @@ const styles = StyleSheet.create({
   },
   playerSlot: {
     flex: 1,
+    position: 'relative',
+  },
+  playerFill: {
+    ...StyleSheet.absoluteFillObject,
   },
   playerHidden: {
     opacity: 0,

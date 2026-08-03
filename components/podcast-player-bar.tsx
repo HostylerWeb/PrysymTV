@@ -147,7 +147,7 @@ export function PodcastPlayerBar({
         src={episode.videoUrl}
         poster={episode.cover}
         className="w-full h-full object-contain"
-        controls
+        showQualitySelector
         playsInline
         videoRef={videoRef}
         muted={muted}

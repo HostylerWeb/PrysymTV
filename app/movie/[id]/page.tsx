@@ -1,7 +1,22 @@
 "use client"
 
 import { use, useState, useRef, useEffect, useCallback } from "react"
-import { ChevronLeft, Play, Plus, Check, Share2, Clock, Calendar, Lock, Flag, ThumbsUp, Maximize, Minimize2 } from "lucide-react"
+import {
+  ChevronLeft,
+  Play,
+  Pause,
+  Plus,
+  Check,
+  Share2,
+  Clock,
+  Calendar,
+  Lock,
+  Flag,
+  ThumbsUp,
+  Volume2,
+  Maximize,
+  Minimize2,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -110,6 +125,11 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
   const [prerollLoading, setPrerollLoading] = useState(false)
   const [isReportOpen, setIsReportOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [showControls, setShowControls] = useState(true)
+  const [isMuted, setIsMuted] = useState(false)
+  const [playerPlaying, setPlayerPlaying] = useState(false)
   const [qualityControl, setQualityControl] = useState<HlsQualityControl | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const isMobile = useIsMobile()
@@ -175,11 +195,36 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
     setPrerollAd(null)
     setPrerollLoading(false)
     setIsPlaying(true)
+    setPlayerPlaying(true)
     if (!viewRecorded.current) {
       viewRecorded.current = true
       void recordVideoView(id).catch(() => {})
     }
   }, [id])
+
+  useEffect(() => {
+    const el = videoRef.current
+    if (!el || !isPlaying) return
+    const onPlayEvt = () => setPlayerPlaying(true)
+    const onPauseEvt = () => setPlayerPlaying(false)
+    el.addEventListener("play", onPlayEvt)
+    el.addEventListener("pause", onPauseEvt)
+    return () => {
+      el.removeEventListener("play", onPlayEvt)
+      el.removeEventListener("pause", onPauseEvt)
+    }
+  }, [isPlaying, movie?.id])
+
+  const togglePlay = useCallback(() => {
+    const el = videoRef.current
+    if (!el) return
+    if (el.paused) {
+      void el.play().then(() => setPlayerPlaying(true)).catch(() => {})
+    } else {
+      el.pause()
+      setPlayerPlaying(false)
+    }
+  }, [])
 
   const handleWatchNow = () => {
     if (!isAuthenticated) {
@@ -224,93 +269,166 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
     )
   }
 
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
       <div className="max-w-7xl mx-auto w-full">
         <div
           ref={playerContainerRef}
           className={cn(
-            "relative w-full aspect-video md:aspect-[21/9] bg-black overflow-hidden",
+            "relative w-full aspect-video md:aspect-[21/9] bg-black overflow-hidden group",
             isImmersive && immersiveClassName,
           )}
+          onClick={() => {
+            if (!isPlaying) return
+            setShowControls(true)
+            togglePlay()
+          }}
         >
           {prerollLoading && (
-            <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center">
+            <div className="absolute inset-0 z-40 bg-black/80 flex items-center justify-center">
               <p className="text-white/70 text-sm">Loading…</p>
             </div>
           )}
-          {showPreroll && prerollAd && (
+          {showPreroll && prerollAd ? (
             <AdPreroll
+              variant="inline"
               servedAd={prerollAd}
               onComplete={startPlayback}
               creatorId={movie.creatorId}
               videoId={movie.id}
             />
-          )}
-          {isPlaying ? (
+          ) : isPlaying ? (
             <>
               <HlsVideoPlayer
                 src={movie.videoUrl}
                 poster={movie.banner}
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain pointer-events-none"
                 autoPlay
-                controls
-                onQualityControlReady={setQualityControl}
+                controls={false}
                 disableNativeFullscreen={isMobile}
                 onNativeFullscreenBlocked={toggleImmersive}
+                onQualityControlReady={setQualityControl}
+                muted={isMuted}
                 playsInline
                 videoRef={videoRef}
-                onTimeUpdate={(t, d) => persistProgress(t, d)}
-                onEnded={() => persistProgress(0, 0, true)}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (isImmersive) exitImmersive()
-                  setIsPlaying(false)
+                onPlay={() => setPlayerPlaying(true)}
+                onTimeUpdate={(t, d) => {
+                  setCurrentTime(t)
+                  setDuration(d)
+                  persistProgress(t, d)
                 }}
-                className="absolute top-4 left-4 z-[110] w-10 h-10 rounded-full bg-black/60 flex items-center justify-center text-white"
-                aria-label="Close player"
-              >
-                ✕
-              </button>
-              {isMobile && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleImmersive()
-                  }}
-                  className="absolute bottom-4 right-4 z-[110] w-10 h-10 rounded-full bg-black/60 flex items-center justify-center text-white"
-                  aria-label={isImmersive ? "Exit fullscreen" : "Fullscreen"}
-                >
-                  {isImmersive ? (
-                    <Minimize2 className="w-5 h-5" />
-                  ) : (
-                    <Maximize className="w-5 h-5" />
-                  )}
-                </button>
+                onEnded={() => {
+                  setPlayerPlaying(false)
+                  persistProgress(duration, duration, true)
+                }}
+              />
+              {!playerPlaying && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-16 h-16 rounded-full bg-black/50 flex items-center justify-center border border-white/30">
+                    <Play className="w-8 h-8 text-white fill-white ml-1" />
+                  </div>
+                </div>
               )}
-              <div className="absolute top-4 right-4 z-[110] flex items-center gap-2">
-                <VideoQualityMenu control={qualityControl} variant="on-video" />
-                <CastMediaButton
-                  variant="on-video"
-                  media={
-                    movie.videoUrl
-                      ? {
-                          title: movie.title,
-                          subtitle: movie.genres.join(" · "),
-                          streamUrl: movie.videoUrl,
-                          posterUrl: movie.banner,
-                        }
-                      : null
-                  }
-                  getCurrentTime={() => videoRef.current?.currentTime ?? 0}
-                  onCastStarted={() => {
-                    const el = videoRef.current
-                    if (el && !el.paused) el.pause()
-                  }}
-                />
+              <div
+                className={cn(
+                  "absolute inset-0 transition-opacity pointer-events-none",
+                  showControls ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                )}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="absolute top-0 left-0 right-0 flex justify-between p-3 bg-gradient-to-b from-black/70 to-transparent pointer-events-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isImmersive) exitImmersive()
+                      setIsPlaying(false)
+                    }}
+                    className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center text-white"
+                    aria-label="Close player"
+                  >
+                    ✕
+                  </button>
+                  <div className="flex gap-2">
+                    <CastMediaButton
+                      variant="on-video"
+                      media={
+                        movie.videoUrl
+                          ? {
+                              title: movie.title,
+                              subtitle: movie.genres.join(" · "),
+                              streamUrl: movie.videoUrl,
+                              posterUrl: movie.banner,
+                            }
+                          : null
+                      }
+                      getCurrentTime={() => videoRef.current?.currentTime ?? 0}
+                      onCastStarted={() => {
+                        const el = videoRef.current
+                        if (el && !el.paused) el.pause()
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="absolute bottom-0 left-0 right-0 px-3 pb-3 bg-gradient-to-t from-black/70 to-transparent pointer-events-auto">
+                  <div
+                    className="w-full h-1 bg-white/30 rounded-full mb-2 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const el = videoRef.current
+                      if (!el || !duration) return
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      el.currentTime = ((e.clientX - rect.left) / rect.width) * duration
+                    }}
+                  >
+                    <div className="h-full bg-primary rounded-full" style={{ width: `${progress}%` }} />
+                  </div>
+                  <div className="flex items-center justify-between text-white text-xs">
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          togglePlay()
+                        }}
+                      >
+                        {playerPlaying ? (
+                          <Pause className="w-5 h-5" />
+                        ) : (
+                          <Play className="w-5 h-5 fill-white" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const el = videoRef.current
+                          if (!el) return
+                          el.muted = !el.muted
+                          setIsMuted(el.muted)
+                        }}
+                      >
+                        <Volume2 className="w-5 h-5" />
+                      </button>
+                      <VideoQualityMenu control={qualityControl} variant="compact" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleImmersive()
+                      }}
+                      aria-label={isImmersive ? "Exit fullscreen" : "Fullscreen"}
+                    >
+                      {isImmersive ? (
+                        <Minimize2 className="w-5 h-5" />
+                      ) : (
+                        <Maximize className="w-5 h-5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
             </>
           ) : (

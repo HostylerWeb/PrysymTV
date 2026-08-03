@@ -11,6 +11,7 @@ type Props = {
   onReady: () => void
   onError: () => void
   onEnded?: () => void
+  onTimeUpdate?: (currentTime: number, duration: number) => void
 }
 
 export function AdMediaDisplay({
@@ -21,6 +22,7 @@ export function AdMediaDisplay({
   onReady,
   onError,
   onEnded,
+  onTimeUpdate,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const resolved = resolveAdMediaUrl(mediaUrl)
@@ -61,6 +63,16 @@ export function AdMediaDisplay({
         onPlaying={onReady}
         onEnded={onEnded}
         onError={onError}
+        onTimeUpdate={() => {
+          const el = videoRef.current
+          if (!el) return
+          onTimeUpdate?.(el.currentTime, el.duration)
+        }}
+        onLoadedMetadata={() => {
+          const el = videoRef.current
+          if (!el) return
+          onTimeUpdate?.(el.currentTime, el.duration)
+        }}
       />
     )
   }

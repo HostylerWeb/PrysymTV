@@ -17,7 +17,9 @@ export function VideoQualityMenu({
   className,
   variant = "compact",
 }: VideoQualityMenuProps) {
-  if (!control || control.levels.length <= 1) return null
+  if (!control || control.levels.length === 0) return null
+
+  const singleLevel = control.levels.length === 1 ? control.levels[0] : null
 
   const activeLabel =
     control.currentLevel < 0
@@ -37,7 +39,8 @@ export function VideoQualityMenu({
               "bg-black/60 text-white text-xs font-medium px-2.5 py-1.5 hover:bg-black/75",
             variant === "on-video" &&
               "h-10 bg-background/20 text-white text-xs font-medium px-3 hover:bg-background/30",
-            variant === "compact" && "text-white hover:text-white/80",
+            variant === "compact" &&
+              "h-9 w-9 justify-center text-white hover:text-white/80",
             className,
           )}
           aria-label={`Video quality: ${activeLabel}`}
@@ -63,16 +66,18 @@ export function VideoQualityMenu({
         <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
           Quality
         </p>
-        <button
-          type="button"
-          onClick={() => control.setLevel(-1)}
-          className={cn(
-            "w-full rounded-md px-2 py-2 text-left text-sm hover:bg-accent",
-            control.currentLevel < 0 && "bg-accent font-medium",
-          )}
-        >
-          Auto
-        </button>
+        {!singleLevel ? (
+          <button
+            type="button"
+            onClick={() => control.setLevel(-1)}
+            className={cn(
+              "w-full rounded-md px-2 py-2 text-left text-sm hover:bg-accent",
+              control.currentLevel < 0 && "bg-accent font-medium",
+            )}
+          >
+            Auto
+          </button>
+        ) : null}
         {control.levels.map((level) => (
           <button
             key={level.index}

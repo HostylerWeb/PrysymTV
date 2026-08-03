@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import {
   buildAdAttribution,
   fetchServedAd,
@@ -16,6 +16,8 @@ import { useShouldShowAds } from '@/hooks/useShouldShowAds';
 import { resolveAdMediaUrl } from '@/lib/ad-media';
 import { colors, spacing, typography } from '@/theme/tokens';
 
+const POST_END_SKIP_MS = 3000;
+
 type Props = {
   visible: boolean;
   placement: AdPlacement;
@@ -23,6 +25,8 @@ type Props = {
   creatorId?: string;
   servedAd?: ServedAd | null;
   onComplete: () => void;
+  /** Render inside the player frame instead of a full-screen modal. */
+  inline?: boolean;
 };
 
 export function TvAdOverlay({
@@ -32,6 +36,7 @@ export function TvAdOverlay({
   creatorId,
   servedAd,
   onComplete,
+  inline = false,
 }: Props) {
   const shouldShow = useShouldShowAds();
   const { user } = useAuth();
@@ -40,7 +45,24 @@ export function TvAdOverlay({
   const [countdown, setCountdown] = useState(5);
   const [ready, setReady] = useState(false);
   const onCompleteRef = useRef(onComplete);
+  const postEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   onCompleteRef.current = onComplete;
+
+  const finish = useCallback(() => {
+    if (postEndTimerRef.current) {
+      clearTimeout(postEndTimerRef.current);
+      postEndTimerRef.current = null;
+    }
+    onCompleteRef.current();
+  }, []);
+
+  const schedulePostEndSkip = useCallback(() => {
+    if (postEndTimerRef.current) clearTimeout(postEndTimerRef.current);
+    postEndTimerRef.current = setTimeout(() => {
+      postEndTimerRef.current = null;
+      finish();
+    }, POST_END_SKIP_MS);
+  }, [finish]);
 
   useEffect(() => {
     if (!visible) {
@@ -88,6 +110,12 @@ export function TvAdOverlay({
   }, [visible, shouldShow, servedAd, isPlacementEnabled, placement]);
 
   useEffect(() => {
+    return () => {
+      if (postEndTimerRef.current) clearTimeout(postEndTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!ad) return;
     void trackAdImpression(
       buildAdAttribution({
@@ -125,48 +153,45 @@ export function TvAdOverlay({
 
   const canSkip = ready && countdown <= 0;
 
-  return (
-    <Modal
-      visible
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={() => canSkip && onComplete()}
-    >
-      <View style={styles.screen}>
-        <View style={styles.player}>
-          <AdMedia
-            mediaUrl={mediaUrl}
-            mediaType={ad.mediaType}
-            style={styles.media}
-            contentFit="contain"
-            onReady={() => setReady(true)}
-            onError={() => onCompleteRef.current()}
-            onEnded={() => onCompleteRef.current()}
+  const content = (
+    <View style={inline ? styles.inlineShell : styles.screen}>
+      <View style={styles.topBar}>
+        <Text style={styles.sponsor}>Sponsored</Text>
+        {ready && canSkip ? (
+          <TvFocusButton
+            label="Skip ad"
+            hasTVPreferredFocus
+            onPress={finish}
+            style={styles.skipBtn}
           />
-          {!ready ? (
-            <View style={styles.loadingOverlay} pointerEvents="none">
-              <ActivityIndicator size="large" color={colors.primary} />
-            </View>
-          ) : null}
-          {ready && canSkip ? (
-            <TvFocusButton
-              label="Skip ad"
-              hasTVPreferredFocus
-              onPress={onComplete}
-              style={styles.skipBtn}
-            />
-          ) : ready ? (
-            <View style={styles.skipHint}>
-              <Text style={styles.skipText}>Skip in {countdown}s</Text>
-            </View>
-          ) : null}
-          {ready && ad.title ? (
-            <Text style={styles.adTitle}>{ad.title}</Text>
-          ) : null}
-        </View>
+        ) : ready ? (
+          <View style={styles.skipHint}>
+            <Text style={styles.skipText}>Skip in {countdown}s</Text>
+          </View>
+        ) : (
+          <Text style={styles.skipText}>Loading…</Text>
+        )}
       </View>
-    </Modal>
+      <View style={styles.player}>
+        <AdMedia
+          mediaUrl={mediaUrl}
+          mediaType={ad.mediaType}
+          style={styles.media}
+          contentFit="contain"
+          onReady={() => setReady(true)}
+          onError={() => finish()}
+          onEnded={schedulePostEndSkip}
+        />
+        {!ready ? (
+          <View style={styles.loadingOverlay} pointerEvents="none">
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : null}
+      </View>
+    </View>
   );
+
+  return content;
 }
 
 const styles = StyleSheet.create({
@@ -176,9 +201,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  inlineShell: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+    zIndex: 40,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    gap: spacing.md,
+  },
+  sponsor: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: typography.caption,
+    textDecorationLine: 'underline',
+  },
   player: {
+    flex: 1,
     width: '100%',
-    height: '100%',
     justifyContent: 'center',
   },
   media: { width: '100%', height: '100%' },
@@ -189,26 +233,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   skipBtn: {
-    position: 'absolute',
-    top: spacing.lg,
-    right: spacing.lg,
     minWidth: 160,
   },
   skipHint: {
-    position: 'absolute',
-    top: spacing.lg,
-    right: spacing.lg,
     backgroundColor: 'rgba(0,0,0,0.7)',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: 8,
   },
   skipText: { color: colors.foreground, fontSize: typography.body, fontWeight: '600' },
-  adTitle: {
-    position: 'absolute',
-    bottom: spacing.lg,
-    left: spacing.lg,
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: typography.caption,
-  },
 });

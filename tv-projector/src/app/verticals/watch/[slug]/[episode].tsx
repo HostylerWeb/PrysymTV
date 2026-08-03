@@ -39,24 +39,29 @@ export default function VerticalEpisodeWatchScreen() {
   return (
     <View style={styles.root}>
       <Stack.Screen options={{ headerShown: false, animation: 'none' }} />
-      <TvAdOverlay
-        visible={adGate.showOverlay}
-        placement="vertical_episode"
-        creatorId={data?.series.creatorId ?? undefined}
-        videoId={data?.episode.id}
-        servedAd={adGate.servedAd}
-        onComplete={adGate.completeAd}
-      />
       {data?.playbackSource ? (
-        <PlayerShell
-          title={`${data.series.title} · Ep ${data.episode.episodeNumber}`}
-          subtitle={data.episode.title}
-          playbackUrl={data.playbackSource}
-          autoPlay={shouldPlay}
-          contentFit="contain"
-          onProgress={(seconds) => setProgressSeconds(seconds)}
-          onPlaying={() => setVideoVisible(true)}
-        />
+        <View style={styles.playerSlot}>
+          <TvAdOverlay
+            inline
+            visible={adGate.showOverlay}
+            placement="vertical_episode"
+            creatorId={data?.series.creatorId ?? undefined}
+            videoId={data?.episode.id}
+            servedAd={adGate.servedAd}
+            onComplete={adGate.completeAd}
+          />
+          <View style={[styles.playerFill, !videoVisible ? styles.playerHidden : null]}>
+            <PlayerShell
+              title={`${data.series.title} · Ep ${data.episode.episodeNumber}`}
+              subtitle={data.episode.title}
+              playbackUrl={data.playbackSource}
+              autoPlay={shouldPlay}
+              contentFit="contain"
+              onProgress={(seconds) => setProgressSeconds(seconds)}
+              onPlaying={() => setVideoVisible(true)}
+            />
+          </View>
+        </View>
       ) : null}
       {waiting || error ? (
         <View style={styles.center}>
@@ -69,6 +74,9 @@ export default function VerticalEpisodeWatchScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.videoBackground },
+  playerSlot: { flex: 1, position: 'relative' },
+  playerFill: { ...StyleSheet.absoluteFillObject },
+  playerHidden: { opacity: 0 },
   center: {
     flex: 1,
     alignItems: 'center',

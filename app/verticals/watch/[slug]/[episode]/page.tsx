@@ -289,7 +289,6 @@ export default function VerticalWatchPage({
                 src={episode.videoUrl}
                 className="w-full h-full max-h-[100dvh] object-contain"
                 autoPlay
-                controls
                 showQualitySelector
                 videoRef={videoRef}
                 onPlay={() => recordViewOnce(episode.id)}

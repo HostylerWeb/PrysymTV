@@ -13,8 +13,12 @@ import { AdMediaDisplay } from "@/components/ad-media-display"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 import { useAuth } from "@/contexts/auth-context"
-
-const POST_END_SKIP_MS = 3000
+import {
+  canSkipImageAd,
+  canSkipVideoAd,
+  POST_END_SKIP_MS,
+  videoAdSkipSecondsRemaining,
+} from "@/lib/ad-skip-timing"
 
 type VerticalEpisodeAdGateProps = {
   creatorId?: string
@@ -63,13 +67,18 @@ export function VerticalEpisodeAdGate({
       : undefined,
   )
   const [mediaReady, setMediaReady] = useState(false)
-  const [countdown, setCountdown] = useState(5)
+  const [imageCountdown, setImageCountdown] = useState(5)
+  const [adCurrentTime, setAdCurrentTime] = useState(0)
+  const [adDuration, setAdDuration] = useState(0)
 
   const placementEnabled = isPlacementEnabled("vertical_episode")
+  const isVideoAd = ad?.mediaType === "video"
 
   useEffect(() => {
     finishedRef.current = false
     setMediaReady(false)
+    setAdCurrentTime(0)
+    setAdDuration(0)
   }, [servedAd?.id])
 
   useEffect(() => {
@@ -82,7 +91,6 @@ export function VerticalEpisodeAdGate({
     if (servedAd !== undefined) {
       const valid = isValidServedAd(servedAd) ? servedAd : null
       setAd(valid)
-      if (valid) setCountdown(valid.skipAfterSeconds || 5)
       if (!valid) complete()
       return
     }
@@ -96,7 +104,6 @@ export function VerticalEpisodeAdGate({
     void fetchServedAd("vertical_episode").then((served) => {
       const valid = isValidServedAd(served) ? served : null
       setAd(valid)
-      if (valid) setCountdown(valid.skipAfterSeconds || 5)
       if (!valid) complete()
     })
   }, [showAds, placementEnabled, servedAd, complete])
@@ -114,11 +121,16 @@ export function VerticalEpisodeAdGate({
   }, [ad, creatorId, platformCreatorId, user?.id])
 
   useEffect(() => {
-    if (!ad || !mediaReady) return
-    if (countdown <= 0) return
-    const t = setTimeout(() => setCountdown((c) => c - 1), 1000)
+    if (!ad || !mediaReady || isVideoAd) return
+    setImageCountdown(ad.skipAfterSeconds || 5)
+  }, [ad, mediaReady, isVideoAd])
+
+  useEffect(() => {
+    if (!ad || !mediaReady || isVideoAd) return
+    if (imageCountdown <= 0) return
+    const t = setTimeout(() => setImageCountdown((c) => c - 1), 1000)
     return () => clearTimeout(t)
-  }, [countdown, ad, mediaReady])
+  }, [imageCountdown, ad, mediaReady, isVideoAd])
 
   if (ad === undefined) return null
   if (!ad) return null
@@ -131,12 +143,20 @@ export function VerticalEpisodeAdGate({
     viewerUserId: user?.id,
   })
 
-  const onMediaReady = () => {
-    setMediaReady(true)
-    setCountdown(ad.skipAfterSeconds || 5)
-  }
+  const canSkip = isVideoAd
+    ? canSkipVideoAd(mediaReady, adCurrentTime, adDuration)
+    : canSkipImageAd(mediaReady, imageCountdown)
 
-  const canSkip = mediaReady && countdown <= 0
+  const skipLabel = (() => {
+    if (!mediaReady) return "Loading…"
+    if (canSkip) return null
+    if (isVideoAd) {
+      if (adDuration <= 0) return "Loading…"
+      const remaining = videoAdSkipSecondsRemaining(adCurrentTime, adDuration)
+      return `Skip in ${remaining}s`
+    }
+    return `Skip in ${imageCountdown}s`
+  })()
 
   return (
     <div className="fixed inset-0 z-[100] bg-black flex flex-col max-w-lg mx-auto">
@@ -161,19 +181,23 @@ export function VerticalEpisodeAdGate({
           >
             Skip Ad
           </button>
-        ) : mediaReady ? (
-          <span className="text-sm text-white/70">Skip in {countdown}s</span>
-        ) : (
-          <span className="text-sm text-white/50">Loading…</span>
-        )}
+        ) : skipLabel ? (
+          <span className="text-sm text-white/70">{skipLabel}</span>
+        ) : null}
       </div>
       <AdMediaDisplay
         mediaUrl={ad.mediaUrl}
         mediaType={ad.mediaType}
         className="flex-1 w-full object-cover"
-        onReady={onMediaReady}
+        onReady={() => setMediaReady(true)}
         onError={() => complete()}
         onEnded={schedulePostEndSkip}
+        onTimeUpdate={(currentTime, duration) => {
+          setAdCurrentTime(currentTime)
+          if (Number.isFinite(duration) && duration > 0) {
+            setAdDuration(duration)
+          }
+        }}
       />
     </div>
   )

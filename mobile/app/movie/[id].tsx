@@ -114,6 +114,24 @@ export default function MovieScreen() {
             paused={!isFocused}
             onProgress={onProgress}
           />
+        ) : prerollOpen ? (
+          <View style={styles.prerollSlot}>
+            <PlayerShell
+              title={movie.title}
+              thumbnailUrl={movie.thumbnailUrl}
+              playbackUrl={movie.playbackSource}
+              subtitle={`${movie.releaseYear ?? ''} · ${movie.ageRating ?? ''}`}
+              showCast
+              posterOnly
+            />
+            <AdPreroll
+              inline
+              visible={prerollOpen}
+              onComplete={finishPreroll}
+              videoId={movie.id}
+              creatorId={movie.creator.id}
+            />
+          </View>
         ) : (
           <PlayerShell
             title={movie.title}
@@ -173,12 +191,6 @@ export default function MovieScreen() {
         </View>
       </ScrollView>
 
-      <AdPreroll
-        visible={prerollOpen}
-        onComplete={finishPreroll}
-        videoId={movie.id}
-        creatorId={movie.creator.id}
-      />
       <GiftModal
         visible={giftOpen}
         onClose={() => setGiftOpen(false)}
@@ -209,6 +221,7 @@ export default function MovieScreen() {
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
+  prerollSlot: { position: 'relative', width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000' },
   center: { alignItems: 'center', justifyContent: 'center', flex: 1 },
   pad: { paddingHorizontal: 16 },
   body: { padding: 16, gap: 12 },
