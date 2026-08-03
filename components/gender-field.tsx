@@ -33,7 +33,7 @@ export function GenderField({
         onValueChange={(next) => onChange(next as UserGenderValue)}
         required={required}
       >
-        <SelectTrigger className="h-12 w-full rounded-xl bg-secondary border-0 shadow-none">
+        <SelectTrigger className="h-12 w-full rounded-xl bg-secondary border-0 shadow-none data-[size=default]:h-12">
           <SelectValue placeholder="Select gender" />
         </SelectTrigger>
         <SelectContent>
