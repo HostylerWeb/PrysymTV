@@ -14,6 +14,11 @@ import { useMockAuth } from '@/context/MockAuthContext';
 import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
 import { useShouldShowAds } from '@/hooks/useShouldShowAds';
 import { resolveAdMediaUrl } from '@/lib/ad-media';
+import {
+  canSkipImageAd,
+  canSkipVideoAd,
+  videoAdSkipSecondsRemaining,
+} from '@/lib/ad-skip-timing';
 import { radius } from '@/theme/tokens';
 
 type Props = {
@@ -30,17 +35,26 @@ export function AdInterstitial({ visible, videoId, creatorId, servedAd, onClose 
   const { user } = useMockAuth();
   const { platformCreatorId, isPlacementEnabled } = usePublicAdsConfig();
   const [ad, setAd] = useState<ServedAd | null | undefined>(undefined);
-  const [countdown, setCountdown] = useState(5);
+  const [imageCountdown, setImageCountdown] = useState(5);
+  const [adCurrentTime, setAdCurrentTime] = useState(0);
+  const [adDuration, setAdDuration] = useState(0);
   const [ready, setReady] = useState(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
+  const isVideoAd = ad?.mediaType === 'video';
+
   useEffect(() => {
     if (!visible) {
       setAd(undefined);
+      setReady(false);
+      setAdCurrentTime(0);
+      setAdDuration(0);
       return;
     }
     setReady(false);
+    setAdCurrentTime(0);
+    setAdDuration(0);
     if (!shouldShow || !isPlacementEnabled('shorts_interstitial')) {
       onCloseRef.current();
       return;
@@ -77,15 +91,16 @@ export function AdInterstitial({ visible, videoId, creatorId, servedAd, onClose 
   }, [ad, creatorId, videoId, platformCreatorId, user?.id]);
 
   useEffect(() => {
-    if (!visible || !ad || !ready || countdown <= 0) return;
-    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [visible, ad, ready, countdown]);
+    if (!ad || !ready || isVideoAd) return;
+    setImageCountdown(ad.skipAfterSeconds || 5);
+  }, [ad, ready, isVideoAd]);
 
   useEffect(() => {
-    if (!visible || ad === undefined) return;
-    if (ad && ready) setCountdown(ad.skipAfterSeconds);
-  }, [visible, ad, ready]);
+    if (!visible || !ad || !ready || isVideoAd) return;
+    if (imageCountdown <= 0) return;
+    const t = setTimeout(() => setImageCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [visible, ad, ready, imageCountdown, isVideoAd]);
 
   if (!visible || ad === undefined || !ad) return null;
 
@@ -106,7 +121,27 @@ export function AdInterstitial({ visible, videoId, creatorId, servedAd, onClose 
     void Linking.openURL(ad.clickThroughUrl);
   };
 
-  const canClose = ready && countdown <= 0;
+  const canClose = isVideoAd
+    ? canSkipVideoAd(ready, adCurrentTime, adDuration)
+    : canSkipImageAd(ready, imageCountdown);
+
+  const closeLabel = (() => {
+    if (!ready) return 'Loading…';
+    if (canClose) return null;
+    if (isVideoAd) {
+      if (adDuration <= 0) return 'Loading…';
+      const remaining = videoAdSkipSecondsRemaining(adCurrentTime, adDuration);
+      return `Close in ${remaining}s`;
+    }
+    return `Close in ${imageCountdown}s`;
+  })();
+
+  const onTimeUpdate = (currentTime: number, duration: number) => {
+    setAdCurrentTime(currentTime);
+    if (Number.isFinite(duration) && duration > 0) {
+      setAdDuration(duration);
+    }
+  };
 
   if (!ready) {
     return (
@@ -118,6 +153,7 @@ export function AdInterstitial({ visible, videoId, creatorId, servedAd, onClose 
           contentFit="cover"
           onReady={() => setReady(true)}
           onError={() => onCloseRef.current()}
+          onTimeUpdate={onTimeUpdate}
         />
       </View>
     );
@@ -137,15 +173,13 @@ export function AdInterstitial({ visible, videoId, creatorId, servedAd, onClose 
           <Pressable onPress={openAd}>
             <Text style={styles.sponsor} numberOfLines={1}>Sponsored · {ad.title}</Text>
           </Pressable>
-          {ready && countdown <= 0 ? (
+          {canClose ? (
             <Pressable style={styles.closeBtn} onPress={onClose}>
               <Text style={styles.closeText}>Close</Text>
             </Pressable>
-          ) : ready ? (
-            <Text style={styles.countdown}>Close in {countdown}s</Text>
-          ) : (
-            <Text style={styles.countdown}>Loading…</Text>
-          )}
+          ) : closeLabel ? (
+            <Text style={styles.countdown}>{closeLabel}</Text>
+          ) : null}
         </View>
         <AdMedia
           mediaUrl={mediaUrl}
@@ -154,6 +188,7 @@ export function AdInterstitial({ visible, videoId, creatorId, servedAd, onClose 
           contentFit="cover"
           onReady={() => setReady(true)}
           onError={() => onCloseRef.current()}
+          onTimeUpdate={onTimeUpdate}
         />
       </View>
     </Modal>

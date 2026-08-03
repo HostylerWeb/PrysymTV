@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
@@ -210,7 +210,16 @@ export function HlsPlayer({
     if (!enableQualityMenu) return;
     let cancelled = false;
     void fetchHlsVariants(masterSource).then((list) => {
-      if (!cancelled) setVariants(list);
+      if (cancelled) return;
+      if (list.length > 0) {
+        setVariants(list);
+        return;
+      }
+      if (masterSource.includes('.m3u8')) {
+        setVariants([{ uri: masterSource, height: 0, label: 'Auto' }]);
+      } else {
+        setVariants([]);
+      }
     });
     return () => {
       cancelled = true;

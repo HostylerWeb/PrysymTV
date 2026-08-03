@@ -15,7 +15,9 @@ export function VideoQualityMenu({ variants, selectedUri, onSelect }: Props) {
   const { colors } = useTheme();
   const [open, setOpen] = useState(false);
 
-  if (variants.length <= 1) return null;
+  if (variants.length === 0) return null;
+
+  const singleVariant = variants.length === 1 ? variants[0] : null;
 
   const activeLabel =
     variants.find((v) => v.uri === selectedUri)?.label ?? 'Auto';
@@ -37,15 +39,17 @@ export function VideoQualityMenu({ variants, selectedUri, onSelect }: Props) {
             onPress={(e) => e.stopPropagation()}
           >
             <Text style={[styles.title, { color: colors.foreground }]}>Quality</Text>
-            <Pressable
-              style={[styles.row, !selectedUri && { backgroundColor: colors.primary + '18' }]}
-              onPress={() => {
-                onSelect(null);
-                setOpen(false);
-              }}
-            >
-              <Text style={{ color: colors.foreground, fontWeight: !selectedUri ? '700' : '500' }}>Auto</Text>
-            </Pressable>
+            {!singleVariant ? (
+              <Pressable
+                style={[styles.row, !selectedUri && { backgroundColor: colors.primary + '18' }]}
+                onPress={() => {
+                  onSelect(null);
+                  setOpen(false);
+                }}
+              >
+                <Text style={{ color: colors.foreground, fontWeight: !selectedUri ? '700' : '500' }}>Auto</Text>
+              </Pressable>
+            ) : null}
             {variants.map((variant) => {
               const on = selectedUri === variant.uri;
               return (
