@@ -3,6 +3,7 @@ import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   buildAdAttribution,
+  fetchServedAd,
   isValidServedAd,
   trackAdClick,
   trackAdImpression,
@@ -90,7 +91,19 @@ export function VerticalEpisodeAdGate({
       return;
     }
 
-    onCompleteRef.current();
+    void fetchServedAd('vertical_episode', { peek: true })
+      .then((peek) => {
+        if (!isValidServedAd(peek)) {
+          onCompleteRef.current();
+          return;
+        }
+        return fetchServedAd('vertical_episode').then((served) => {
+          const valid = isValidServedAd(served) ? served : null;
+          setAd(valid);
+          if (!valid) onCompleteRef.current();
+        });
+      })
+      .catch(() => onCompleteRef.current());
   }, [visible, shouldShow, servedAd, isPlacementEnabled]);
 
   useEffect(() => {
@@ -167,33 +180,37 @@ export function VerticalEpisodeAdGate({
       onRequestClose={() => canSkip && finish()}
     >
       <View style={styles.screen}>
+        <View style={styles.player}>
+          <AdMedia
+            mediaUrl={mediaUrl}
+            mediaType={ad.mediaType}
+            style={styles.media}
+            contentFit="cover"
+            onReady={() => setReady(true)}
+            onError={finish}
+            onEnded={schedulePostEndSkip}
+            onTimeUpdate={(currentTime, duration) => {
+              setAdCurrentTime(currentTime);
+              if (Number.isFinite(duration) && duration > 0) {
+                setAdDuration(duration);
+              }
+            }}
+          />
+        </View>
         <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
           <Pressable onPress={openAd} style={styles.sponsorPress}>
             <Text style={styles.sponsor}>Sponsored</Text>
           </Pressable>
-          {canSkip ? (
-            <Pressable style={styles.skipBtn} onPress={finish}>
-              <Text style={styles.skipText}>Skip Ad</Text>
-            </Pressable>
-          ) : skipLabel ? (
-            <Text style={styles.countdown}>{skipLabel}</Text>
-          ) : null}
+          <View style={styles.skipSlot}>
+            {canSkip ? (
+              <Pressable style={styles.skipBtn} onPress={finish}>
+                <Text style={styles.skipText}>Skip Ad</Text>
+              </Pressable>
+            ) : skipLabel ? (
+              <Text style={styles.countdown}>{skipLabel}</Text>
+            ) : null}
+          </View>
         </View>
-        <AdMedia
-          mediaUrl={mediaUrl}
-          mediaType={ad.mediaType}
-          style={styles.media}
-          contentFit="cover"
-          onReady={() => setReady(true)}
-          onError={finish}
-          onEnded={schedulePostEndSkip}
-          onTimeUpdate={(currentTime, duration) => {
-            setAdCurrentTime(currentTime);
-            if (Number.isFinite(duration) && duration > 0) {
-              setAdDuration(duration);
-            }
-          }}
-        />
       </View>
     </Modal>
   );
@@ -201,7 +218,13 @@ export function VerticalEpisodeAdGate({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#000' },
+  player: { ...StyleSheet.absoluteFillObject, justifyContent: 'center' },
   topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -211,6 +234,12 @@ const styles = StyleSheet.create({
   },
   sponsorPress: { flexShrink: 0 },
   sponsor: { color: 'rgba(255,255,255,0.75)', fontSize: 12, textDecorationLine: 'underline' },
+  skipSlot: {
+    minWidth: 96,
+    minHeight: 32,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
   skipBtn: {
     backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 16,
@@ -219,5 +248,5 @@ const styles = StyleSheet.create({
   },
   skipText: { color: '#fff', fontWeight: '800', fontSize: 13 },
   countdown: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
-  media: { flex: 1, width: '100%' },
+  media: { width: '100%', height: '100%' },
 });

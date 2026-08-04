@@ -93,16 +93,25 @@ function VerticalEpisodeCell({
     if (!active) return;
     setGateOpen(false);
     setGateAd(null);
-    onGateDismissed(episode.id);
     if (!shouldShow || !isPlacementEnabled('vertical_episode')) {
+      onGateDismissed(episode.id);
       return;
     }
     void fetchServedAd('vertical_episode', { peek: true })
       .then((peekAd) => {
-        if (!isValidServedAd(peekAd)) return;
-        onGateBlocked(episode.id);
-        setGateAd(peekAd);
-        setGateOpen(true);
+        if (!isValidServedAd(peekAd)) {
+          onGateDismissed(episode.id);
+          return;
+        }
+        return fetchServedAd('vertical_episode').then((servedAd) => {
+          if (!isValidServedAd(servedAd)) {
+            onGateDismissed(episode.id);
+            return;
+          }
+          onGateBlocked(episode.id);
+          setGateAd(servedAd);
+          setGateOpen(true);
+        });
       })
       .catch(() => onGateDismissed(episode.id));
   }, [active, episode.id, shouldShow, isPlacementEnabled, onGateDismissed, onGateBlocked]);

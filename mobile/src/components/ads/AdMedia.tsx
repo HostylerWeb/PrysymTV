@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, type ImageStyle, type StyleProp } from 'react-native';
+import { StyleSheet, View, type ImageStyle, type StyleProp } from 'react-native';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView, type VideoContentFit } from 'expo-video';
 
@@ -97,12 +97,14 @@ function AdVideoMedia({
   }, [player, onReady, onError, onEnded, onTimeUpdate]);
 
   return (
-    <VideoView
-      player={player}
-      style={[StyleSheet.absoluteFill, style]}
-      contentFit={contentFit}
-      nativeControls={false}
-    />
+    <View style={[styles.videoWrap, style]}>
+      <VideoView
+        player={player}
+        style={StyleSheet.absoluteFillObject}
+        contentFit={contentFit}
+        nativeControls={false}
+      />
+    </View>
   );
 }
 
@@ -155,3 +157,11 @@ export function AdMedia({
     />
   );
 }
+
+const styles = StyleSheet.create({
+  videoWrap: {
+    flex: 1,
+    width: '100%',
+    overflow: 'hidden',
+  },
+});
