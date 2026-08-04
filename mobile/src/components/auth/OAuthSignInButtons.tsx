@@ -8,6 +8,8 @@ import {
   View,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
+import * as Application from 'expo-application';
+import * as AuthSession from 'expo-auth-session';
 import * as Google from 'expo-auth-session/providers/google';
 import * as Facebook from 'expo-auth-session/providers/facebook';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -22,6 +24,13 @@ import {
 import { colors, radius } from '@/theme/tokens';
 
 WebBrowser.maybeCompleteAuthSession();
+
+/** Redirect URI Google expects for Expo standalone Android Google OAuth. */
+function googleAndroidRedirectUri(): string {
+  return AuthSession.makeRedirectUri({
+    native: `${Application.applicationId ?? 'com.prysymtv.app'}:/oauthredirect`,
+  });
+}
 
 type Props = {
   disabled?: boolean;
@@ -102,10 +111,15 @@ function ConfiguredGoogleSignInButton({
   androidClientId?: string | null;
 }) {
   const [busy, setBusy] = useState(false);
+  // Android's installed-app OAuth flow must use the Web client ID in the browser request.
+  // Using the Android client ID here causes Google "invalid_request" (400).
+  const androidOAuthClientId =
+    Platform.OS === 'android' ? webClientId ?? androidClientId : androidClientId;
   const [request, , promptAsync] = Google.useIdTokenAuthRequest({
     webClientId: webClientId || undefined,
     iosClientId: iosClientId || undefined,
-    androidClientId: androidClientId || undefined,
+    androidClientId: androidOAuthClientId || undefined,
+    redirectUri: Platform.OS === 'android' ? googleAndroidRedirectUri() : undefined,
   });
 
   const handleGoogle = useCallback(async () => {
@@ -218,7 +232,7 @@ export function OAuthSignInButtons({
   const canUseGoogleHook =
     !useMockSignIn &&
     (Platform.OS === 'android'
-      ? Boolean(googleAndroidClientId)
+      ? Boolean(googleWebClientId)
       : Platform.OS === 'ios'
         ? Boolean(googleIosClientId || googleWebClientId)
         : Boolean(googleWebClientId));
