@@ -57,6 +57,7 @@ type MockAuthContextValue = {
     password?: string,
     username?: string,
     gender?: string,
+    birthDate?: string,
   ) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
   loginWithApple: (
@@ -188,17 +189,22 @@ export function MockAuthProvider({ children }: { children: React.ReactNode }) {
       password = 'password',
       username?: string,
       gender?: string,
+      birthDate?: string,
     ) => {
       if (isApiEnabled()) {
         try {
           if (!gender) {
             throw new Error('Gender is required.');
           }
+          if (!birthDate?.trim()) {
+            throw new Error('Date of birth is required.');
+          }
           const payload: Parameters<typeof authApi.register>[0] = {
             email,
             password,
             displayName: name,
             gender,
+            birthDate: birthDate.trim(),
           };
           if (username?.trim()) {
             payload.username = username.trim().toLowerCase();

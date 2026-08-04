@@ -30,12 +30,14 @@ export async function register(input: {
   password: string;
   displayName: string;
   gender: string;
+  birthDate: string;
 }) {
   const body = {
     email: input.email,
     password: input.password,
     displayName: input.displayName,
     gender: input.gender,
+    birthDate: input.birthDate,
     ...(input.username?.trim()
       ? { username: input.username.trim().toLowerCase() }
       : {}),

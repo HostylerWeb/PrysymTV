@@ -34,4 +34,10 @@ export class RegisterDto {
 
   @IsIn([...USER_GENDER_VALUES])
   gender!: (typeof USER_GENDER_VALUES)[number];
+
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'birthDate must be YYYY-MM-DD',
+  })
+  birthDate!: string;
 }

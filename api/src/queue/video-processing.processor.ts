@@ -82,7 +82,9 @@ export class VideoProcessingProcessor extends WorkerHost {
       const isShort = video.type === VideoType.short;
       const isMovie = video.type === VideoType.movie;
       if (isShort) {
-        this.logger.log(`Video ${videoId}: shorts profile (single 720p HLS)`);
+        this.logger.log(`Video ${videoId}: short — keeping original upload (no transcode)`);
+        await this.processSkipMode(videoId, objectKey, settings.ffmpegPath, ffprobePath);
+        return;
       }
       if (isMovie) {
         this.logger.log(`Video ${videoId}: movie profile (480p/720p/1080p adaptive HLS)`);
@@ -93,7 +95,7 @@ export class VideoProcessingProcessor extends WorkerHost {
         settings.ffmpegPath,
         ffprobePath,
         settings.tmpDir,
-        isShort ? 'single' : 'adaptive',
+        'adaptive',
         isMovie,
       );
     } catch (err) {

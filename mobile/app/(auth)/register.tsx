@@ -11,6 +11,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Button } from '@/components/ui/Button';
 import { AuthErrorBox, AuthFormField } from '@/components/auth/AuthFormField';
 import { OAuthSignInButtons } from '@/components/auth/OAuthSignInButtons';
@@ -18,7 +19,7 @@ import { useOAuthAuthHandlers } from '@/components/auth/useOAuthAuthHandlers';
 import { GenderField } from '@/components/auth/GenderField';
 import type { UserGenderValue } from '@/lib/user-gender';
 import { useMockAuth, getAuthErrorMessage } from '@/context/MockAuthContext';
-import { colors, spacing, typography } from '@/theme/tokens';
+import { colors, spacing, typography, radius } from '@/theme/tokens';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -29,6 +30,8 @@ export default function RegisterScreen() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [gender, setGender] = useState<UserGenderValue | ''>('');
+  const [birthDate, setBirthDate] = useState('');
+  const [showBirthPicker, setShowBirthPicker] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -56,6 +59,10 @@ export default function RegisterScreen() {
       setError('Please select your gender.');
       return;
     }
+    if (!birthDate.trim()) {
+      setError('Please select your date of birth.');
+      return;
+    }
     setError('');
     setBusy(true);
     try {
@@ -65,6 +72,7 @@ export default function RegisterScreen() {
         password,
         username.trim() || undefined,
         gender,
+        birthDate.trim(),
       );
       finish();
     } catch (err) {
@@ -135,6 +143,37 @@ export default function RegisterScreen() {
 
           <GenderField value={gender} onChange={setGender} />
 
+          <Text style={styles.birthLabel}>Date of birth</Text>
+          <Pressable
+            style={styles.birthBtn}
+            onPress={() => setShowBirthPicker(true)}
+            disabled={busy}
+          >
+            <Ionicons name="calendar-outline" size={18} color={colors.mutedForeground} />
+            <Text style={{ color: birthDate ? colors.foreground : colors.mutedForeground, flex: 1 }}>
+              {birthDate || 'Select date'}
+            </Text>
+          </Pressable>
+          {showBirthPicker ? (
+            <DateTimePicker
+              value={birthDate ? new Date(`${birthDate}T12:00:00`) : new Date(2000, 0, 1)}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              maximumDate={new Date()}
+              onChange={(_, date) => {
+                if (Platform.OS === 'android') setShowBirthPicker(false);
+                if (!date) return;
+                const yyyy = date.getFullYear();
+                const mm = String(date.getMonth() + 1).padStart(2, '0');
+                const dd = String(date.getDate()).padStart(2, '0');
+                setBirthDate(`${yyyy}-${mm}-${dd}`);
+              }}
+            />
+          ) : null}
+          {Platform.OS === 'ios' && showBirthPicker ? (
+            <Button label="Done" variant="ghost" onPress={() => setShowBirthPicker(false)} />
+          ) : null}
+
           <Button
             label={busy ? 'Creating account…' : 'Create account'}
             onPress={() => void handleRegister()}
@@ -181,6 +220,18 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   form: { gap: 12 },
+  birthLabel: { color: colors.foreground, fontSize: 13, fontWeight: '600', marginTop: 4 },
+  birthBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.secondary,
+    borderRadius: radius.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
   oauth: { marginTop: 20 },
   signInRow: {
     flexDirection: 'row',

@@ -221,7 +221,6 @@ export default function ShortsScreen() {
                     loop
                     nativeControls={false}
                     seekOnTap
-                    enableQualityMenu
                     enableFullscreen
                     tapToToggle={false}
                     autoPlay={isActive}

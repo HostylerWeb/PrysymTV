@@ -684,16 +684,18 @@ export function HlsPlayer({
             <Text style={styles.timeText}>
               {formatTime(currentTime)} / {formatTime(duration)}
             </Text>
-            <PlayerOverlayControls
-              enableQualityMenu={enableQualityMenu}
-              enableFullscreen={enableFullscreen}
-              isFullscreen={fullscreen}
-              onToggleFullscreen={toggleFullscreen}
-              variants={variants}
-              selectedVariantUri={selectedVariantUri}
-              onQualitySelect={onQualitySelect}
-              inline
-            />
+            {!seekOnTap ? (
+              <PlayerOverlayControls
+                enableQualityMenu={enableQualityMenu}
+                enableFullscreen={enableFullscreen}
+                isFullscreen={fullscreen}
+                onToggleFullscreen={toggleFullscreen}
+                variants={variants}
+                selectedVariantUri={selectedVariantUri}
+                onQualitySelect={onQualitySelect}
+                inline
+              />
+            ) : null}
           </View>
           <View
             {...scrubPanResponder.panHandlers}
@@ -735,7 +737,7 @@ export function HlsPlayer({
           pointerEvents="box-none"
         >
           <PlayerOverlayControls
-            enableQualityMenu={enableQualityMenu}
+            enableQualityMenu={false}
             enableFullscreen={enableFullscreen}
             enableMute
             isMuted={isVolumeMuted}

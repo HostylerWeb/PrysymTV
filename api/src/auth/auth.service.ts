@@ -72,6 +72,7 @@ export class AuthService {
         displayName: dto.displayName,
         passwordHash,
         gender: dto.gender,
+        birthDate: new Date(`${dto.birthDate}T12:00:00.000Z`),
         role: UserRole.user,
         notificationPrefs: {
           create: NOTIFICATION_TYPES.map((type) => ({ type, enabled: true })),

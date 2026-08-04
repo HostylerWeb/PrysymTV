@@ -123,6 +123,7 @@ export default function MovieScreen() {
               subtitle={`${movie.releaseYear ?? ''} · ${movie.ageRating ?? ''}`}
               showCast
               posterOnly
+              hideMeta
             />
             <AdPreroll
               inline

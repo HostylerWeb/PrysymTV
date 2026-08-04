@@ -177,18 +177,6 @@ export function AdPreroll({
 
   const content = (
     <View style={[inline ? styles.inlineShell : styles.screen, !inline && { paddingTop: insets.top }]}>
-      <View style={styles.topBar}>
-        <Pressable onPress={openAd}>
-          <Text style={styles.sponsor}>Sponsored</Text>
-        </Pressable>
-        {canSkip ? (
-          <Pressable style={styles.skipBtn} onPress={finish}>
-            <Text style={styles.skipText}>Skip Ad</Text>
-          </Pressable>
-        ) : skipLabel ? (
-          <Text style={styles.countdown}>{skipLabel}</Text>
-        ) : null}
-      </View>
       <View style={styles.player}>
         <AdMedia
           mediaUrl={mediaUrl}
@@ -210,6 +198,20 @@ export function AdPreroll({
             <ActivityIndicator size="large" color="#fff" />
           </View>
         ) : null}
+      </View>
+      <View style={[styles.topBar, inline ? styles.topBarInline : { paddingTop: insets.top + 10 }]}>
+        <Pressable onPress={openAd}>
+          <Text style={styles.sponsor}>Sponsored</Text>
+        </Pressable>
+        <View style={styles.skipSlot}>
+          {canSkip ? (
+            <Pressable style={styles.skipBtn} onPress={finish}>
+              <Text style={styles.skipText}>Skip Ad</Text>
+            </Pressable>
+          ) : skipLabel ? (
+            <Text style={styles.countdown}>{skipLabel}</Text>
+          ) : null}
+        </View>
       </View>
     </View>
   );
@@ -236,15 +238,29 @@ const styles = StyleSheet.create({
     zIndex: 50,
   },
   topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingBottom: 10,
     gap: 12,
   },
+  topBarInline: {
+    paddingTop: 10,
+  },
+  skipSlot: {
+    minWidth: 96,
+    minHeight: 32,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
   sponsor: { color: 'rgba(255,255,255,0.75)', fontSize: 12, textDecorationLine: 'underline' },
-  player: { flex: 1, width: '100%', justifyContent: 'center' },
+  player: { ...StyleSheet.absoluteFillObject, justifyContent: 'center' },
   media: { width: '100%', height: '100%' },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
