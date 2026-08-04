@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { MobileLiveStudioPanel } from '@/components/live/MobileLiveStudioPanel';
-import { PlayerShell } from '@/components/video/PlayerShell';
+import { LiveBroadcastPlayer } from '@/components/live/LiveBroadcastPlayer';
 import { LiveGiftPanel } from '@/components/live/LiveGiftPanel';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { Button } from '@/components/ui/Button';
@@ -21,7 +21,6 @@ import { useStreamChat } from '@/hooks/useStreamChat';
 import { unlockStream } from '@/lib/api/streams';
 import { followUser, toggleLiveAlerts, unfollowUser } from '@/lib/api/users';
 import { colors, radius, spacing } from '@/theme/tokens';
-import { formatViewCount } from '@/utils/format-media';
 import { resolveAvatarUrl } from '@/lib/media-url';
 
 export default function LiveScreen() {
@@ -197,20 +196,29 @@ export default function LiveScreen() {
               {unlockError ? <Text style={styles.unlockError}>{unlockError}</Text> : null}
             </View>
           </View>
+        ) : stream.status === 'live' && (stream.webrtcPlaybackUrl || stream.hlsPlaybackUrl || stream.playbackSource) ? (
+          <View style={styles.playerWrap}>
+            <LiveBroadcastPlayer
+              webrtcUrl={stream.webrtcPlaybackUrl}
+              hlsUrl={stream.hlsPlaybackUrl ?? stream.playbackSource}
+              posterUrl={stream.thumbnailUrl}
+              contentFit="cover"
+              paused={!isFocused}
+              isLive
+              autoPlay
+            />
+            <View style={styles.liveBadge}>
+              <Text style={styles.liveBadgeText}>{stream.isPaid ? 'VIP' : 'LIVE'}</Text>
+            </View>
+          </View>
         ) : (
-          <PlayerShell
-            title={stream.title}
-            thumbnailUrl={stream.thumbnailUrl}
-            playbackUrl={stream.playbackSource}
-            subtitle={`${stream.streamer} · ${formatViewCount(stream.viewerCount)} watching`}
-            badge={stream.isPaid ? 'VIP' : 'LIVE'}
-            contentFit="cover"
-            paused={!isFocused}
-            isLive={stream.status === 'live'}
-            nativeControls={false}
-            enablePlayerChrome={false}
-            autoPlay
-          />
+          <View style={styles.playerWrap}>
+            {stream.thumbnailUrl ? (
+              <Image source={{ uri: stream.thumbnailUrl }} style={styles.offlinePoster} />
+            ) : (
+              <View style={styles.offlinePoster} />
+            )}
+          </View>
         )}
         <View style={styles.streamerRow}>
           <Image
@@ -334,6 +342,28 @@ const styles = StyleSheet.create({
   paywallBalance: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 8, textAlign: 'center' },
   paywallNeed: { color: '#fbbf24' },
   unlockError: { color: colors.destructive, fontSize: 12, marginTop: 8, textAlign: 'center' },
+  playerWrap: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: colors.videoBackground,
+    position: 'relative',
+  },
+  offlinePoster: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: colors.secondary,
+  },
+  liveBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: colors.live,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    zIndex: 2,
+  },
+  liveBadgeText: { color: colors.onVideo, fontSize: 10, fontWeight: '800' },
   streamerRow: {
     flexDirection: 'row',
     alignItems: 'center',
