@@ -132,7 +132,7 @@ export default function CreatorScreen() {
         const res = await createChannelSubscription({ creatorId: profile.id, tier });
         const checkout = await completeMobileCheckout(res);
         if (checkout.ok) {
-          setIsMember(true);
+          await profileQuery.refetch();
         } else {
           throw new Error(checkout.error ?? 'Could not start membership checkout');
         }

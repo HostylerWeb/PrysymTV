@@ -5,7 +5,14 @@ export async function runBillingCheckout(
   result: CheckoutResult,
   onFulfilled?: () => void | Promise<void>,
 ): Promise<{ ok: boolean; error?: string }> {
-  if (result.devMode || result.coinsAdded != null || result.premiumTier || result.insiderActive) {
+  if (
+    result.devMode ||
+    result.success ||
+    result.coinsAdded != null ||
+    result.premiumTier ||
+    result.insiderActive ||
+    result.subscriptionId
+  ) {
     await onFulfilled?.();
     return { ok: true };
   }

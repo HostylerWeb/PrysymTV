@@ -782,31 +782,66 @@ export class BillingService {
     amountUsd: number,
     providerTransactionId?: string,
   ) {
+    if (providerTransactionId) {
+      const alreadyCompleted = await this.prisma.transaction.findFirst({
+        where: {
+          providerTransactionId,
+          status: TransactionStatus.completed,
+        },
+      });
+      if (alreadyCompleted) return;
+    }
+
     await this.prisma.user.update({
       where: { id: userId },
       data: { coinsBalance: { increment: coins } },
     });
 
-    const tx = await this.prisma.transaction.create({
-      data: {
-        userId,
-        type: TransactionType.purchase_coins,
-        provider: this.stripe ? PaymentProvider.stripe : PaymentProvider.stripe,
-        providerTransactionId:
-          providerTransactionId ?? `dev-${packageId}-${Date.now()}`,
-        amountUsd: amountUsd,
-        coinsAdded: coins,
-        status: TransactionStatus.completed,
+    let tx = providerTransactionId
+      ? await this.prisma.transaction.findFirst({
+          where: { providerTransactionId },
+        })
+      : null;
+
+    if (tx) {
+      tx = await this.prisma.transaction.update({
+        where: { id: tx.id },
+        data: {
+          status: TransactionStatus.completed,
+          coinsAdded: coins,
+          amountUsd,
+        },
+      });
+    } else {
+      tx = await this.prisma.transaction.create({
+        data: {
+          userId,
+          type: TransactionType.purchase_coins,
+          provider: PaymentProvider.stripe,
+          providerTransactionId:
+            providerTransactionId ?? `dev-${packageId}-${Date.now()}`,
+          amountUsd,
+          coinsAdded: coins,
+          status: TransactionStatus.completed,
+        },
+      });
+    }
+
+    const batchExists = await this.prisma.revenueLedgerBatch.findFirst({
+      where: {
+        sourceId: tx.id,
+        sourceType: RevenueSourceType.coin_purchase,
       },
     });
-
-    await this.revenueSplit.distributeAndPersist({
-      ruleKey: 'coin_purchase',
-      sourceType: RevenueSourceType.coin_purchase,
-      sourceId: tx.id,
-      grossAmountUsd: amountUsd,
-      metadata: { packageId, coins },
-    });
+    if (!batchExists) {
+      await this.revenueSplit.distributeAndPersist({
+        ruleKey: 'coin_purchase',
+        sourceType: RevenueSourceType.coin_purchase,
+        sourceId: tx.id,
+        grossAmountUsd: amountUsd,
+        metadata: { packageId, coins },
+      });
+    }
   }
 
   async sendGift(senderId: string, dto: SendGiftDto) {

@@ -19,12 +19,14 @@ import { useOAuthAuthHandlers } from '@/components/auth/useOAuthAuthHandlers';
 import { GenderField } from '@/components/auth/GenderField';
 import type { UserGenderValue } from '@/lib/user-gender';
 import { useMockAuth, getAuthErrorMessage } from '@/context/MockAuthContext';
+import { useOAuthConfig } from '@/context/OAuthConfigContext';
 import { colors, spacing, typography, radius } from '@/theme/tokens';
 
 export default function RegisterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { register } = useMockAuth();
+  const { showOAuthUi } = useOAuthConfig();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -182,18 +184,20 @@ export default function RegisterScreen() {
           />
         </View>
 
-        <View style={styles.oauth}>
-          <OAuthSignInButtons
-            disabled={busy}
-            onGoogleCredential={oauth.onGoogleCredential}
-            onAppleCredential={oauth.onAppleCredential}
-            onFacebookCredential={oauth.onFacebookCredential}
-            onError={oauth.onOAuthError}
-            showDivider
-            dividerPosition="above"
-            dividerLabel="or continue with"
-          />
-        </View>
+        {showOAuthUi ? (
+          <View style={styles.oauth}>
+            <OAuthSignInButtons
+              disabled={busy}
+              onGoogleCredential={oauth.onGoogleCredential}
+              onAppleCredential={oauth.onAppleCredential}
+              onFacebookCredential={oauth.onFacebookCredential}
+              onError={oauth.onOAuthError}
+              showDivider
+              dividerPosition="above"
+              dividerLabel="or continue with"
+            />
+          </View>
+        ) : null}
 
         <Pressable
           onPress={() => router.replace('/(auth)/login')}

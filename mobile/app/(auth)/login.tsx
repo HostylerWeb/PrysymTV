@@ -16,12 +16,14 @@ import { AuthErrorBox, AuthFormField } from '@/components/auth/AuthFormField';
 import { OAuthSignInButtons } from '@/components/auth/OAuthSignInButtons';
 import { useOAuthAuthHandlers } from '@/components/auth/useOAuthAuthHandlers';
 import { useMockAuth, getAuthErrorMessage } from '@/context/MockAuthContext';
+import { useOAuthConfig } from '@/context/OAuthConfigContext';
 import { colors, spacing, typography } from '@/theme/tokens';
 
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { login } = useMockAuth();
+  const { showOAuthUi } = useOAuthConfig();
   const [email, setEmail] = useState(__DEV__ ? 'demo@prysym.tv' : '');
   const [password, setPassword] = useState(__DEV__ ? 'password' : '');
   const [error, setError] = useState('');
@@ -116,18 +118,20 @@ export default function LoginScreen() {
           />
         </View>
 
-        <View style={styles.oauth}>
-          <OAuthSignInButtons
-            disabled={busy}
-            onGoogleCredential={oauth.onGoogleCredential}
-            onAppleCredential={oauth.onAppleCredential}
-            onFacebookCredential={oauth.onFacebookCredential}
-            onError={oauth.onOAuthError}
-            showDivider
-            dividerPosition="above"
-            dividerLabel="or continue with"
-          />
-        </View>
+        {showOAuthUi ? (
+          <View style={styles.oauth}>
+            <OAuthSignInButtons
+              disabled={busy}
+              onGoogleCredential={oauth.onGoogleCredential}
+              onAppleCredential={oauth.onAppleCredential}
+              onFacebookCredential={oauth.onFacebookCredential}
+              onError={oauth.onOAuthError}
+              showDivider
+              dividerPosition="above"
+              dividerLabel="or continue with"
+            />
+          </View>
+        ) : null}
 
         <Pressable
           onPress={() => router.replace('/(auth)/register')}

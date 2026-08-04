@@ -10,6 +10,11 @@ import {
   fetchPublicConfig,
   type PublicOAuthConfig,
 } from '@/lib/api/public-config';
+import {
+  isPlaceholderAppleClientId,
+  isPlaceholderFacebookAppId,
+  isPlaceholderGoogleClientId,
+} from '@/lib/oauth-mock';
 
 type OAuthConfigContextValue = {
   auth: PublicOAuthConfig | null;
@@ -72,9 +77,15 @@ export function OAuthConfigProvider({ children }: { children: ReactNode }) {
     const apple = auth?.apple ?? defaultAuth.apple;
     const facebook = auth?.facebook ?? defaultAuth.facebook;
     const googleConfigured = Boolean(
-      google.webClientId || google.iosClientId || google.androidClientId,
+      google.webClientId && !isPlaceholderGoogleClientId(google.webClientId),
     );
-    const appleConfigured = Boolean(apple.webClientId || apple.iosClientId);
+    const appleConfigured = Boolean(
+      (apple.iosClientId && !isPlaceholderAppleClientId(apple.iosClientId)) ||
+        (apple.webClientId && !isPlaceholderAppleClientId(apple.webClientId)),
+    );
+    const facebookConfigured = Boolean(
+      facebook.appId && !isPlaceholderFacebookAppId(facebook.appId),
+    );
 
     return {
       auth,
@@ -85,7 +96,7 @@ export function OAuthConfigProvider({ children }: { children: ReactNode }) {
       appleClientId: apple.iosClientId ?? apple.webClientId,
       facebookAppId: facebook.appId,
       isGoogleAvailableOnPlatform: googleConfigured,
-      showOAuthUi: true,
+      showOAuthUi: googleConfigured || appleConfigured || facebookConfigured,
     };
   }, [auth, loading]);
 

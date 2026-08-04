@@ -27,7 +27,7 @@ export async function completeMobileCheckout(
       if (payload.orderId) {
         try {
           const order = await fetchStoreOrder(payload.orderId);
-          if (order.status === 'paid' || order.status === 'fulfilled' || order.status === 'completed') {
+          if (order.status === 'paid' || order.status === 'fulfilled') {
             return { ok: true };
           }
         } catch {

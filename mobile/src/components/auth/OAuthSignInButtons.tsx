@@ -8,9 +8,8 @@ import {
   View,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import * as Application from 'expo-application';
-import * as AuthSession from 'expo-auth-session';
 import * as Google from 'expo-auth-session/providers/google';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as Facebook from 'expo-auth-session/providers/facebook';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,18 +18,14 @@ import {
   MOCK_APPLE_TOKEN,
   MOCK_FACEBOOK_TOKEN,
   MOCK_GOOGLE_TOKEN,
+  isPlaceholderAppleClientId,
+  isPlaceholderFacebookAppId,
+  isPlaceholderGoogleClientId,
   shouldUseMockOAuthSignIn,
 } from '@/lib/oauth-mock';
 import { colors, radius } from '@/theme/tokens';
 
 WebBrowser.maybeCompleteAuthSession();
-
-/** Redirect URI Google expects for Expo standalone Android Google OAuth. */
-function googleAndroidRedirectUri(): string {
-  return AuthSession.makeRedirectUri({
-    native: `${Application.applicationId ?? 'com.prysymtv.app'}:/oauthredirect`,
-  });
-}
 
 type Props = {
   disabled?: boolean;
@@ -95,7 +90,62 @@ function OAuthPillButton({
   );
 }
 
-function ConfiguredGoogleSignInButton({
+function NativeGoogleSignInButton({
+  disabled,
+  onGoogleCredential,
+  onError,
+  webClientId,
+}: {
+  disabled?: boolean;
+  onGoogleCredential: (idToken: string) => Promise<void>;
+  onError?: (message: string) => void;
+  webClientId?: string | null;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!webClientId) return;
+    GoogleSignin.configure({ webClientId, offlineAccess: false });
+  }, [webClientId]);
+
+  const handleGoogle = useCallback(async () => {
+    if (!webClientId) {
+      onError?.('Google sign-in is not configured yet.');
+      return;
+    }
+    setBusy(true);
+    try {
+      if (Platform.OS === 'android') {
+        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      }
+      const result = await GoogleSignin.signIn();
+      if (result.type === 'cancelled') return;
+      let idToken = result.data.idToken;
+      if (!idToken) {
+        const tokens = await GoogleSignin.getTokens();
+        idToken = tokens.idToken;
+      }
+      if (!idToken) throw new Error('Google did not return a sign-in token');
+      await onGoogleCredential(idToken);
+    } catch (err) {
+      onError?.(err instanceof Error ? err.message : 'Google sign-in failed');
+    } finally {
+      setBusy(false);
+    }
+  }, [onError, onGoogleCredential, webClientId]);
+
+  return (
+    <OAuthPillButton
+      label="Continue with Google"
+      icon={<Ionicons name="logo-google" size={20} color="#4285F4" />}
+      busy={busy}
+      disabled={disabled}
+      onPress={() => void handleGoogle()}
+    />
+  );
+}
+
+function WebGoogleSignInButton({
   disabled,
   onGoogleCredential,
   onError,
@@ -111,15 +161,10 @@ function ConfiguredGoogleSignInButton({
   androidClientId?: string | null;
 }) {
   const [busy, setBusy] = useState(false);
-  // Android's installed-app OAuth flow must use the Web client ID in the browser request.
-  // Using the Android client ID here causes Google "invalid_request" (400).
-  const androidOAuthClientId =
-    Platform.OS === 'android' ? webClientId ?? androidClientId : androidClientId;
   const [request, , promptAsync] = Google.useIdTokenAuthRequest({
     webClientId: webClientId || undefined,
     iosClientId: iosClientId || undefined,
-    androidClientId: androidOAuthClientId || undefined,
-    redirectUri: Platform.OS === 'android' ? googleAndroidRedirectUri() : undefined,
+    androidClientId: androidClientId || undefined,
   });
 
   const handleGoogle = useCallback(async () => {
@@ -148,6 +193,44 @@ function ConfiguredGoogleSignInButton({
       busy={busy}
       disabled={disabled}
       onPress={() => void handleGoogle()}
+    />
+  );
+}
+
+function ConfiguredGoogleSignInButton({
+  disabled,
+  onGoogleCredential,
+  onError,
+  webClientId,
+  iosClientId,
+  androidClientId,
+}: {
+  disabled?: boolean;
+  onGoogleCredential: (idToken: string) => Promise<void>;
+  onError?: (message: string) => void;
+  webClientId?: string | null;
+  iosClientId?: string | null;
+  androidClientId?: string | null;
+}) {
+  if (Platform.OS !== 'web') {
+    return (
+      <NativeGoogleSignInButton
+        disabled={disabled}
+        onGoogleCredential={onGoogleCredential}
+        onError={onError}
+        webClientId={webClientId}
+      />
+    );
+  }
+
+  return (
+    <WebGoogleSignInButton
+      disabled={disabled}
+      onGoogleCredential={onGoogleCredential}
+      onError={onError}
+      webClientId={webClientId}
+      iosClientId={iosClientId}
+      androidClientId={androidClientId}
     />
   );
 }
@@ -220,8 +303,6 @@ export function OAuthSignInButtons({
   const [appleBusy, setAppleBusy] = useState(false);
   const [appleNativeAvailable, setAppleNativeAvailable] = useState(false);
 
-  const appleConfigured = Boolean(appleClientId);
-  const facebookConfigured = Boolean(facebookAppId);
   const useMockSignIn = shouldUseMockOAuthSignIn({
     preferMock: preferMockSignIn,
     googleWebClientId,
@@ -229,13 +310,29 @@ export function OAuthSignInButtons({
     googleAndroidClientId,
     appleClientId,
   });
+
+  const googleConfigured =
+    preferMockSignIn && useMockSignIn
+      ? true
+      : Boolean(
+          googleWebClientId && !isPlaceholderGoogleClientId(googleWebClientId),
+        );
+  const appleConfigured =
+    preferMockSignIn && useMockSignIn
+      ? true
+      : Boolean(appleClientId && !isPlaceholderAppleClientId(appleClientId));
+  const facebookConfigured =
+    preferMockSignIn && useMockSignIn
+      ? true
+      : Boolean(facebookAppId && !isPlaceholderFacebookAppId(facebookAppId));
+
+  const showGoogle = googleConfigured;
+  const showApple = appleConfigured && Platform.OS === 'ios';
+  const showFacebook = facebookConfigured;
   const canUseGoogleHook =
-    !useMockSignIn &&
-    (Platform.OS === 'android'
-      ? Boolean(googleWebClientId)
-      : Platform.OS === 'ios'
-        ? Boolean(googleIosClientId || googleWebClientId)
-        : Boolean(googleWebClientId));
+    !useMockSignIn && Boolean(googleWebClientId) && googleConfigured;
+  const canUseFacebookHook =
+    !useMockSignIn && facebookConfigured && Boolean(facebookAppId);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
@@ -254,15 +351,8 @@ export function OAuthSignInButtons({
     await onFacebookCredential(MOCK_FACEBOOK_TOKEN);
   }, [onFacebookCredential]);
 
-  const canUseFacebookHook =
-    !useMockSignIn && facebookConfigured && Boolean(facebookAppId);
-
   const handleAppleNative = useCallback(async () => {
     if (useMockSignIn) {
-      await handleApplePreview();
-      return;
-    }
-    if (!appleConfigured) {
       await handleApplePreview();
       return;
     }
@@ -288,20 +378,8 @@ export function OAuthSignInButtons({
     } finally {
       setAppleBusy(false);
     }
-  }, [appleConfigured, handleApplePreview, onAppleCredential, onError, useMockSignIn]);
+  }, [handleApplePreview, onAppleCredential, onError, useMockSignIn]);
 
-  const handleAppleAndroid = useCallback(async () => {
-    if (useMockSignIn || !appleConfigured) {
-      await handleApplePreview();
-      return;
-    }
-    onError?.('Apple Sign-In is not available on this device.');
-  }, [appleConfigured, handleApplePreview, onError, useMockSignIn]);
-
-  const showApple =
-    Platform.OS === 'ios'
-      ? useMockSignIn || appleNativeAvailable || !appleConfigured
-      : true;
   const useNativeAppleButton =
     Platform.OS === 'ios' &&
     appleNativeAvailable &&
@@ -310,6 +388,7 @@ export function OAuthSignInButtons({
   const isBusy = disabled || appleBusy;
 
   if (loading) return null;
+  if (!showGoogle && !showApple && !showFacebook) return null;
 
   return (
     <View style={styles.wrap}>
@@ -317,23 +396,25 @@ export function OAuthSignInButtons({
         <OAuthDivider label={dividerLabel} />
       ) : null}
 
-      {canUseGoogleHook ? (
-        <ConfiguredGoogleSignInButton
-          disabled={disabled}
-          onGoogleCredential={onGoogleCredential}
-          onError={onError}
-          webClientId={googleWebClientId}
-          iosClientId={googleIosClientId}
-          androidClientId={googleAndroidClientId}
-        />
-      ) : (
-        <OAuthPillButton
-          label="Continue with Google"
-          icon={<Ionicons name="logo-google" size={20} color="#4285F4" />}
-          disabled={isBusy}
-          onPress={() => void handleGooglePreview()}
-        />
-      )}
+      {showGoogle ? (
+        canUseGoogleHook ? (
+          <ConfiguredGoogleSignInButton
+            disabled={disabled}
+            onGoogleCredential={onGoogleCredential}
+            onError={onError}
+            webClientId={googleWebClientId}
+            iosClientId={googleIosClientId}
+            androidClientId={googleAndroidClientId}
+          />
+        ) : (
+          <OAuthPillButton
+            label="Continue with Google"
+            icon={<Ionicons name="logo-google" size={20} color="#4285F4" />}
+            disabled={isBusy}
+            onPress={() => void handleGooglePreview()}
+          />
+        )
+      ) : null}
 
       {showApple ? (
         useNativeAppleButton ? (
@@ -350,28 +431,28 @@ export function OAuthSignInButtons({
             icon={<Ionicons name="logo-apple" size={22} color={colors.foreground} />}
             busy={appleBusy}
             disabled={isBusy && !appleBusy}
-            onPress={() =>
-              void (Platform.OS === 'ios' ? handleAppleNative() : handleAppleAndroid())
-            }
+            onPress={() => void handleAppleNative()}
           />
         )
       ) : null}
 
-      {canUseFacebookHook && facebookAppId ? (
-        <ConfiguredFacebookSignInButton
-          disabled={disabled}
-          onFacebookCredential={onFacebookCredential}
-          onError={onError}
-          appId={facebookAppId}
-        />
-      ) : (
-        <OAuthPillButton
-          label="Continue with Facebook"
-          icon={<Ionicons name="logo-facebook" size={20} color="#1877F2" />}
-          disabled={isBusy}
-          onPress={() => void handleFacebookPreview()}
-        />
-      )}
+      {showFacebook ? (
+        canUseFacebookHook && facebookAppId ? (
+          <ConfiguredFacebookSignInButton
+            disabled={disabled}
+            onFacebookCredential={onFacebookCredential}
+            onError={onError}
+            appId={facebookAppId}
+          />
+        ) : (
+          <OAuthPillButton
+            label="Continue with Facebook"
+            icon={<Ionicons name="logo-facebook" size={20} color="#1877F2" />}
+            disabled={isBusy}
+            onPress={() => void handleFacebookPreview()}
+          />
+        )
+      ) : null}
 
       {showDivider && dividerPosition === 'below' ? (
         <OAuthDivider label={dividerLabel} />

@@ -79,7 +79,8 @@
       "@react-native-community/datetimepicker",
       "expo-audio",
       "expo-navigation-bar",
-      "./plugins/withNotificationLargeIcon.js"
+      "./plugins/withNotificationLargeIcon.js",
+      "@react-native-google-signin/google-signin"
     ]
   }
 }
