@@ -57,6 +57,7 @@ type FeedLiveItem = {
   title: string;
   thumbnailUrl?: string | null;
   thumbnail?: string | null;
+  hlsPlaybackUrl?: string | null;
   streamer: string;
   streamerSlug: string;
   streamerAvatar?: string | null;
@@ -69,10 +70,12 @@ type FeedLiveItem = {
 };
 
 export function mapFeedLiveStream(raw: FeedLiveItem): LiveStream {
+  const hls = raw.hlsPlaybackUrl?.trim();
   return {
     id: raw.id,
     title: raw.title,
     thumbnailUrl: mediaThumb(raw.thumbnailUrl ?? raw.thumbnail),
+    hlsPlaybackUrl: hls ? proxyMediaAssetUrl(hls) : null,
     viewerCount: raw.viewers ?? raw.viewerCount ?? 0,
     category: raw.category ?? 'Live',
     streamer: raw.streamer,

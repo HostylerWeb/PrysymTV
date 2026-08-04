@@ -219,6 +219,7 @@ export type LiveStream = {
   id: string;
   title: string;
   thumbnailUrl: string | null;
+  hlsPlaybackUrl?: string | null;
   viewerCount: number;
   category: string;
   streamer: string;

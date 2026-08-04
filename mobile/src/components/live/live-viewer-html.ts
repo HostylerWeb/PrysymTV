@@ -15,7 +15,12 @@ export function buildLiveViewerHtml(whepPlaybackUrl: string): string {
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-  video { width: 100%; height: 100%; object-fit: cover; background: #000; }
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+  }
 </style>
 </head>
 <body>
@@ -72,7 +77,20 @@ function onControlMessage(raw) {
 window.addEventListener('message', (event) => onControlMessage(event.data));
 document.addEventListener('message', (event) => onControlMessage(event.data));
 
-startReader();
+let bootAttempts = 0;
+function boot() {
+  bootAttempts += 1;
+  if (window.MediaMTXWebRTCReader) {
+    startReader();
+    return;
+  }
+  if (bootAttempts > 100) {
+    post({ type: 'error', message: 'WebRTC reader script failed to load' });
+    return;
+  }
+  setTimeout(boot, 50);
+}
+boot();
 </script>
 </body>
 </html>`;

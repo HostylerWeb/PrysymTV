@@ -101,6 +101,7 @@ export function BrowserLivePublisher({
   const [audioDevices, setAudioDevices] = useState<DeviceOption[]>([])
   const [selectedVideoId, setSelectedVideoId] = useState("")
   const [selectedAudioId, setSelectedAudioId] = useState("")
+  const [mirrorPreview, setMirrorPreview] = useState(true)
 
   const refreshDeviceLists = useCallback(async () => {
     if (!navigator.mediaDevices?.enumerateDevices) return
@@ -331,11 +332,19 @@ export function BrowserLivePublisher({
       <div className="relative flex-1 min-h-0">
         <video
           ref={videoRef}
-          className="w-full h-full object-contain [transform:scaleX(-1)]"
+          className={cn(
+            "w-full h-full object-contain",
+            mirrorPreview && "[transform:scaleX(-1)]",
+          )}
           playsInline
           muted
           autoPlay
         />
+        {mirrorPreview ? (
+          <p className="absolute top-12 left-3 right-3 text-[10px] leading-snug text-white/80 bg-black/45 rounded px-2 py-1 pointer-events-none">
+            Mirrored preview only — viewers (including mobile) see the normal image.
+          </p>
+        ) : null}
         <div className="absolute top-3 left-3 flex items-center gap-2">
           <span
             className={cn(
@@ -415,6 +424,15 @@ export function BrowserLivePublisher({
                   ))
                 )}
               </select>
+            </label>
+            <label className="flex items-center justify-between gap-3 rounded-lg bg-zinc-800/80 border border-white/10 px-3 py-2.5">
+              <span className="text-xs font-medium text-zinc-300">Mirror preview (selfie view)</span>
+              <input
+                type="checkbox"
+                checked={mirrorPreview}
+                onChange={(e) => setMirrorPreview(e.target.checked)}
+                className="h-4 w-4 accent-primary"
+              />
             </label>
             <label className="block space-y-1.5">
               <span className="text-xs font-medium text-zinc-300 flex items-center gap-1.5">

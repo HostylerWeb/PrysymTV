@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LiveStreamPreview } from '@/components/feed/LiveStreamPreview';
 import { colors, radius, withAlpha } from '@/theme/tokens';
 import { formatViewCount } from '@/utils/format-media';
 import { resolveAvatarUrl } from '@/lib/media-url';
@@ -15,14 +16,14 @@ export function LiveStreamCard({ stream, featured }: { stream: LiveStream; featu
       style={[styles.card, featured && styles.featured]}
       onPress={() => router.push(`/live/${stream.id}`)}
     >
-      <Image
-        source={{
-          uri: stream.thumbnailUrl
-            ? stream.thumbnailUrl
-            : resolveAvatarUrl(stream.avatarUrl, stream.streamerSlug ?? stream.streamer),
-        }}
+      <LiveStreamPreview
+        title={stream.title}
+        hlsPlaybackUrl={stream.hlsPlaybackUrl}
+        thumbnailUrl={stream.thumbnailUrl}
+        streamerAvatar={stream.avatarUrl}
+        streamerSlug={stream.streamerSlug}
+        streamer={stream.streamer}
         style={styles.thumb}
-        contentFit={stream.thumbnailUrl ? 'cover' : 'contain'}
       />
       <View style={styles.liveBadge}>
         <View style={styles.liveDot} />
