@@ -21,6 +21,7 @@ export function LiveBroadcastPlayer({
   paused = false,
   autoPlay = true,
   isLive = true,
+  immersive = false,
 }: LiveBroadcastPlayerProps) {
   const webRef = useRef<WebView>(null);
   const whep = webrtcUrl?.trim() ?? '';
@@ -65,21 +66,23 @@ export function LiveBroadcastPlayer({
     [hls],
   );
 
+  const wrapStyle = [styles.wrap, immersive ? styles.wrapImmersive : styles.wrapInline];
+
   if (useHlsFallback) {
     if (!hls) {
       return (
-        <View style={styles.wrap}>
+        <View style={wrapStyle}>
           {posterUrl ? (
-            <Image source={{ uri: posterUrl }} style={styles.poster} contentFit="cover" />
+            <Image source={{ uri: posterUrl }} style={immersive ? StyleSheet.absoluteFill : styles.poster} contentFit="cover" />
           ) : (
-            <View style={styles.poster} />
+            <View style={immersive ? StyleSheet.absoluteFill : styles.poster} />
           )}
         </View>
       );
     }
 
     return (
-      <View style={styles.wrap}>
+      <View style={wrapStyle}>
         <HlsPlayer
           source={hls}
           posterUrl={posterUrl}
@@ -90,6 +93,7 @@ export function LiveBroadcastPlayer({
           nativeControls={false}
           tapToToggle={false}
           enablePlayerChrome={false}
+          fill={immersive}
         />
       </View>
     );
@@ -109,7 +113,7 @@ export function LiveBroadcastPlayer({
       : {};
 
   return (
-    <View style={styles.wrap}>
+    <View style={wrapStyle}>
       {posterUrl && !webrtcPlaying ? (
         <Image source={{ uri: posterUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
       ) : null}
@@ -137,9 +141,15 @@ export function LiveBroadcastPlayer({
 const styles = StyleSheet.create({
   wrap: {
     width: '100%',
-    aspectRatio: 16 / 9,
     backgroundColor: colors.videoBackground,
     overflow: 'hidden',
+  },
+  wrapImmersive: {
+    flex: 1,
+    height: '100%',
+  },
+  wrapInline: {
+    aspectRatio: 16 / 9,
   },
   web: {
     flex: 1,

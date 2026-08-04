@@ -21,6 +21,7 @@ import { AdBanner } from '@/components/ads/AdBanner';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { Image } from 'expo-image';
 import { useHomeFeed } from '@/hooks/api/useHomeFeed';
+import { useLiveFeedUpdates } from '@/hooks/useLiveFeedUpdates';
 import { useVerticalsList } from '@/hooks/api/useVerticalsList';
 import { usePodcastsCatalog } from '@/hooks/api/usePodcastsCatalog';
 import { flattenShortsPages, useShortsFeed } from '@/hooks/api/useShortsFeed';
@@ -37,6 +38,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const homeQuery = useHomeFeed();
+  useLiveFeedUpdates();
   const verticalsQuery = useVerticalsList();
   const podcastsQuery = usePodcastsCatalog(1, 12);
   const shortsQuery = useShortsFeed(8);

@@ -25,6 +25,7 @@ import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-me
 import { userAvatarUrl } from "@/lib/user-avatar"
 import { CreateFlowModals, triggerContextualCreate } from "@/components/create-flow-modals"
 import { useCreateFlow } from "@/hooks/use-create-flow"
+import { useLiveFeedUpdates } from "@/lib/hooks/use-live-feed-updates"
 import { useAuth } from "@/contexts/auth-context"
 import { VideosBrowseSkeleton } from "@/components/content-skeletons"
 
@@ -118,16 +119,26 @@ function VideosBrowseContent() {
     void loadFeed(1, false)
   }, [loadFeed])
 
-  // Refresh just the live rail so hlsPlaybackUrl/thumbnail populate once the
-  // stream is fully on-air, without resetting pagination or scroll position.
-  useEffect(() => {
-    const interval = setInterval(() => {
-      void fetchVideosBrowse({ page: 1, limit: 24, vertical: vertical ?? undefined, sort, mode, q: searchQuery || undefined })
-        .then((res) => setLiveItems(res.live.items))
-        .catch(() => {})
-    }, 20_000)
-    return () => clearInterval(interval)
+  const refreshLiveRail = useCallback(() => {
+    void fetchVideosBrowse({
+      page: 1,
+      limit: 24,
+      vertical: vertical ?? undefined,
+      sort,
+      mode,
+      q: searchQuery || undefined,
+    })
+      .then((res) => setLiveItems(res.live.items))
+      .catch(() => {})
   }, [vertical, sort, mode, searchQuery])
+
+  useLiveFeedUpdates(refreshLiveRail)
+
+  // Fallback poll for live rail metadata (viewer counts, thumbnails).
+  useEffect(() => {
+    const interval = setInterval(() => refreshLiveRail(), 20_000)
+    return () => clearInterval(interval)
+  }, [refreshLiveRail])
 
   useEffect(() => {
     const cat = searchParams.get("category")

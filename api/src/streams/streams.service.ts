@@ -492,7 +492,7 @@ export class StreamsService {
         where: { temporaryStreamToken: streamKey },
         include: {
           creator: {
-            select: { id: true, username: true, displayName: true },
+            select: { id: true, username: true, displayName: true, avatarUrl: true },
           },
         },
       });
@@ -503,6 +503,21 @@ export class StreamsService {
           stream.id,
           name,
         );
+        this.streamsGateway.emitStreamLive({
+          streamId: stream.id,
+          title: stream.title,
+          streamer: name,
+          streamerSlug: stream.creator.username,
+          streamerAvatar: this.playback.resolvePublicAssetUrl(
+            stream.creator.avatarUrl,
+          ),
+          thumbnailUrl: this.playback.resolvePublicAssetUrl(stream.thumbnailUrl),
+          hlsPlaybackUrl,
+          viewerCount: stream.viewerCount,
+          category: stream.category,
+          isPaid: stream.accessType === StreamAccessType.paid,
+          entryCoinCost: stream.entryCoinCost,
+        });
       }
     }
     return { ok: true, hlsPlaybackUrl };

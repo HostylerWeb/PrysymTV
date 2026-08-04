@@ -20,6 +20,7 @@ import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { useCreateFlow } from '@/hooks/useCreateFlow';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useVideosFeed } from '@/hooks/api/useVideosFeed';
+import { useLiveFeedUpdates } from '@/hooks/useLiveFeedUpdates';
 import { fetchVideoCategories } from '@/lib/api/categories';
 import {
   FALLBACK_VIDEO_CATEGORIES,
@@ -84,6 +85,7 @@ export default function VideosScreen() {
     mode: browseMode,
     q: search,
   });
+  useLiveFeedUpdates();
 
   useEffect(() => {
     const batch = feedQuery.data?.videos;

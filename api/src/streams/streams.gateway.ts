@@ -37,6 +37,21 @@ export type StreamGiftPayload = {
   createdAt: string;
 };
 
+/** Lightweight payload for home/videos live rails — no per-user access gating. */
+export type StreamLiveFeedPayload = {
+  streamId: string;
+  title: string;
+  streamer: string;
+  streamerSlug: string;
+  streamerAvatar: string | null;
+  thumbnailUrl: string | null;
+  hlsPlaybackUrl: string | null;
+  viewerCount: number;
+  category: string | null;
+  isPaid: boolean;
+  entryCoinCost: number | null;
+};
+
 const CHAT_COLORS = [
   'text-cyan-400',
   'text-pink-400',
@@ -126,6 +141,13 @@ export class StreamsGateway implements OnGatewayConnection, OnGatewayDisconnect 
     this.server.to(room).emit('viewers', { count });
   }
 
+  /** Subscribe to global live-rail updates (stream went live / ended). */
+  @SubscribeMessage('joinFeed')
+  async joinFeed(@ConnectedSocket() client: Socket) {
+    await client.join('feed:live');
+    return { ok: true };
+  }
+
   @SubscribeMessage('join')
   async join(
     @ConnectedSocket() client: Socket,
@@ -206,8 +228,13 @@ export class StreamsGateway implements OnGatewayConnection, OnGatewayDisconnect 
     return { ok: true };
   }
 
+  emitStreamLive(payload: StreamLiveFeedPayload) {
+    this.server.to('feed:live').emit('streamLive', payload);
+  }
+
   emitStreamEnded(streamId: string) {
     this.server.to(`stream:${streamId}`).emit('streamEnded', { streamId });
+    this.server.to('feed:live').emit('streamEnded', { streamId });
   }
 
   emitGift(streamId: string, payload: StreamGiftPayload) {

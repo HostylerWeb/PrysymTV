@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Header } from "@/components/header"
 import { MovieRow } from "@/components/movie-row"
 import { LiveRow } from "@/components/live-row"
@@ -21,6 +21,7 @@ import { fetchShortsFeed } from "@/lib/api/videos-feed"
 import { fetchPodcastEpisodesFeed } from "@/lib/api/podcasts"
 import { fetchVerticalSeriesList } from "@/lib/api/verticals"
 import { formatDuration, formatViewCount, moviePosterUrl, videoThumbnail } from "@/lib/format-media"
+import { useLiveFeedUpdates } from "@/lib/hooks/use-live-feed-updates"
 
 export default function Home() {
   const { platformCreatorId } = usePublicAdsConfig()
@@ -77,6 +78,9 @@ export default function Home() {
     const interval = setInterval(() => setFeedReloadKey((k) => k + 1), 30_000)
     return () => clearInterval(interval)
   }, [])
+
+  const bumpFeed = useCallback(() => setFeedReloadKey((k) => k + 1), [])
+  useLiveFeedUpdates(bumpFeed)
 
   useEffect(() => {
     let cancelled = false

@@ -6,4 +6,6 @@ export type LiveBroadcastPlayerProps = {
   paused?: boolean;
   autoPlay?: boolean;
   isLive?: boolean;
+  /** Fill parent (immersive fullscreen) instead of fixed 16:9 box. */
+  immersive?: boolean;
 };

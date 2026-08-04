@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { MobileLiveStudioPanel } from '@/components/live/MobileLiveStudioPanel';
 import { LiveBroadcastPlayer } from '@/components/live/LiveBroadcastPlayer';
+import { LiveImmersiveWatch } from '@/components/live/LiveImmersiveWatch';
 import { LiveGiftPanel } from '@/components/live/LiveGiftPanel';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { Button } from '@/components/ui/Button';
@@ -42,12 +43,13 @@ export default function LiveScreen() {
   const [following, setFollowing] = useState(false);
   const [alertsOn, setAlertsOn] = useState(false);
   const [draft, setDraft] = useState('');
+  const [immersive, setImmersive] = useState(false);
   const chatRef = useRef<ScrollView>(null);
 
   const isOwner = !!user?.id && stream?.creatorId === user.id;
   const needsPaywall = Boolean(stream?.isPaid) && !stream?.hasAccess && !isOwner;
   const chatStreamId = needsPaywall ? undefined : id;
-  const { messages, connected, error: chatError, sendMessage } = useStreamChat(chatStreamId);
+  const { messages, connected, viewerCount: liveViewerCount, error: chatError, sendMessage } = useStreamChat(chatStreamId);
   const userCoins = user?.coinsBalance ?? 0;
 
   const sendChat = () => {
@@ -203,13 +205,20 @@ export default function LiveScreen() {
               hlsUrl={stream.hlsPlaybackUrl ?? stream.playbackSource}
               posterUrl={stream.thumbnailUrl}
               contentFit="cover"
-              paused={!isFocused}
+              paused={!isFocused || immersive}
               isLive
               autoPlay
             />
             <View style={styles.liveBadge}>
               <Text style={styles.liveBadgeText}>{stream.isPaid ? 'VIP' : 'LIVE'}</Text>
             </View>
+            <Pressable
+              style={styles.fullscreenBtn}
+              onPress={() => setImmersive(true)}
+              accessibilityLabel="Fullscreen"
+            >
+              <Ionicons name="expand-outline" size={20} color={colors.onVideo} />
+            </Pressable>
           </View>
         ) : (
           <View style={styles.playerWrap}>
@@ -313,6 +322,33 @@ export default function LiveScreen() {
       />
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} targetType="stream" targetId={stream.id} />
       <CoinsModal visible={coinsOpen} onClose={() => setCoinsOpen(false)} balance={userCoins} />
+      {!needsPaywall && stream.status === 'live' ? (
+        <LiveImmersiveWatch
+          visible={immersive}
+          onClose={() => setImmersive(false)}
+          title={stream.title}
+          streamer={stream.streamer}
+          viewerCount={liveViewerCount > 0 ? liveViewerCount : stream.viewerCount}
+          isPaid={stream.isPaid}
+          webrtcUrl={stream.webrtcPlaybackUrl}
+          hlsUrl={stream.hlsPlaybackUrl ?? stream.playbackSource}
+          posterUrl={stream.thumbnailUrl}
+          paused={!isFocused}
+          creatorId={stream.creatorId}
+          streamId={stream.id}
+          messages={messages}
+          connected={connected}
+          chatError={chatError}
+          draft={draft}
+          onDraftChange={setDraft}
+          onSendChat={sendChat}
+          canChat={!!user}
+          giftOpen={giftOpen}
+          onToggleGift={() => requireAuth(() => setGiftOpen(!giftOpen))}
+          onGiftSent={() => setGiftOpen(false)}
+          onOpenShare={() => setShareOpen(true)}
+        />
+      ) : null}
     </>
   );
 }
@@ -364,6 +400,18 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   liveBadgeText: { color: colors.onVideo, fontSize: 10, fontWeight: '800' },
+  fullscreenBtn: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
   streamerRow: {
     flexDirection: 'row',
     alignItems: 'center',
