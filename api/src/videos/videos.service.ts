@@ -276,10 +276,7 @@ export class VideosService implements OnModuleInit {
     }
 
     if (video.status === ContentStatus.failed && video.verticalEpisodeId) {
-      await this.prisma.verticalEpisode.update({
-        where: { id: video.verticalEpisodeId },
-        data: { status: ContentStatus.failed },
-      });
+      await this.syncVerticalEpisodeFailedStatus(video.verticalEpisodeId);
     }
   }
 
@@ -295,6 +292,13 @@ export class VideosService implements OnModuleInit {
     }
     await this.markVideoAndEpisodeFailed(video);
     return { success: true, status: ContentStatus.failed };
+  }
+
+  private async syncVerticalEpisodeFailedStatus(verticalEpisodeId: string) {
+    await this.prisma.verticalEpisode.updateMany({
+      where: { id: verticalEpisodeId },
+      data: { status: ContentStatus.failed },
+    });
   }
 
   private async markVideoAndEpisodeFailed(
@@ -313,10 +317,7 @@ export class VideosService implements OnModuleInit {
       data: { status: ContentStatus.failed },
     });
     if (video.verticalEpisodeId) {
-      await this.prisma.verticalEpisode.update({
-        where: { id: video.verticalEpisodeId },
-        data: { status: ContentStatus.failed },
-      });
+      await this.syncVerticalEpisodeFailedStatus(video.verticalEpisodeId);
     }
     void this.notifications.notifyVideoProcessingFailed(
       video.creatorId,
