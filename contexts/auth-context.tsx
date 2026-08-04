@@ -31,6 +31,7 @@ export interface User {
   username: string
   email: string
   avatar: string
+  avatarUrl: string | null
   bannerUrl: string | null
   bio: string
   coins: number

@@ -1,20 +1,61 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePathname } from 'expo-router';
 import { EditProfileModal } from '@/components/modals/EditProfileModal';
 import { useMockAuth } from '@/context/MockAuthContext';
+import {
+  getMissingProfileFields,
+  needsProfileCompletion,
+  profileCompletionMessage,
+} from '@/lib/profile-completion';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 
 export function CompleteProfileBanner() {
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { user, isAuthenticated, sessionReady } = useMockAuth();
   const [editOpen, setEditOpen] = useState(false);
 
-  if (!sessionReady || !isAuthenticated || !user || user.gender) {
+  const missing = useMemo(
+    () =>
+      getMissingProfileFields(
+        user
+          ? {
+              gender: user.gender,
+              birthDate: user.birthDate,
+              avatarUrl: user.avatarUrl,
+              bannerUrl: user.bannerUrl,
+            }
+          : null,
+      ),
+    [user],
+  );
+
+  const onAuthScreen =
+    pathname.startsWith('/(auth)') ||
+    pathname === '/welcome' ||
+    pathname === '/login' ||
+    pathname === '/register';
+
+  if (
+    !sessionReady ||
+    !isAuthenticated ||
+    !user ||
+    onAuthScreen ||
+    !needsProfileCompletion({
+      gender: user.gender,
+      birthDate: user.birthDate,
+      avatarUrl: user.avatarUrl,
+      bannerUrl: user.bannerUrl,
+    })
+  ) {
     return null;
   }
+
+  const message = profileCompletionMessage(missing);
 
   return (
     <>
@@ -28,15 +69,14 @@ export function CompleteProfileBanner() {
           },
         ]}
       >
-        <Text style={[styles.text, { color: colors.foreground }]}>
-          Complete your profile so we can personalize your experience.
-        </Text>
+        <Text style={[styles.text, { color: colors.foreground }]}>{message}</Text>
         <Pressable
           onPress={() => setEditOpen(true)}
           style={[styles.btn, { backgroundColor: colors.primary }]}
           accessibilityRole="button"
+          accessibilityLabel="Continue profile setup"
         >
-          <Text style={[styles.btnText, { color: colors.primaryForeground }]}>Complete profile</Text>
+          <Text style={[styles.btnText, { color: colors.primaryForeground }]}>Continue setup</Text>
         </Pressable>
       </View>
       <EditProfileModal visible={editOpen} onClose={() => setEditOpen(false)} />

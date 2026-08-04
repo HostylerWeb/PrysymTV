@@ -58,6 +58,7 @@ import {
 } from "@/lib/api/playlists"
 import { ProfilePageSkeleton } from "@/components/content-skeletons"
 import { profileAuthHref, safeReturnPath } from "@/lib/safe-return-path"
+import { CompleteProfileBannerStrip, useNeedsProfileCompletion } from "@/components/complete-profile-banner"
 
 const baseTabs = [
   { id: "content", label: "Content", icon: Grid3X3 },
@@ -104,6 +105,7 @@ function ProfilePageContent() {
       : undefined
 
   const { user, isAuthenticated, isLoading, logout, refreshUser } = useAuth()
+  const needsProfileBanner = useNeedsProfileCompletion()
   const [activeTab, setActiveTab] = useState("content")
   const [showSettings, setShowSettings] = useState(false)
   const [settingsOpenTo, setSettingsOpenTo] = useState<ProfileSettingsScreen | undefined>()
@@ -377,6 +379,11 @@ function ProfilePageContent() {
 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
+      {needsProfileBanner ? (
+        <div className="sticky top-0 z-[60]">
+          <CompleteProfileBannerStrip />
+        </div>
+      ) : null}
       {/* Header */}
       <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-lg border-b border-border">
         <div className="flex items-center justify-between px-4 py-3 max-w-5xl mx-auto w-full">

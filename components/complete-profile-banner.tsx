@@ -5,20 +5,47 @@ import { useAuth } from "@/contexts/auth-context"
 import { EditProfileModal } from "@/components/edit-profile-modal"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import {
+  getMissingProfileFields,
+  needsProfileCompletion as userNeedsProfileCompletion,
+  profileCompletionMessage,
+  type ProfileCompletionInput,
+} from "@/lib/profile-completion"
 
 /** Extra spacer below the main header row when the profile banner is visible. */
 export const PROFILE_BANNER_SPACER_CLASS = "h-[5.25rem] sm:h-[3.25rem]"
 
 export function useNeedsProfileCompletion(): boolean {
   const { user, isAuthenticated, isLoading } = useAuth()
-  return !isLoading && isAuthenticated && !!user && !user.gender
+  if (isLoading || !isAuthenticated || !user) return false
+  const input: ProfileCompletionInput = {
+    gender: user.gender,
+    birthDate: user.birthDate,
+    avatarUrl: user.avatarUrl,
+    bannerUrl: user.bannerUrl,
+  }
+  return userNeedsProfileCompletion(input)
+}
+
+export function useProfileCompletionMessage(): string | null {
+  const { user, isAuthenticated, isLoading } = useAuth()
+  if (isLoading || !isAuthenticated || !user) return null
+  const missing = getMissingProfileFields({
+    gender: user.gender,
+    birthDate: user.birthDate,
+    avatarUrl: user.avatarUrl,
+    bannerUrl: user.bannerUrl,
+  })
+  if (missing.length === 0) return null
+  return profileCompletionMessage(missing)
 }
 
 export function CompleteProfileBannerStrip({ className }: { className?: string }) {
   const needsProfile = useNeedsProfileCompletion()
+  const message = useProfileCompletionMessage()
   const [open, setOpen] = useState(false)
 
-  if (!needsProfile) return null
+  if (!needsProfile || !message) return null
 
   return (
     <>
@@ -28,11 +55,9 @@ export function CompleteProfileBannerStrip({ className }: { className?: string }
           className,
         )}
       >
-        <p className="text-sm text-foreground">
-          Complete your profile so we can personalize your experience.
-        </p>
+        <p className="text-sm text-foreground">{message}</p>
         <Button size="sm" className="rounded-full shrink-0" onClick={() => setOpen(true)}>
-          Complete profile
+          Continue setup
         </Button>
       </div>
       <EditProfileModal isOpen={open} onClose={() => setOpen(false)} />

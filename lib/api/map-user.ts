@@ -30,5 +30,6 @@ export function mapMeToUser(me: MeResponse): User {
     videosCount: me.videosCount,
     gender: me.gender ?? null,
     birthDate: me.birthDate ?? null,
+    avatarUrl: me.avatarUrl ?? null,
   };
 }
