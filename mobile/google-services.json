@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "839585847210",
+    "project_id": "prysymtv-8891f",
+    "storage_bucket": "prysymtv-8891f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:839585847210:android:dc7b9301e8e60edcc17dd3",
+        "android_client_info": {
+          "package_name": "com.prysymtv.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDIa6FbrXpcvYe2GEHMLxJbAfcHpHeVsKA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -45,7 +45,14 @@
       "expo-router",
       "expo-font",
       "expo-apple-authentication",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#EF511D",
+          "defaultChannel": "default"
+        }
+      ],
       [
         "expo-image-picker",
         {
@@ -71,7 +78,8 @@
       ],
       "@react-native-community/datetimepicker",
       "expo-audio",
-      "expo-navigation-bar"
+      "expo-navigation-bar",
+      "./plugins/withNotificationLargeIcon.js"
     ]
   }
 }

@@ -87,13 +87,13 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
   },
   sheet: {
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderRadius: radius.xl,
     padding: 16,
-    paddingBottom: 28,
+    paddingBottom: 16,
   },
   title: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
   row: {

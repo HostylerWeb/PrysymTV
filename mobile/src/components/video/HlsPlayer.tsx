@@ -15,6 +15,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { activateKeepAwake, deactivateKeepAwake } from 'expo-keep-awake';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 import { VideoQualityMenu } from '@/components/video/VideoQualityMenu';
 import { fetchHlsVariants, type HlsVariant } from '@/lib/hls-variants';
@@ -200,26 +201,41 @@ export function HlsPlayer({
       p.loop = loop;
       p.muted = muted;
       p.timeUpdateEventInterval = 0.25;
+      if (isLive) {
+        // Stay close to live edge without over-buffering (web uses WebRTC; mobile uses HLS).
+        p.bufferOptions = {
+          preferredForwardBufferDuration: 3,
+          minBufferForPlayback: 1,
+          prioritizeTimeOverSizeThreshold: true,
+        };
+      }
     },
   );
 
   const seekToLiveEdge = useCallback(() => {
     try {
+      if (!player.playing && !autoPlay) return;
+
       const total = player.duration;
-      if (!Number.isFinite(total) || total <= 0) return;
-      const lag = total - player.currentTime;
-      if (lag > 3 || player.currentTime < 0.25) {
-        player.currentTime = Math.max(0, total - 1.5);
+      if (Number.isFinite(total) && total > 0) {
+        const lag = total - player.currentTime;
+        // Only jump when clearly behind — small seeks cause rebuffer spinners on Android.
+        if (lag > 12) {
+          player.currentTime = Math.max(0, total - 1);
+        }
+        return;
       }
-      if (!player.playing) {
-        player.play();
-        setPlaying(true);
-        setEnded(false);
+
+      if (!Number.isFinite(total)) {
+        const nativeOffset = player.currentOffsetFromLive;
+        if (nativeOffset != null && Number.isFinite(nativeOffset) && nativeOffset > 12) {
+          player.currentTime = player.currentTime + (nativeOffset - 1);
+        }
       }
     } catch {
       // Native player may already be released during navigation.
     }
-  }, [player]);
+  }, [player, autoPlay]);
 
   useEffect(() => {
     setActiveSource(source);
@@ -265,6 +281,14 @@ export function HlsPlayer({
   }, [paused, fullscreenOn, fullscreenPresentation, externalFullscreen, onFullscreenChange]);
 
   useImmersivePlaybackRegistration(fullscreenOn);
+
+  useEffect(() => {
+    if (!playing || paused) return;
+    activateKeepAwake('hls-player');
+    return () => {
+      void deactivateKeepAwake('hls-player');
+    };
+  }, [playing, paused]);
 
   useEffect(() => {
     return () => {
@@ -334,15 +358,27 @@ export function HlsPlayer({
       if (status === 'readyToPlay') {
         setReady(true);
         setBuffering(false);
+        if (isLive) {
+          seekToLiveEdge();
+          if (!paused && appActive) player.play();
+        }
       } else if (status === 'loading') {
-        setBuffering(true);
+        // During live playback, brief segment fetches should not flash the spinner.
+        if (!isLive || !ready) setBuffering(true);
+      } else if (status === 'error' && isLive) {
+        setBuffering(false);
+        try {
+          player.play();
+        } catch {
+          /* ignore */
+        }
       }
     });
     return () => {
       playingSub.remove();
       statusSub.remove();
     };
-  }, [player]);
+  }, [player, isLive, seekToLiveEdge, paused, appActive]);
 
   useEffect(() => {
     const sub = player.addListener('timeUpdate', ({ currentTime: t }) => {
@@ -374,9 +410,8 @@ export function HlsPlayer({
 
   useEffect(() => {
     if (!isLive || paused || !appActive) return;
-    const interval = setInterval(() => {
-      seekToLiveEdge();
-    }, 3000);
+    // Gentle catch-up only when drift is large — frequent seeks cause spinner flashes.
+    const interval = setInterval(seekToLiveEdge, 15000);
     return () => clearInterval(interval);
   }, [isLive, paused, appActive, seekToLiveEdge]);
 
@@ -399,12 +434,25 @@ export function HlsPlayer({
     }
   };
 
+  const CHROME_AUTO_HIDE_MS = 3500;
+
+  const startChromeHideTimer = useCallback(() => {
+    if (chromeHideTimerRef.current) clearTimeout(chromeHideTimerRef.current);
+    chromeHideTimerRef.current = setTimeout(() => {
+      setChromeVisible(false);
+    }, CHROME_AUTO_HIDE_MS);
+  }, []);
+
   const handleVideoTap = () => {
     if (nativeControls) return;
     if (enablePlayerChrome) {
       setChromeVisible((visible) => {
         const next = !visible;
-        if (next && chromeHideTimerRef.current) clearTimeout(chromeHideTimerRef.current);
+        if (next) {
+          startChromeHideTimer();
+        } else {
+          if (chromeHideTimerRef.current) clearTimeout(chromeHideTimerRef.current);
+        }
         return next;
       });
       return;
@@ -431,7 +479,7 @@ export function HlsPlayer({
 
   const revealChrome = () => {
     setChromeVisible(true);
-    if (chromeHideTimerRef.current) clearTimeout(chromeHideTimerRef.current);
+    startChromeHideTimer();
   };
 
   const seekToRatio = (ratio: number) => {
@@ -515,7 +563,9 @@ export function HlsPlayer({
   const cornerBottom = controlsBottomInset ?? insets.bottom + 12;
   const cornerTop = controlsTopInset ?? insets.top + 12;
 
-  const showLoading = (!ready || buffering) && !playing && !nativeControls;
+  const showLoading = isLive
+    ? !ready && !nativeControls
+    : (!ready || buffering) && !playing && !nativeControls;
   const showPausedOverlay =
     !nativeControls &&
     ready &&
@@ -579,9 +629,9 @@ export function HlsPlayer({
           accessibilityLabel={playing ? 'Pause' : 'Play'}
         />
       ) : null}
-      {!nativeControls && enablePlayerChrome && !chromeVisible && duration > 0 ? (
+      {!nativeControls && enablePlayerChrome && !chromeVisible && !fullscreen && duration > 0 ? (
         <Pressable
-          style={[styles.miniProgressWrap, fullscreen && { bottom: Math.max(insets.bottom, 4) }]}
+          style={styles.miniProgressWrap}
           onPress={revealChrome}
           accessibilityRole="button"
           accessibilityLabel="Show playback controls"
@@ -680,7 +730,7 @@ export function HlsPlayer({
           />
         </View>
       ) : null}
-      {fullscreen ? (
+      {fullscreen && chromeVisible ? (
         <Pressable
           style={[styles.fullscreenClose, { top: insets.top + 8 }]}
           onPress={toggleFullscreen}

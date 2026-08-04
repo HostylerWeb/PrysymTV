@@ -132,4 +132,4 @@ curl -s -X POST http://localhost:4000/api/v1/auth/forgot-password \
 ## Related docs
 
 - [how-to-run.md](./how-to-run.md) — local setup  
-- [api.md](./api.md) — REST reference  
+- [api.md](../api/api.md — REST reference  

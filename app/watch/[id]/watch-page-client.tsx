@@ -111,6 +111,24 @@ function WatchPageContent({ videoId }: { videoId: string }) {
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [showControls, setShowControls] = useState(true)
+  const controlsHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const revealControls = useCallback(() => {
+    setShowControls(true)
+    if (controlsHideTimerRef.current) clearTimeout(controlsHideTimerRef.current)
+    controlsHideTimerRef.current = setTimeout(() => setShowControls(false), 3500)
+  }, [])
+
+  useEffect(() => {
+    if (!isImmersive) {
+      setShowControls(true)
+      if (controlsHideTimerRef.current) clearTimeout(controlsHideTimerRef.current)
+    } else {
+      // Hide controls a moment after entering fullscreen
+      controlsHideTimerRef.current = setTimeout(() => setShowControls(false), 2000)
+    }
+    return () => { if (controlsHideTimerRef.current) clearTimeout(controlsHideTimerRef.current) }
+  }, [isImmersive])
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [isLiked, setIsLiked] = useState(false)
@@ -448,9 +466,14 @@ function WatchPageContent({ videoId }: { videoId: string }) {
             isImmersive && !commentsOpen && immersiveClassName,
           )}
           onClick={() => {
-            setShowControls(true)
+            if (isImmersive) {
+              revealControls()
+            } else {
+              setShowControls(true)
+            }
             togglePlay()
           }}
+          onMouseMove={() => { if (isImmersive) revealControls() }}
         >
           <HlsVideoPlayer
             src={video.videoUrl}

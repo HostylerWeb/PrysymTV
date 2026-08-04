@@ -118,6 +118,17 @@ function VideosBrowseContent() {
     void loadFeed(1, false)
   }, [loadFeed])
 
+  // Refresh just the live rail so hlsPlaybackUrl/thumbnail populate once the
+  // stream is fully on-air, without resetting pagination or scroll position.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void fetchVideosBrowse({ page: 1, limit: 24, vertical: vertical ?? undefined, sort, mode, q: searchQuery || undefined })
+        .then((res) => setLiveItems(res.live.items))
+        .catch(() => {})
+    }, 20_000)
+    return () => clearInterval(interval)
+  }, [vertical, sort, mode, searchQuery])
+
   useEffect(() => {
     const cat = searchParams.get("category")
     if (cat && cat !== category) setCategory(cat)

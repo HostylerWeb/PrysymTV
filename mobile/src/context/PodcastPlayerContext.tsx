@@ -13,6 +13,7 @@ type PodcastPlayerContextValue = PodcastPlayerState & {
   togglePlay: () => void;
   toggleMute: () => void;
   stop: () => void;
+  setProgress: (progress: number) => void;
 };
 
 const PodcastPlayerContext = createContext<PodcastPlayerContextValue | null>(null);
@@ -20,13 +21,16 @@ const PodcastPlayerContext = createContext<PodcastPlayerContextValue | null>(nul
 export function PodcastPlayerProvider({ children }: { children: React.ReactNode }) {
   const [episode, setEpisode] = useState<PodcastEpisode | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [progress, setProgress] = useState(0.35);
+  const [progress, setProgress] = useState(0);
   const [muted, setMuted] = useState(false);
 
   const playEpisode = useCallback((ep: PodcastEpisode) => {
-    setEpisode(ep);
+    setEpisode((prev) => {
+      if (prev?.id === ep.id) return prev;
+      setProgress(0);
+      return ep;
+    });
     setPlaying(true);
-    setProgress(0.1);
   }, []);
 
   const togglePlay = useCallback(() => setPlaying((p) => !p), []);
@@ -34,10 +38,21 @@ export function PodcastPlayerProvider({ children }: { children: React.ReactNode 
   const stop = useCallback(() => {
     setEpisode(null);
     setPlaying(false);
+    setProgress(0);
   }, []);
 
   const value = useMemo(
-    () => ({ episode, playing, progress, muted, playEpisode, togglePlay, toggleMute, stop }),
+    () => ({
+      episode,
+      playing,
+      progress,
+      muted,
+      playEpisode,
+      togglePlay,
+      toggleMute,
+      stop,
+      setProgress,
+    }),
     [episode, playing, progress, muted, playEpisode, togglePlay, toggleMute, stop],
   );
 

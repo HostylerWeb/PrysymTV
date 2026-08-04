@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { usePodcastEpisodeDetail } from '@/hooks/api/usePodcastEpisodeDetail';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
+import { usePodcastPlayer } from '@/context/PodcastPlayerContext';
 import { useWatchAnalytics } from '@/hooks/useWatchAnalytics';
 import { useBackNavigation } from '@/hooks/useBackNavigation';
 import {
@@ -33,8 +34,9 @@ import { formatDuration, formatViewCount } from '@/utils/format-media';
 export default function PodcastEpisodeScreen() {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, autoplay } = useLocalSearchParams<{ id: string; autoplay?: string }>();
   const router = useRouter();
+  const { stop } = usePodcastPlayer();
   useBackNavigation('/(tabs)/podcasts');
   const { requireAuth, user } = useMockAuth();
   const epQuery = usePodcastEpisodeDetail(id);
@@ -49,6 +51,15 @@ export default function PodcastEpisodeScreen() {
   const [prerollOpen, setPrerollOpen] = useState(false);
   const [started, setStarted] = useState(false);
   const [progressSeconds, setProgressSeconds] = useState(0);
+
+  React.useEffect(() => {
+    stop();
+  }, [id, stop]);
+
+  React.useEffect(() => {
+    if (autoplay !== '1' || !ep?.playbackSource || started) return;
+    setPrerollOpen(true);
+  }, [autoplay, ep?.id, ep?.playbackSource, started]);
 
   React.useEffect(() => {
     if (!ep) return;

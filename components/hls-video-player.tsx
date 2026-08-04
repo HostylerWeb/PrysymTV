@@ -98,6 +98,27 @@ export function HlsVideoPlayer({
   const [isMuted, setIsMuted] = useState(muted)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [playbackRate, setPlaybackRate] = useState(1)
+  const [controlsVisible, setControlsVisible] = useState(true)
+  const controlsHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const activeFullscreen = onFullscreenToggle ? (fullscreenActive ?? false) : isFullscreen
+
+  const revealControlsFS = useCallback(() => {
+    if (!activeFullscreen) return
+    setControlsVisible(true)
+    if (controlsHideTimerRef.current) clearTimeout(controlsHideTimerRef.current)
+    controlsHideTimerRef.current = setTimeout(() => setControlsVisible(false), 3500)
+  }, [activeFullscreen])
+
+  useEffect(() => {
+    if (activeFullscreen) {
+      controlsHideTimerRef.current = setTimeout(() => setControlsVisible(false), 2000)
+    } else {
+      setControlsVisible(true)
+      if (controlsHideTimerRef.current) clearTimeout(controlsHideTimerRef.current)
+    }
+    return () => { if (controlsHideTimerRef.current) clearTimeout(controlsHideTimerRef.current) }
+  }, [activeFullscreen])
 
   const useIntegratedControls =
     showQualitySelector && !onQualityControlReady
@@ -396,7 +417,11 @@ export function HlsVideoPlayer({
   const showNativeControls = controls && !useIntegratedControls
 
   return (
-    <div ref={containerRef} className="relative w-full h-full group">
+    <div
+      ref={containerRef}
+      className="relative w-full h-full group"
+      onMouseMove={revealControlsFS}
+    >
       <video
         ref={videoRef}
         className={className ?? "w-full h-full object-contain"}
@@ -409,13 +434,16 @@ export function HlsVideoPlayer({
         loop={loop}
         onClick={
           useIntegratedControls
-            ? () => togglePlay()
+            ? () => { revealControlsFS(); togglePlay() }
             : undefined
         }
       />
       {useIntegratedControls ? (
         <div
-          className="absolute inset-x-0 bottom-0 z-20 pointer-events-none bg-gradient-to-t from-black/85 via-black/40 to-transparent pt-10"
+          className={cn(
+            "absolute inset-x-0 bottom-0 z-20 pointer-events-none bg-gradient-to-t from-black/85 via-black/40 to-transparent pt-10 transition-opacity duration-300",
+            activeFullscreen && !controlsVisible ? "opacity-0" : "opacity-100",
+          )}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="pointer-events-auto px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))]">

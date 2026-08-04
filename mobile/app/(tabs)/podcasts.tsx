@@ -159,10 +159,7 @@ export default function PodcastsScreen() {
             {featuredShow && featuredEpisode ? (
               <Pressable
                 style={styles.hero}
-                onPress={() => {
-                  playEpisode(featuredEpisode);
-                  router.push(`/podcast/${featuredEpisode.id}`);
-                }}
+                onPress={() => router.push(`/podcast/${featuredEpisode.id}?autoplay=1`)}
               >
                 <Image source={{ uri: featuredShow.coverUrl ?? '' }} style={StyleSheet.absoluteFill} contentFit="cover" />
                 <LinearGradient colors={['transparent', withAlpha(colors.background, 0.95)]} style={StyleSheet.absoluteFill} />
@@ -173,10 +170,7 @@ export default function PodcastsScreen() {
                   <Button
                     label="Play latest episode"
                     size="sm"
-                    onPress={() => {
-                      playEpisode(featuredEpisode);
-                      router.push(`/podcast/${featuredEpisode.id}`);
-                    }}
+                    onPress={() => router.push(`/podcast/${featuredEpisode.id}?autoplay=1`)}
                   />
                 </View>
               </Pressable>
@@ -210,10 +204,7 @@ export default function PodcastsScreen() {
         renderItem={({ item }) => (
           <Pressable
             style={styles.episode}
-            onPress={() => {
-              playEpisode(item);
-              router.push(`/podcast/${item.id}`);
-            }}
+            onPress={() => router.push(`/podcast/${item.id}?autoplay=1`)}
           >
             <Image source={{ uri: item.coverUrl ?? '' }} style={styles.epCover} contentFit="cover" />
             <View style={styles.epInfo}>
@@ -221,7 +212,14 @@ export default function PodcastsScreen() {
               <Text style={styles.epMeta}>{item.showTitle} · {formatDuration(item.durationSeconds)}</Text>
               <View style={styles.epActions}>
                 <Text style={styles.badge}>{item.mediaType === 'video' ? 'Video' : 'Audio'}</Text>
-                <Pressable hitSlop={8} onPress={() => playEpisode(item)} style={styles.playIcon}>
+                <Pressable
+                  hitSlop={8}
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    playEpisode(item);
+                  }}
+                  style={styles.playIcon}
+                >
                   <Ionicons name="play-circle" size={28} color={colors.primary} />
                 </Pressable>
               </View>

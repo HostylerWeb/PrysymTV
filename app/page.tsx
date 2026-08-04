@@ -73,8 +73,15 @@ export default function Home() {
   const [feedReloadKey, setFeedReloadKey] = useState(0)
 
   useEffect(() => {
+    // Poll so newly-started live streams show up without a manual page reload.
+    const interval = setInterval(() => setFeedReloadKey((k) => k + 1), 30_000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
-    setFeedReady(false)
+    const isInitialLoad = feedReloadKey === 0
+    if (isInitialLoad) setFeedReady(false)
     setFeedError(false)
     void fetchFeedHomeResult()
       .then(({ data: feed, fromFallback }) => {
@@ -156,6 +163,7 @@ export default function Home() {
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feedReloadKey])
 
   useEffect(() => {

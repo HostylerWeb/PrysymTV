@@ -204,9 +204,12 @@ export default function LiveScreen() {
             playbackUrl={stream.playbackSource}
             subtitle={`${stream.streamer} · ${formatViewCount(stream.viewerCount)} watching`}
             badge={stream.isPaid ? 'VIP' : 'LIVE'}
-            contentFit="contain"
+            contentFit="cover"
             paused={!isFocused}
             isLive={stream.status === 'live'}
+            nativeControls={false}
+            enablePlayerChrome={false}
+            autoPlay
           />
         )}
         <View style={styles.streamerRow}>

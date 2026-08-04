@@ -14,7 +14,9 @@ import { createVerticalSeries, createVerticalEpisode, attachVerticalEpisodeVideo
 import { fetchMovieGenres } from '@/lib/api/categories';
 import { runVideoUpload } from '@/lib/api/videos';
 import { uploadQueuedBodyFor } from '@/lib/upload-processing-copy';
-import { colors, radius } from '@/theme/tokens';
+import { radius, type ThemeColors } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 
 const FALLBACK_VERTICAL_GENRES = ['Drama', 'Romance', 'Thriller', 'Comedy', 'Fantasy', 'Action', 'Mystery'];
 
@@ -47,6 +49,8 @@ export function VerticalSeriesWizard({
   initialIntent = 'choose',
   seriesSlug: initialSeriesSlug,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [mode, setMode] = useState<Mode>('choose');
   const [seriesTitle, setSeriesTitle] = useState('');
   const [seriesSlug, setSeriesSlug] = useState('');
@@ -283,6 +287,7 @@ export function VerticalSeriesWizard({
 }
 
 function Label({ children }: { children: string }) {
+  const styles = useThemedStyles(createStyles);
   return <Text style={styles.label}>{children}</Text>;
 }
 
@@ -301,6 +306,8 @@ function Input({
   autoCapitalize?: 'none' | 'sentences';
   keyboardType?: 'default' | 'number-pad';
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   return (
     <TextInput
       style={[styles.input, multiline && styles.inputMulti]}
@@ -315,7 +322,8 @@ function Input({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   sub: { color: colors.mutedForeground, fontSize: 13, marginBottom: 12, lineHeight: 20 },
   label: { color: colors.foreground, fontWeight: '600', fontSize: 13, marginBottom: 6, marginTop: 8 },
   input: {
@@ -350,4 +358,5 @@ const styles = StyleSheet.create({
   },
   fileLabel: { color: colors.foreground, fontWeight: '600', fontSize: 13 },
   poster: { width: 90, height: 160, borderRadius: radius.md },
-});
+  });
+}

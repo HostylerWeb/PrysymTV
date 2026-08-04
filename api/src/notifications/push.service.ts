@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Notification, User } from '@prisma/client';
 import * as admin from 'firebase-admin';
+import { readFileSync } from 'fs';
 import * as webpush from 'web-push';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterPushSubscriptionDto } from './dto/register-push-subscription.dto';
@@ -46,7 +47,10 @@ export class PushService {
   }
 
   isFcmEnabled(): boolean {
-    return Boolean(this.config.get<string>('FIREBASE_SERVICE_ACCOUNT_JSON')?.trim());
+    return Boolean(
+      this.config.get<string>('FIREBASE_SERVICE_ACCOUNT_PATH')?.trim() ||
+        this.config.get<string>('FIREBASE_SERVICE_ACCOUNT_JSON')?.trim(),
+    );
   }
 
   getPublicKey(): string | null {
@@ -54,14 +58,40 @@ export class PushService {
     return this.config.get<string>('VAPID_PUBLIC_KEY')?.trim() ?? null;
   }
 
+  private loadFirebaseServiceAccount(): admin.ServiceAccount | null {
+    const filePath = this.config
+      .get<string>('FIREBASE_SERVICE_ACCOUNT_PATH')
+      ?.trim();
+    if (filePath) {
+      try {
+        return JSON.parse(readFileSync(filePath, 'utf8')) as admin.ServiceAccount;
+      } catch (err) {
+        this.logger.warn(
+          `FCM service account file unreadable (${filePath}): ${String(err)}`,
+        );
+        return null;
+      }
+    }
+
+    const raw = this.config.get<string>('FIREBASE_SERVICE_ACCOUNT_JSON')?.trim();
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as admin.ServiceAccount;
+    } catch (err) {
+      this.logger.warn(`FCM service account JSON parse failed: ${String(err)}`);
+      return null;
+    }
+  }
+
   private ensureFcm(): boolean {
     if (this.fcmInitialized) return true;
-    const raw = this.config.get<string>('FIREBASE_SERVICE_ACCOUNT_JSON')?.trim();
-    if (!raw) return false;
+    const serviceAccount = this.loadFirebaseServiceAccount();
+    if (!serviceAccount) return false;
     try {
-      const serviceAccount = JSON.parse(raw) as admin.ServiceAccount;
       if (!admin.apps.length) {
-        admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+        });
       }
       this.fcmInitialized = true;
       return true;
@@ -206,7 +236,9 @@ export class PushService {
   ): Promise<void> {
     if (subscriptions.length === 0) return;
     if (!this.ensureFcm()) {
-      this.logger.warn('FCM delivery skipped: FIREBASE_SERVICE_ACCOUNT_JSON not configured');
+      this.logger.warn(
+        'FCM delivery skipped: Firebase service account not configured or invalid',
+      );
       return;
     }
 
@@ -215,13 +247,15 @@ export class PushService {
     );
 
     try {
+      // Data-only so expo-notifications builds the notification (play icon in status
+      // bar + full-color ic_launcher large icon in the shade). A top-level
+      // `notification` block is shown by the OS without the large logo.
       const response = await admin.messaging().sendEachForMulticast({
         tokens,
-        notification: {
-          title: message.title,
-          body: message.body,
-        },
         data: {
+          channelId: 'default',
+          title: message.title,
+          message: message.body,
           url: message.url,
           tag: message.tag,
           type: message.type,
@@ -231,7 +265,6 @@ export class PushService {
         },
         android: {
           priority: 'high',
-          notification: { channelId: 'default' },
         },
       });
 

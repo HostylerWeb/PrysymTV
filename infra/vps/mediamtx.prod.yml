@@ -8,10 +8,10 @@ hls: yes
 hlsAddress: :8888
 hlsAllowOrigins: ["*"]
 hlsAlwaysRemux: yes
-hlsVariant: lowLatency
+# WebRTC publishes Opus — mpegts only supports MPEG-4 Audio; use fmp4 for HLS fallback.
+hlsVariant: fmp4
 hlsSegmentDuration: 1s
-hlsPartDuration: 200ms
-hlsSegmentCount: 7
+hlsSegmentCount: 6
 
 webrtc: yes
 webrtcAddress: :8889

@@ -2,7 +2,7 @@
 
 This document serves as the ultimate blueprint and checklist for building the **Prysym TV** backend. It details the architecture, database schema, API endpoints, and a week-by-week implementation checklist. The Next.js frontend (`/app`) is **UI-complete** and largely wired to the API (home, movies, shorts, podcasts, verticals, live, profile, settings). Engagement parity is complete (**§14.5**). Next up: **Admin UI** (§14.6), then production deploy. Canonical API routes: [`api.md`](./api.md).
 
-**Stakeholder / mission requirements (Onyx Repository Foundation):** See [`stakeholder-product-requirements.md`](./stakeholder-product-requirements.md) for content verticals (Sports, Concerts, Community Events, Education), **GAF**, revenue splits (80/15/5 live events, 90/5/5 viewer support), Creator Store™, Impact Dashboard™, Insider Membership, and **14 implementation modules**. That doc is the gap analysis; Section **15** below integrates it into this roadmap.
+**Stakeholder / mission requirements (Onyx Repository Foundation):** See [`stakeholder-product-requirements.md`](../web/stakeholder-product-requirements.md for content verticals (Sports, Concerts, Community Events, Education), **GAF**, revenue splits (80/15/5 live events, 90/5/5 viewer support), Creator Store™, Impact Dashboard™, Insider Membership, and **14 implementation modules**. That doc is the gap analysis; Section **15** below integrates it into this roadmap.
 
 **Repository:** [github.com/HostylerWeb/PrysymTV](https://github.com/HostylerWeb/PrysymTV)
 
@@ -789,7 +789,7 @@ Legacy bullets:
 
 ## 10. MONETIZATION FLOW DETAILS
 
-> **Stakeholder rules (authoritative):** See [`stakeholder-product-requirements.md`](./stakeholder-product-requirements.md).  
+> **Stakeholder rules (authoritative):** See [`stakeholder-product-requirements.md`](../web/stakeholder-product-requirements.md.  
 > - **Live events** (tickets/PPV): Creator **80%** · PRYSYM **15%** · GAF **5%**  
 > - **Viewer support** (tips, donations, super chats, digital gifts): Creator **90%** · PRYSYM **5%** · GAF **5%**  
 > - **Platform Insider Membership** ($4.99/mo): **80%** platform development · **10%** GAF · **10%** Creator Development Fund  
@@ -1041,7 +1041,7 @@ These frontend UI elements exist but are **deferred** unless product decides oth
 
 ## 15. STAKEHOLDER REQUIREMENTS ↔ ENGINEERING (SUMMARY)
 
-Canonical detail: **[`stakeholder-product-requirements.md`](./stakeholder-product-requirements.md)**.
+Canonical detail: **[`stakeholder-product-requirements.md`](../web/stakeholder-product-requirements.md**.
 
 ### 15.1 Content pillars (beyond current mock catalog)
 

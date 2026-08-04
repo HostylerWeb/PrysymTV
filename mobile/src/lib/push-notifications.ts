@@ -20,9 +20,14 @@ export type PushPermissionState = {
 
 async function ensureAndroidChannel() {
   if (Platform.OS !== 'android') return;
+  // MAX importance is required for heads-up (pop-over) banners while the screen is on.
+  // DEFAULT (level 3) only puts notifications in the drawer silently — no banner.
   await Notifications.setNotificationChannelAsync('default', {
-    name: 'Default',
-    importance: Notifications.AndroidImportance.DEFAULT,
+    name: 'PrysymTV',
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 200, 100, 200],
+    lightColor: '#EF511D',
+    sound: 'default',
   });
 }
 

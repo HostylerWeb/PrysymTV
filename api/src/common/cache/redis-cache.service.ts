@@ -56,4 +56,18 @@ export class RedisCacheService implements OnModuleDestroy {
       /* ignore */
     }
   }
+
+  /** Deletes all keys matching a glob pattern (e.g. `feed:home:*`). Non-blocking SCAN. */
+  async delPattern(pattern: string): Promise<void> {
+    try {
+      let cursor = '0';
+      do {
+        const [next, keys] = await this.client.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+        cursor = next;
+        if (keys.length > 0) await this.client.del(...keys);
+      } while (cursor !== '0');
+    } catch {
+      /* ignore */
+    }
+  }
 }

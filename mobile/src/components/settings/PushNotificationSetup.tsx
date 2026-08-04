@@ -1,6 +1,10 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import * as Notifications from 'expo-notifications';
+import {
+  NOTIFICATIONS_QUERY_KEY,
+} from '@/hooks/api/useNotifications';
 import {
   resolveNotificationNavTargetFromPushData,
   type NotificationNavTarget,
@@ -28,16 +32,11 @@ function handleNotificationResponse(
 
 export function PushNotificationSetup() {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
+    const receivedSub = Notifications.addNotificationReceivedListener(() => {
+      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
     });
 
     void Notifications.getLastNotificationResponseAsync().then((response) => {
@@ -49,9 +48,10 @@ export function PushNotificationSetup() {
     });
 
     return () => {
+      receivedSub.remove();
       responseSub.remove();
     };
-  }, [router]);
+  }, [queryClient, router]);
 
   return null;
 }

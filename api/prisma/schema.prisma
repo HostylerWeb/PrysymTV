@@ -1,4 +1,4 @@
-// Prysym TV — full PostgreSQL schema (see guides-md-files/backend-development-plan.md)
+// Prysym TV — full PostgreSQL schema (see docs/api/backend-development-plan.md)
 
 generator client {
   provider = "prisma-client-js"

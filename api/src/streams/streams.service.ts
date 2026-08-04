@@ -23,6 +23,7 @@ import { RevenueSplitService } from '../revenue/revenue-split.service';
 import { StorageService } from '../storage/storage.service';
 import { verticalFromCategorySlug } from '../common/utils/category-vertical.util';
 import { coinsToGrossUsd, usdToCoinCost } from '../common/utils/coin-usd.util';
+import { RedisCacheService } from '../common/cache/redis-cache.service';
 import { StreamsGateway } from './streams.gateway';
 
 type MediamtxAuthBody = {
@@ -71,6 +72,7 @@ export class StreamsService {
     private readonly playback: PlaybackService,
     private readonly platformSettings: PlatformSettingsService,
     private readonly revenueSplit: RevenueSplitService,
+    private readonly cache: RedisCacheService,
   ) {}
 
   async listLive(viewerId?: string) {
@@ -483,6 +485,9 @@ export class StreamsService {
 
     if (updated.count > 0) {
       this.logger.log(`Stream live: ${streamKey} → ${hlsPlaybackUrl}`);
+      // Home feed is cached per-user for 45s — bust it now so the new live
+      // stream shows up on the next poll instead of after the TTL expires.
+      void this.cache.delPattern('feed:home:*');
       const stream = await this.prisma.stream.findFirst({
         where: { temporaryStreamToken: streamKey },
         include: {
@@ -528,6 +533,7 @@ export class StreamsService {
 
     if (updated.count > 0 && stream) {
       this.streamsGateway.emitStreamEnded(stream.id);
+      void this.cache.delPattern('feed:home:*');
     }
 
     this.logger.log(`Stream ended: ${streamKey}`);
@@ -562,6 +568,7 @@ export class StreamsService {
     });
 
     this.streamsGateway.emitStreamEnded(streamId);
+    void this.cache.delPattern('feed:home:*');
     this.logger.log(`Stream ended by creator: ${streamId}`);
     return { success: true, status: StreamStatus.ended };
   }

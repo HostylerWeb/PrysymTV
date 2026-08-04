@@ -20,12 +20,25 @@ import { OAuthConfigProvider } from '@/context/OAuthConfigContext';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { PodcastPlayerProvider } from '@/context/PodcastPlayerContext';
 import { AuthPromptSheet } from '@/components/auth/AuthPromptSheet';
+import * as Notifications from 'expo-notifications';
 import { PushNotificationSetup } from '@/components/settings/PushNotificationSetup';
 import { CompleteProfileBanner } from '@/components/auth/CompleteProfileBanner';
 import { ThemedStatusBar } from '@/components/layout/ThemedStatusBar';
 import { StoreCartProvider } from '@/context/StoreCartContext';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { colors } from '@/theme/tokens';
+
+// Module-level: registered before any notification can arrive, including pushes
+// that wake the JS thread while the app is in the foreground.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 

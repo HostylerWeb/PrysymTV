@@ -3,7 +3,7 @@ PRYSYM TV — HOW TO UPDATE THE LIVE WEBSITE AFTER A GITHUB PUSH
 ================================================================================
 
 This file explains how to deploy code from GitHub to the production VPS.
-Read it before every deploy. See also: guides-md-files/vps-production.md
+Read it before every deploy. See also: docs/README.md and docs/vps/vps-production.md
 
 --------------------------------------------------------------------------------
 1. OVERVIEW
@@ -275,9 +275,10 @@ Database connection failed:
   Full deploy:   ssh root@2.25.210.178 'bash /var/www/prysymtv/infra/vps/deploy.sh'
   API health:    https://srv1765056.hstgr.cloud/api/v1/health
   Admin panel:   https://srv1765056.hstgr.cloud/admin
-  More docs:     guides-md-files/vps-production.md
-                 guides-md-files/how-to-run.md
-                 guides-md-files/security-checklist.md
+  More docs:     docs/README.md
+                 docs/vps/vps-production.md
+                 docs/web/how-to-run.md
+                 docs/web/security-checklist.md
 
 ================================================================================
 Last updated: 2026-07-03

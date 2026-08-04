@@ -170,17 +170,26 @@ type ApiPodcastEpisode = {
   coverUrl?: string | null;
   durationSeconds?: number;
   mediaType?: 'audio' | 'video';
+  audioUrl?: string | null;
   videoUrl?: string | null;
   show?: { title: string; coverUrl?: string | null };
 };
 
 export function mapPodcastEpisode(raw: ApiPodcastEpisode): PodcastEpisode {
+  const videoUrl = raw.videoUrl?.trim() ? proxyMediaAssetUrl(raw.videoUrl.trim()) : null;
+  const audioUrl = raw.audioUrl?.trim()
+    ? proxyMediaAssetUrl(raw.audioUrl.trim())
+    : videoUrl
+      ? null
+      : resolvePlaybackUrl(raw as Parameters<typeof resolvePlaybackUrl>[0]);
   return {
     id: raw.id,
     title: raw.title,
     coverUrl: mediaThumb(raw.coverUrl ?? raw.show?.coverUrl),
     durationSeconds: raw.durationSeconds ?? 0,
     showTitle: raw.show?.title ?? 'Podcast',
-    mediaType: raw.mediaType ?? (raw.videoUrl ? 'video' : 'audio'),
+    mediaType: raw.mediaType ?? (videoUrl ? 'video' : 'audio'),
+    audioUrl,
+    videoUrl,
   };
 }

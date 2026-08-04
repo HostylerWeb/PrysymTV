@@ -246,6 +246,8 @@ export type PodcastEpisode = {
   durationSeconds: number;
   showTitle: string;
   mediaType: 'audio' | 'video';
+  audioUrl?: string | null;
+  videoUrl?: string | null;
 };
 
 export type PodcastEpisodeRecord = {

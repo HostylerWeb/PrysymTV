@@ -15,7 +15,15 @@ export function LiveStreamCard({ stream, featured }: { stream: LiveStream; featu
       style={[styles.card, featured && styles.featured]}
       onPress={() => router.push(`/live/${stream.id}`)}
     >
-      <Image source={{ uri: stream.thumbnailUrl ?? '' }} style={styles.thumb} contentFit="cover" />
+      <Image
+        source={{
+          uri: stream.thumbnailUrl
+            ? stream.thumbnailUrl
+            : resolveAvatarUrl(stream.avatarUrl, stream.streamerSlug ?? stream.streamer),
+        }}
+        style={styles.thumb}
+        contentFit={stream.thumbnailUrl ? 'cover' : 'contain'}
+      />
       <View style={styles.liveBadge}>
         <View style={styles.liveDot} />
         <Text style={styles.liveText}>LIVE</Text>

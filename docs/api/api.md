@@ -812,7 +812,7 @@ After `POST /videos/upload/complete`, a job on queue `video-processing` runs in 
 Clients show a quality menu only when the HLS master playlist has **2+** `#EXT-X-STREAM-INF` variants. Single-variant outputs hide the control.
 
 **Requires:** `ffmpeg` and `ffprobe` on PATH (`FFMPEG_PATH`, `FFPROBE_PATH`).  
-**Storage:** `STORAGE_DRIVER=local` (dev) or `s3` (Cloudflare R2-compatible). See [`how-to-run.md`](./how-to-run.md#7-video-uploads-r2--ffmpeg).
+**Storage:** `STORAGE_DRIVER=local` (dev) or `s3` (Cloudflare R2-compatible). See [`how-to-run.md`](../web/how-to-run.md#7-video-uploads-r2--ffmpeg).
 
 ---
 
@@ -1390,16 +1390,20 @@ Long-form video browse (`type = video`). Returns live streams when `mode` includ
 
 Values for `ads` are stored in `platform_settings` and edited at `/admin/config/ads`. Membership and insider prices come from `/admin/config/economy`.
 
-### Web push (`/push`, `/users/me/push-subscription`)
+### Web push & native push (`/push`, `/users/me/push-subscription`)
 
 | Route | Auth | Notes |
 |-------|------|-------|
-| `GET /push/vapid-public-key` | — | `{ enabled, publicKey }` — alias of `GET /config/public` → `push` |
+| `GET /push/vapid-public-key` | — | `{ enabled, publicKey }` — web push (VAPID) |
 | `GET /users/me/push-subscription` | Bearer | `{ subscribed, enabled }` |
-| `POST /users/me/push-subscription` | Bearer | Register browser push subscription (Web Push / VAPID) |
+| `POST /users/me/push-subscription` | Bearer | Register push target (web subscription **or** native `fcm:` / `apns:` token) |
 | `DELETE /users/me/push-subscription` | Bearer | `{ endpoint }` — remove subscription |
 
-Used by the web app for browser notifications. React Native Expo push uses a separate flow (not yet exposed as a dedicated REST route).
+- **Web:** browser Web Push via VAPID (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` in `api/.env`).
+- **Android:** FCM via Firebase Admin SDK. Prefer `FIREBASE_SERVICE_ACCOUNT_PATH` (file on VPS, readable by `prysym` user); fallback `FIREBASE_SERVICE_ACCOUNT_JSON` (single-line only). Mobile sends `endpoint: "fcm:<device_token>"`. FCM uses `android.notification.icon` = `notification_icon` (white owl silhouette in APK) and brand color `#EF511D` — no `imageUrl` for social notifications.
+- **In-app bell:** `GET /users/me/notifications` — **not** WebSocket; web and mobile poll every **15s** when authenticated (`NOTIFICATIONS_POLL_MS`).
+
+**Setup guide (Firebase, key rotation, production):** [`mobile/notifications.md`](../mobile/notifications.md)
 
 ---
 
@@ -1407,7 +1411,7 @@ Used by the web app for browser notifications. React Native Expo push uses a sep
 
 **Auth:** Bearer + role `admin` on all routes.
 
-**Frontend:** Operator console at `/admin` (see [`admin-dashboard-plan.md`](./admin-dashboard-plan.md)).
+**Frontend:** Operator console at `/admin` (see [`admin-dashboard-plan.md`](../web/admin-dashboard-plan.md)).
 
 ### Analytics
 
@@ -1490,7 +1494,7 @@ Seeder flag `SEED_DEMO_CONTENT` (default `true` in dev, set `false` in `api/.env
 | Item | Notes |
 |------|--------|
 | Advertiser portal analytics | Self-serve campaign reports on `/advertise` (post-verification) |
-| Native mobile push token API | Web push uses `POST /users/me/push-subscription`; Expo device token endpoint not yet documented |
+| Native mobile push | Same `POST /users/me/push-subscription` with `endpoint: "fcm:<token>"` — see [`mobile/notifications.md`](../mobile/notifications.md) |
 
 **Seeded `revenue_split_rules` keys:** `live_event`, `viewer_support`, `insider_membership`, `ad_gaf_allocation`, `sponsorship`, `creator_subscription`, `coin_purchase`, `store_merchandise`
 
@@ -1612,7 +1616,7 @@ Core public fields plus `hasStore` (true when `storeCreatorStatus === approved`)
 
 ## Environment variables
 
-Templates: root [`.env.example`](../.env.example) (frontend + API reference) and [`api/.env.example`](../api/.env.example) (API-only). Copy to `.env.local` and `api/.env` respectively — **never commit** those files.
+Templates: root [`.env.example`](../../.env.example) (frontend + API reference) and [`api/.env.example`](../../api/.env.example) (API-only). Copy to `.env.local` and `api/.env` respectively — **never commit** those files.
 
 ### API (`api/.env`)
 
@@ -1631,7 +1635,7 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 | `FRONTEND_URL` | Yes | — | Stripe success/cancel redirects, password-reset links |
 | `NODE_ENV` | No | `development` | `development` \| `production` \| `test` |
 | `THROTTLE_TTL_MS` | No | `60000` | Rate-limit window (ms); **per client IP**, not global |
-| `THROTTLE_LIMIT` | No | `1000` | Max HTTP requests per IP per window; see [security-checklist.md](./security-checklist.md#api-rate-limit-quota) |
+| `THROTTLE_LIMIT` | No | `1000` | Max HTTP requests per IP per window; see [security-checklist.md](../web/security-checklist.md#api-rate-limit-quota) |
 | `STORAGE_DRIVER` | Yes | `local` | `local` or `s3` |
 | `LOCAL_STORAGE_ROOT` | If `local` | `./storage` | Filesystem root for uploads |
 | `LOCAL_STORAGE_PUBLIC_BASE_URL` | If `local` | — | Public URL prefix for served files |
@@ -1662,7 +1666,7 @@ Templates: root [`.env.example`](../.env.example) (frontend + API reference) and
 | `STRIPE_WEBHOOK_SECRET` | No | — | Required with Stripe; see [`stripe-production.md`](./stripe-production.md) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | No | — | Password-reset email |
 
-**Live stack:** `docker compose up -d mediamtx` (custom image `prysymtv-mediamtx:local` includes `curl` for webhooks) exposes RTMP `:1935` and HLS `:8888`. MediaMTX calls `POST /streams/mediamtx/auth` and `POST /streams/webhooks/ready|done` on the API. Configure MediaMTX to send `x-mediamtx-webhook-secret` matching `MEDIAMTX_WEBHOOK_SECRET`. Run the API on the host so the container can reach `host.docker.internal:4000`. See [how-to-run.md](./how-to-run.md) § Live streaming.
+**Live stack:** `docker compose up -d mediamtx` (custom image `prysymtv-mediamtx:local` includes `curl` for webhooks) exposes RTMP `:1935` and HLS `:8888`. MediaMTX calls `POST /streams/mediamtx/auth` and `POST /streams/webhooks/ready|done` on the API. Configure MediaMTX to send `x-mediamtx-webhook-secret` matching `MEDIAMTX_WEBHOOK_SECRET`. Run the API on the host so the container can reach `host.docker.internal:4000`. See [how-to-run.md](../web/how-to-run.md) § Live streaming.
 
 **Profile images:** Avatar/banner use `POST /users/me/avatar/upload` and `/banner/upload`, then multipart `POST /media/profile-upload` (`file` + `objectKey`) for both local and R2.
 

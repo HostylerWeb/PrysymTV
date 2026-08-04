@@ -32,6 +32,7 @@ type Props = {
   paused?: boolean;
   /** Live HLS stream — keeps playback at the live edge. */
   isLive?: boolean;
+  autoPlay?: boolean;
 };
 
 export function PlayerShell({
@@ -58,6 +59,7 @@ export function PlayerShell({
   controlsPlacement,
   controlsTopInset,
   isLive = false,
+  autoPlay = true,
 }: Props) {
   const showTopActions = showCast || onShare || onReport;
   const showPoster = posterOnly || !playbackUrl;
@@ -76,6 +78,7 @@ export function PlayerShell({
           enablePlayerChrome={enablePlayerChrome}
           tapToToggle={!nativeControls && !seekOnTap && !enablePlayerChrome}
           paused={paused}
+          autoPlay={autoPlay}
           controlsBottomInset={controlsBottomInset}
           controlsPlacement={controlsPlacement}
           controlsTopInset={controlsTopInset}

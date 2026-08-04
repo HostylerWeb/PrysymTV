@@ -16,7 +16,7 @@ This guide covers local development on Linux/macOS/WSL. You need **Node.js 20+**
 
 Ports **5433** and **6380** avoid conflicts if you already run Postgres/Redis on the default ports.
 
-**Product scope (stakeholder):** Full mission requirements (GAF, revenue splits, Creator Store, Impact Dashboard, content verticals, 14 backend modules) are documented in [`stakeholder-product-requirements.md`](./stakeholder-product-requirements.md) and integrated into [`backend-development-plan.md`](./backend-development-plan.md) Section 15.
+**Product scope (stakeholder):** Full mission requirements (GAF, revenue splits, Creator Store, Impact Dashboard, content verticals, 14 backend modules) are documented in [`stakeholder-product-requirements.md`](./stakeholder-product-requirements.md) and integrated into [`backend-development-plan.md`](../api/backend-development-plan.md) Section 15.
 
 ---
 
@@ -147,7 +147,7 @@ curl http://localhost:4000/api/v1/users/me \
 | `npm run db:studio` | Prisma Studio (DB browser) |
 | `npm run db:migrate` | Create/apply migrations after schema changes |
 
-Full endpoint reference: [api.md](./api.md)
+Full endpoint reference: [api.md](../api/api.md)
 
 ---
 
@@ -161,7 +161,7 @@ pnpm dev
 
 Default URL: **http://localhost:3001** (Next.js may pick 3000 if free; check terminal output).
 
-Set `NEXT_PUBLIC_API_URL` in `.env.local` so the UI talks to the API (auth, feed, uploads, billing). Some screens still fall back to mocks when the API is unreachable — see [backend-development-plan.md](./backend-development-plan.md) Section 14.
+Set `NEXT_PUBLIC_API_URL` in `.env.local` so the UI talks to the API (auth, feed, uploads, billing). Some screens still fall back to mocks when the API is unreachable — see [backend-development-plan.md](../api/backend-development-plan.md) Section 14.
 
 ### Other frontend commands
 
@@ -436,6 +436,6 @@ cd api && npm audit # API (Prisma CLI may show dev-only advisories — do not us
 ## Related docs
 
 - [security-checklist.md](./security-checklist.md) — audits, prod requirements, known dev-only risks
-- [vps-production.md](./vps-production.md) — fresh VPS bootstrap (Docker, nginx, TLS, firewall)
-- [api.md](./api.md) — REST API reference (mobile + web)
-- [backend-development-plan.md](./backend-development-plan.md) — full backend roadmap
+- [vps-production.md](../vps/vps-production.md) — fresh VPS bootstrap (Docker, nginx, TLS, firewall)
+- [api.md](../api/api.md) — REST API reference (mobile + web)
+- [backend-development-plan.md](../api/backend-development-plan.md) — full backend roadmap

@@ -10,12 +10,16 @@ import { useMockAuth } from '@/context/MockAuthContext';
 import { fetchPublicConfig } from '@/lib/api/public-config';
 import { fetchVideoCategories, type ContentCategory } from '@/lib/api/categories';
 import { fetchStreamIngestHealth, initStream, type StreamIngestHealth } from '@/lib/api/streams';
-import { colors, radius } from '@/theme/tokens';
+import { radius, withAlpha, type ThemeColors } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 
 type StreamMode = 'camera' | 'obs';
 type AccessType = 'free' | 'paid';
 
 export default function GoLiveScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createGoLiveStyles);
   const { user } = useMockAuth();
   const router = useRouter();
   const [applyOpen, setApplyOpen] = useState(false);
@@ -223,11 +227,11 @@ export default function GoLiveScreen() {
                   >
                     {accessType === 'free' ? (
                       <View style={styles.accessCheckFree}>
-                        <Ionicons name="checkmark" size={14} color="#fff" />
+                        <Ionicons name="checkmark" size={14} color={colors.primaryForeground} />
                       </View>
                     ) : null}
                     <View style={[styles.accessIconWrap, styles.accessIconFree]}>
-                      <Ionicons name="earth" size={26} color="#10b981" />
+                      <Ionicons name="earth" size={26} color={colors.success} />
                     </View>
                     <Text style={styles.accessCardTitle}>Free stream</Text>
                     <Text style={styles.accessCardHint}>
@@ -241,11 +245,11 @@ export default function GoLiveScreen() {
                   >
                     {accessType === 'paid' ? (
                       <View style={styles.accessCheckPaid}>
-                        <Ionicons name="checkmark" size={14} color="#000" />
+                        <Ionicons name="checkmark" size={14} color={colors.foreground} />
                       </View>
                     ) : null}
                     <View style={[styles.accessIconWrap, styles.accessIconPaid]}>
-                      <Ionicons name="lock-closed" size={26} color="#f59e0b" />
+                      <Ionicons name="lock-closed" size={26} color={colors.warning} />
                     </View>
                     <Text style={styles.accessCardTitle}>Paid VIP</Text>
                     <Text style={styles.accessCardHint}>
@@ -257,7 +261,7 @@ export default function GoLiveScreen() {
                 {accessType === 'paid' ? (
                   <View style={styles.paidPriceBox}>
                     <View style={styles.paidPriceHeader}>
-                      <Ionicons name="logo-bitcoin" size={18} color="#f59e0b" />
+                      <Ionicons name="logo-bitcoin" size={18} color={colors.warning} />
                       <Text style={styles.paidPriceLabel}>VIP entry price (USD)</Text>
                     </View>
                     <TextInput
@@ -333,7 +337,7 @@ export default function GoLiveScreen() {
 
                 <View style={styles.fieldBlock}>
                   <View style={styles.fieldLabelRow}>
-                    <Ionicons name="text-outline" size={18} color="#10b981" />
+                    <Ionicons name="text-outline" size={18} color={colors.success} />
                     <Text style={styles.fieldLabel}>Stream title *</Text>
                   </View>
                   <TextInput
@@ -356,7 +360,7 @@ export default function GoLiveScreen() {
 
                 <View style={styles.fieldBlock}>
                   <View style={styles.fieldLabelRow}>
-                    <Ionicons name="grid-outline" size={18} color="#10b981" />
+                    <Ionicons name="grid-outline" size={18} color={colors.success} />
                     <Text style={styles.fieldLabel}>Category *</Text>
                   </View>
                   <View style={styles.categoryRow}>
@@ -431,7 +435,8 @@ export default function GoLiveScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createGoLiveStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   pad: { paddingHorizontal: 16, paddingBottom: 32 },
   title: { color: colors.foreground, fontSize: 18, fontWeight: '700' },
@@ -469,16 +474,16 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   selectionPillFree: {
-    backgroundColor: '#10b98122',
+    backgroundColor: withAlpha(colors.success, 0.13),
     borderWidth: 1,
-    borderColor: '#10b98166',
+    borderColor: withAlpha(colors.success, 0.4),
   },
   selectionPillPaid: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: colors.warning,
   },
   selectionPillText: { fontSize: 11, fontWeight: '800' },
-  selectionPillTextFree: { color: '#10b981' },
-  selectionPillTextPaid: { color: '#000' },
+  selectionPillTextFree: { color: colors.success },
+  selectionPillTextPaid: { color: colors.primaryForeground },
   accessTitle: {
     color: colors.foreground,
     fontSize: 20,
@@ -502,12 +507,12 @@ const styles = StyleSheet.create({
     minHeight: 148,
   },
   accessCardFreeOn: {
-    borderColor: '#10b981',
-    backgroundColor: '#10b98118',
+    borderColor: colors.success,
+    backgroundColor: withAlpha(colors.success, 0.1),
   },
   accessCardPaidOn: {
-    borderColor: '#f59e0b',
-    backgroundColor: '#f59e0b18',
+    borderColor: colors.warning,
+    backgroundColor: withAlpha(colors.warning, 0.1),
   },
   accessCheckFree: {
     position: 'absolute',
@@ -516,7 +521,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#10b981',
+    backgroundColor: colors.success,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -527,7 +532,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#f59e0b',
+    backgroundColor: colors.warning,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -539,8 +544,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 10,
   },
-  accessIconFree: { backgroundColor: '#10b98122' },
-  accessIconPaid: { backgroundColor: '#f59e0b33' },
+  accessIconFree: { backgroundColor: withAlpha(colors.success, 0.13) },
+  accessIconPaid: { backgroundColor: withAlpha(colors.warning, 0.2) },
   accessCardTitle: { color: colors.foreground, fontSize: 16, fontWeight: '800' },
   accessCardHint: { color: colors.mutedForeground, fontSize: 12, lineHeight: 17, marginTop: 6 },
   paidPriceBox: {
@@ -548,8 +553,8 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: radius.lg,
     borderWidth: 2,
-    borderColor: '#f59e0b66',
-    backgroundColor: '#f59e0b14',
+    borderColor: withAlpha(colors.warning, 0.4),
+    backgroundColor: withAlpha(colors.warning, 0.08),
     gap: 8,
   },
   paidPriceHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -559,7 +564,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: '#f59e0b44',
+    borderColor: withAlpha(colors.warning, 0.27),
     color: colors.foreground,
     fontSize: 16,
     fontWeight: '600',
@@ -575,19 +580,19 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: radius.xl,
     borderWidth: 2,
-    borderColor: '#10b98166',
-    backgroundColor: '#10b98112',
+    borderColor: withAlpha(colors.success, 0.4),
+    backgroundColor: withAlpha(colors.success, 0.07),
     gap: 10,
   },
   requiredBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#059669',
+    backgroundColor: colors.success,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.full,
   },
   requiredBadgeText: {
-    color: '#fff',
+    color: colors.primaryForeground,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.6,
@@ -598,7 +603,7 @@ const styles = StyleSheet.create({
   fieldLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   fieldLabel: { color: colors.foreground, fontSize: 14, fontWeight: '700' },
   fieldHint: { color: colors.mutedForeground, fontSize: 12, lineHeight: 17 },
-  fieldHintWarn: { color: '#d97706', fontSize: 12, lineHeight: 17, fontWeight: '600' },
+  fieldHintWarn: { color: colors.warning, fontSize: 12, lineHeight: 17, fontWeight: '600' },
   modeRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   modeCard: {
     flex: 1,
@@ -609,7 +614,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary + '55',
   },
   modeCardOn: { borderColor: colors.primary, backgroundColor: colors.primary + '18' },
-  paidCardOn: { borderColor: '#f59e0b', backgroundColor: '#f59e0b18' },
+  paidCardOn: { borderColor: colors.warning, backgroundColor: withAlpha(colors.warning, 0.1) },
   modeTitle: { color: colors.foreground, fontSize: 14, fontWeight: '700' },
   modeTitleOn: { color: colors.primary },
   modeHint: { color: colors.mutedForeground, fontSize: 11, lineHeight: 15, marginTop: 4 },
@@ -621,14 +626,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     borderWidth: 2,
-    borderColor: '#10b98155',
+    borderColor: withAlpha(colors.success, 0.33),
   },
   inputProminent: {
     minHeight: 52,
   },
   inputAttention: {
-    borderColor: '#f59e0b88',
-    backgroundColor: '#f59e0b0a',
+    borderColor: withAlpha(colors.warning, 0.53),
+    backgroundColor: withAlpha(colors.warning, 0.04),
   },
   categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   categoryChip: {
@@ -663,14 +668,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   ingestOk: {
-    borderColor: '#10b98155',
-    backgroundColor: '#10b98118',
+    borderColor: withAlpha(colors.success, 0.33),
+    backgroundColor: withAlpha(colors.success, 0.1),
   },
   ingestWarn: {
-    borderColor: '#f59e0b66',
-    backgroundColor: '#f59e0b14',
+    borderColor: withAlpha(colors.warning, 0.4),
+    backgroundColor: withAlpha(colors.warning, 0.08),
   },
   ingestText: { fontSize: 12, lineHeight: 17 },
-  ingestTextOk: { color: '#10b981' },
-  ingestTextWarn: { color: '#d97706' },
-});
+  ingestTextOk: { color: colors.success },
+  ingestTextWarn: { color: colors.warning },
+  });
+}

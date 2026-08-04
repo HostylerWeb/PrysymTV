@@ -239,6 +239,11 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   FIREBASE_SERVICE_ACCOUNT_JSON?: string;
+
+  /** Preferred in production: path readable by the API process (avoids systemd .env JSON issues) */
+  @IsOptional()
+  @IsString()
+  FIREBASE_SERVICE_ACCOUNT_PATH?: string;
 }
 
 const WEAK_SECRET_MARKERS = [

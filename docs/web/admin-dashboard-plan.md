@@ -2,7 +2,7 @@
 
 **Status:** Planning document (not started)  
 **Last updated:** 2026-05-31 (platform config + scorecard + content categories strategy)  
-**Related:** [`backend-development-plan.md`](./backend-development-plan.md) §7, [`api.md`](./api.md) Admin section, [`stakeholder-product-requirements.md`](./stakeholder-product-requirements.md)
+**Related:** [`backend-development-plan.md`](../api/backend-development-plan.md) §7, [`api.md`](../api/api.md) Admin section, [`stakeholder-product-requirements.md`](./stakeholder-product-requirements.md)
 
 This is the canonical blueprint for the PrysymTV **operator console**: every page, tab, action, API dependency, and implementation checkbox. Work through phases in order unless a blocker forces a reorder.
 
@@ -1044,7 +1044,7 @@ Add to `api/prisma/seed.ts` for dev only (document in README).
 - [ ] `POST /admin/streams/:id/kill`
 - [ ] `DELETE /admin/videos/:id` + `DELETE /admin/comments/:id`
 - [ ] Replace `GET /admin/analytics/overview` stub with real data
-- [ ] Update `guides-md-files/api.md` with all new routes
+- [ ] Update `../api/api.md` with all new routes
 
 ### Phase 2 — Frontend core pages (P0)
 
@@ -1165,7 +1165,7 @@ lib/api/
 ### Docs
 
 - [ ] `api.md` admin section complete
-- [ ] `backend-development-plan.md` §14.6 admin items checked off as done
+- [ ] [`backend-development-plan.md`](../api/backend-development-plan.md) §14.6 admin items checked off as done
 - [ ] `api/README.md` — how to promote first admin user
 
 ---

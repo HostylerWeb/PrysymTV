@@ -36,5 +36,8 @@ for arg in "$@"; do
   fi
 done
 
+cd "$ROOT"
+node scripts/generate-notification-icons.js
+
 cd "$ROOT/android"
 ./gradlew "$@"

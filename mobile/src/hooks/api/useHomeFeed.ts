@@ -21,6 +21,8 @@ export type HomeFeedData = {
 export function useHomeFeed() {
   return useQuery({
     queryKey: ['feed', 'home'],
+    // Poll every 30s so newly-started live streams appear without manual refresh.
+    refetchInterval: 30_000,
     queryFn: async (): Promise<HomeFeedData> => {
       const data = await fetchFeedHome();
       return {

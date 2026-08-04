@@ -53,7 +53,26 @@ Then update `CORS_ORIGIN`, `FRONTEND_URL`, `API_PUBLIC_URL`, and MediaMTX `webrt
 3. Copy `/etc/prysym/api.env.template` → `/var/www/prysymtv/api/.env` and add R2/Stripe/SMTP.
 4. Never expose Postgres (5432) or Redis (6379) publicly — they bind to `127.0.0.1` only.
 
-See [security-checklist.md](../security-checklist.md) for full production requirements.
+See [security-checklist.md](../web/security-checklist.md for full production requirements.
+
+## Push notifications (Firebase / FCM)
+
+Android push requires Firebase on the API and `google-services.json` in the mobile app. Full setup, key rotation, and troubleshooting:
+
+**[`mobile/notifications.md`](../mobile/notifications.md)**
+
+Production paths:
+
+| Path | Purpose |
+|------|---------|
+| `/etc/prysym/firebase-adminsdk.json` | Firebase service account (`chown prysym:prysym`, `chmod 640`, **not in git**) |
+| `api/.env` → `FIREBASE_SERVICE_ACCOUNT_PATH` | Path to service account JSON (preferred — avoids systemd mangling inline JSON) |
+| `api/.env` → `FIREBASE_SERVICE_ACCOUNT_JSON` | Fallback only (single-line minified JSON; avoid with `EnvironmentFile`) |
+| `api/.env` → `VAPID_*` | Web browser push (optional) |
+
+**Do not** put multi-line Firebase JSON in `api/.env` when `prysym-api.service` loads it via `EnvironmentFile` — use `FIREBASE_SERVICE_ACCOUNT_PATH` instead. See [production incident log](../mobile/notifications.md#production-incident-log-aug-2026) in `mobile/notifications.md`.
+
+After changing Firebase env: `systemctl restart prysym-api`. Users must re-enable push in the app to register `fcm:` tokens.
 
 ## Live deployment (srv1765056.hstgr.cloud)
 

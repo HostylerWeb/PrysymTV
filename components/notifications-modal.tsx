@@ -1,26 +1,19 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useState } from "react"
 import { X, Check, Bell, Heart, MessageCircle, UserPlus, Play, Trash2, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import {
-  clearAllNotifications,
-  fetchNotifications,
-  markAllNotificationsRead,
-  markNotificationRead,
-} from "@/lib/api/notifications"
-import {
-  mapNotificationToListItem,
-  type NotificationListItem,
-} from "@/lib/map-notifications"
-import { ApiError } from "@/lib/api-client"
+  useNotificationActions,
+  useNotifications,
+} from "@/lib/hooks/use-notifications"
+import type { NotificationListItem } from "@/lib/map-notifications"
 
 interface NotificationsModalProps {
   isOpen: boolean
   onClose: () => void
-  onUnreadChange?: (count: number) => void
 }
 
 function getNotificationIcon(
@@ -115,38 +108,16 @@ function NotificationRow({
 export function NotificationsModal({
   isOpen,
   onClose,
-  onUnreadChange,
 }: NotificationsModalProps) {
   const { isAuthenticated } = useAuth()
   const [activeFilter, setActiveFilter] = useState<"all" | "unread">("all")
-  const [notificationList, setNotificationList] = useState<NotificationListItem[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const load = useCallback(async () => {
-    if (!isAuthenticated) return
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetchNotifications(1, 50)
-      const mapped = res.items.map(mapNotificationToListItem)
-      setNotificationList(mapped)
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not load notifications")
-      setNotificationList([])
-    } finally {
-      setLoading(false)
-    }
-  }, [isAuthenticated])
-
-  useEffect(() => {
-    if (isOpen && isAuthenticated) void load()
-  }, [isOpen, isAuthenticated, load])
-
-  useEffect(() => {
-    if (!isOpen) return
-    onUnreadChange?.(notificationList.filter((n) => !n.isRead).length)
-  }, [notificationList, onUnreadChange, isOpen])
+  const {
+    data: notificationList = [],
+    isLoading: loading,
+    isError,
+    error,
+  } = useNotifications(isAuthenticated)
+  const { markRead, markAllRead, clearAll } = useNotificationActions()
 
   const filteredNotifications =
     activeFilter === "unread"
@@ -154,34 +125,19 @@ export function NotificationsModal({
       : notificationList
 
   const unreadCount = notificationList.filter((n) => !n.isRead).length
+  const errorMessage =
+    isError && error instanceof Error ? error.message : isError ? "Could not load notifications" : null
 
   const markOneRead = async (id: string) => {
-    setNotificationList((list) =>
-      list.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
-    )
-    try {
-      await markNotificationRead(id)
-    } catch {
-      /* optimistic */
-    }
+    await markRead(id)
   }
 
   const markAllAsRead = async () => {
-    setNotificationList((list) => list.map((n) => ({ ...n, isRead: true })))
-    try {
-      await markAllNotificationsRead()
-    } catch {
-      /* optimistic */
-    }
+    await markAllRead()
   }
 
-  const clearAll = async () => {
-    try {
-      await clearAllNotifications()
-      setNotificationList([])
-    } catch {
-      /* keep list */
-    }
+  const clearAllNotifications = async () => {
+    await clearAll()
   }
 
   if (!isOpen) return null
@@ -259,8 +215,8 @@ export function NotificationsModal({
             <div className="flex justify-center py-20">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
-          ) : error ? (
-            <p className="text-center text-sm text-destructive py-12 px-4">{error}</p>
+          ) : errorMessage ? (
+            <p className="text-center text-sm text-destructive py-12 px-4">{errorMessage}</p>
           ) : filteredNotifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 px-4">
               <div className="w-20 h-20 rounded-full bg-secondary flex items-center justify-center mb-4">
@@ -287,7 +243,7 @@ export function NotificationsModal({
                 <div className="px-4 py-6">
                   <button
                     type="button"
-                    onClick={() => void clearAll()}
+                    onClick={() => void clearAllNotifications()}
                     className="w-full flex items-center justify-center gap-2 py-3 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-foreground/50 transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />

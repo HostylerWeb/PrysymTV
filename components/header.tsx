@@ -4,10 +4,10 @@ import { Bell, Search, User } from "lucide-react"
 import { CreateHeaderButton } from "@/components/create-header-button"
 import Link from "next/link"
 import { userAvatarUrl } from "@/lib/user-avatar"
-import { useCallback, useEffect, useState } from "react"
+import { useState } from "react"
 import { NotificationsModal } from "@/components/notifications-modal"
 import { useAuth } from "@/contexts/auth-context"
-import { fetchNotifications } from "@/lib/api/notifications"
+import { useUnreadNotificationCount } from "@/lib/hooks/use-notifications"
 import {
   CompleteProfileBannerStrip,
   appHeaderOffsetClass,
@@ -37,24 +37,7 @@ export function Header({
   const { isAuthenticated, user } = useAuth()
   const needsProfileBanner = useNeedsProfileCompletion()
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
-
-  const refreshUnread = useCallback(async () => {
-    if (!isAuthenticated) {
-      setUnreadCount(0)
-      return
-    }
-    try {
-      const res = await fetchNotifications(1, 50)
-      setUnreadCount(res.items.filter((n) => !n.isRead).length)
-    } catch {
-      setUnreadCount(0)
-    }
-  }, [isAuthenticated])
-
-  useEffect(() => {
-    void refreshUnread()
-  }, [refreshUnread, isAuthenticated])
+  const { unread: unreadCount } = useUnreadNotificationCount(isAuthenticated)
 
   return (
     <>
@@ -115,7 +98,6 @@ export function Header({
       <NotificationsModal
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
-        onUnreadChange={setUnreadCount}
       />
     </>
   )
