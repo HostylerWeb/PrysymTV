@@ -182,7 +182,7 @@ export default function HomeScreen() {
             )}
 
             {showSeries && verticals.length > 0 && (
-              <ContentRow title="Micro-dramas & series" actionLabel="View all" onAction={() => router.push('/(tabs)/verticals')}>
+              <ContentRow title="Verticals" actionLabel="View all" onAction={() => router.push('/(tabs)/verticals')}>
                 {verticals.slice(0, 5).map((s) => (
                   <Pressable key={s.slug} onPress={() => router.push(`/verticals/${s.slug}`)}>
                     <Image source={{ uri: s.posterUrl ?? '' }} style={styles.poster} contentFit="cover" />

@@ -34,11 +34,13 @@ import { spacing } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import { bumpLikeCount } from '@/utils/engagement-count';
+import { parseResumeSeconds } from '@/lib/continue-watching-nav';
 import { formatDuration, formatViewCount } from '@/utils/format-media';
 
 export default function WatchScreen() {
   const styles = useThemedStyles(createStyles);
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, t } = useLocalSearchParams<{ id: string; t?: string }>();
+  const resumeSeconds = parseResumeSeconds(t);
   const router = useRouter();
   const isFocused = useIsFocused();
   const { requireAuth, user } = useMockAuth();
@@ -135,6 +137,7 @@ export default function WatchScreen() {
             enablePlayerChrome
             paused={!isFocused}
             onProgress={onProgress}
+            initialPositionSeconds={resumeSeconds}
             onShare={() => setShareOpen(true)}
             onReport={() => requireAuth(() => setReportOpen(true))}
           />

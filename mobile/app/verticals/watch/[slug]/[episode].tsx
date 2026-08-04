@@ -38,7 +38,7 @@ import {
   toggleVerticalEpisodeSave,
   toggleVerticalSeriesSave,
 } from '@/lib/api/verticals';
-import { radius, withAlpha } from '@/theme/tokens';
+import { parseResumeSeconds } from '@/lib/continue-watching-nav';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
@@ -62,6 +62,7 @@ type EpisodeCellProps = {
   onGateDismissed: (episodeId: string) => void;
   onGateBlocked: (episodeId: string) => void;
   gateDismissed: boolean;
+  initialPositionSeconds?: number;
 };
 
 function VerticalEpisodeCell({
@@ -75,6 +76,7 @@ function VerticalEpisodeCell({
   onGateDismissed,
   onGateBlocked,
   gateDismissed,
+  initialPositionSeconds = 0,
 }: EpisodeCellProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -168,6 +170,7 @@ function VerticalEpisodeCell({
             paused={!gateDismissed || !active || !screenFocused}
             autoPlay={gateDismissed && active}
             onProgress={onProgress}
+            initialPositionSeconds={initialPositionSeconds}
           />
         </View>
       ) : null}
@@ -190,7 +193,8 @@ function VerticalEpisodeCell({
 export default function VerticalWatchScreen() {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const { slug, episode } = useLocalSearchParams<{ slug: string; episode: string }>();
+  const { slug, episode, t } = useLocalSearchParams<{ slug: string; episode: string; t?: string }>();
+  const resumeSeconds = parseResumeSeconds(t);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
@@ -322,6 +326,9 @@ export default function VerticalWatchScreen() {
               onGateDismissed={onGateDismissed}
               onGateBlocked={onGateBlocked}
               gateDismissed={gateDismissedMap[item.id] !== false}
+              initialPositionSeconds={
+                item.episodeNumber === epNum ? resumeSeconds : 0
+              }
             />
           )}
         />

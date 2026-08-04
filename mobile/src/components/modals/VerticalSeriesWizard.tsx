@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -10,7 +10,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
-import { createVerticalSeries, createVerticalEpisode, attachVerticalEpisodeVideo } from '@/lib/api/verticals';
+import { createVerticalSeries, createVerticalEpisode, attachVerticalEpisodeVideo, fetchMyVerticalSeries } from '@/lib/api/verticals';
 import { fetchMovieGenres } from '@/lib/api/categories';
 import { runVideoUpload } from '@/lib/api/videos';
 import { uploadQueuedBodyFor } from '@/lib/upload-processing-copy';
@@ -29,6 +29,13 @@ type Props = {
 };
 
 type Mode = 'choose' | 'series' | 'episode' | 'done';
+
+type MySeriesRow = {
+  id: string;
+  slug: string;
+  title: string;
+  episodes: Array<{ id: string; episodeNumber: number; title: string }>;
+};
 
 type PickedVideo = { uri: string; name: string; mimeType?: string };
 
@@ -65,10 +72,13 @@ export function VerticalSeriesWizard({
   const [cliffhanger, setCliffhanger] = useState('');
   const [videoFile, setVideoFile] = useState<PickedVideo | null>(null);
   const [activeSeriesSlug, setActiveSeriesSlug] = useState('');
-  const [doneMessage, setDoneMessage] = useState('Your micro-drama series is ready.');
+  const [doneMessage, setDoneMessage] = useState('Your vertical series is ready.');
   const [busy, setBusy] = useState(false);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mySeries, setMySeries] = useState<MySeriesRow[]>([]);
+  const [loadingSeries, setLoadingSeries] = useState(false);
+  const [selectedSlug, setSelectedSlug] = useState('');
 
   useEffect(() => {
     if (!visible) return;
@@ -80,6 +90,32 @@ export function VerticalSeriesWizard({
       })
       .catch(() => setGenreOptions(FALLBACK_VERTICAL_GENRES));
   }, [visible]);
+
+  useEffect(() => {
+    if (!visible) return;
+    setLoadingSeries(true);
+    void fetchMyVerticalSeries()
+      .then((res) => {
+        const items = res.items.map((s) => ({
+          id: s.id,
+          slug: s.slug,
+          title: s.title,
+          episodes: (s.episodes ?? []).map((e) => ({
+            id: e.id,
+            episodeNumber: e.episodeNumber,
+            title: e.title,
+          })),
+        }));
+        setMySeries(items);
+        const slug = initialSeriesSlug ?? items[0]?.slug ?? '';
+        if (slug) {
+          setSelectedSlug(slug);
+          setActiveSeriesSlug(slug);
+        }
+      })
+      .catch(() => setMySeries([]))
+      .finally(() => setLoadingSeries(false));
+  }, [visible, initialSeriesSlug]);
 
   useEffect(() => {
     if (!visible) return;
@@ -102,7 +138,7 @@ export function VerticalSeriesWizard({
     setCliffhanger('');
     setVideoFile(null);
     setActiveSeriesSlug(initialSeriesSlug ?? '');
-    setDoneMessage('Your micro-drama series is ready.');
+    setDoneMessage('Your vertical series is ready.');
     setError(null);
     setBusy(false);
   }, [visible, initialIntent, initialSeriesSlug]);
@@ -111,6 +147,20 @@ export function VerticalSeriesWizard({
     if (slugTouched) return;
     if (seriesTitle.trim()) setSeriesSlug(slugifyTitle(seriesTitle));
   }, [seriesTitle, slugTouched]);
+
+  const selectedSeries = useMemo(
+    () => mySeries.find((s) => s.slug === (activeSeriesSlug || selectedSlug)),
+    [mySeries, activeSeriesSlug, selectedSlug],
+  );
+
+  const nextEpisodeNumber = useMemo(() => {
+    if (!selectedSeries?.episodes.length) return 1;
+    return Math.max(...selectedSeries.episodes.map((e) => e.episodeNumber)) + 1;
+  }, [selectedSeries]);
+
+  useEffect(() => {
+    if (mode === 'episode') setEpisodeNumber(String(nextEpisodeNumber));
+  }, [mode, nextEpisodeNumber, selectedSlug, activeSeriesSlug]);
 
   const pickPoster = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -150,13 +200,13 @@ export function VerticalSeriesWizard({
           genre,
         });
         setActiveSeriesSlug(seriesSlug.trim());
-        setDoneMessage('Series created. Add episodes from Micro-dramas settings.');
+        setDoneMessage('Series created. Add episodes from Verticals settings.');
         setMode('done');
         return;
       }
 
       if (mode === 'episode') {
-        const slug = activeSeriesSlug || initialSeriesSlug;
+        const slug = activeSeriesSlug || selectedSlug || initialSeriesSlug;
         if (!slug) {
           setError('Select a series before uploading an episode.');
           return;
@@ -206,12 +256,21 @@ export function VerticalSeriesWizard({
   }
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Micro-drama series">
+    <BottomSheet visible={visible} onClose={onClose} title="Vertical series">
       {mode === 'choose' && (
         <>
-          <Text style={styles.sub}>Create a new series or add an episode to an existing one.</Text>
+          <Text style={styles.sub}>Create a new vertical series or upload an episode to an existing one.</Text>
           <Button label="Create new series" onPress={() => setMode('series')} style={{ marginBottom: 8 }} />
-          <Button label="Add episode" variant="outline" onPress={() => setMode('episode')} />
+          <Button
+            label="Add episode"
+            variant="outline"
+            disabled={loadingSeries || mySeries.length === 0}
+            onPress={() => setMode('episode')}
+          />
+          {loadingSeries ? <Text style={styles.sub}>Loading your series…</Text> : null}
+          {!loadingSeries && mySeries.length === 0 ? (
+            <Text style={styles.sub}>Create a series first, then you can add episodes.</Text>
+          ) : null}
         </>
       )}
 
@@ -257,6 +316,40 @@ export function VerticalSeriesWizard({
 
       {mode === 'episode' && (
         <>
+          <Label>Series *</Label>
+          {mySeries.length === 0 ? (
+            <Text style={styles.sub}>You need at least one series. Create one first.</Text>
+          ) : (
+            <View style={styles.chipRow}>
+              {mySeries.map((s) => (
+                <Pressable
+                  key={s.slug}
+                  style={[styles.chip, (activeSeriesSlug || selectedSlug) === s.slug && styles.chipOn]}
+                  onPress={() => {
+                    setSelectedSlug(s.slug);
+                    setActiveSeriesSlug(s.slug);
+                  }}
+                >
+                  <Text style={styles.chipText}>{s.title}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          {selectedSeries ? (
+            <View style={styles.seriesCard}>
+              <Text style={styles.seriesCardTitle}>{selectedSeries.title}</Text>
+              <Text style={styles.seriesCardSub}>
+                /{selectedSeries.slug} · {selectedSeries.episodes.length} episode
+                {selectedSeries.episodes.length === 1 ? '' : 's'}
+              </Text>
+              {selectedSeries.episodes.length > 0 ? (
+                <Text style={styles.seriesCardSub}>
+                  Latest: Ep {selectedSeries.episodes[selectedSeries.episodes.length - 1]?.episodeNumber} —{' '}
+                  {selectedSeries.episodes[selectedSeries.episodes.length - 1]?.title}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
           <Label>Episode number *</Label>
           <Input value={episodeNumber} onChangeText={setEpisodeNumber} placeholder="1" keyboardType="number-pad" />
           <Label>Episode title *</Label>
@@ -275,7 +368,7 @@ export function VerticalSeriesWizard({
                   : 'Uploading…'
                 : 'Publish episode'
             }
-            disabled={!episodeTitle.trim() || !videoFile || busy || !(activeSeriesSlug || initialSeriesSlug)}
+            disabled={!episodeTitle.trim() || !videoFile || busy || !(activeSeriesSlug || selectedSlug || initialSeriesSlug)}
             onPress={() => void submit()}
             style={{ marginTop: 12 }}
           />
@@ -346,6 +439,17 @@ function createStyles(colors: ThemeColors) {
   },
   chipOn: { borderColor: colors.primary, backgroundColor: colors.primary + '15' },
   chipText: { color: colors.foreground, fontSize: 12, fontWeight: '600' },
+  seriesCard: {
+    padding: 12,
+    borderRadius: radius.lg,
+    backgroundColor: colors.secondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 8,
+    gap: 4,
+  },
+  seriesCardTitle: { color: colors.foreground, fontWeight: '700', fontSize: 14 },
+  seriesCardSub: { color: colors.mutedForeground, fontSize: 12 },
   fileBox: {
     alignItems: 'center',
     justifyContent: 'center',

@@ -140,7 +140,7 @@ function canAccessCreatorDashboard(user: User | null): boolean {
 }
 
 const FAQS = [
-  { q: "How do I upload a video?", a: "Tap the + button in the header and choose Short, Long video, Podcast, or Micro-drama series." },
+  { q: "How do I upload a video?", a: "Tap the + button in the header and choose Short, Long video, Podcast, or Vertical series." },
   { q: "How do I become a streamer?", a: "Apply from Settings → Become a Streamer. Once approved, use Go Live." },
   { q: "What are Coins?", a: "Coins let you send gifts during live streams and support creators." },
   { q: "How do I report content?", a: "Use the flag icon on any video, movie, or live stream page." },
@@ -186,7 +186,7 @@ const SCREEN_TITLES: Record<Exclude<ProfileSettingsScreen, "menu">, string> = {
   history: "Watch History",
   "go-live": "Go Live",
   upload: "Upload",
-  verticals: "Micro-dramas",
+  verticals: "Verticals",
   podcasts: "Podcasts",
   playlists: "Playlists",
   social: "Social Links",

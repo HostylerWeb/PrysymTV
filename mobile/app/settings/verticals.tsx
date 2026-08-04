@@ -35,7 +35,7 @@ export default function SettingsVerticalsScreen() {
     <>
       <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 40 }}>
         <View style={styles.pad}>
-          <AppHeader showBack title="Micro-dramas" showSearch={false} showNotifications={false} />
+          <AppHeader showBack title="Verticals" showSearch={false} showNotifications={false} />
           <Text style={styles.sub}>Manage your vertical series, episodes, and publishing schedule.</Text>
           {approved ? (
             <>
@@ -77,7 +77,7 @@ export default function SettingsVerticalsScreen() {
             </>
           ) : (
             <>
-              <Text style={styles.sub}>Apply to publish micro-drama series on Prysym TV.</Text>
+              <Text style={styles.sub}>Apply to publish vertical series on Prysym TV.</Text>
               <Button label="Apply for vertical creator" onPress={() => setApplyOpen(true)} />
             </>
           )}

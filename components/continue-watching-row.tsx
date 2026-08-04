@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { Play } from "lucide-react"
 import { historyProgressPercent, videoThumbnail } from "@/lib/format-media"
-import { isContinueWatchingHistoryItem } from "@/lib/continue-watching"
+import { continueWatchingHref, isContinueWatchingHistoryItem } from "@/lib/continue-watching"
 import type { ContinueWatchingFeedItem, HistoryItemRecord } from "@/lib/api/types"
 import type { VerticalProgressEntry } from "@/lib/vertical-progress"
 
@@ -15,14 +15,7 @@ type ContinueWatchingRowProps = {
 }
 
 function feedItemHref(item: ContinueWatchingFeedItem): string {
-  if (item.contentType === "video") {
-    if (item.videoType === "movie") return `/movie/${item.contentId}`
-    return `/watch/${item.contentId}`
-  }
-  if (item.seriesSlug != null && item.episodeNumber != null) {
-    return `/verticals/watch/${item.seriesSlug}/${item.episodeNumber}`
-  }
-  return `/verticals`
+  return continueWatchingHref(item)
 }
 
 function VerticalCard({

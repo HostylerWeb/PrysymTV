@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/ui/ThemedText';
 import { colors, radius, spacing, withAlpha } from '@/theme/tokens';
 import { commonStyles } from '@/theme/styles';
 import { formatDuration } from '@/utils/format-media';
+import { continueWatchingHref } from '@/lib/continue-watching-nav';
 import type { ContinueWatchingItem } from '@/types/api';
 
 export function ContinueWatchingRow({ items }: { items: ContinueWatchingItem[] }) {
@@ -21,13 +22,7 @@ export function ContinueWatchingRow({ items }: { items: ContinueWatchingItem[] }
           <Pressable
             key={item.contentId}
             style={styles.card}
-            onPress={() => {
-              if (item.contentType === 'video') router.push(`/watch/${item.contentId}` as never);
-              else if (item.contentType === 'podcast_episode') router.push(`/podcast/${item.contentId}` as never);
-              else if (item.contentType === 'vertical_episode' && item.seriesSlug) {
-                router.push(`/verticals/watch/${item.seriesSlug}/${item.episodeNumber ?? 1}` as never);
-              }
-            }}
+            onPress={() => router.push(continueWatchingHref(item) as never)}
           >
             <View style={styles.thumbWrap}>
               <Image source={{ uri: item.thumbnailUrl ?? '' }} style={styles.thumb} contentFit="cover" />

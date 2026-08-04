@@ -11,11 +11,24 @@ type Props = {
   durationSeconds: number;
   onProgress?: (seconds: number) => void;
   autoPlay?: boolean;
+  initialPositionSeconds?: number;
 };
 
-export function AudioPlayer({ source, title, durationSeconds, onProgress, autoPlay = false }: Props) {
+export function AudioPlayer({
+  source,
+  title,
+  durationSeconds,
+  onProgress,
+  autoPlay = false,
+  initialPositionSeconds = 0,
+}: Props) {
   const player = useAudioPlayer(source);
   const status = useAudioPlayerStatus(player);
+  const appliedInitialSeek = React.useRef(false);
+
+  useEffect(() => {
+    appliedInitialSeek.current = false;
+  }, [source, initialPositionSeconds]);
 
   useEffect(() => {
     void setAudioModeAsync({ playsInSilentMode: true });
@@ -24,6 +37,15 @@ export function AudioPlayer({ source, title, durationSeconds, onProgress, autoPl
   useEffect(() => {
     if (autoPlay) player.play();
   }, [autoPlay, player, source]);
+
+  useEffect(() => {
+    if (appliedInitialSeek.current || initialPositionSeconds < 5) return;
+    const timer = setTimeout(() => {
+      player.seekTo(initialPositionSeconds);
+      appliedInitialSeek.current = true;
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [initialPositionSeconds, player, source]);
 
   useEffect(() => {
     if (status.currentTime != null) {

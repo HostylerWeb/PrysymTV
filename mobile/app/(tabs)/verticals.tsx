@@ -40,7 +40,7 @@ export default function VerticalsScreen() {
           searchScope="vertical"
           onCreatePress={() => requireAuth(() => trigger('vertical'))}
         />
-        <Text style={styles.sub}>Micro-drama series - swipe up episodes</Text>
+        <Text style={styles.sub}>Vertical series — swipe up episodes</Text>
       </View>
       {isLoading ? (
         <ActivityIndicator style={{ marginTop: 32 }} color={colors.primary} />
@@ -60,7 +60,7 @@ export default function VerticalsScreen() {
             <FeedQueryState
               isEmpty
               emptyTitle="No series yet"
-              emptyMessage="Vertical micro-dramas will show up here when published."
+              emptyMessage="Vertical series will show up here when published."
               onRetry={() => void verticalsQuery.refetch()}
             />
           }

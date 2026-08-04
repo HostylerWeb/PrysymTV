@@ -13,13 +13,13 @@ import { buildShareUrl } from '@/lib/share-url';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { GiftModal } from '@/components/modals/GiftModal';
-import { Button } from '@/components/ui/Button';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { usePodcastEpisodeDetail } from '@/hooks/api/usePodcastEpisodeDetail';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
 import { usePodcastPlayer } from '@/context/PodcastPlayerContext';
 import { useWatchAnalytics } from '@/hooks/useWatchAnalytics';
 import { useBackNavigation } from '@/hooks/useBackNavigation';
+import { parseResumeSeconds } from '@/lib/continue-watching-nav';
 import {
   togglePodcastLike,
   togglePodcastSave,
@@ -34,13 +34,14 @@ import { formatDuration, formatViewCount } from '@/utils/format-media';
 export default function PodcastEpisodeScreen() {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
-  const { id, autoplay } = useLocalSearchParams<{ id: string; autoplay?: string }>();
+  const { id, autoplay, t } = useLocalSearchParams<{ id: string; autoplay?: string; t?: string }>();
   const router = useRouter();
   const { stop } = usePodcastPlayer();
   useBackNavigation('/(tabs)/podcasts');
   const { requireAuth, user } = useMockAuth();
   const epQuery = usePodcastEpisodeDetail(id);
   const ep = epQuery.data;
+  const resumeSeconds = parseResumeSeconds(t);
 
   const [shareOpen, setShareOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -50,7 +51,7 @@ export default function PodcastEpisodeScreen() {
   const [saved, setSaved] = useState(false);
   const [prerollOpen, setPrerollOpen] = useState(false);
   const [started, setStarted] = useState(false);
-  const [progressSeconds, setProgressSeconds] = useState(0);
+  const [progressSeconds, setProgressSeconds] = useState(resumeSeconds);
 
   React.useEffect(() => {
     stop();
@@ -107,6 +108,7 @@ export default function PodcastEpisodeScreen() {
 
   const hostSlug = ep.creator?.username ?? 'creator';
   const hostName = ep.creator?.displayName ?? hostSlug;
+  const coverUri = ep.coverUrl ?? ep.show?.coverUrl ?? null;
 
   return (
     <>
@@ -122,11 +124,29 @@ export default function PodcastEpisodeScreen() {
             <Text style={styles.backLink}>‹ Back to Podcasts</Text>
           </Pressable>
         </View>
+
+        {coverUri ? (
+          <View style={styles.artWrap}>
+            <Image source={{ uri: coverUri }} style={styles.art} contentFit="cover" accessibilityLabel={ep.title} />
+            <View style={styles.artBadge}>
+              <Text style={styles.artBadgeText}>{ep.mediaType === 'video' ? 'Video podcast' : 'Audio podcast'}</Text>
+            </View>
+          </View>
+        ) : null}
+
+        <View style={styles.metaBlock}>
+          <Text style={styles.epTitle}>{ep.title}</Text>
+          <Text style={styles.epSub}>
+            {ep.show?.title ?? 'Podcast'} · {formatDuration(ep.durationSeconds)}
+            {ep.playsCount != null ? ` · ${formatViewCount(ep.playsCount)} plays` : ''}
+          </Text>
+        </View>
+
         {ep.mediaType === 'video' && ep.playbackSource ? (
           started ? (
             <PlayerShell
               title={ep.title}
-              thumbnailUrl={ep.coverUrl}
+              thumbnailUrl={coverUri}
               playbackUrl={ep.playbackSource}
               subtitle={ep.show?.title ?? 'Podcast'}
               showCast
@@ -134,12 +154,13 @@ export default function PodcastEpisodeScreen() {
               enableQualityMenu
               enableFullscreen
               enablePlayerChrome
+              initialPositionSeconds={resumeSeconds}
             />
           ) : prerollOpen ? (
             <View style={styles.prerollSlot}>
               <PlayerShell
                 title={ep.title}
-                thumbnailUrl={ep.coverUrl}
+                thumbnailUrl={coverUri}
                 playbackUrl={ep.playbackSource}
                 subtitle={ep.show?.title ?? 'Podcast'}
                 showCast
@@ -157,16 +178,10 @@ export default function PodcastEpisodeScreen() {
               />
             </View>
           ) : (
-            <View style={styles.audio}>
-              <Text style={styles.audioTitle}>{ep.title}</Text>
-              <Text style={styles.audioSub}>
-                {ep.show?.title ?? 'Podcast'} · {formatDuration(ep.durationSeconds)}
-                {ep.playsCount != null ? ` · ${formatViewCount(ep.playsCount)} plays` : ''}
-              </Text>
-              <Pressable style={styles.playBtn} onPress={startPlayback}>
-                <Text style={styles.playText}>Play</Text>
-              </Pressable>
-            </View>
+            <Pressable style={styles.playBtn} onPress={startPlayback}>
+              <Ionicons name="play" size={22} color={colors.primaryForeground} />
+              <Text style={styles.playText}>Play episode</Text>
+            </Pressable>
           )
         ) : ep.playbackSource && started ? (
           <AudioPlayer
@@ -175,20 +190,17 @@ export default function PodcastEpisodeScreen() {
             durationSeconds={ep.durationSeconds}
             onProgress={onAudioProgress}
             autoPlay
+            initialPositionSeconds={resumeSeconds}
           />
-        ) : (
-          <View style={styles.audio}>
-            <Text style={styles.audioTitle}>{ep.title}</Text>
-            <Text style={styles.audioSub}>
-              {ep.show?.title ?? 'Podcast'} · {formatDuration(ep.durationSeconds)}
-              {ep.playsCount != null ? ` · ${formatViewCount(ep.playsCount)} plays` : ''}
-            </Text>
-            <Pressable style={styles.playBtn} onPress={startPlayback}>
-              <Text style={styles.playText}>{started ? 'Playing' : 'Play'}</Text>
-            </Pressable>
-          </View>
-        )}
+        ) : !started ? (
+          <Pressable style={styles.playBtn} onPress={startPlayback}>
+            <Ionicons name="play" size={22} color={colors.primaryForeground} />
+            <Text style={styles.playText}>Play episode</Text>
+          </Pressable>
+        ) : null}
+
         <Text style={styles.epDesc}>{ep.description ?? `Listen to ${ep.title} on Prysym Podcasts.`}</Text>
+
         {ep.creator ? (
           <Pressable style={styles.hostCard} onPress={() => router.push(`/creator/${hostSlug}`)}>
             <Image
@@ -203,6 +215,7 @@ export default function PodcastEpisodeScreen() {
             <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
           </Pressable>
         ) : null}
+
         <View style={styles.iconRow}>
           <IconBtn icon={liked ? 'heart' : 'heart-outline'} label="Like" active={liked} onPress={() => requireAuth(async () => {
             const res = await togglePodcastLike(ep.id);
@@ -269,9 +282,9 @@ function IconBtn({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   return (
-    <Pressable style={[styles.iconBtn, active && styles.iconBtnActive]} onPress={onPress}>
-      <Ionicons name={icon} size={20} color={active ? colors.primary : colors.foreground} />
-      <Text style={[styles.iconLabel, active && styles.iconLabelActive]}>{label}</Text>
+    <Pressable style={[styles.iconBtn, active && styles.iconBtnActive]} onPress={onPress} accessibilityLabel={label}>
+      <Ionicons name={icon} size={18} color={active ? colors.primary : colors.foreground} />
+      <Text style={[styles.iconLabel, active && styles.iconLabelActive]} numberOfLines={1}>{label}</Text>
     </Pressable>
   );
 }
@@ -283,6 +296,32 @@ function createStyles(colors: ThemeColors) {
     center: { alignItems: 'center', justifyContent: 'center' },
     pad: { paddingHorizontal: 16 },
     backLink: { color: colors.primary, fontWeight: '600', marginBottom: 8 },
+    artWrap: {
+      marginHorizontal: 16,
+      marginBottom: 16,
+      alignSelf: 'center',
+      width: 220,
+      aspectRatio: 1,
+      borderRadius: radius.xl,
+      overflow: 'hidden',
+      backgroundColor: colors.secondary,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    art: { width: '100%', height: '100%' },
+    artBadge: {
+      position: 'absolute',
+      bottom: 10,
+      left: 10,
+      backgroundColor: 'rgba(0,0,0,0.55)',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: radius.full,
+    },
+    artBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+    metaBlock: { paddingHorizontal: 16, marginBottom: 12, alignItems: 'center' },
+    epTitle: { color: colors.foreground, fontSize: 22, fontWeight: '800', textAlign: 'center' },
+    epSub: { color: colors.mutedForeground, fontSize: 13, marginTop: 6, textAlign: 'center' },
     epDesc: { color: colors.mutedForeground, fontSize: 14, lineHeight: 20, paddingHorizontal: 16, marginBottom: 12 },
     hostCard: {
       flexDirection: 'row',
@@ -299,27 +338,35 @@ function createStyles(colors: ThemeColors) {
     hostAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.muted },
     hostLabel: { color: colors.mutedForeground, fontSize: 11 },
     hostName: { color: colors.foreground, fontWeight: '700' },
-    iconRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, marginBottom: 8 },
+    iconRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      paddingHorizontal: 12,
+      marginBottom: 16,
+      gap: 2,
+    },
     iconBtn: {
+      flex: 1,
       alignItems: 'center',
       gap: 4,
-      paddingHorizontal: 10,
       paddingVertical: 8,
+      paddingHorizontal: 2,
       borderRadius: radius.md,
-      backgroundColor: colors.secondary,
-      minWidth: 64,
+      minWidth: 0,
     },
-    iconBtnActive: { backgroundColor: colors.primary + '22' },
-    iconLabel: { color: colors.foreground, fontSize: 10, fontWeight: '600' },
+    iconBtnActive: { backgroundColor: colors.primary + '15' },
+    iconLabel: { color: colors.foreground, fontSize: 9, fontWeight: '600', textAlign: 'center' },
     iconLabelActive: { color: colors.primary },
-    bodyBtn: { marginHorizontal: 16, marginBottom: 16 },
-    audio: { padding: 24, alignItems: 'center', gap: 12 },
-    audioTitle: { color: colors.foreground, fontSize: 20, fontWeight: '700', textAlign: 'center' },
-    audioSub: { color: colors.mutedForeground, fontSize: 14 },
     playBtn: {
-      marginTop: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      marginHorizontal: 16,
+      marginBottom: 16,
       paddingHorizontal: 24,
-      paddingVertical: 12,
+      paddingVertical: 14,
       borderRadius: radius.full,
       backgroundColor: colors.primary,
     },

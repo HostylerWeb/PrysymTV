@@ -316,7 +316,7 @@ export function VerticalSeriesWizard({
             <LayoutGrid className="w-5 h-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="font-semibold text-lg truncate">Micro-drama series</h2>
+            <h2 className="font-semibold text-lg truncate">Vertical series</h2>
             <p className="text-xs text-muted-foreground">{stepLabel}</p>
           </div>
           <button

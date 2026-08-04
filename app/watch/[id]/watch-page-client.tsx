@@ -94,6 +94,9 @@ function WatchPageContent({ videoId }: { videoId: string }) {
   const searchParams = useSearchParams()
   const highlightCommentId = searchParams.get("comment")
   const openCommentsFromUrl = searchParams.get("comments") === "1"
+  const resumeSeconds = Number.parseInt(searchParams.get("t") ?? "", 10)
+  const resumeAt = Number.isFinite(resumeSeconds) && resumeSeconds >= 5 ? resumeSeconds : 0
+  const resumeApplied = useRef(false)
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const confirm = useConfirm()
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -250,6 +253,20 @@ function WatchPageContent({ videoId }: { videoId: string }) {
     }, 200)
     return () => window.clearTimeout(t)
   }, [highlightCommentId, loading, comments])
+
+  useEffect(() => {
+    const el = videoRef.current
+    if (!el || !video || resumeApplied.current || resumeAt < 5) return
+    const apply = () => {
+      if (resumeApplied.current) return
+      const max = el.duration > 0 ? el.duration - 1 : resumeAt
+      el.currentTime = Math.min(resumeAt, Math.max(0, max))
+      resumeApplied.current = true
+    }
+    el.addEventListener("loadedmetadata", apply)
+    if (el.readyState >= 1) apply()
+    return () => el.removeEventListener("loadedmetadata", apply)
+  }, [video, resumeAt])
 
   useEffect(() => {
     const el = videoRef.current

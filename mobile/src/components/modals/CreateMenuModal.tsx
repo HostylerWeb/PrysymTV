@@ -17,7 +17,7 @@ const ITEMS = [
   { id: 'short', label: 'Short', description: 'Quick vertical clip', icon: 'videocam-outline' as const, uploadType: 'short' as const },
   { id: 'video', label: 'Long video', description: 'Standard upload', icon: 'play-circle-outline' as const, uploadType: 'video' as const },
   { id: 'podcast', label: 'Podcast episode', description: 'Audio or video episode', icon: 'headset-outline' as const, uploadType: 'podcast' as const },
-  { id: 'vertical', label: 'Micro-drama series', description: 'Create series & episodes', icon: 'grid-outline' as const, requires: 'vertical' as const },
+  { id: 'vertical', label: 'Vertical series', description: 'Create series & episodes', icon: 'grid-outline' as const, requires: 'vertical' as const },
   { id: 'live', label: 'Go live', description: 'Stream with camera or OBS', icon: 'radio-outline' as const, requires: 'live' as const },
 ] as const;
 

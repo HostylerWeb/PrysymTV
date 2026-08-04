@@ -49,6 +49,8 @@ type Props = {
   externalFullscreen?: boolean;
   onFullscreenChange?: (isFullscreen: boolean) => void;
   posterUrl?: string | null;
+  /** Seek to this position once when playback starts (continue watching). */
+  initialPositionSeconds?: number;
   onProgress?: (seconds: number, duration: number) => void;
   onEnded?: () => void;
   contentFit?: 'contain' | 'cover' | 'fill';
@@ -174,6 +176,7 @@ export function HlsPlayer({
   controlsTopInset,
   onMutedChange,
   isLive = false,
+  initialPositionSeconds = 0,
 }: Props) {
   const insets = useSafeAreaInsets();
   const masterSource = useMemo(() => source, [source]);
@@ -236,6 +239,22 @@ export function HlsPlayer({
       // Native player may already be released during navigation.
     }
   }, [player, autoPlay]);
+
+  const appliedInitialSeek = useRef(false);
+
+  useEffect(() => {
+    appliedInitialSeek.current = false;
+  }, [source, initialPositionSeconds]);
+
+  useEffect(() => {
+    if (!ready || appliedInitialSeek.current || initialPositionSeconds < 5) return;
+    try {
+      player.currentTime = initialPositionSeconds;
+      appliedInitialSeek.current = true;
+    } catch {
+      /* player may not be ready yet */
+    }
+  }, [ready, initialPositionSeconds, player]);
 
   useEffect(() => {
     setActiveSource(source);

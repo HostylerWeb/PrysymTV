@@ -72,7 +72,7 @@ export default function PodcastsScreen() {
   const router = useRouter();
   const { requireAuth } = useMockAuth();
   const { trigger, flowHost } = useCreateFlow();
-  const { playEpisode, episode: playingEpisode } = usePodcastPlayer();
+  const { stop, episode: playingEpisode } = usePodcastPlayer();
   const [category, setCategory] = useState('All');
   const [categories, setCategories] = useState<string[]>(FALLBACK_PODCAST_FILTER_CATEGORIES);
   const [refreshing, setRefreshing] = useState(false);
@@ -105,11 +105,15 @@ export default function PodcastsScreen() {
     return episodes.filter((e) => showTitles.has(e.showTitle));
   }, [catalog?.episodes, category, filteredShows]);
 
+  const openEpisode = (episodeId: string, play = false) => {
+    stop();
+    router.push(play ? `/podcast/${episodeId}?autoplay=1` : `/podcast/${episodeId}`);
+  };
+
   const openShow = (show: PodcastShow) => {
     const ep = catalog?.episodes.find((e) => e.showTitle === show.title) ?? catalog?.episodes[0];
     if (!ep) return;
-    // Navigate first — detail screen owns playback to avoid mini-player flash.
-    router.push(`/podcast/${ep.id}`);
+    openEpisode(ep.id);
   };
 
   const isLoading = catalogQuery.isLoading && !catalog;
@@ -157,10 +161,7 @@ export default function PodcastsScreen() {
             />
 
             {featuredShow && featuredEpisode ? (
-              <Pressable
-                style={styles.hero}
-                onPress={() => router.push(`/podcast/${featuredEpisode.id}?autoplay=1`)}
-              >
+              <View style={styles.hero}>
                 <Image source={{ uri: featuredShow.coverUrl ?? '' }} style={StyleSheet.absoluteFill} contentFit="cover" />
                 <LinearGradient colors={['transparent', withAlpha(colors.background, 0.95)]} style={StyleSheet.absoluteFill} />
                 <View style={styles.heroContent}>
@@ -170,10 +171,10 @@ export default function PodcastsScreen() {
                   <Button
                     label="Play latest episode"
                     size="sm"
-                    onPress={() => router.push(`/podcast/${featuredEpisode.id}?autoplay=1`)}
+                    onPress={() => openEpisode(featuredEpisode.id, true)}
                   />
                 </View>
-              </Pressable>
+              </View>
             ) : null}
 
             <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
@@ -204,7 +205,7 @@ export default function PodcastsScreen() {
         renderItem={({ item }) => (
           <Pressable
             style={styles.episode}
-            onPress={() => router.push(`/podcast/${item.id}?autoplay=1`)}
+            onPress={() => openEpisode(item.id)}
           >
             <Image source={{ uri: item.coverUrl ?? '' }} style={styles.epCover} contentFit="cover" />
             <View style={styles.epInfo}>
@@ -216,7 +217,7 @@ export default function PodcastsScreen() {
                   hitSlop={8}
                   onPress={(e) => {
                     e.stopPropagation?.();
-                    playEpisode(item);
+                    openEpisode(item.id, true);
                   }}
                   style={styles.playIcon}
                 >

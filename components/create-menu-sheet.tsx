@@ -59,7 +59,7 @@ const ITEMS: Array<{
   },
   {
     id: "vertical",
-    label: "Micro-drama series",
+    label: "Vertical series",
     description: "Create series, cover art & episodes",
     icon: LayoutGrid,
     requires: "vertical",

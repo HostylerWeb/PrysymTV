@@ -63,7 +63,7 @@ function BrandHero() {
               Where content creates community wealth
             </h1>
             <p className="text-muted-foreground mt-4 text-base md:text-lg max-w-lg">
-              Stream movies, micro-dramas, live creators, and more — all in one place built for community.
+              Stream movies, verticals, live creators, and more — all in one place built for community.
             </p>
             <div className="flex flex-wrap gap-3 mt-8">
               <Link href="/videos">

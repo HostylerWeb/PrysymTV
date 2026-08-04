@@ -31,6 +31,7 @@ import { radius, spacing, typography, withAlpha } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
+import { continueWatchingHref } from '@/lib/continue-watching-nav';
 import { formatDuration } from '@/utils/format-media';
 import { resolveAvatarUrl, resolveProfileMediaUrl } from '@/lib/media-url';
 import { prefetchProfileMedia } from '@/lib/profile-media-cache';
@@ -244,13 +245,7 @@ export default function ProfileScreen() {
                 <Pressable
                   key={item.contentId}
                   style={styles.continueCard}
-                  onPress={() => {
-                    if (item.contentType === 'video') router.push(`/watch/${item.contentId}`);
-                    else if (item.contentType === 'podcast_episode') router.push(`/podcast/${item.contentId}`);
-              else if (item.contentType === 'vertical_episode' && item.seriesSlug) {
-                      router.push(`/verticals/watch/${item.seriesSlug}/${item.episodeNumber ?? 1}`);
-                    }
-                  }}
+                  onPress={() => router.push(continueWatchingHref(item) as never)}
                 >
                   <View style={styles.continueThumb}>
                     <Image source={{ uri: item.thumbnailUrl ?? '' }} style={StyleSheet.absoluteFill} contentFit="cover" />

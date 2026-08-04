@@ -32,3 +32,17 @@ export function filterContinueWatchingFeed(
     return false;
   });
 }
+
+export function continueWatchingHref(item: ContinueWatchingFeedItem): string {
+  const t = Math.max(0, Math.floor(item.progressSeconds));
+  const resume = t >= 5 ? `?t=${t}` : "";
+
+  if (item.contentType === "video") {
+    if (item.videoType === "movie") return `/movie/${item.contentId}${resume}`;
+    return `/watch/${item.contentId}${resume}`;
+  }
+  if (item.seriesSlug != null && item.episodeNumber != null) {
+    return `/verticals/watch/${item.seriesSlug}/${item.episodeNumber}${resume}`;
+  }
+  return "/verticals";
+}

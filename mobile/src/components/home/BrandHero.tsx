@@ -25,7 +25,7 @@ export function BrandHero() {
             Where content creates community wealth
           </ThemedText>
           <ThemedText variant="bodyMedium" muted style={styles.subtitle}>
-            Stream movies, micro-dramas, live creators, and more - all in one place built for community.
+            Stream movies, verticals, live creators, and more - all in one place built for community.
           </ThemedText>
           <View style={styles.actions}>
             <Button

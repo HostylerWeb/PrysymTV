@@ -97,10 +97,10 @@ export default function SettingsUploadScreen() {
             <Text style={styles.cardSub}>
               {uploadType === 'podcast'
                 ? 'Upload podcast episodes from Settings → Podcasts.'
-                : 'Upload vertical episodes from Settings → Micro-dramas.'}
+                : 'Upload vertical episodes from Settings → Verticals.'}
             </Text>
             <Button
-              label={uploadType === 'podcast' ? 'Open Podcasts' : 'Open Micro-dramas'}
+              label={uploadType === 'podcast' ? 'Open Podcasts' : 'Open Verticals'}
               onPress={() => router.replace(uploadType === 'podcast' ? '/settings/podcasts' : '/settings/verticals')}
               style={{ marginTop: 12 }}
             />
