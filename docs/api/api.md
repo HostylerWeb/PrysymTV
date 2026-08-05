@@ -419,7 +419,7 @@ All uploads use a 3-step flow: **init** → **upload bytes** → **complete**.
   "uploadMethod": "PUT",
   "uploadHeaders": { "Content-Type": "video/mp4" },
   "expiresIn": 3600,
-  "maxUploadBytes": 2147483648
+  "maxUploadBytes": 10737418240
 }
 ```
 
@@ -758,7 +758,7 @@ Ranks videos by **7-day view events** in `analytics_events` (SQL aggregation). F
   "uploadUrl": "https://…",
   "uploadMethod": "PUT",
   "uploadHeaders": { "Content-Type": "video/mp4" },
-  "maxUploadBytes": 2147483648,
+  "maxUploadBytes": 10737418240,
   "expiresIn": 3600
 }
 ```
@@ -1647,7 +1647,7 @@ Templates: root [`.env.example`](../../.env.example) (frontend + API reference) 
 | `STORAGE_THUMBNAIL_KEY_PREFIX` | No | `uploads/thumbnails` | Thumbnail prefix |
 | `STORAGE_RAW_KEY_PATTERN` | No | `{videoId}/source{extension}` | Raw object key template |
 | `STORAGE_PRESIGN_EXPIRES_SECONDS` | No | `3600` | Presigned URL TTL |
-| `UPLOAD_MAX_BYTES` | No | `2147483648` | Max upload size (bytes) |
+| `UPLOAD_MAX_BYTES` | No | `10737418240` | Max upload size (bytes, 10 GiB) |
 | `UPLOAD_ALLOWED_MIME_PREFIXES` | No | `video/,audio/` | Allowed MIME prefixes for video uploads |
 | `VIDEO_PROCESSING_MODE` | No | `skip` | `ffmpeg` (HLS + thumb) or `skip` |
 | `VIDEO_PROCESSING_MAX_RETRIES` | No | `3` | Worker retries |

@@ -42,7 +42,7 @@ export function getStorageSettings(config: ConfigService): StorageSettings {
     rawKeyPattern:
       config.get<string>('STORAGE_RAW_KEY_PATTERN') ?? '{videoId}/source{extension}',
     presignExpiresSeconds: Number(config.get<string>('STORAGE_PRESIGN_EXPIRES_SECONDS') ?? 3600),
-    maxUploadBytes: Number(config.get<string>('UPLOAD_MAX_BYTES') ?? String(2 * 1024 ** 3)),
+    maxUploadBytes: Number(config.get<string>('UPLOAD_MAX_BYTES') ?? String(10 * 1024 ** 3)),
     allowedMimePrefixes,
     apiPublicUrl: config.getOrThrow<string>('API_PUBLIC_URL'),
   };

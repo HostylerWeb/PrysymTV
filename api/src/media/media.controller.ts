@@ -53,7 +53,7 @@ export class MediaController {
     FileInterceptor('file', {
       storage: videoUploadStorage,
       limits: {
-        fileSize: Number(process.env.UPLOAD_MAX_BYTES ?? 2 * 1024 ** 3),
+        fileSize: Number(process.env.UPLOAD_MAX_BYTES ?? 10 * 1024 ** 3),
       },
     }),
   )

@@ -5,6 +5,8 @@ set -euo pipefail
 HOST="${PRYSYM_HOST:-srv1765056.hstgr.cloud}"
 BASE_URL="https://${HOST}"
 PUBLIC_IP="${PRYSYM_PUBLIC_IP:-$(curl -fsS -4 ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')}"
+# Max multipart upload size (10 GiB). Keep nginx client_max_body_size in sync.
+UPLOAD_MAX_BYTES="${PRYSYM_UPLOAD_MAX_BYTES:-10737418240}"
 APP="/var/www/prysymtv"
 DEPLOY_USER="prysym"
 REPO="https://github.com/HostylerWeb/PrysymTV.git"
@@ -173,7 +175,7 @@ write_api_env() {
     STORAGE_THUMBNAIL_KEY_PREFIX uploads/thumbnails \
     STORAGE_RAW_KEY_PATTERN '{videoId}/source{extension}' \
     STORAGE_PRESIGN_EXPIRES_SECONDS 3600 \
-    UPLOAD_MAX_BYTES 2147483648 \
+    UPLOAD_MAX_BYTES "$UPLOAD_MAX_BYTES" \
     UPLOAD_ALLOWED_MIME_PREFIXES 'video/,audio/' \
     VIDEO_PROCESSING_MODE ffmpeg \
     VIDEO_PROCESSING_MAX_RETRIES 3 \
@@ -229,7 +231,7 @@ write_frontend_env() {
     PORT 3001 \
     NEXT_PUBLIC_API_URL "${BASE_URL}/api/v1" \
     NEXT_PUBLIC_WS_URL "${BASE_URL}" \
-    NEXT_PUBLIC_UPLOAD_MAX_BYTES 2147483648 \
+    NEXT_PUBLIC_UPLOAD_MAX_BYTES "$UPLOAD_MAX_BYTES" \
     NEXT_PUBLIC_RTMP_INGEST_URL "rtmp://${HOST}:1935/live" \
     NEXT_PUBLIC_ADMIN_UI_PREVIEW false
   log ".env.production OK"
@@ -268,8 +270,21 @@ else
 fi
 docker restart prysym-mediamtx 2>/dev/null || (cd /opt/prysym/stack && docker compose up -d mediamtx)
 
-log "Updating nginx server_name..."
-sed -i "s/server_name .*/server_name ${HOST} _;/" /etc/nginx/sites-available/prysymtv
+log "Updating nginx..."
+NGINX_SITE=/etc/nginx/sites-available/prysymtv
+sed -i "s/server_name .*/server_name ${HOST} _;/" "$NGINX_SITE"
+sed -i 's/^[[:space:]]*client_max_body_size .*/  client_max_body_size 10g;/' "$NGINX_SITE"
+if grep -q '^[[:space:]]*client_body_timeout ' "$NGINX_SITE"; then
+  sed -i 's/^[[:space:]]*client_body_timeout .*/  client_body_timeout 1200s;/' "$NGINX_SITE"
+else
+  sed -i '/client_max_body_size/a\  client_body_timeout 1200s;' "$NGINX_SITE"
+fi
+sed -i '/location \/api\/ {/,/^[[:space:]]*}/ s/^[[:space:]]*proxy_read_timeout .*/    proxy_read_timeout 1200s;/' "$NGINX_SITE"
+if grep -A12 'location /api/' "$NGINX_SITE" | grep -q proxy_send_timeout; then
+  sed -i '/location \/api\/ {/,/^[[:space:]]*}/ s/^[[:space:]]*proxy_send_timeout .*/    proxy_send_timeout 1200s;/' "$NGINX_SITE"
+else
+  sed -i '/location \/api\/ {/,/^[[:space:]]*}/ s/\(proxy_read_timeout 1200s;\)/\1\n    proxy_send_timeout 1200s;/' "$NGINX_SITE"
+fi
 nginx -t && systemctl reload nginx
 
 MAIN_TS="$APP/api/src/main.ts"
