@@ -149,6 +149,7 @@ export async function uploadVideoFlow(
   body: UploadInitBody,
   file: File,
   onProgress?: (percent: number) => void,
+  thumbnailFile?: File,
 ): Promise<UploadFlowResult> {
   const init = await initVideoUpload({
     ...body,
@@ -156,6 +157,9 @@ export async function uploadVideoFlow(
     fileName: body.fileName ?? file.name,
   });
   try {
+    if (thumbnailFile) {
+      await uploadVideoThumbnail(init.videoId, thumbnailFile);
+    }
     await uploadVideoFile(init, file, onProgress);
     return await completeVideoUpload({
       videoId: init.videoId,
@@ -230,6 +234,28 @@ export async function uploadMoviePoster(
     { method: "POST", body: { objectKey: init.objectKey } },
   );
   return done.posterUrl;
+}
+
+export async function uploadVideoThumbnail(
+  videoId: string,
+  file: File,
+): Promise<string> {
+  const mimeType = file.type?.trim().startsWith("image/")
+    ? file.type
+    : "image/jpeg";
+  const init = await apiRequest<PosterUploadInit>(
+    `/videos/${videoId}/thumbnail/upload/init`,
+    {
+      method: "POST",
+      body: { mimeType, fileName: file.name },
+    },
+  );
+  await uploadPosterImageFile(init, file);
+  const done = await apiRequest<{ videoId: string; thumbnailUrl: string }>(
+    `/videos/${videoId}/thumbnail/upload/complete`,
+    { method: "POST", body: { objectKey: init.objectKey } },
+  );
+  return done.thumbnailUrl;
 }
 
 /** Admin movie upload: poster is required before the video can complete processing. */

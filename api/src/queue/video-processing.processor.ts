@@ -60,6 +60,23 @@ export class VideoProcessingProcessor extends WorkerHost {
     });
   }
 
+  /** True when the creator uploaded a custom thumb before processing finished. */
+  private async hasCreatorThumbnail(thumbnailUrl: string | null): Promise<boolean> {
+    if (!thumbnailUrl?.trim()) return false;
+    const key = this.storage.resolveMediaObjectKey(thumbnailUrl);
+    if (!key?.includes('/thumb.')) return false;
+    return await this.storage.objectExists(key);
+  }
+
+  private async publishAutoThumbnail(
+    videoId: string,
+    localThumbPath: string,
+  ): Promise<string> {
+    const thumbKey = this.storage.buildThumbnailKey(videoId);
+    await this.storage.uploadFromFile(thumbKey, localThumbPath, 'image/jpeg');
+    return this.storage.getPublicUrl(thumbKey);
+  }
+
   async process(job: Job<VideoProcessingJobData>): Promise<void> {
     const { videoId, objectKey } = job.data;
     const settings = getVideoProcessingSettings(this.config);
@@ -125,6 +142,14 @@ export class VideoProcessingProcessor extends WorkerHost {
     let durationSeconds = 0;
     let thumbnailUrl = rawUrl;
 
+    const existing = await this.prisma.video.findUnique({
+      where: { id: videoId },
+      select: { thumbnailUrl: true },
+    });
+    const useCreatorThumb = await this.hasCreatorThumbnail(
+      existing?.thumbnailUrl ?? null,
+    );
+
     const workRoot = await mkdtemp(join(tmpdir(), `prysym-skip-${videoId}-`));
     const inputPath = join(workRoot, 'source');
     const thumbPath = join(workRoot, 'thumb.jpg');
@@ -134,11 +159,11 @@ export class VideoProcessingProcessor extends WorkerHost {
       const probe = await probeMedia(inputPath, ffprobePath);
       durationSeconds = probe.durationSeconds;
 
-      if (probe.hasVideo) {
+      if (useCreatorThumb) {
+        thumbnailUrl = existing!.thumbnailUrl!;
+      } else if (probe.hasVideo) {
         await extractThumbnail(inputPath, thumbPath, ffmpegPath, true);
-        const thumbKey = this.storage.buildThumbnailKey(videoId);
-        await this.storage.uploadFromFile(thumbKey, thumbPath, 'image/jpeg');
-        thumbnailUrl = this.storage.getPublicUrl(thumbKey);
+        thumbnailUrl = await this.publishAutoThumbnail(videoId, thumbPath);
       }
     } catch (e) {
       this.logger.warn(
@@ -277,6 +302,14 @@ export class VideoProcessingProcessor extends WorkerHost {
     const hlsDir = join(workRoot, 'hls');
     const thumbPath = join(workRoot, 'thumb.jpg');
 
+    const existing = await this.prisma.video.findUnique({
+      where: { id: videoId },
+      select: { thumbnailUrl: true },
+    });
+    const useCreatorThumb = await this.hasCreatorThumbnail(
+      existing?.thumbnailUrl ?? null,
+    );
+
     try {
       const { mkdir } = await import('fs/promises');
       await this.storage.downloadToFile(objectKey, inputPath);
@@ -292,7 +325,7 @@ export class VideoProcessingProcessor extends WorkerHost {
         preferMovieLadder,
       );
 
-      if (probe.hasVideo) {
+      if (!useCreatorThumb && probe.hasVideo) {
         await extractThumbnail(inputPath, thumbPath, ffmpegPath, true);
       }
 
@@ -301,11 +334,11 @@ export class VideoProcessingProcessor extends WorkerHost {
         this.storage.uploadFromFile(key, localPath, contentType),
       );
 
-      const thumbKey = this.storage.buildThumbnailKey(videoId);
       let thumbnailUrl: string | null = null;
-      if (probe.hasVideo) {
-        await this.storage.uploadFromFile(thumbKey, thumbPath, 'image/jpeg');
-        thumbnailUrl = this.storage.getPublicUrl(thumbKey);
+      if (useCreatorThumb) {
+        thumbnailUrl = existing!.thumbnailUrl;
+      } else if (probe.hasVideo) {
+        thumbnailUrl = await this.publishAutoThumbnail(videoId, thumbPath);
       } else if (probe.isAudioOnly) {
         thumbnailUrl = null;
       }

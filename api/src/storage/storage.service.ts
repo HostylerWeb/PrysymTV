@@ -86,6 +86,13 @@ export class StorageService implements OnModuleInit {
     return `${prefix}/${videoId}.jpg`;
   }
 
+  /** Creator-uploaded thumbnail (distinct from FFmpeg auto thumb at `{prefix}/{videoId}.jpg`). */
+  buildCustomVideoThumbnailKey(videoId: string, fileName?: string): string {
+    const prefix = this.settings.thumbnailKeyPrefix.replace(/^\/+|\/+$/g, '');
+    const extension = this.extensionFromFileName(fileName) || '.jpg';
+    return `${prefix}/${videoId}/thumb${extension}`;
+  }
+
   buildStreamThumbnailKey(streamId: string): string {
     return `uploads/stream-thumbnails/${streamId}.jpg`;
   }

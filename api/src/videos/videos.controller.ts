@@ -76,6 +76,31 @@ export class VideosController {
     return this.videos.completeMoviePosterUpload(user, id, body.objectKey);
   }
 
+  @Post(':id/thumbnail/upload/init')
+  @UseGuards(JwtAuthGuard)
+  thumbnailUploadInit(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: { mimeType: string; fileName?: string },
+  ) {
+    return this.videos.initVideoThumbnailUpload(
+      user,
+      id,
+      body.mimeType,
+      body.fileName,
+    );
+  }
+
+  @Post(':id/thumbnail/upload/complete')
+  @UseGuards(JwtAuthGuard)
+  thumbnailUploadComplete(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUserPayload,
+    @Body() body: { objectKey: string },
+  ) {
+    return this.videos.completeVideoThumbnailUpload(user, id, body.objectKey);
+  }
+
   @Get('feed/shorts')
   @UseGuards(OptionalJwtAuthGuard)
   shortsFeed(

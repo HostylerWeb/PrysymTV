@@ -78,6 +78,28 @@ export function abandonVideoUpload(videoId: string) {
   );
 }
 
+export async function uploadVideoThumbnail(
+  videoId: string,
+  file: { uri: string; name?: string | null; mimeType?: string | null },
+): Promise<string> {
+  const mimeType = file.mimeType?.trim().startsWith('image/')
+    ? file.mimeType
+    : 'image/jpeg';
+  const init = await apiRequest<FileUploadInit & { videoId: string }>(
+    `/videos/${videoId}/thumbnail/upload/init`,
+    {
+      method: 'POST',
+      body: { mimeType, fileName: file.name ?? 'thumbnail.jpg' },
+    },
+  );
+  await uploadPickedFile(init, file);
+  const done = await apiRequest<{ videoId: string; thumbnailUrl: string }>(
+    `/videos/${videoId}/thumbnail/upload/complete`,
+    { method: 'POST', body: { objectKey: init.objectKey } },
+  );
+  return done.thumbnailUrl;
+}
+
 export async function uploadVideoFile(
   init: UploadInitResponse,
   file: { uri: string; name?: string | null; mimeType?: string | null },
@@ -95,6 +117,7 @@ export async function runVideoUpload(params: {
   tags?: string;
   file: { uri: string; name?: string | null; mimeType?: string | null };
   verticalEpisodeId?: string;
+  thumbnailFile?: { uri: string; name?: string | null; mimeType?: string | null };
   onProgress?: (percent: number) => void;
 }) {
   const mimeType = params.file.mimeType || 'video/mp4';
@@ -110,6 +133,9 @@ export async function runVideoUpload(params: {
     verticalEpisodeId: params.verticalEpisodeId,
   });
   try {
+    if (params.thumbnailFile) {
+      await uploadVideoThumbnail(init.videoId, params.thumbnailFile);
+    }
     await uploadVideoFile(init, params.file, params.onProgress);
     return await completeVideoUpload({ videoId: init.videoId, objectKey: init.objectKey });
   } catch (err) {

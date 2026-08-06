@@ -75,6 +75,8 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
   const [visibility, setVisibility] = useState<'public' | 'unlisted' | 'private'>('public');
   const [tags, setTags] = useState('');
   const [file, setFile] = useState<PickedMedia | null>(null);
+  const [thumbnailMode, setThumbnailMode] = useState<'auto' | 'custom'>('auto');
+  const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [doneMessage, setDoneMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -124,6 +126,8 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
     setVisibility('public');
     setTags('');
     setFile(null);
+    setThumbnailMode('auto');
+    setThumbnailUri(null);
     setDone(false);
     setDoneMessage(null);
     setBusy(false);
@@ -190,6 +194,16 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
     }
   };
 
+  const pickThumbnail = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.9,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setThumbnailUri(result.assets[0].uri);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!title.trim() || !file) {
       setError('Title and media file are required.');
@@ -197,6 +211,10 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
     }
     if (kind === 'podcast' && podcastMode === 'new' && !showTitle.trim()) {
       setError('Enter a show title.');
+      return;
+    }
+    if (kind === 'video' && thumbnailMode === 'custom' && !thumbnailUri) {
+      setError('Choose a thumbnail image or use auto from video.');
       return;
     }
     setBusy(true);
@@ -212,6 +230,10 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
           visibility,
           tags: tags.trim() || undefined,
           file,
+          thumbnailFile:
+            kind === 'video' && thumbnailMode === 'custom' && thumbnailUri
+              ? { uri: thumbnailUri, name: 'thumbnail.jpg', mimeType: 'image/jpeg' }
+              : undefined,
           onProgress: setUploadPercent,
         });
         setDoneMessage(uploadQueuedBodyFor(kind));
@@ -396,6 +418,42 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
                         </Pressable>
                       ))}
                     </View>
+                    <Text style={styles.fieldLabel}>Thumbnail</Text>
+                    <View style={styles.segment}>
+                      <Pressable
+                        style={[styles.segBtn, thumbnailMode === 'auto' && styles.segBtnOn]}
+                        onPress={() => {
+                          setThumbnailMode('auto');
+                          setThumbnailUri(null);
+                        }}
+                      >
+                        <Text style={[styles.segText, thumbnailMode === 'auto' && styles.segTextOn]}>
+                          Auto from video
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.segBtn, thumbnailMode === 'custom' && styles.segBtnOn]}
+                        onPress={() => setThumbnailMode('custom')}
+                      >
+                        <Text style={[styles.segText, thumbnailMode === 'custom' && styles.segTextOn]}>
+                          Upload image
+                        </Text>
+                      </Pressable>
+                    </View>
+                    {thumbnailMode === 'auto' ? (
+                      <Text style={styles.hintText}>
+                        We&apos;ll grab a frame from your video after processing.
+                      </Text>
+                    ) : (
+                      <Pressable style={styles.fileBox} onPress={() => void pickThumbnail()}>
+                        {thumbnailUri ? (
+                          <Image source={{ uri: thumbnailUri }} style={styles.coverPreview} />
+                        ) : (
+                          <Ionicons name="image-outline" size={28} color={colors.primary} />
+                        )}
+                        <Text style={styles.fileLabel}>Choose thumbnail image</Text>
+                      </Pressable>
+                    )}
                   </>
                 )}
 
@@ -524,6 +582,12 @@ function createUploadStyles(colors: ThemeColors) {
   body: { paddingHorizontal: 20, paddingVertical: 16 },
   section: { marginBottom: 8 },
   fieldLabel: { color: colors.foreground, fontSize: 13, fontWeight: '600', marginBottom: 6 },
+  hintText: {
+    color: colors.mutedForeground,
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
   input: {
     backgroundColor: colors.input,
     borderWidth: 1,

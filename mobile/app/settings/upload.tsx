@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/Button';
@@ -28,6 +29,8 @@ export default function SettingsUploadScreen() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<{ uri: string; name: string; mimeType?: string } | null>(null);
+  const [thumbnailMode, setThumbnailMode] = useState<'auto' | 'custom'>('auto');
+  const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
 
@@ -51,8 +54,26 @@ export default function SettingsUploadScreen() {
     }
   };
 
+  const pickThumbnail = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.9,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setThumbnailUri(result.assets[0].uri);
+    }
+  };
+
   const publish = async () => {
     if (!config.videoType || !file || !title.trim()) return;
+    if (
+      uploadType === 'video' &&
+      thumbnailMode === 'custom' &&
+      !thumbnailUri
+    ) {
+      Alert.alert('Thumbnail required', 'Choose an image or use auto from video.');
+      return;
+    }
     setBusy(true);
     setUploadPercent(0);
     try {
@@ -61,6 +82,10 @@ export default function SettingsUploadScreen() {
         title: title.trim(),
         description: description.trim() || undefined,
         file,
+        thumbnailFile:
+          uploadType === 'video' && thumbnailMode === 'custom' && thumbnailUri
+            ? { uri: thumbnailUri, name: 'thumbnail.jpg', mimeType: 'image/jpeg' }
+            : undefined,
         onProgress: setUploadPercent,
       });
       Alert.alert(
@@ -71,6 +96,8 @@ export default function SettingsUploadScreen() {
       setTitle('');
       setDescription('');
       setFile(null);
+      setThumbnailMode('auto');
+      setThumbnailUri(null);
     } catch (e) {
       Alert.alert('Upload failed', e instanceof Error ? e.message : 'Could not upload');
     } finally {
@@ -115,7 +142,7 @@ export default function SettingsUploadScreen() {
           </Card>
         )}
 
-        {config.videoType && step >= 1 && step < config.steps.length - 1 && (
+        {config.videoType && step >= 1 && step < config.steps.length - 1 && uploadType !== 'video' && (
           <Card>
             <Text style={styles.cardTitle}>{config.steps[step]}</Text>
             <TextInput
@@ -136,6 +163,81 @@ export default function SettingsUploadScreen() {
             <View style={styles.row}>
               {step > 0 && <Button label="Back" variant="outline" onPress={() => setStep(step - 1)} style={styles.flex} />}
               <Button label="Next" onPress={() => setStep(step + 1)} style={styles.flex} disabled={!title.trim()} />
+            </View>
+          </Card>
+        )}
+
+        {config.videoType && uploadType === 'video' && step === 1 && (
+          <Card>
+            <Text style={styles.cardTitle}>Details</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Title"
+              placeholderTextColor={colors.mutedForeground}
+              value={title}
+              onChangeText={setTitle}
+            />
+            <TextInput
+              style={[styles.input, { marginTop: 8 }]}
+              placeholder="Description (optional)"
+              placeholderTextColor={colors.mutedForeground}
+              multiline
+              value={description}
+              onChangeText={setDescription}
+            />
+            <View style={styles.row}>
+              <Button label="Back" variant="outline" onPress={() => setStep(0)} style={styles.flex} />
+              <Button label="Next" onPress={() => setStep(2)} style={styles.flex} disabled={!title.trim()} />
+            </View>
+          </Card>
+        )}
+
+        {config.videoType && uploadType === 'video' && step === 2 && (
+          <Card>
+            <Text style={styles.cardTitle}>Thumbnail</Text>
+            <View style={styles.segment}>
+              <Pressable
+                style={[styles.segBtn, thumbnailMode === 'auto' && styles.segBtnOn]}
+                onPress={() => {
+                  setThumbnailMode('auto');
+                  setThumbnailUri(null);
+                }}
+              >
+                <Text style={[styles.segText, thumbnailMode === 'auto' && styles.segTextOn]}>
+                  Auto from video
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.segBtn, thumbnailMode === 'custom' && styles.segBtnOn]}
+                onPress={() => setThumbnailMode('custom')}
+              >
+                <Text style={[styles.segText, thumbnailMode === 'custom' && styles.segTextOn]}>
+                  Upload image
+                </Text>
+              </Pressable>
+            </View>
+            {thumbnailMode === 'auto' ? (
+              <Text style={styles.cardSub}>
+                We&apos;ll grab a frame from your video after processing.
+              </Text>
+            ) : (
+              <Pressable style={styles.thumbBox} onPress={() => void pickThumbnail()}>
+                {thumbnailUri ? (
+                  <Image source={{ uri: thumbnailUri }} style={styles.thumbPreview} />
+                ) : (
+                  <Ionicons name="image-outline" size={32} color={colors.primary} />
+                )}
+                <Text style={styles.cardSub}>Tap to choose thumbnail image</Text>
+              </Pressable>
+            )}
+            <View style={styles.row}>
+              <Button label="Back" variant="outline" onPress={() => setStep(1)} style={styles.flex} />
+              <Button
+                label="Next"
+                onPress={() => setStep(3)}
+                style={styles.flex}
+                disabled={thumbnailMode === 'custom' && !thumbnailUri}
+              />
             </View>
           </Card>
         )}
@@ -175,4 +277,25 @@ const styles = StyleSheet.create({
   input: { backgroundColor: colors.secondary, borderRadius: radius.md, padding: 12, color: colors.foreground, marginTop: 12 },
   row: { flexDirection: 'row', gap: 8, marginTop: 16 },
   flex: { flex: 1 },
+  segment: {
+    flexDirection: 'row',
+    backgroundColor: colors.secondary,
+    borderRadius: radius.lg,
+    padding: 4,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  segBtn: { flex: 1, paddingVertical: 8, borderRadius: radius.md, alignItems: 'center' },
+  segBtnOn: { backgroundColor: colors.background },
+  segText: { color: colors.mutedForeground, fontSize: 12, fontWeight: '600' },
+  segTextOn: { color: colors.foreground },
+  thumbBox: {
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 8,
+  },
+  thumbPreview: { width: 120, height: 68, borderRadius: radius.md, marginBottom: 8 },
 });

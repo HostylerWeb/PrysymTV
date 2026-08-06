@@ -452,6 +452,87 @@ export class VideosService implements OnModuleInit {
     return { videoId, posterUrl };
   }
 
+  private assertVideoThumbnailAccess(
+    user: AuthUserPayload,
+    video: { creatorId: string; type: VideoType },
+  ) {
+    if (video.type === VideoType.movie) {
+      throw new BadRequestException(
+        'Movies use poster images — use the movie poster upload instead',
+      );
+    }
+    if (video.type !== VideoType.video && video.type !== VideoType.short) {
+      throw new BadRequestException('Thumbnail upload is only for videos and shorts');
+    }
+    if (video.creatorId !== user.id && user.role !== 'admin') {
+      throw new ForbiddenException('Not allowed to update this video thumbnail');
+    }
+  }
+
+  async initVideoThumbnailUpload(
+    user: AuthUserPayload,
+    videoId: string,
+    mimeType: string,
+    fileName?: string,
+  ) {
+    const video = await this.prisma.video.findUnique({ where: { id: videoId } });
+    if (!video) throw new NotFoundException('Video not found');
+    this.assertVideoThumbnailAccess(user, video);
+
+    const objectKey = this.storage.buildCustomVideoThumbnailKey(videoId, fileName);
+    this.storage.assertImageMime(mimeType);
+    const target = await this.storage.createUploadTargetForKey(objectKey, mimeType);
+    return {
+      videoId,
+      objectKey: target.objectKey,
+      uploadUrl: target.uploadUrl,
+      uploadMethod: target.uploadMethod,
+      uploadHeaders: target.uploadHeaders,
+      expiresIn: target.expiresIn,
+      publicUrl: this.storage.getPublicUrl(objectKey),
+    };
+  }
+
+  async completeVideoThumbnailUpload(
+    user: AuthUserPayload,
+    videoId: string,
+    objectKey: string,
+  ) {
+    const video = await this.prisma.video.findUnique({ where: { id: videoId } });
+    if (!video) throw new NotFoundException('Video not found');
+    this.assertVideoThumbnailAccess(user, video);
+
+    const key = objectKey.replace(/^\/+/, '');
+    const expectedPrefix = `${this.storage
+      .getSettings()
+      .thumbnailKeyPrefix.replace(/^\/+|\/+$/g, '')}/${videoId}/thumb`;
+    if (!key.startsWith(expectedPrefix)) {
+      throw new BadRequestException('Invalid thumbnail object key');
+    }
+
+    const exists = await this.storage.objectExists(key);
+    if (!exists) {
+      throw new BadRequestException(
+        'Thumbnail image not found. Finish uploading the image first.',
+      );
+    }
+
+    if (video.thumbnailUrl) {
+      const previousKey = this.storage.objectKeyFromPublicUrl(video.thumbnailUrl);
+      const autoKey = this.storage.buildThumbnailKey(videoId);
+      if (previousKey && previousKey !== key && previousKey !== autoKey) {
+        await this.storage.purgePublicMediaUrl(video.thumbnailUrl);
+      }
+    }
+
+    const thumbnailUrl = this.storage.getPublicUrl(key);
+    await this.prisma.video.update({
+      where: { id: videoId },
+      data: { thumbnailUrl },
+    });
+    return { videoId, thumbnailUrl };
+  }
+
   async updateOwned(
     userId: string,
     id: string,

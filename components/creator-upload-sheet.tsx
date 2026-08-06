@@ -111,6 +111,9 @@ export function CreatorUploadSheet({
   )
   const [tags, setTags] = useState("")
   const [file, setFile] = useState<File | null>(null)
+  const [thumbnailMode, setThumbnailMode] = useState<"auto" | "custom">("auto")
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -146,6 +149,9 @@ export function CreatorUploadSheet({
     setVisibility("public")
     setTags("")
     setFile(null)
+    setThumbnailMode("auto")
+    setThumbnailFile(null)
+    setThumbnailPreview(null)
     setProgress(0)
     setError(null)
     setBusy(false)
@@ -304,6 +310,7 @@ export function CreatorUploadSheet({
         },
         file,
         setProgress,
+        kind === "video" && thumbnailMode === "custom" ? thumbnailFile : undefined,
       )
       await assignPlaylists("video", queued.videoId)
       setDone(true)
@@ -596,6 +603,82 @@ export function CreatorUploadSheet({
                 </div>
               )}
 
+              {kind === "video" && (
+                <div className="space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Thumbnail
+                  </p>
+                  <div className="flex gap-2 p-1 rounded-xl bg-secondary/60">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setThumbnailMode("auto")
+                        setThumbnailFile(null)
+                        if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview)
+                        setThumbnailPreview(null)
+                      }}
+                      className={cn(
+                        "flex-1 py-2 text-xs font-medium rounded-lg",
+                        thumbnailMode === "auto"
+                          ? "bg-background shadow-sm"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      Auto from video
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setThumbnailMode("custom")}
+                      className={cn(
+                        "flex-1 py-2 text-xs font-medium rounded-lg",
+                        thumbnailMode === "custom"
+                          ? "bg-background shadow-sm"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      Upload image
+                    </button>
+                  </div>
+                  {thumbnailMode === "auto" ? (
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      We&apos;ll grab a frame from your video (~2 seconds in) after
+                      processing.
+                    </p>
+                  ) : (
+                    <label className="block p-4 rounded-xl border-2 border-dashed border-border text-center cursor-pointer hover:border-primary/50 transition-colors">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const picked = e.target.files?.[0] ?? null
+                          setThumbnailFile(picked)
+                          if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview)
+                          setThumbnailPreview(
+                            picked ? URL.createObjectURL(picked) : null,
+                          )
+                        }}
+                      />
+                      {thumbnailPreview ? (
+                        <img
+                          src={thumbnailPreview}
+                          alt="Thumbnail preview"
+                          className="w-full max-h-32 object-contain rounded-lg mx-auto mb-2"
+                        />
+                      ) : (
+                        <ImageIcon className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                      )}
+                      <p className="text-sm font-medium">
+                        {thumbnailFile?.name ?? "Choose thumbnail image"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        JPG, PNG, or WebP — 16:9 works well
+                      </p>
+                    </label>
+                  )}
+                </div>
+              )}
+
               <label
                 className={cn(
                   "block border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors",
@@ -643,7 +726,14 @@ export function CreatorUploadSheet({
 
               <Button
                 onClick={() => void handleUpload()}
-                disabled={!title.trim() || !file || busy}
+                disabled={
+                  !title.trim() ||
+                  !file ||
+                  busy ||
+                  (kind === "video" &&
+                    thumbnailMode === "custom" &&
+                    !thumbnailFile)
+                }
                 className="w-full rounded-full h-12 text-base font-semibold"
               >
                 {busy ? `Uploading${progress ? ` ${progress}%` : "…"}` : "Upload"}
