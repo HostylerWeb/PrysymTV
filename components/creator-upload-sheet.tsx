@@ -310,7 +310,7 @@ export function CreatorUploadSheet({
         },
         file,
         setProgress,
-        kind === "video" && thumbnailMode === "custom" ? thumbnailFile : undefined,
+        kind === "video" && thumbnailMode === "custom" ? thumbnailFile ?? undefined : undefined,
       )
       await assignPlaylists("video", queued.videoId)
       setDone(true)
