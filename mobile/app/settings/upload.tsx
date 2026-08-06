@@ -29,7 +29,7 @@ export default function SettingsUploadScreen() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<{ uri: string; name: string; mimeType?: string } | null>(null);
-  const [thumbnailMode, setThumbnailMode] = useState<'auto' | 'custom'>('auto');
+  const [thumbnailMode, setThumbnailMode] = useState<'auto' | 'custom'>('custom');
   const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
@@ -96,7 +96,7 @@ export default function SettingsUploadScreen() {
       setTitle('');
       setDescription('');
       setFile(null);
-      setThumbnailMode('auto');
+      setThumbnailMode('custom');
       setThumbnailUri(null);
     } catch (e) {
       Alert.alert('Upload failed', e instanceof Error ? e.message : 'Could not upload');

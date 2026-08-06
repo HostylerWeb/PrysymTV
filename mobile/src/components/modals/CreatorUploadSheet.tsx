@@ -75,7 +75,7 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
   const [visibility, setVisibility] = useState<'public' | 'unlisted' | 'private'>('public');
   const [tags, setTags] = useState('');
   const [file, setFile] = useState<PickedMedia | null>(null);
-  const [thumbnailMode, setThumbnailMode] = useState<'auto' | 'custom'>('auto');
+  const [thumbnailMode, setThumbnailMode] = useState<'auto' | 'custom'>('custom');
   const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [doneMessage, setDoneMessage] = useState<string | null>(null);
@@ -126,7 +126,7 @@ export function CreatorUploadSheet({ visible, kind, onClose, onSuccess }: Props)
     setVisibility('public');
     setTags('');
     setFile(null);
-    setThumbnailMode('auto');
+    setThumbnailMode('custom');
     setThumbnailUri(null);
     setDone(false);
     setDoneMessage(null);
