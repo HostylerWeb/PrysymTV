@@ -202,19 +202,7 @@ export class StorageService implements OnModuleInit {
     const expiresIn = this.settings.presignExpiresSeconds;
 
     if (this.settings.driver === 's3' && this.s3 && this.settings.s3) {
-      const command = new PutObjectCommand({
-        Bucket: this.settings.s3.bucket,
-        Key: key,
-        ContentType: mimeType,
-      });
-      const uploadUrl = await getSignedUrl(this.s3, command, { expiresIn });
-      return {
-        objectKey: key,
-        uploadUrl,
-        uploadMethod: 'PUT',
-        uploadHeaders: { 'Content-Type': mimeType },
-        expiresIn,
-      };
+      return this.createPresignedPutTarget(key, mimeType, expiresIn);
     }
 
     await mkdir(dirname(this.getLocalAbsolutePath(key)), { recursive: true });
@@ -328,20 +316,42 @@ export class StorageService implements OnModuleInit {
     this.assertMimeAllowed(mimeType);
     const objectKey = this.buildRawKey(videoId, fileName);
     const expiresIn = this.settings.presignExpiresSeconds;
-    const base = this.settings.apiPublicUrl.replace(/\/$/, '');
 
-    if (this.settings.driver === 'local') {
-      await mkdir(dirname(this.getLocalAbsolutePath(objectKey)), {
-        recursive: true,
-      });
+    if (this.settings.driver === 's3' && this.s3 && this.settings.s3) {
+      // Direct browser → R2/S3 PUT avoids Node's 2 GiB readFile cap on the API path.
+      return this.createPresignedPutTarget(objectKey, mimeType, expiresIn);
     }
 
-    // Route uploads through the API so files land in storage reliably (R2/S3 or local).
+    await mkdir(dirname(this.getLocalAbsolutePath(objectKey)), {
+      recursive: true,
+    });
+    const base = this.settings.apiPublicUrl.replace(/\/$/, '');
     return {
       objectKey,
       uploadUrl: `${base}/media/upload/${videoId}`,
       uploadMethod: 'POST',
       uploadHeaders: {},
+      expiresIn,
+    };
+  }
+
+  private async createPresignedPutTarget(
+    objectKey: string,
+    mimeType: string,
+    expiresIn: number,
+  ): Promise<UploadTarget> {
+    const key = objectKey.replace(/^\/+/, '');
+    const command = new PutObjectCommand({
+      Bucket: this.settings.s3!.bucket,
+      Key: key,
+      ContentType: mimeType,
+    });
+    const uploadUrl = await getSignedUrl(this.s3!, command, { expiresIn });
+    return {
+      objectKey: key,
+      uploadUrl,
+      uploadMethod: 'PUT',
+      uploadHeaders: { 'Content-Type': mimeType },
       expiresIn,
     };
   }
@@ -430,13 +440,11 @@ export class StorageService implements OnModuleInit {
     contentType: string,
   ): Promise<void> {
     if (this.settings.driver === 's3' && this.s3 && this.settings.s3) {
-      const { readFile } = await import('fs/promises');
-      const body = await readFile(localPath);
       await this.s3.send(
         new PutObjectCommand({
           Bucket: this.settings.s3.bucket,
           Key: objectKey,
-          Body: body,
+          Body: createReadStream(localPath),
           ContentType: contentType,
         }),
       );
