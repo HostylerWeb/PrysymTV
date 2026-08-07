@@ -1217,6 +1217,23 @@ export type TmdbMoviePosterResult = {
   overview: string | null;
 };
 
+export type TmdbMovieCastMember = {
+  name: string;
+  role: string;
+};
+
+export type TmdbMovieDetails = {
+  tmdbId: number;
+  title: string;
+  releaseYear: number | null;
+  posterUrl: string | null;
+  tagline: string | null;
+  overview: string | null;
+  director: string | null;
+  writers: string[];
+  cast: TmdbMovieCastMember[];
+};
+
 export type TmdbPosterLookupMode = 'api' | 'scrape';
 
 export function fetchTmdbMoviePosters(query: string) {
@@ -1225,6 +1242,15 @@ export function fetchTmdbMoviePosters(query: string) {
     configured: boolean;
     mode: TmdbPosterLookupMode;
   }>(`/admin/movies/poster/search?q=${encodeURIComponent(query)}`);
+}
+
+export function fetchTmdbMovieDetails(tmdbId: number) {
+  return apiRequest<
+    TmdbMovieDetails & {
+      configured: boolean;
+      mode: TmdbPosterLookupMode;
+    }
+  >(`/admin/movies/tmdb/${tmdbId}`);
 }
 
 export function updateAdminMovieGenresConfig(

@@ -5,6 +5,7 @@ import {
   Get,
   Header,
   Param,
+  ParseIntPipe,
   Post,
   Put,
   Query,
@@ -71,6 +72,16 @@ export class AdminController {
     }
     const items = await this.tmdb.searchMoviePosters(query);
     return { items, configured: this.tmdb.isConfigured(), mode };
+  }
+
+  @Get('movies/tmdb/:tmdbId')
+  async getTmdbMovieDetails(@Param('tmdbId', ParseIntPipe) tmdbId: number) {
+    const details = await this.tmdb.getMovieDetails(tmdbId);
+    return {
+      ...details,
+      configured: this.tmdb.isConfigured(),
+      mode: this.tmdb.getLookupMode(),
+    };
   }
 
   @Get('analytics/overview')

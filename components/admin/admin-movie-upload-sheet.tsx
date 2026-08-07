@@ -12,6 +12,7 @@ import {
 } from "@/lib/api/videos"
 import { UploadQueuedSuccess } from "@/components/upload-queued-success"
 import { MoviePosterPicker } from "@/components/admin/movie-poster-picker"
+import type { TmdbMovieDetails } from "@/lib/api/admin"
 
 const AGE_RATINGS = ["G", "PG", "PG-13", "R", "NC-17", "TV-MA", "NR"]
 
@@ -77,6 +78,18 @@ export function AdminMovieUploadSheet({
       next[index] = { ...next[index], ...patch }
       return next
     })
+  }
+
+  const applyTmdbDetails = (details: TmdbMovieDetails) => {
+    if (details.title) setTitle(details.title)
+    if (details.tagline) setTagline(details.tagline)
+    if (details.overview) setDescription(details.overview)
+    if (details.director) setDirector(details.director)
+    if (details.writers.length) setWriters(details.writers.join(", "))
+    if (details.releaseYear) setReleaseYear(String(details.releaseYear))
+    if (details.cast.length) {
+      setCast(details.cast.map((member) => ({ name: member.name, role: member.role })))
+    }
   }
 
   const handleUpload = async () => {
@@ -282,6 +295,7 @@ export function AdminMovieUploadSheet({
                     return preview
                   })
                 }}
+                onDetailsApply={applyTmdbDetails}
               />
               <label className="block p-8 rounded-xl border-2 border-dashed border-border text-center cursor-pointer hover:border-primary/50">
                 <input

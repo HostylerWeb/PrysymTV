@@ -8,9 +8,11 @@ import {
   fetchAdminMovieGenresConfig,
   fetchAdminVideo,
   updateAdminVideo,
+  type TmdbMovieDetails,
 } from "@/lib/api/admin"
 import { uploadMoviePoster } from "@/lib/api/videos"
 import { moviePosterUrl } from "@/lib/format-media"
+import { MoviePosterPicker } from "@/components/admin/movie-poster-picker"
 
 const AGE_RATINGS = ["G", "PG", "PG-13", "R", "NC-17", "TV-MA", "NR"]
 
@@ -56,7 +58,6 @@ export function AdminMovieEditSheet({
   const [posterUrl, setPosterUrl] = useState<string | null>(null)
   const [posterFile, setPosterFile] = useState<File | null>(null)
   const [posterPreview, setPosterPreview] = useState<string | null>(null)
-  const [posterBusy, setPosterBusy] = useState(false)
   const [formVideoId, setFormVideoId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -105,6 +106,18 @@ export function AdminMovieEditSheet({
     })
   }
 
+  const applyTmdbDetails = (details: TmdbMovieDetails) => {
+    if (details.title) setTitle(details.title)
+    if (details.tagline) setTagline(details.tagline)
+    if (details.overview) setDescription(details.overview)
+    if (details.director) setDirector(details.director)
+    if (details.writers.length) setWriters(details.writers.join(", "))
+    if (details.releaseYear) setReleaseYear(String(details.releaseYear))
+    if (details.cast.length) {
+      setCast(details.cast.map((member) => ({ name: member.name, role: member.role })))
+    }
+  }
+
   const handleSave = async () => {
     if (!title.trim() || !videoId) return
 
@@ -149,27 +162,6 @@ export function AdminMovieEditSheet({
       setSaveError(e instanceof Error ? e.message : "Save failed")
     } finally {
       setBusy(false)
-    }
-  }
-
-  const handlePosterUpload = async () => {
-    if (!posterFile || !videoId) return
-    setPosterBusy(true)
-    setSaveError(null)
-    try {
-      const url = await uploadMoviePoster(videoId, posterFile)
-      setPosterUrl(url)
-      setPosterFile(null)
-      setPosterPreview((prev) => {
-        if (prev) URL.revokeObjectURL(prev)
-        return null
-      })
-      onSuccess?.()
-      void reload()
-    } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Poster upload failed")
-    } finally {
-      setPosterBusy(false)
     }
   }
 
@@ -326,59 +318,28 @@ export function AdminMovieEditSheet({
                   </div>
                 ))}
               </div>
-              <div className="space-y-3">
-                <p className="text-sm font-medium">Movie poster</p>
-                <div className="flex items-start gap-4">
-                  <img
-                    src={
-                      posterPreview ??
-                      moviePosterUrl({ posterUrl, thumbnailUrl: null })
-                    }
-                    alt="Movie poster"
-                    className="w-24 aspect-[2/3] object-cover rounded-lg border border-border shrink-0"
-                  />
-                  <div className="flex-1 space-y-2">
-                    <label className="block">
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        className="hidden"
-                        onChange={(e) => {
-                          const next = e.target.files?.[0] ?? null
-                          setPosterFile(next)
-                          setPosterPreview((prev) => {
-                            if (prev) URL.revokeObjectURL(prev)
-                            return next ? URL.createObjectURL(next) : null
-                          })
-                        }}
-                      />
-                      <span className="inline-flex h-9 items-center px-3 rounded-full bg-secondary text-xs font-medium cursor-pointer">
-                        Choose new poster
-                      </span>
-                    </label>
-                    {posterFile && (
-                      <p className="text-xs text-primary">
-                        New poster selected — save changes to apply.
-                      </p>
-                    )}
-                    {posterFile && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="rounded-full"
-                        disabled={posterBusy || busy}
-                        onClick={() => void handlePosterUpload()}
-                      >
-                        {posterBusy ? "Uploading…" : "Upload poster now"}
-                      </Button>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      Portrait 2:3 recommended. Shown on homepage and movies page.
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <MoviePosterPicker
+                movieTitle={title}
+                posterFile={posterFile}
+                posterPreview={posterPreview}
+                existingPosterUrl={moviePosterUrl({
+                  posterUrl,
+                  thumbnailUrl: null,
+                })}
+                posterRequired={false}
+                autoSearch={false}
+                onPosterChange={(file, preview) => {
+                  setPosterFile(file)
+                  setPosterPreview((prev) => {
+                    if (prev) URL.revokeObjectURL(prev)
+                    return preview
+                  })
+                }}
+                onDetailsApply={applyTmdbDetails}
+              />
+              <p className="text-xs text-muted-foreground -mt-1">
+                Search TMDB above to import a new poster, tagline, synopsis, director, writers, and cast for this movie.
+              </p>
               <p className="text-xs text-muted-foreground">
                 Video file cannot be changed here. Delete and re-upload to replace the file.
               </p>

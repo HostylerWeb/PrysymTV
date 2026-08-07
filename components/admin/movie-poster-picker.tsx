@@ -4,15 +4,23 @@ import { useCallback, useEffect, useState } from "react"
 import { Film, Loader2, Search, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
+  fetchTmdbMovieDetails,
   fetchTmdbMoviePosters,
+  type TmdbMovieDetails,
   type TmdbMoviePosterResult,
 } from "@/lib/api/admin"
+
+type CastRow = { name: string; role: string }
 
 type Props = {
   movieTitle: string
   posterFile: File | null
   posterPreview: string | null
+  existingPosterUrl?: string | null
+  posterRequired?: boolean
+  autoSearch?: boolean
   onPosterChange: (file: File | null, previewUrl: string | null) => void
+  onDetailsApply?: (details: TmdbMovieDetails) => void
 }
 
 async function posterUrlToFile(
@@ -38,7 +46,11 @@ export function MoviePosterPicker({
   movieTitle,
   posterFile,
   posterPreview,
+  existingPosterUrl = null,
+  posterRequired = true,
+  autoSearch = true,
   onPosterChange,
+  onDetailsApply,
 }: Props) {
   const [suggested, setSuggested] = useState<TmdbMoviePosterResult | null>(null)
   const [results, setResults] = useState<TmdbMoviePosterResult[]>([])
@@ -50,24 +62,32 @@ export function MoviePosterPicker({
   const [lookupError, setLookupError] = useState<string | null>(null)
   const [accepting, setAccepting] = useState(false)
 
-  const applyPoster = useCallback(
+  const displayPreview =
+    posterPreview ?? existingPosterUrl ?? null
+
+  const applyTmdbMovie = useCallback(
     async (item: TmdbMoviePosterResult) => {
       setAccepting(true)
       setLookupError(null)
       try {
-        const file = await posterUrlToFile(item.posterUrl, item.title)
-        const preview = URL.createObjectURL(file)
-        onPosterChange(file, preview)
+        const details = await fetchTmdbMovieDetails(item.tmdbId)
+        const posterUrl = details.posterUrl ?? item.posterUrl
+        if (posterUrl) {
+          const file = await posterUrlToFile(posterUrl, details.title)
+          const preview = URL.createObjectURL(file)
+          onPosterChange(file, preview)
+        }
+        onDetailsApply?.(details)
         setManualOpen(false)
       } catch (e) {
         setLookupError(
-          e instanceof Error ? e.message : "Could not use this poster",
+          e instanceof Error ? e.message : "Could not import TMDB data",
         )
       } finally {
         setAccepting(false)
       }
     },
-    [onPosterChange],
+    [onDetailsApply, onPosterChange],
   )
 
   const runSearch = useCallback(async (query: string) => {
@@ -92,28 +112,31 @@ export function MoviePosterPicker({
             : "TMDB poster lookup is not available on the server.",
         )
       } else if (!res.items.length) {
-        setLookupError(`No posters found for "${q}". Try a different search.`)
+        setLookupError(`No movies found for "${q}". Try a different search.`)
       }
     } catch (e) {
       setSuggested(null)
       setResults([])
-      setLookupError(e instanceof Error ? e.message : "Poster lookup failed")
+      setLookupError(e instanceof Error ? e.message : "TMDB lookup failed")
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    if (!movieTitle.trim() || posterFile) return
+    if (!autoSearch || !movieTitle.trim()) return
+    if (posterRequired && posterFile) return
     const timer = window.setTimeout(() => {
       void runSearch(movieTitle)
     }, 600)
     return () => window.clearTimeout(timer)
-  }, [movieTitle, posterFile, runSearch])
+  }, [movieTitle, posterFile, posterRequired, autoSearch, runSearch])
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium">Movie poster *</p>
+      <p className="text-sm font-medium">
+        {posterRequired ? "Movie poster *" : "Movie poster"}
+      </p>
 
       {!posterFile && suggested && !manualOpen ? (
         <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
@@ -149,12 +172,12 @@ export function MoviePosterPicker({
               size="sm"
               className="rounded-full"
               disabled={accepting}
-              onClick={() => void applyPoster(suggested)}
+              onClick={() => void applyTmdbMovie(suggested)}
             >
               {accepting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                "Use this poster"
+                "Import poster & details"
               )}
             </Button>
             <Button
@@ -174,16 +197,19 @@ export function MoviePosterPicker({
         </div>
       ) : null}
 
-      {manualOpen && !posterFile ? (
+      {(!suggested || manualOpen || posterFile || !autoSearch) &&
+      !posterFile ? (
         <div className="rounded-xl border border-border p-4 space-y-3">
           <div className="flex gap-2">
             <input
-              value={searchQuery}
+              value={searchQuery || movieTitle}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search TMDB…"
               className="flex-1 h-10 px-3 rounded-lg bg-secondary text-sm"
               onKeyDown={(e) => {
-                if (e.key === "Enter") void runSearch(searchQuery)
+                if (e.key === "Enter") {
+                  void runSearch(searchQuery || movieTitle)
+                }
               }}
             />
             <Button
@@ -191,7 +217,7 @@ export function MoviePosterPicker({
               size="icon"
               variant="secondary"
               className="shrink-0 rounded-lg"
-              onClick={() => void runSearch(searchQuery)}
+              onClick={() => void runSearch(searchQuery || movieTitle)}
               disabled={loading}
             >
               {loading ? (
@@ -208,7 +234,7 @@ export function MoviePosterPicker({
                   key={item.tmdbId}
                   type="button"
                   className="text-left rounded-lg border border-border overflow-hidden hover:border-primary/50 transition-colors"
-                  onClick={() => void applyPoster(item)}
+                  onClick={() => void applyTmdbMovie(item)}
                   disabled={accepting}
                 >
                   <img
@@ -224,22 +250,24 @@ export function MoviePosterPicker({
               ))}
             </div>
           ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8"
-            onClick={() => setManualOpen(false)}
-          >
-            Back to suggestion
-          </Button>
+          {manualOpen ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8"
+              onClick={() => setManualOpen(false)}
+            >
+              Back to suggestion
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
       {loading && !posterFile && !suggested ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
           <Loader2 className="w-4 h-4 animate-spin" />
-          Looking up poster on TMDB…
+          Looking up movie on TMDB…
         </div>
       ) : null}
 
@@ -268,9 +296,9 @@ export function MoviePosterPicker({
             setManualOpen(false)
           }}
         />
-        {posterPreview ? (
+        {displayPreview ? (
           <img
-            src={posterPreview}
+            src={displayPreview}
             alt="Poster preview"
             className="mx-auto mb-3 w-32 aspect-[2/3] object-cover rounded-lg border border-border"
           />
@@ -305,3 +333,5 @@ export function MoviePosterPicker({
     </div>
   )
 }
+
+export type { CastRow }

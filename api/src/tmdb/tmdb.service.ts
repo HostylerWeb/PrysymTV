@@ -1,6 +1,7 @@
 import {
   BadGatewayException,
   Injectable,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -15,6 +16,23 @@ export type TmdbMoviePosterResult = {
   overview: string | null;
 };
 
+export type TmdbMovieCastMember = {
+  name: string;
+  role: string;
+};
+
+export type TmdbMovieDetails = {
+  tmdbId: number;
+  title: string;
+  releaseYear: number | null;
+  posterUrl: string | null;
+  tagline: string | null;
+  overview: string | null;
+  director: string | null;
+  writers: string[];
+  cast: TmdbMovieCastMember[];
+};
+
 type TmdbSearchResponse = {
   results?: Array<{
     id: number;
@@ -25,11 +43,41 @@ type TmdbSearchResponse = {
   }>;
 };
 
+type TmdbMovieApiResponse = {
+  id: number;
+  title?: string;
+  tagline?: string | null;
+  overview?: string;
+  release_date?: string;
+  poster_path?: string | null;
+  credits?: {
+    cast?: Array<{ name?: string; character?: string; order?: number }>;
+    crew?: Array<{ name?: string; job?: string }>;
+  };
+};
+
+type TmdbJsonLdMovie = {
+  '@type'?: string;
+  name?: string;
+  description?: string;
+  image?: string;
+  releasedEvent?: Array<{ startDate?: string }>;
+};
+
 @Injectable()
 export class TmdbService {
   private static readonly IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
-  private static readonly SCRAPE_BASE =
+  private static readonly SCRAPE_SEARCH_BASE =
     'https://www.themoviedb.org/search/movie';
+  private static readonly SCRAPE_MOVIE_BASE =
+    'https://www.themoviedb.org/movie';
+
+  private static readonly WRITER_JOBS = new Set([
+    'Writer',
+    'Screenplay',
+    'Story',
+    'Characters',
+  ]);
 
   constructor(private readonly config: ConfigService) {}
 
@@ -51,6 +99,251 @@ export class TmdbService {
       return this.searchMoviePostersScrape(q);
     }
     return this.searchMoviePostersApi(q);
+  }
+
+  async getMovieDetails(tmdbId: number): Promise<TmdbMovieDetails> {
+    if (!Number.isFinite(tmdbId) || tmdbId <= 0) {
+      throw new NotFoundException('Invalid TMDB movie id');
+    }
+
+    if (this.getLookupMode() === 'scrape') {
+      return this.getMovieDetailsScrape(tmdbId);
+    }
+    return this.getMovieDetailsApi(tmdbId);
+  }
+
+  private async getMovieDetailsApi(tmdbId: number): Promise<TmdbMovieDetails> {
+    const apiKey = this.config.get<string>('TMDB_API_KEY')?.trim();
+    if (!apiKey) {
+      throw new ServiceUnavailableException(
+        'TMDB API key is not configured. Add TMDB_API_KEY to api/.env or set TMDB_POSTER_LOOKUP_MODE=scrape.',
+      );
+    }
+
+    const url = new URL(`https://api.themoviedb.org/3/movie/${tmdbId}`);
+    url.searchParams.set('api_key', apiKey);
+    url.searchParams.set('append_to_response', 'credits');
+
+    let data: TmdbMovieApiResponse;
+    try {
+      const res = await fetch(url.toString(), {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (res.status === 404) {
+        throw new NotFoundException('TMDB movie not found');
+      }
+      if (!res.ok) {
+        throw new BadGatewayException(`TMDB movie lookup failed (${res.status})`);
+      }
+      data = (await res.json()) as TmdbMovieApiResponse;
+    } catch (err) {
+      if (err instanceof NotFoundException || err instanceof BadGatewayException) {
+        throw err;
+      }
+      throw new BadGatewayException('TMDB movie lookup request failed');
+    }
+
+    const crew = data.credits?.crew ?? [];
+    const directors = crew
+      .filter((member) => member.job === 'Director')
+      .map((member) => member.name?.trim())
+      .filter(Boolean) as string[];
+    const writers = [
+      ...new Set(
+        crew
+          .filter((member) => member.job && TmdbService.WRITER_JOBS.has(member.job))
+          .map((member) => member.name?.trim())
+          .filter(Boolean) as string[],
+      ),
+    ];
+    const cast = (data.credits?.cast ?? [])
+      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+      .slice(0, 12)
+      .map((member) => ({
+        name: member.name?.trim() || 'Unknown',
+        role: member.character?.trim() || 'Cast',
+      }))
+      .filter((member) => member.name !== 'Unknown');
+
+    return {
+      tmdbId: data.id,
+      title: data.title?.trim() || 'Untitled',
+      releaseYear: this.parseReleaseYear(data.release_date),
+      posterUrl: data.poster_path
+        ? `${TmdbService.IMAGE_BASE}${data.poster_path}`
+        : null,
+      tagline: data.tagline?.trim() || null,
+      overview: data.overview?.trim() || null,
+      director: directors[0] ?? null,
+      writers,
+      cast,
+    };
+  }
+
+  private async getMovieDetailsScrape(tmdbId: number): Promise<TmdbMovieDetails> {
+    const url = `${TmdbService.SCRAPE_MOVIE_BASE}/${tmdbId}`;
+    let html: string;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          Accept: 'text/html,application/xhtml+xml',
+          'User-Agent':
+            'Mozilla/5.0 (compatible; PrysymTV/1.0; +https://prysym.tv)',
+        },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (res.status === 404) {
+        throw new NotFoundException('TMDB movie not found');
+      }
+      if (!res.ok) {
+        throw new BadGatewayException(`TMDB scrape failed (${res.status})`);
+      }
+      html = await res.text();
+    } catch (err) {
+      if (err instanceof NotFoundException || err instanceof BadGatewayException) {
+        throw err;
+      }
+      throw new BadGatewayException('TMDB scrape request failed');
+    }
+
+    const parsed = this.parseScrapedMovieHtml(html, tmdbId);
+    if (!parsed) {
+      throw new NotFoundException('TMDB movie not found');
+    }
+    return parsed;
+  }
+
+  private parseScrapedMovieHtml(
+    html: string,
+    tmdbId: number,
+  ): TmdbMovieDetails | null {
+    const jsonLd = this.parseMovieJsonLd(html);
+    const originalTitle = html
+      .match(/<strong>Original Title<\/strong>\s*([^<]+)/)?.[1]
+      ?.trim();
+    const tagline =
+      html.match(/<h3 class="tagline"[^>]*>([^<]*)<\/h3>/)?.[1]?.trim() || null;
+    const overview =
+      html.match(/<div class="overview"[^>]*>\s*<p>([^<]*)<\/p>/)?.[1]?.trim() ||
+      jsonLd?.description?.trim() ||
+      null;
+    const posterUrl = jsonLd?.image
+      ? this.upgradePosterUrl(jsonLd.image)
+      : html.match(/property="og:image" content="([^"]+)"/)?.[1]
+        ? this.upgradePosterUrl(
+            html.match(/property="og:image" content="([^"]+)"/)![1]!,
+          )
+        : null;
+
+    const releaseYear =
+      this.parseYearFromText(jsonLd?.releasedEvent?.[0]?.startDate ?? '') ??
+      this.parseYearFromText(
+        html.match(/<span class="tag release_date">\((\d{4})\)<\/span>/)?.[1] ??
+          '',
+      );
+
+    const title =
+      originalTitle ||
+      jsonLd?.name?.trim() ||
+      html.match(/<title>([^<(]+)/)?.[1]?.trim() ||
+      'Untitled';
+
+    const crewSection = html.match(
+      /<ol class="people no_image">([\s\S]*?)<\/ol>/,
+    )?.[1];
+    const { director, writers } = this.parseScrapedCrew(crewSection ?? '');
+    const cast = this.parseScrapedCast(html);
+
+    return {
+      tmdbId,
+      title,
+      releaseYear,
+      posterUrl,
+      tagline: tagline || null,
+      overview: overview || null,
+      director,
+      writers,
+      cast,
+    };
+  }
+
+  private parseMovieJsonLd(html: string): TmdbJsonLdMovie | null {
+    const scripts = html.matchAll(
+      /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g,
+    );
+    for (const script of scripts) {
+      const raw = (script[1] ?? '')
+        .replace(/\/\* <!\[CDATA\[\s*\*\//, '')
+        .replace(/\/\* \]\]> \*\//, '')
+        .replace(/\s*\*\/\s*$/, '')
+        .trim();
+      if (!raw.includes('"@type":"Movie"')) continue;
+      try {
+        const parsed = JSON.parse(raw) as TmdbJsonLdMovie;
+        if (parsed['@type'] === 'Movie' || raw.includes('"@type":"Movie"')) {
+          return parsed;
+        }
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  private parseScrapedCrew(section: string): {
+    director: string | null;
+    writers: string[];
+  } {
+    const writers = new Set<string>();
+    let director: string | null = null;
+    const profiles = section.split('<li class="profile">').slice(1);
+
+    for (const profile of profiles) {
+      const name = profile
+        .match(/<a href="\/person\/[^"]+">([^<]+)<\/a>/)?.[1]
+        ?.trim();
+      const jobs =
+        profile.match(/<p class="character">([^<]*)<\/p>/)?.[1]?.trim() ?? '';
+      if (!name) continue;
+
+      if (jobs.includes('Director') && !director) {
+        director = name;
+      }
+      if (
+        jobs.includes('Screenplay') ||
+        jobs.includes('Story') ||
+        jobs.includes('Characters') ||
+        jobs.includes('Writer')
+      ) {
+        writers.add(name);
+      }
+    }
+
+    return { director, writers: [...writers] };
+  }
+
+  private parseScrapedCast(html: string): TmdbMovieCastMember[] {
+    const section = html.match(
+      /<section class="panel top_billed[\s\S]*?<ol class="people scroller">([\s\S]*?)<\/ol>/,
+    )?.[1];
+    if (!section) return [];
+
+    const cast: TmdbMovieCastMember[] = [];
+    const cards = section.split('<li class="card">').slice(1);
+
+    for (const card of cards) {
+      if (card.includes('class="filler view_more"')) continue;
+      const name = card
+        .match(/<p><a href="\/person\/[^"]+">([^<]+)<\/a><\/p>/)?.[1]
+        ?.trim();
+      const role = card.match(/<p class="character">([^<]*)<\/p>/)?.[1]?.trim();
+      if (!name || !role) continue;
+      cast.push({ name, role });
+      if (cast.length >= 12) break;
+    }
+
+    return cast;
   }
 
   private async searchMoviePostersApi(
@@ -99,7 +392,7 @@ export class TmdbService {
   private async searchMoviePostersScrape(
     query: string,
   ): Promise<TmdbMoviePosterResult[]> {
-    const url = `${TmdbService.SCRAPE_BASE}?query=${encodeURIComponent(query)}`;
+    const url = `${TmdbService.SCRAPE_SEARCH_BASE}?query=${encodeURIComponent(query)}`;
     let html: string;
     try {
       const res = await fetch(url, {
