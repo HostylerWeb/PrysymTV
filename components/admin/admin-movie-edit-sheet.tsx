@@ -113,6 +113,13 @@ export function AdminMovieEditSheet({
     if (details.director) setDirector(details.director)
     if (details.writers.length) setWriters(details.writers.join(", "))
     if (details.releaseYear) setReleaseYear(String(details.releaseYear))
+    if (
+      details.genreSlug &&
+      activeGenres.some((genre) => genre.slug === details.genreSlug)
+    ) {
+      setGenre(details.genreSlug)
+    }
+    if (details.ageRating) setAgeRating(details.ageRating)
     if (details.cast.length) {
       setCast(details.cast.map((member) => ({ name: member.name, role: member.role })))
     }

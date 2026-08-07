@@ -1232,6 +1232,8 @@ export type TmdbMovieDetails = {
   director: string | null;
   writers: string[];
   cast: TmdbMovieCastMember[];
+  genreSlug: string | null;
+  ageRating: string | null;
 };
 
 export type TmdbPosterLookupMode = 'api' | 'scrape';

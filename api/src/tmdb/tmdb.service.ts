@@ -31,6 +31,8 @@ export type TmdbMovieDetails = {
   director: string | null;
   writers: string[];
   cast: TmdbMovieCastMember[];
+  genreSlug: string | null;
+  ageRating: string | null;
 };
 
 type TmdbSearchResponse = {
@@ -50,9 +52,16 @@ type TmdbMovieApiResponse = {
   overview?: string;
   release_date?: string;
   poster_path?: string | null;
+  genres?: Array<{ id?: number; name?: string }>;
   credits?: {
     cast?: Array<{ name?: string; character?: string; order?: number }>;
     crew?: Array<{ name?: string; job?: string }>;
+  };
+  release_dates?: {
+    results?: Array<{
+      iso_3166_1?: string;
+      release_dates?: Array<{ certification?: string }>;
+    }>;
   };
 };
 
@@ -78,6 +87,59 @@ export class TmdbService {
     'Story',
     'Characters',
   ]);
+
+  private static readonly PLATFORM_GENRE_SLUGS = new Set([
+    'action',
+    'comedy',
+    'drama',
+    'thriller',
+    'sci-fi',
+    'horror',
+    'romance',
+    'documentary',
+  ]);
+
+  private static readonly ALLOWED_AGE_RATINGS = new Set([
+    'G',
+    'PG',
+    'PG-13',
+    'R',
+    'NC-17',
+    'TV-MA',
+    'NR',
+  ]);
+
+  private static readonly TMDB_GENRE_SLUG_MAP: Record<string, string> = {
+    action: 'action',
+    adventure: 'action',
+    comedy: 'comedy',
+    drama: 'drama',
+    thriller: 'thriller',
+    mystery: 'thriller',
+    crime: 'thriller',
+    horror: 'horror',
+    romance: 'romance',
+    documentary: 'documentary',
+    'science-fiction': 'sci-fi',
+    'sci-fi': 'sci-fi',
+    fantasy: 'sci-fi',
+  };
+
+  private static readonly TMDB_GENRE_NAME_MAP: Record<string, string> = {
+    Action: 'action',
+    Adventure: 'action',
+    Comedy: 'comedy',
+    Drama: 'drama',
+    Thriller: 'thriller',
+    Mystery: 'thriller',
+    Crime: 'thriller',
+    Horror: 'horror',
+    Romance: 'romance',
+    Documentary: 'documentary',
+    'Science Fiction': 'sci-fi',
+    'Sci-Fi & Fantasy': 'sci-fi',
+    Fantasy: 'sci-fi',
+  };
 
   constructor(private readonly config: ConfigService) {}
 
@@ -162,7 +224,7 @@ export class TmdbService {
 
     const url = new URL(`https://api.themoviedb.org/3/movie/${tmdbId}`);
     url.searchParams.set('api_key', apiKey);
-    url.searchParams.set('append_to_response', 'credits');
+    url.searchParams.set('append_to_response', 'credits,release_dates');
 
     let data: TmdbMovieApiResponse;
     try {
@@ -206,6 +268,11 @@ export class TmdbService {
       }))
       .filter((member) => member.name !== 'Unknown');
 
+    const genreSlug = this.pickGenreSlugFromNames(
+      (data.genres ?? []).map((genre) => genre.name ?? ''),
+    );
+    const ageRating = this.extractUsCertificationFromApi(data.release_dates);
+
     return {
       tmdbId: data.id,
       title: data.title?.trim() || 'Untitled',
@@ -218,6 +285,8 @@ export class TmdbService {
       director: directors[0] ?? null,
       writers,
       cast,
+      genreSlug,
+      ageRating,
     };
   }
 
@@ -294,6 +363,8 @@ export class TmdbService {
     )?.[1];
     const { director, writers } = this.parseScrapedCrew(crewSection ?? '');
     const cast = this.parseScrapedCast(html);
+    const genreSlug = this.pickGenreSlugFromTmdbSlugs(this.parseScrapedGenreSlugs(html));
+    const ageRating = this.normalizeAgeRating(this.parseScrapedCertification(html));
 
     return {
       tmdbId,
@@ -305,7 +376,84 @@ export class TmdbService {
       director,
       writers,
       cast,
+      genreSlug,
+      ageRating,
     };
+  }
+
+  private parseScrapedCertification(html: string): string | null {
+    return (
+      html.match(/<span class="certification">\s*([^<]+?)\s*<\/span>/)?.[1]?.trim() ??
+      null
+    );
+  }
+
+  private parseScrapedGenreSlugs(html: string): string[] {
+    const genresSection =
+      html.match(/<span class="genres">([\s\S]*?)<\/span>/)?.[1] ?? '';
+    const slugs: string[] = [];
+    const re = /href="\/genre\/\d+-([^/]+)\/movie"/g;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(genresSection)) !== null) {
+      slugs.push(match[1]!.toLowerCase());
+    }
+    return slugs;
+  }
+
+  private mapTmdbGenreSlug(tmdbSlug: string): string | null {
+    const lower = tmdbSlug.trim().toLowerCase();
+    const mapped = TmdbService.TMDB_GENRE_SLUG_MAP[lower];
+    if (mapped) return mapped;
+    if (TmdbService.PLATFORM_GENRE_SLUGS.has(lower)) return lower;
+    return null;
+  }
+
+  private mapTmdbGenreName(name: string): string | null {
+    const trimmed = name.trim();
+    const mapped = TmdbService.TMDB_GENRE_NAME_MAP[trimmed];
+    if (mapped) return mapped;
+    const slug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return this.mapTmdbGenreSlug(slug);
+  }
+
+  private pickGenreSlugFromTmdbSlugs(tmdbSlugs: string[]): string | null {
+    for (const slug of tmdbSlugs) {
+      const mapped = this.mapTmdbGenreSlug(slug);
+      if (mapped) return mapped;
+    }
+    return null;
+  }
+
+  private pickGenreSlugFromNames(names: string[]): string | null {
+    for (const name of names) {
+      const mapped = this.mapTmdbGenreName(name);
+      if (mapped) return mapped;
+    }
+    return null;
+  }
+
+  private extractUsCertificationFromApi(
+    releaseDates?: TmdbMovieApiResponse['release_dates'],
+  ): string | null {
+    const us = releaseDates?.results?.find(
+      (entry) => entry.iso_3166_1 === 'US',
+    );
+    const certification = us?.release_dates
+      ?.map((entry) => entry.certification?.trim())
+      .find((value) => Boolean(value));
+    return this.normalizeAgeRating(certification ?? null);
+  }
+
+  private normalizeAgeRating(raw: string | null): string | null {
+    if (!raw?.trim()) return null;
+    const trimmed = raw.trim();
+    const upper = trimmed.toUpperCase().replace(/\s+/g, '');
+    if (upper === 'PG13') return 'PG-13';
+    if (upper === 'NC17') return 'NC-17';
+    if (upper === 'TVMA') return 'TV-MA';
+    if (TmdbService.ALLOWED_AGE_RATINGS.has(trimmed)) return trimmed;
+    if (TmdbService.ALLOWED_AGE_RATINGS.has(upper)) return upper;
+    return null;
   }
 
   private parseMovieJsonLd(html: string): TmdbJsonLdMovie | null {
