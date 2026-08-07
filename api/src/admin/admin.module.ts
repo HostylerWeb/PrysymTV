@@ -5,6 +5,7 @@ import { PlaylistsModule } from '../playlists/playlists.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RevenueModule } from '../revenue/revenue.module';
 import { StorageModule } from '../storage/storage.module';
+import { TmdbModule } from '../tmdb/tmdb.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { AuditLogService } from './audit-log.service';
@@ -17,6 +18,7 @@ import { AuditLogService } from './audit-log.service';
     GafModule,
     StorageModule,
     PlaylistsModule,
+    TmdbModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, AuditLogService],

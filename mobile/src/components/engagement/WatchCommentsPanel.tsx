@@ -9,10 +9,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useVideoComments } from '@/hooks/api/useVideoComments';
+import { resolveAvatarUrl } from '@/lib/media-url';
 import { radius, spacing, withAlpha } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -94,11 +96,16 @@ export function WatchCommentsPanel({
               </View>
             ) : null}
             <View style={styles.composerRow}>
-              <View style={styles.composerAvatar}>
-                <Text style={styles.composerAvatarLetter}>
-                  {(user?.username ?? 'Y')[0]?.toUpperCase()}
-                </Text>
-              </View>
+              <Image
+                source={{
+                  uri: resolveAvatarUrl(
+                    user?.avatarUrl,
+                    user?.username ?? user?.email ?? 'user',
+                  ),
+                }}
+                style={styles.composerAvatar}
+                contentFit="cover"
+              />
               <TextInput
                 style={styles.composerInput}
                 placeholder={replyingTo ? 'Add a reply…' : 'Add a comment…'}
@@ -137,11 +144,13 @@ export function WatchCommentsPanel({
           comments.map((c) => (
             <View key={c.id}>
               <View style={styles.comment}>
-                <View style={styles.commentAvatar}>
-                  <Text style={styles.commentAvatarLetter}>
-                    {c.user.username[0]?.toUpperCase()}
-                  </Text>
-                </View>
+                <Image
+                  source={{
+                    uri: resolveAvatarUrl(c.user.avatarUrl, c.user.username),
+                  }}
+                  style={styles.commentAvatar}
+                  contentFit="cover"
+                />
                 <View style={styles.commentBody}>
                   <View style={styles.commentMeta}>
                     <Text style={styles.commentAuthor}>@{c.user.username}</Text>
@@ -179,11 +188,13 @@ export function WatchCommentsPanel({
               </View>
               {(c.replies ?? []).map((reply) => (
                 <View key={reply.id} style={[styles.comment, styles.replyComment]}>
-                  <View style={styles.commentAvatar}>
-                    <Text style={styles.commentAvatarLetter}>
-                      {reply.user.username[0]?.toUpperCase()}
-                    </Text>
-                  </View>
+                  <Image
+                    source={{
+                      uri: resolveAvatarUrl(reply.user.avatarUrl, reply.user.username),
+                    }}
+                    style={styles.commentAvatar}
+                    contentFit="cover"
+                  />
                   <View style={styles.commentBody}>
                     <View style={styles.commentMeta}>
                       <Text style={styles.commentAuthor}>@{reply.user.username}</Text>
@@ -242,11 +253,13 @@ export function WatchCommentsPanel({
             <ActivityIndicator color={colors.primary} />
           ) : topComment ? (
             <View style={styles.previewRow}>
-              <View style={styles.previewAvatar}>
-                <Text style={styles.previewAvatarLetter}>
-                  {topComment.user.username[0]?.toUpperCase()}
-                </Text>
-              </View>
+              <Image
+                source={{
+                  uri: resolveAvatarUrl(topComment.user.avatarUrl, topComment.user.username),
+                }}
+                style={styles.previewAvatar}
+                contentFit="cover"
+              />
               <Text style={styles.previewSnippet} numberOfLines={2}>
                 <Text style={styles.previewAuthor}>@{topComment.user.username}</Text>
                 <Text style={styles.previewBody}> {topComment.body}</Text>
@@ -306,10 +319,7 @@ function createStyles(colors: ThemeColors) {
       height: 36,
       borderRadius: 18,
       backgroundColor: colors.secondary,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
-    previewAvatarLetter: { color: colors.foreground, fontWeight: '700' },
     previewSnippet: { flex: 1, fontSize: 14, lineHeight: 20 },
     previewAuthor: { fontWeight: '700', color: colors.foreground },
     previewBody: { color: colors.mutedForeground },
@@ -385,10 +395,7 @@ function createStyles(colors: ThemeColors) {
       height: 36,
       borderRadius: 18,
       backgroundColor: withAlpha(colors.primary, 0.2),
-      alignItems: 'center',
-      justifyContent: 'center',
     },
-    composerAvatarLetter: { color: colors.primary, fontWeight: '800' },
     composerInput: {
       flex: 1,
       borderBottomWidth: 1,
@@ -414,10 +421,7 @@ function createStyles(colors: ThemeColors) {
       height: 36,
       borderRadius: 18,
       backgroundColor: colors.secondary,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
-    commentAvatarLetter: { color: colors.foreground, fontWeight: '700' },
     commentBody: { flex: 1 },
     commentMeta: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 4 },
     commentAuthor: { color: colors.foreground, fontWeight: '700', fontSize: 14 },

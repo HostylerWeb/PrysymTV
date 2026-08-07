@@ -181,6 +181,16 @@ export class EnvironmentVariables {
   @IsString()
   STRIPE_WEBHOOK_SECRET?: string;
 
+  /** The Movie Database (TMDB) — admin movie poster lookup */
+  @IsOptional()
+  @IsString()
+  TMDB_API_KEY?: string;
+
+  /** TMDB poster lookup: `api` (official key) or `scrape` (no key, less reliable) */
+  @IsOptional()
+  @IsIn(['api', 'scrape'])
+  TMDB_POSTER_LOOKUP_MODE?: 'api' | 'scrape';
+
   @IsOptional()
   @IsString()
   RTMP_INGEST_URL?: string;

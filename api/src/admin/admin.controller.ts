@@ -50,6 +50,7 @@ import { UpdateAdminPodcastEpisodeDto } from './dto/update-admin-podcast-episode
 import { UpdateAdminVerticalEpisodeDto } from './dto/update-admin-vertical-episode.dto';
 import { UpdateAdminVerticalSeriesDto } from './dto/update-admin-vertical-series.dto';
 import { UpdateAdminVideoDto } from './dto/update-admin-video.dto';
+import { TmdbService } from '../tmdb/tmdb.service';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -58,7 +59,19 @@ export class AdminController {
   constructor(
     private readonly revenueSplit: RevenueSplitService,
     private readonly admin: AdminService,
+    private readonly tmdb: TmdbService,
   ) {}
+
+  @Get('movies/poster/search')
+  async searchMoviePosters(@Query('q') q?: string) {
+    const query = q?.trim() ?? '';
+    const mode = this.tmdb.getLookupMode();
+    if (!query) {
+      return { items: [], configured: this.tmdb.isConfigured(), mode };
+    }
+    const items = await this.tmdb.searchMoviePosters(query);
+    return { items, configured: this.tmdb.isConfigured(), mode };
+  }
 
   @Get('analytics/overview')
   overview() {

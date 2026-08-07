@@ -1209,6 +1209,24 @@ export function fetchAdminMovieGenresConfig() {
   >("/admin/config/movie-genres");
 }
 
+export type TmdbMoviePosterResult = {
+  tmdbId: number;
+  title: string;
+  releaseYear: number | null;
+  posterUrl: string;
+  overview: string | null;
+};
+
+export type TmdbPosterLookupMode = 'api' | 'scrape';
+
+export function fetchTmdbMoviePosters(query: string) {
+  return apiRequest<{
+    items: TmdbMoviePosterResult[];
+    configured: boolean;
+    mode: TmdbPosterLookupMode;
+  }>(`/admin/movies/poster/search?q=${encodeURIComponent(query)}`);
+}
+
 export function updateAdminMovieGenresConfig(
   genres: Array<{
     slug: string;

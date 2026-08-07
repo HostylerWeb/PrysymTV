@@ -11,6 +11,7 @@ import {
   uploadMoviePoster,
 } from "@/lib/api/videos"
 import { UploadQueuedSuccess } from "@/components/upload-queued-success"
+import { MoviePosterPicker } from "@/components/admin/movie-poster-picker"
 
 const AGE_RATINGS = ["G", "PG", "PG-13", "R", "NC-17", "TV-MA", "NR"]
 
@@ -270,36 +271,18 @@ export function AdminMovieUploadSheet({
                   </div>
                 ))}
               </div>
-              <label className="block p-6 rounded-xl border-2 border-dashed border-border text-center cursor-pointer hover:border-primary/50">
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(e) => {
-                    const next = e.target.files?.[0] ?? null
-                    setPosterFile(next)
-                    setPosterPreview((prev) => {
-                      if (prev) URL.revokeObjectURL(prev)
-                      return next ? URL.createObjectURL(next) : null
-                    })
-                  }}
-                />
-                {posterPreview ? (
-                  <img
-                    src={posterPreview}
-                    alt="Poster preview"
-                    className="mx-auto mb-3 w-32 aspect-[2/3] object-cover rounded-lg border border-border"
-                  />
-                ) : (
-                  <Film className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                )}
-                <p className="text-sm font-medium">
-                  {posterFile ? posterFile.name : "Choose poster image *"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Portrait 2:3 recommended (JPG, PNG, or WebP)
-                </p>
-              </label>
+              <MoviePosterPicker
+                movieTitle={title}
+                posterFile={posterFile}
+                posterPreview={posterPreview}
+                onPosterChange={(file, preview) => {
+                  setPosterFile(file)
+                  setPosterPreview((prev) => {
+                    if (prev) URL.revokeObjectURL(prev)
+                    return preview
+                  })
+                }}
+              />
               <label className="block p-8 rounded-xl border-2 border-dashed border-border text-center cursor-pointer hover:border-primary/50">
                 <input
                   type="file"

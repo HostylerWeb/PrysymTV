@@ -135,6 +135,8 @@ write_api_env() {
   vapid_private="$(resolve_api_secret VAPID_PRIVATE_KEY "")"
   vapid_subject="$(resolve_api_secret VAPID_SUBJECT "mailto:support@prysym.tv")"
   mediamtx_webhook_secret="$(resolve_api_secret MEDIAMTX_WEBHOOK_SECRET "")"
+  tmdb_api_key="$(resolve_api_secret TMDB_API_KEY "")"
+  tmdb_poster_mode="$(resolve_api_secret TMDB_POSTER_LOOKUP_MODE "scrape")"
   if [[ -z "$mediamtx_webhook_secret" ]]; then
     mediamtx_webhook_secret="$(openssl rand -hex 32)"
   fi
@@ -221,6 +223,10 @@ write_api_env() {
   if [[ -n "$vapid_subject" ]]; then
     upsert_env_file "$API_ENV" VAPID_SUBJECT "$vapid_subject"
   fi
+  if [[ -n "$tmdb_api_key" ]]; then
+    upsert_env_file "$API_ENV" TMDB_API_KEY "$tmdb_api_key"
+  fi
+  upsert_env_file "$API_ENV" TMDB_POSTER_LOOKUP_MODE "$tmdb_poster_mode"
 
   validate_api_env
   log "api/.env OK ($(wc -l <"$API_ENV") lines, backup at ${API_ENV_BACKUP})"
