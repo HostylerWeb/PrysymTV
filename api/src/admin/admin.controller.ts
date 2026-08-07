@@ -9,6 +9,7 @@ import {
   Post,
   Put,
   Query,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import { AdCampaignStatus, UserRole } from '@prisma/client';
@@ -82,6 +83,17 @@ export class AdminController {
       configured: this.tmdb.isConfigured(),
       mode: this.tmdb.getLookupMode(),
     };
+  }
+
+  @Get('movies/tmdb/:tmdbId/poster')
+  async downloadTmdbPoster(
+    @Param('tmdbId', ParseIntPipe) tmdbId: number,
+  ): Promise<StreamableFile> {
+    const poster = await this.tmdb.downloadPoster(tmdbId);
+    return new StreamableFile(poster.buffer, {
+      type: poster.contentType,
+      disposition: `inline; filename="${poster.filename}"`,
+    });
   }
 
   @Get('analytics/overview')

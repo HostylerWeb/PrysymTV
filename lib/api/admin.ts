@@ -1,4 +1,4 @@
-import { apiRequest, getApiBaseUrl, loadStoredAccessToken } from "@/lib/api-client";
+import { apiRequest, ensureAccessToken, getApiBaseUrl, loadStoredAccessToken } from "@/lib/api-client";
 
 export type AdminDateRangeParams = {
   range?: "7d" | "30d" | "90d";
@@ -1251,6 +1251,34 @@ export function fetchTmdbMovieDetails(tmdbId: number) {
       mode: TmdbPosterLookupMode;
     }
   >(`/admin/movies/tmdb/${tmdbId}`);
+}
+
+export async function fetchTmdbPosterFile(
+  tmdbId: number,
+): Promise<File> {
+  const token = await ensureAccessToken();
+  const res = await fetch(
+    `${getApiBaseUrl()}/admin/movies/tmdb/${tmdbId}/poster`,
+    {
+      credentials: "include",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    },
+  );
+  if (!res.ok) {
+    throw new Error("Could not download poster image");
+  }
+  const blob = await res.blob();
+  const type = blob.type?.startsWith("image/") ? blob.type : "image/jpeg";
+  const ext = type.includes("png")
+    ? "png"
+    : type.includes("webp")
+      ? "webp"
+      : "jpg";
+  const fromHeader = res.headers
+    .get("content-disposition")
+    ?.match(/filename="([^"]+)"/)?.[1];
+  const filename = fromHeader || `movie-poster.${ext}`;
+  return new File([blob], filename, { type });
 }
 
 export function updateAdminMovieGenresConfig(

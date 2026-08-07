@@ -112,6 +112,46 @@ export class TmdbService {
     return this.getMovieDetailsApi(tmdbId);
   }
 
+  async downloadPoster(
+    tmdbId: number,
+  ): Promise<{ buffer: Buffer; contentType: string; filename: string }> {
+    const details = await this.getMovieDetails(tmdbId);
+    if (!details.posterUrl) {
+      throw new NotFoundException('TMDB poster not found');
+    }
+
+    let res: Response;
+    try {
+      res = await fetch(details.posterUrl, {
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch {
+      throw new BadGatewayException('TMDB poster download failed');
+    }
+    if (!res.ok) {
+      throw new BadGatewayException(`TMDB poster download failed (${res.status})`);
+    }
+
+    const contentType =
+      res.headers.get('content-type')?.split(';')[0]?.trim() || 'image/jpeg';
+    const ext = contentType.includes('png')
+      ? 'png'
+      : contentType.includes('webp')
+        ? 'webp'
+        : 'jpg';
+    const safeName =
+      details.title
+        .replace(/[^\w-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 48) || 'movie';
+
+    return {
+      buffer: Buffer.from(await res.arrayBuffer()),
+      contentType,
+      filename: `${safeName}-poster.${ext}`,
+    };
+  }
+
   private async getMovieDetailsApi(tmdbId: number): Promise<TmdbMovieDetails> {
     const apiKey = this.config.get<string>('TMDB_API_KEY')?.trim();
     if (!apiKey) {

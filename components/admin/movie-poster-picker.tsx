@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import {
   fetchTmdbMovieDetails,
   fetchTmdbMoviePosters,
+  fetchTmdbPosterFile,
   type TmdbMovieDetails,
   type TmdbMoviePosterResult,
 } from "@/lib/api/admin"
@@ -21,25 +22,6 @@ type Props = {
   autoSearch?: boolean
   onPosterChange: (file: File | null, previewUrl: string | null) => void
   onDetailsApply?: (details: TmdbMovieDetails) => void
-}
-
-async function posterUrlToFile(
-  posterUrl: string,
-  title: string,
-): Promise<File> {
-  const res = await fetch(posterUrl)
-  if (!res.ok) throw new Error("Could not download poster image")
-  const blob = await res.blob()
-  const type = blob.type?.startsWith("image/") ? blob.type : "image/jpeg"
-  const ext = type.includes("png")
-    ? "png"
-    : type.includes("webp")
-      ? "webp"
-      : "jpg"
-  const safeName =
-    title.replace(/[^\w-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) ||
-    "movie"
-  return new File([blob], `${safeName}-poster.${ext}`, { type })
 }
 
 export function MoviePosterPicker({
@@ -71,9 +53,8 @@ export function MoviePosterPicker({
       setLookupError(null)
       try {
         const details = await fetchTmdbMovieDetails(item.tmdbId)
-        const posterUrl = details.posterUrl ?? item.posterUrl
-        if (posterUrl) {
-          const file = await posterUrlToFile(posterUrl, details.title)
+        if (details.posterUrl ?? item.posterUrl) {
+          const file = await fetchTmdbPosterFile(item.tmdbId)
           const preview = URL.createObjectURL(file)
           onPosterChange(file, preview)
         }
