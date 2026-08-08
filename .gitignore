@@ -16,6 +16,8 @@ infra/vps/.deploy.env
 *.pem
 *.key
 credentials.json
+mobile/google-services.json
+mobile/GoogleService-Info.plist
 
 # Common ignores
 node_modules

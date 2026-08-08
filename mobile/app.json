@@ -14,6 +14,8 @@
       "backgroundColor": "#030303"
     },
     "ios": {
+      "bundleIdentifier": "com.prysymtv.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "PrysymTV uses your camera for live broadcasts.",
@@ -80,7 +82,12 @@
       "expo-audio",
       "expo-navigation-bar",
       "./plugins/withNotificationLargeIcon.js",
-      "@react-native-google-signin/google-signin"
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.382595461943-faiamjd8k7enffig0j81qk37i9t7h43v"
+        }
+      ]
     ]
   }
 }

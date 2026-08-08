@@ -66,12 +66,12 @@ Mobile registers via the **same** `POST /users/me/push-subscription` as web, wit
 
 ## Firebase setup (Android push)
 
-Project in use: **`prysymtv-8891f`**  
+Project in use: **`new-prysymtv`**  
 Android package: **`com.prysymtv.app`**
 
 ### 1. Firebase Console
 
-1. [Firebase Console](https://console.firebase.google.com/) → project **prysymtv-8891f**
+1. [Firebase Console](https://console.firebase.google.com/) → project **new-prysymtv**
 2. **Project settings** → **Your apps** → Android app with package `com.prysymtv.app`
    - If missing: Add app → Android → package `com.prysymtv.app`
 3. Download **`google-services.json`** → place at **`mobile/google-services.json`**
@@ -84,12 +84,12 @@ Android package: **`com.prysymtv.app`**
 Required for the API to **send** push to devices.
 
 1. Firebase Console → **Project settings** → **Service accounts**
-2. **Generate new private key** → saves JSON like `prysymtv-8891f-firebase-adminsdk-….json`
+2. **Generate new private key** → saves JSON like `new-prysymtv-firebase-adminsdk-….json`
 3. Store securely on the VPS (not in git):
 
 ```bash
 # On VPS (example)
-scp prysymtv-8891f-firebase-adminsdk-….json root@YOUR_VPS:/etc/prysym/firebase-adminsdk.json
+scp new-prysymtv-firebase-adminsdk-….json root@YOUR_VPS:/etc/prysym/firebase-adminsdk.json
 ssh root@YOUR_VPS 'chown prysym:prysym /etc/prysym/firebase-adminsdk.json && chmod 640 /etc/prysym/firebase-adminsdk.json'
 ```
 
@@ -287,4 +287,4 @@ admin.messaging().send({
 
 ---
 
-*Last updated: 2026-08-04 — Firebase `prysymtv-8891f`, package `com.prysymtv.app`, production path `/etc/prysym/firebase-adminsdk.json`, 15s bell polling, Android `notification-icon.png`.*
+*Last updated: 2026-08-08 — Firebase `new-prysymtv`, package `com.prysymtv.app`, production path `/etc/prysym/firebase-adminsdk.json`, 15s bell polling, Android `notification-icon.png`.*

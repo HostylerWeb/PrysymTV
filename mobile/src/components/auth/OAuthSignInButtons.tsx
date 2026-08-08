@@ -95,18 +95,24 @@ function NativeGoogleSignInButton({
   onGoogleCredential,
   onError,
   webClientId,
+  iosClientId,
 }: {
   disabled?: boolean;
   onGoogleCredential: (idToken: string) => Promise<void>;
   onError?: (message: string) => void;
   webClientId?: string | null;
+  iosClientId?: string | null;
 }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!webClientId) return;
-    GoogleSignin.configure({ webClientId, offlineAccess: false });
-  }, [webClientId]);
+    GoogleSignin.configure({
+      webClientId,
+      iosClientId: iosClientId || undefined,
+      offlineAccess: false,
+    });
+  }, [iosClientId, webClientId]);
 
   const handleGoogle = useCallback(async () => {
     if (!webClientId) {
@@ -219,6 +225,7 @@ function ConfiguredGoogleSignInButton({
         onGoogleCredential={onGoogleCredential}
         onError={onError}
         webClientId={webClientId}
+        iosClientId={iosClientId}
       />
     );
   }
