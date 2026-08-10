@@ -17,6 +17,9 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+android/keystore.properties
+android/app/prysymtv-release.keystore
+credentials/
 
 # Metro
 .metro-health-check*

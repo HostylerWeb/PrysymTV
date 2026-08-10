@@ -51,7 +51,9 @@ adb install -r android/app/build/outputs/apk/release/app-release.apk
 
 Output: `android/app/build/outputs/apk/release/app-release.apk`
 
-Rebuild after **any** JS/UI change. After changing **`app.json`** notification icon or Firebase `google-services.json`, run `npx expo prebuild --platform android` then rebuild the APK (see [`notifications.md`](./notifications.md#android-notification-icon-status-bar--tray)).
+**Release signing (Firebase SHA, Play Store):** [`android-release-signing.md`](./android-release-signing.md)
+
+Rebuild after **any** JS/UI change.
 
 ---
 
