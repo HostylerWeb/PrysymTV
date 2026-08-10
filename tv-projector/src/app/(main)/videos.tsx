@@ -5,12 +5,13 @@ import {
   StyleSheet,
   Text,
 } from 'react-native';
-import { ContentRow } from '@/components/tv/ContentRow';
+import { ContentGrid } from '@/components/tv/ContentGrid';
 import { useVideosFeed } from '@/hooks/api/useVideosFeed';
 import { useOpenWatch } from '@/hooks/useOpenWatch';
 import { colors, spacing, typography } from '@/theme/tokens';
+import { withContentServiceGate } from '@/components/tv/ContentServiceGate';
 
-export default function VideosScreen() {
+function VideosScreen() {
   const openWatch = useOpenWatch();
   const { data, isLoading, error } = useVideosFeed();
 
@@ -22,10 +23,10 @@ export default function VideosScreen() {
       ) : error ? (
         <Text style={styles.error}>Could not load videos.</Text>
       ) : (
-        <ContentRow
-          title="Browse"
+        <ContentGrid
           items={data?.items ?? []}
           onItemPress={openWatch}
+          preferInitialFocus
         />
       )}
     </ScrollView>
@@ -48,3 +49,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
 });
+
+export default withContentServiceGate('videos', VideosScreen);

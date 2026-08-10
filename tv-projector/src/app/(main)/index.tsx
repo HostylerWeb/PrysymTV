@@ -10,7 +10,9 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { ContentRow } from '@/components/tv/ContentRow';
 import { ContentCard } from '@/components/tv/ContentCard';
+import { ContinueWatchingCard } from '@/components/tv/ContinueWatchingCard';
 import { useHomeFeed } from '@/hooks/api/useHomeFeed';
+import { useContentServices } from '@/hooks/api/useContentServices';
 import { useVerticalsList } from '@/hooks/api/useVerticalsList';
 import { usePodcastsCatalog } from '@/hooks/api/usePodcastsCatalog';
 import { flattenShortsPages, useShortsFeed } from '@/hooks/api/useShortsFeed';
@@ -24,10 +26,11 @@ export default function HomeScreen() {
   const queryClient = useQueryClient();
   const openWatch = useOpenWatch();
   const openShort = useOpenShort();
+  const { isEnabled } = useContentServices();
   const { data, isLoading, error } = useHomeFeed();
-  const verticalsQuery = useVerticalsList();
-  const podcastsQuery = usePodcastsCatalog(1, 12);
-  const shortsQuery = useShortsFeed(12);
+  const verticalsQuery = useVerticalsList(isEnabled('verticals'));
+  const podcastsQuery = usePodcastsCatalog(1, 12, isEnabled('podcasts'));
+  const shortsQuery = useShortsFeed(12, isEnabled('shorts'));
   const shorts = flattenShortsPages(shortsQuery.data?.pages);
 
   const openContinue = (item: ContinueWatchingItem) => {
@@ -111,11 +114,9 @@ export default function HomeScreen() {
               <Text style={styles.rowTitle}>Continue watching</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
                 {data.continueWatching.map((item, index) => (
-                  <ContentCard
+                  <ContinueWatchingCard
                     key={`${item.contentType}-${item.contentId}`}
-                    title={item.title}
-                    thumbnailUrl={item.thumbnailUrl}
-                    subtitle={item.subtitle}
+                    item={item}
                     hasTVPreferredFocus={!data?.featuredLive && index === 0}
                     onPress={() => openContinue(item)}
                   />
@@ -140,13 +141,15 @@ export default function HomeScreen() {
               })
             }
           />
-          <ContentRow title="Trending videos" items={data?.trending ?? []} onItemPress={openWatch} />
-          <ContentRow title="New releases" items={data?.newReleases ?? []} onItemPress={openWatch} />
-          <ContentRow title="Movies" items={data?.movies ?? []} onItemPress={openWatch} />
+          <ContentRow title="Trending videos" items={isEnabled('videos') ? (data?.trending ?? []) : []} onItemPress={openWatch} />
+          <ContentRow title="New releases" items={isEnabled('movies') ? (data?.newReleases ?? []) : []} onItemPress={openWatch} />
+          {isEnabled('movies') ? (
+            <ContentRow title="Movies" items={data?.movies ?? []} onItemPress={openWatch} />
+          ) : null}
         </>
       )}
 
-      {shortCards.length ? (
+      {isEnabled('shorts') && shortCards.length ? (
         <ContentRow
           title="Shorts"
           items={shortCards}
@@ -155,7 +158,7 @@ export default function HomeScreen() {
         />
       ) : null}
 
-      {verticalCards.length ? (
+      {isEnabled('verticals') && verticalCards.length ? (
         <View style={styles.section}>
           <Text style={styles.rowTitle}>Vertical series</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
@@ -166,7 +169,6 @@ export default function HomeScreen() {
                 thumbnailUrl={item.thumbnailUrl}
                 subtitle={item.channel}
                 aspectRatio={9 / 16}
-                hasTVPreferredFocus={index === 0 && !data?.featuredLive}
                 onPress={() =>
                   router.push({
                     pathname: '/(main)/verticals/[slug]',
@@ -179,7 +181,7 @@ export default function HomeScreen() {
         </View>
       ) : null}
 
-      {podcastCards.length ? (
+      {isEnabled('podcasts') && podcastCards.length ? (
         <ContentRow title="Podcasts" items={podcastCards} onItemPress={(item) =>
           router.push({ pathname: '/podcast/[id]', params: { id: item.id } })
         } />

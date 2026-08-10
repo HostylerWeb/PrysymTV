@@ -11,10 +11,18 @@ import { ContentRow } from '@/components/tv/ContentRow';
 import { ContentCard } from '@/components/tv/ContentCard';
 import { usePodcastsCatalog } from '@/hooks/api/usePodcastsCatalog';
 import { colors, spacing, typography } from '@/theme/tokens';
+import { withContentServiceGate } from '@/components/tv/ContentServiceGate';
 
-export default function PodcastsScreen() {
+function PodcastsScreen() {
   const router = useRouter();
   const { data, isLoading, error } = usePodcastsCatalog();
+
+  const openShow = (showTitle: string) => {
+    const episode = data?.episodes.find((ep) => ep.showTitle === showTitle);
+    if (episode) {
+      router.push({ pathname: '/podcast/[id]', params: { id: episode.id } });
+    }
+  };
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
@@ -33,7 +41,7 @@ export default function PodcastsScreen() {
                 thumbnailUrl={data.featuredShow.coverUrl}
                 subtitle={data.featuredShow.creatorName}
                 hasTVPreferredFocus
-                onPress={() => {}}
+                onPress={() => openShow(data.featuredShow!.title)}
               />
             </View>
           ) : null}
@@ -62,7 +70,7 @@ export default function PodcastsScreen() {
                   thumbnailUrl={show.coverUrl}
                   subtitle={`${show.episodeCount} episodes`}
                   hasTVPreferredFocus={!data?.featuredShow && index === 0}
-                  onPress={() => {}}
+                  onPress={() => openShow(show.title)}
                 />
               ))}
             </ScrollView>
@@ -95,3 +103,5 @@ const styles = StyleSheet.create({
   shows: { marginTop: spacing.md },
   error: { color: '#ff6b6b', fontSize: typography.body, paddingHorizontal: spacing.lg },
 });
+
+export default withContentServiceGate('podcasts', PodcastsScreen);

@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ContentRow } from '@/components/tv/ContentRow';
+import { ContentGrid } from '@/components/tv/ContentGrid';
 import { useLiveStreams } from '@/hooks/api/useLiveStreams';
 import { colors, spacing, typography } from '@/theme/tokens';
 
@@ -23,7 +23,7 @@ export default function LiveBrowseScreen() {
       ) : error ? (
         <Text style={styles.error}>Could not load live streams.</Text>
       ) : data?.length ? (
-        <ContentRow
+        <ContentGrid
           title="Streaming"
           items={data.map((s) => ({
             id: s.id,
@@ -34,6 +34,7 @@ export default function LiveBrowseScreen() {
             channel: s.streamer,
             channelSlug: s.streamerSlug,
           }))}
+          preferInitialFocus
           onItemPress={(item) =>
             router.push({ pathname: '/live/[id]', params: { id: item.id } })
           }

@@ -5,12 +5,13 @@ import {
   StyleSheet,
   Text,
 } from 'react-native';
-import { ContentRow } from '@/components/tv/ContentRow';
+import { ContentGrid } from '@/components/tv/ContentGrid';
 import { useOpenWatch } from '@/hooks/useOpenWatch';
 import { useMoviesFeed } from '@/hooks/api/useMoviesFeed';
 import { colors, spacing, typography } from '@/theme/tokens';
+import { withContentServiceGate } from '@/components/tv/ContentServiceGate';
 
-export default function MoviesScreen() {
+function MoviesScreen() {
   const openWatch = useOpenWatch();
   const { data, isLoading, error } = useMoviesFeed();
 
@@ -22,10 +23,10 @@ export default function MoviesScreen() {
       ) : error ? (
         <Text style={styles.error}>Could not load movies.</Text>
       ) : (
-        <ContentRow
-          title="Featured"
+        <ContentGrid
           items={data?.items ?? []}
           onItemPress={openWatch}
+          preferInitialFocus
         />
       )}
     </ScrollView>
@@ -48,3 +49,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
 });
+
+export default withContentServiceGate('movies', MoviesScreen);

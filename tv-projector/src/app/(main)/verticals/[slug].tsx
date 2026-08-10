@@ -10,8 +10,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ContentCard } from '@/components/tv/ContentCard';
 import { useVerticalSeriesDetail } from '@/hooks/api/useVerticalSeriesDetail';
 import { colors, spacing, typography } from '@/theme/tokens';
+import { withContentServiceGate } from '@/components/tv/ContentServiceGate';
 
-export default function VerticalSeriesScreen() {
+function VerticalSeriesScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
   const { data, isLoading, error } = useVerticalSeriesDetail(slug);
@@ -33,6 +34,7 @@ export default function VerticalSeriesScreen() {
               thumbnailUrl={ep.thumbnailUrl ?? data?.posterUrl}
               subtitle={ep.durationSeconds ? `${Math.round(ep.durationSeconds / 60)} min` : undefined}
               aspectRatio={9 / 16}
+              layout="grid"
               hasTVPreferredFocus={index === 0}
               onPress={() =>
                 router.push({
@@ -72,3 +74,5 @@ const styles = StyleSheet.create({
   },
   error: { color: '#ff6b6b', fontSize: typography.body, paddingHorizontal: spacing.lg },
 });
+
+export default withContentServiceGate('verticals', VerticalSeriesScreen);

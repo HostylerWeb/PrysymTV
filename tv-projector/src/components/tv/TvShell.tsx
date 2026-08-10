@@ -1,27 +1,45 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Slot, usePathname, useRouter } from 'expo-router';
+import React, { useMemo } from 'react';
+import { ScrollView, View, StyleSheet, Text } from 'react-native';
+import { Slot, usePathname, useRouter, type Href } from 'expo-router';
 import { TvFocusButton } from '@/components/tv/TvFocusButton';
 import { useAuth } from '@/context/AuthContext';
+import { useContentServices } from '@/hooks/api/useContentServices';
+import type { ContentServiceKey } from '@/lib/content-services';
 import { colors, spacing, typography } from '@/theme/tokens';
-import { Text } from 'react-native';
 
-const NAV_ITEMS = [
+type NavItem = {
+  href: string;
+  label: string;
+  service?: ContentServiceKey;
+};
+
+const NAV_ITEMS: NavItem[] = [
   { href: '/(main)', label: 'Home' },
-  { href: '/(main)/videos', label: 'Videos' },
-  { href: '/(main)/movies', label: 'Movies' },
-  { href: '/(main)/shorts', label: 'Shorts' },
+  { href: '/(main)/videos', label: 'Videos', service: 'videos' },
+  { href: '/(main)/movies', label: 'Movies', service: 'movies' },
+  { href: '/(main)/shorts', label: 'Shorts', service: 'shorts' },
   { href: '/(main)/live', label: 'Live' },
-  { href: '/(main)/verticals', label: 'Verticals' },
-  { href: '/(main)/podcasts', label: 'Podcasts' },
+  { href: '/(main)/verticals', label: 'Verticals', service: 'verticals' },
+  { href: '/(main)/podcasts', label: 'Podcasts', service: 'podcasts' },
   { href: '/(main)/search', label: 'Search' },
   { href: '/(main)/history', label: 'History' },
-] as const;
+];
 
 export function TvShell() {
   const router = useRouter();
   const pathname = usePathname();
   const { logout } = useAuth();
+  const { isEnabled, hasRemoteConfig } = useContentServices();
+
+  const visibleNavItems = useMemo(
+    () =>
+      NAV_ITEMS.filter((item) => {
+        if (!item.service) return true;
+        if (!hasRemoteConfig) return true;
+        return isEnabled(item.service);
+      }),
+    [hasRemoteConfig, isEnabled],
+  );
 
   const isActive = (href: string) => {
     if (href === '/(main)') {
@@ -35,22 +53,29 @@ export function TvShell() {
     <View style={styles.root}>
       <View style={styles.rail}>
         <Text style={styles.brand}>PrysymTV</Text>
-        {NAV_ITEMS.map((item) => (
-          <TvFocusButton
-            key={item.href}
-            label={item.label}
-            selected={isActive(item.href)}
-            onPress={() => router.push(item.href)}
-            style={styles.navButton}
-          />
-        ))}
-        <View style={styles.logoutWrap}>
-          <TvFocusButton
-            label="Sign out"
-            onPress={() => void logout()}
-            style={styles.navButton}
-          />
-        </View>
+        <ScrollView
+          style={styles.navScroll}
+          contentContainerStyle={styles.navContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {visibleNavItems.map((item, index) => (
+            <TvFocusButton
+              key={item.href}
+              label={item.label}
+              selected={isActive(item.href)}
+              hasTVPreferredFocus={index === 0}
+              onPress={() => router.push(item.href as Href)}
+              style={styles.navButton}
+            />
+          ))}
+          <View style={styles.logoutWrap}>
+            <TvFocusButton
+              label="Sign out"
+              onPress={() => void logout()}
+              style={styles.navButton}
+            />
+          </View>
+        </ScrollView>
       </View>
       <View style={styles.content}>
         <Slot />
@@ -67,11 +92,18 @@ const styles = StyleSheet.create({
   },
   rail: {
     width: 220,
-    paddingVertical: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
     paddingHorizontal: spacing.md,
     borderRightWidth: 1,
     borderRightColor: colors.border,
+  },
+  navScroll: {
+    flex: 1,
+  },
+  navContent: {
     gap: spacing.sm,
+    paddingBottom: spacing.md,
   },
   brand: {
     color: colors.primary,

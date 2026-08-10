@@ -18,6 +18,7 @@ export default function SearchScreen() {
   const openWatch = useOpenWatch();
   const openShort = useOpenShort();
   const [query, setQuery] = useState('');
+  const [inputFocused, setInputFocused] = useState(false);
   const { data, isFetching } = useSearch(query);
 
   const hasQuery = query.trim().length >= 2;
@@ -30,7 +31,11 @@ export default function SearchScreen() {
         onChangeText={setQuery}
         placeholder="Search videos, movies, podcasts..."
         placeholderTextColor={colors.mutedForeground}
-        style={styles.input}
+        focusable
+        hasTVPreferredFocus
+        onFocus={() => setInputFocused(true)}
+        onBlur={() => setInputFocused(false)}
+        style={[styles.input, inputFocused && styles.inputFocused]}
         autoCapitalize="none"
       />
 
@@ -48,6 +53,7 @@ export default function SearchScreen() {
                 title={item.title}
                 thumbnailUrl={item.thumbnailUrl}
                 subtitle="Movie"
+                layout="grid"
                 hasTVPreferredFocus={index === 0 && !data?.videos.length}
                 onPress={() => openWatch(item)}
               />
@@ -183,6 +189,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     color: colors.foreground,
     fontSize: typography.body,
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  inputFocused: {
+    borderColor: colors.focus,
   },
   loader: { marginVertical: spacing.lg },
   section: { marginBottom: spacing.xl },

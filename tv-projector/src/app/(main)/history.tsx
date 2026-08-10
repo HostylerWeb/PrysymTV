@@ -4,11 +4,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { ContentRow } from '@/components/tv/ContentRow';
+import { ContentGrid } from '@/components/tv/ContentGrid';
 import { useHistoryFeed } from '@/hooks/api/useHistory';
 import { prefetchWatchItem } from '@/hooks/useOpenWatch';
 import { historyItemPath } from '@/lib/tv-routes';
@@ -37,9 +36,10 @@ export default function HistoryScreen() {
       ) : error ? (
         <Text style={styles.error}>Could not load history.</Text>
       ) : items.length ? (
-        <ContentRow
+        <ContentGrid
           title="Your history"
           items={items}
+          preferInitialFocus
           onItemPress={(card) => {
             const item = data?.items.find((h) => h.contentId === card.id);
             if (!item) return;

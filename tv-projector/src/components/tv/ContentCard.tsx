@@ -1,11 +1,11 @@
 import React from 'react';
 import {
-  Image,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { colors, typography } from '@/theme/tokens';
 
 type Props = {
@@ -15,6 +15,7 @@ type Props = {
   onPress?: () => void;
   hasTVPreferredFocus?: boolean;
   aspectRatio?: number;
+  layout?: 'row' | 'grid';
   onBeforeNavigate?: () => void;
 };
 
@@ -25,6 +26,7 @@ export function ContentCard({
   onPress,
   hasTVPreferredFocus,
   aspectRatio = 16 / 9,
+  layout = 'row',
   onBeforeNavigate,
 }: Props) {
   const handlePress = () => {
@@ -37,11 +39,20 @@ export function ContentCard({
       focusable
       hasTVPreferredFocus={hasTVPreferredFocus}
       onPress={handlePress}
-      style={({ focused }) => [styles.card, focused && styles.cardFocused]}
+      style={({ focused }) => [
+        styles.card,
+        layout === 'grid' ? styles.cardGrid : styles.cardRow,
+        focused && styles.cardFocused,
+      ]}
     >
       <View style={styles.posterWrap}>
         {thumbnailUrl ? (
-          <Image source={{ uri: thumbnailUrl }} style={[styles.poster, { aspectRatio }]} resizeMode="cover" />
+          <Image
+            source={{ uri: thumbnailUrl }}
+            style={[styles.poster, { aspectRatio }]}
+            contentFit="cover"
+            recyclingKey={thumbnailUrl}
+          />
         ) : (
           <View style={[styles.poster, styles.posterFallback, { aspectRatio }]} />
         )}
@@ -60,12 +71,18 @@ export function ContentCard({
 
 const styles = StyleSheet.create({
   card: {
-    width: 260,
-    marginRight: 20,
     borderRadius: 12,
     borderWidth: 3,
     borderColor: 'transparent',
     padding: 8,
+  },
+  cardRow: {
+    width: 260,
+    marginRight: 20,
+  },
+  cardGrid: {
+    width: 260,
+    marginRight: 0,
   },
   cardFocused: {
     borderColor: colors.focus,

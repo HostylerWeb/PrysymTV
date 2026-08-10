@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, type ImageStyle, type StyleProp } from 'react-native';
+import { StyleSheet, View, type ImageStyle, type StyleProp } from 'react-native';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView, type VideoContentFit } from 'expo-video';
 
@@ -14,6 +14,7 @@ type Props = {
   onReady: () => void;
   onError: () => void;
   onEnded?: () => void;
+  onTimeUpdate?: (currentTime: number, duration: number) => void;
 };
 
 function AdVideoMedia({
@@ -23,6 +24,7 @@ function AdVideoMedia({
   onReady,
   onError,
   onEnded,
+  onTimeUpdate,
 }: Omit<Props, 'mediaType'>) {
   const player = useVideoPlayer(mediaUrl, (instance) => {
     instance.loop = false;
@@ -72,6 +74,10 @@ function AdVideoMedia({
       if (player.playing && currentTime >= MIN_PLAY_SECONDS) {
         signalReady();
       }
+      const duration = player.duration;
+      if (Number.isFinite(duration) && duration > 0) {
+        onTimeUpdate?.(currentTime, duration);
+      }
     });
 
     const endSub = player.addListener('playToEnd', () => {
@@ -88,15 +94,17 @@ function AdVideoMedia({
       timeSub.remove();
       endSub.remove();
     };
-  }, [player, onReady, onError, onEnded]);
+  }, [player, onReady, onError, onEnded, onTimeUpdate]);
 
   return (
-    <VideoView
-      player={player}
-      style={[StyleSheet.absoluteFill, style]}
-      contentFit={contentFit}
-      nativeControls={false}
-    />
+    <View style={[styles.videoWrap, style]}>
+      <VideoView
+        player={player}
+        style={StyleSheet.absoluteFillObject}
+        contentFit={contentFit}
+        nativeControls={false}
+      />
+    </View>
   );
 }
 
@@ -108,6 +116,7 @@ export function AdMedia({
   onReady,
   onError,
   onEnded,
+  onTimeUpdate,
 }: Props) {
   useEffect(() => {
     if (mediaType !== 'image') return;
@@ -133,6 +142,7 @@ export function AdMedia({
         onReady={onReady}
         onError={onError}
         onEnded={onEnded}
+        onTimeUpdate={onTimeUpdate}
       />
     );
   }
@@ -147,3 +157,11 @@ export function AdMedia({
     />
   );
 }
+
+const styles = StyleSheet.create({
+  videoWrap: {
+    flex: 1,
+    width: '100%',
+    overflow: 'hidden',
+  },
+});

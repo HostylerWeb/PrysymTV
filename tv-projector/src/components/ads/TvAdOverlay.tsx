@@ -14,9 +14,13 @@ import { useAuth } from '@/context/AuthContext';
 import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
 import { useShouldShowAds } from '@/hooks/useShouldShowAds';
 import { resolveAdMediaUrl } from '@/lib/ad-media';
+import {
+  canSkipImageAd,
+  canSkipVideoAd,
+  POST_END_SKIP_MS,
+  videoAdSkipSecondsRemaining,
+} from '@/lib/ad-skip-timing';
 import { colors, spacing, typography } from '@/theme/tokens';
-
-const POST_END_SKIP_MS = 3000;
 
 type Props = {
   visible: boolean;
@@ -25,9 +29,13 @@ type Props = {
   creatorId?: string;
   servedAd?: ServedAd | null;
   onComplete: () => void;
-  /** Render inside the player frame instead of a full-screen modal. */
   inline?: boolean;
 };
+
+function resolveInitialAd(servedAd: ServedAd | null | undefined): ServedAd | null | undefined {
+  if (servedAd === undefined) return undefined;
+  return isValidServedAd(servedAd) ? servedAd : null;
+}
 
 export function TvAdOverlay({
   visible,
@@ -41,12 +49,17 @@ export function TvAdOverlay({
   const shouldShow = useShouldShowAds();
   const { user } = useAuth();
   const { platformCreatorId, isPlacementEnabled } = usePublicAdsConfig();
-  const [ad, setAd] = useState<ServedAd | null | undefined>(undefined);
-  const [countdown, setCountdown] = useState(5);
+  const [ad, setAd] = useState<ServedAd | null | undefined>(() => resolveInitialAd(servedAd));
+  const [imageCountdown, setImageCountdown] = useState(5);
+  const [adCurrentTime, setAdCurrentTime] = useState(0);
+  const [adDuration, setAdDuration] = useState(0);
   const [ready, setReady] = useState(false);
   const onCompleteRef = useRef(onComplete);
   const postEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const impressionTrackedRef = useRef(false);
   onCompleteRef.current = onComplete;
+
+  const isVideoAd = ad?.mediaType === 'video';
 
   const finish = useCallback(() => {
     if (postEndTimerRef.current) {
@@ -66,12 +79,9 @@ export function TvAdOverlay({
 
   useEffect(() => {
     if (!visible) {
-      setAd(undefined);
-      setReady(false);
+      impressionTrackedRef.current = false;
       return;
     }
-
-    setReady(false);
 
     if (!shouldShow || !isPlacementEnabled(placement)) {
       onCompleteRef.current();
@@ -79,13 +89,19 @@ export function TvAdOverlay({
     }
 
     if (servedAd !== undefined) {
-      const valid = isValidServedAd(servedAd) ? servedAd : null;
+      const valid = resolveInitialAd(servedAd);
       setAd(valid);
+      setReady(false);
+      setAdCurrentTime(0);
+      setAdDuration(0);
       if (!valid) onCompleteRef.current();
       return;
     }
 
     let cancelled = false;
+    setAd(undefined);
+    setReady(false);
+
     void fetchServedAd(placement, { peek: true })
       .then((peek) => {
         if (cancelled) return;
@@ -116,7 +132,8 @@ export function TvAdOverlay({
   }, []);
 
   useEffect(() => {
-    if (!ad) return;
+    if (!ad || impressionTrackedRef.current) return;
+    impressionTrackedRef.current = true;
     void trackAdImpression(
       buildAdAttribution({
         campaignId: ad.id,
@@ -130,43 +147,59 @@ export function TvAdOverlay({
   }, [ad, creatorId, videoId, platformCreatorId, user?.id, placement]);
 
   useEffect(() => {
-    if (!visible || !ad || !ready || countdown <= 0) return;
-    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    if (!ad || !ready || isVideoAd) return;
+    setImageCountdown(ad.skipAfterSeconds || 5);
+  }, [ad, ready, isVideoAd]);
+
+  useEffect(() => {
+    if (!visible || !ad || !ready || isVideoAd) return;
+    if (imageCountdown <= 0) return;
+    const t = setTimeout(() => setImageCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
-  }, [visible, ad, ready, countdown]);
+  }, [visible, ad, ready, imageCountdown, isVideoAd]);
 
-  useEffect(() => {
-    if (!visible || ad === undefined) return;
-    if (ad && ready) setCountdown(ad.skipAfterSeconds);
-  }, [visible, ad, ready]);
-
-  useEffect(() => {
-    if (!visible || ad === undefined || !ad) return;
-    const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
-    if (!mediaUrl) onCompleteRef.current();
-  }, [visible, ad]);
-
-  if (!visible || ad === undefined || !ad) return null;
+  if (!visible) return null;
+  if (ad === undefined) {
+    return (
+      <View style={inline ? styles.inlineShell : styles.screen}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+  if (!ad) return null;
 
   const mediaUrl = resolveAdMediaUrl(ad.mediaUrl);
   if (!mediaUrl) return null;
 
-  const canSkip = ready && countdown <= 0;
+  const canSkip = isVideoAd
+    ? canSkipVideoAd(ready, adCurrentTime, adDuration)
+    : canSkipImageAd(ready, imageCountdown);
 
-  const content = (
+  const skipLabel = (() => {
+    if (!ready) return null;
+    if (canSkip) return null;
+    if (isVideoAd) {
+      if (adDuration <= 0) return 'Loading…';
+      const remaining = videoAdSkipSecondsRemaining(adCurrentTime, adDuration);
+      return `Skip in ${remaining}s`;
+    }
+    return `Skip in ${imageCountdown}s`;
+  })();
+
+  return (
     <View style={inline ? styles.inlineShell : styles.screen}>
       <View style={styles.topBar}>
         <Text style={styles.sponsor}>Sponsored</Text>
-        {ready && canSkip ? (
+        {canSkip ? (
           <TvFocusButton
             label="Skip ad"
             hasTVPreferredFocus
             onPress={finish}
             style={styles.skipBtn}
           />
-        ) : ready ? (
+        ) : skipLabel ? (
           <View style={styles.skipHint}>
-            <Text style={styles.skipText}>Skip in {countdown}s</Text>
+            <Text style={styles.skipText}>{skipLabel}</Text>
           </View>
         ) : (
           <Text style={styles.skipText}>Loading…</Text>
@@ -174,6 +207,7 @@ export function TvAdOverlay({
       </View>
       <View style={styles.player}>
         <AdMedia
+          key={`${ad.id}-${mediaUrl}`}
           mediaUrl={mediaUrl}
           mediaType={ad.mediaType}
           style={styles.media}
@@ -181,17 +215,16 @@ export function TvAdOverlay({
           onReady={() => setReady(true)}
           onError={() => finish()}
           onEnded={schedulePostEndSkip}
+          onTimeUpdate={(currentTime, duration) => {
+            setAdCurrentTime(currentTime);
+            if (Number.isFinite(duration) && duration > 0) {
+              setAdDuration(duration);
+            }
+          }}
         />
-        {!ready ? (
-          <View style={styles.loadingOverlay} pointerEvents="none">
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        ) : null}
       </View>
     </View>
   );
-
-  return content;
 }
 
 const styles = StyleSheet.create({
@@ -205,6 +238,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#000',
     zIndex: 40,
+    elevation: 40,
   },
   topBar: {
     flexDirection: 'row',
@@ -214,6 +248,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
     gap: spacing.md,
+    zIndex: 2,
   },
   sponsor: {
     color: 'rgba(255,255,255,0.75)',
@@ -224,14 +259,9 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     justifyContent: 'center',
-  },
-  media: { width: '100%', height: '100%' },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: '#000',
   },
+  media: { width: '100%', height: '100%' },
   skipBtn: {
     minWidth: 160,
   },

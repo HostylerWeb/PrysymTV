@@ -118,6 +118,7 @@ export function mapContinueWatchingItem(item: ContinueWatchingFeedItem): Continu
     durationSeconds: item.durationSeconds,
     subtitle: item.subtitle,
     seriesSlug: item.seriesSlug,
+    episodeNumber: item.episodeNumber,
   };
 }
 

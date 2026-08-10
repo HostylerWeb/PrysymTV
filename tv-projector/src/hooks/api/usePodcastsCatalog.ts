@@ -16,9 +16,10 @@ export type PodcastsCatalogData = {
   episodesMeta: PaginatedMeta;
 };
 
-export function usePodcastsCatalog(page = 1, limit = 24) {
+export function usePodcastsCatalog(page = 1, limit = 24, enabled = true) {
   return useQuery({
     queryKey: ['podcasts', 'catalog', page, limit],
+    enabled,
     queryFn: async (): Promise<PodcastsCatalogData> => {
       const [featuredRes, trendingRes, episodesRes, showsRes] = await Promise.all([
         fetchFeaturedPodcastShow(),

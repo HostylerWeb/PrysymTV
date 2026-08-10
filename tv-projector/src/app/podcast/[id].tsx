@@ -16,8 +16,9 @@ import { usePodcastEpisodeDetail } from '@/hooks/api/usePodcastEpisodeDetail';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
 import { useTvAdGate } from '@/hooks/useTvAdGate';
 import { colors, spacing, typography } from '@/theme/tokens';
+import { withContentServiceGate } from '@/components/tv/ContentServiceGate';
 
-export default function PodcastEpisodeScreen() {
+function PodcastEpisodeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading, error } = usePodcastEpisodeDetail(id);
   const [playRequested, setPlayRequested] = useState(false);
@@ -134,3 +135,5 @@ const styles = StyleSheet.create({
   checking: { marginTop: spacing.lg },
   error: { color: '#ff6b6b', fontSize: typography.body },
 });
+
+export default withContentServiceGate('podcasts', PodcastEpisodeScreen);

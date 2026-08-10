@@ -11,8 +11,9 @@ import { ContentCard } from '@/components/tv/ContentCard';
 import { flattenShortsPages, useShortsFeed } from '@/hooks/api/useShortsFeed';
 import { useOpenShort } from '@/hooks/useOpenWatch';
 import { colors, spacing, typography } from '@/theme/tokens';
+import { withContentServiceGate } from '@/components/tv/ContentServiceGate';
 
-export default function ShortsScreen() {
+function ShortsScreen() {
   const openShort = useOpenShort();
   const shortsQuery = useShortsFeed(32);
   const shorts = flattenShortsPages(shortsQuery.data?.pages);
@@ -32,6 +33,7 @@ export default function ShortsScreen() {
               thumbnailUrl={item.thumbnailUrl}
               subtitle={item.channel}
               aspectRatio={9 / 16}
+              layout="grid"
               hasTVPreferredFocus={index === 0}
               onPress={() => openShort(item)}
             />
@@ -71,3 +73,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
 });
+
+export default withContentServiceGate('shorts', ShortsScreen);

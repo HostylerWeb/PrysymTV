@@ -3,9 +3,10 @@ import { fetchShortsFeed } from '@/lib/api/videos-feed';
 import { mapVideoCard } from '@/lib/api/map-content';
 import type { VideoCard } from '@/types/api';
 
-export function useShortsFeed(limit = 24) {
+export function useShortsFeed(limit = 24, enabled = true) {
   return useInfiniteQuery({
     queryKey: ['shorts', 'feed', limit],
+    enabled,
     queryFn: async ({ pageParam }) => {
       const data = await fetchShortsFeed(pageParam as string | undefined, limit);
       return {

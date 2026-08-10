@@ -4,8 +4,8 @@
  */
 export const WATCH_DEBUG_TAG = 'PRYSYM_WATCH';
 
-/** Force-enabled for playback investigation — disable before production ship. */
-export const WATCH_DEBUG_ENABLED = true;
+/** Disable in production — verbose logging can freeze low-end Android TV devices during seek. */
+export const WATCH_DEBUG_ENABLED = false;
 
 let sessionId = '';
 let sessionStartMs = 0;

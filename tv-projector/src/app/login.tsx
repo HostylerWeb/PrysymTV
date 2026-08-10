@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { TvFocusButton } from '@/components/tv/TvFocusButton';
 import { pollTvAuthSession, startTvAuthSession } from '@/lib/api/tv-auth';
 import { setAccessToken, setRefreshToken } from '@/lib/api/client';
 import { useAuth } from '@/context/AuthContext';
@@ -22,6 +23,8 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [emailLoading, setEmailLoading] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
 
   const [userCode, setUserCode] = useState<string | null>(null);
   const [verificationUrl, setVerificationUrl] = useState<string | null>(null);
@@ -114,16 +117,25 @@ export default function LoginScreen() {
         <View style={styles.modeRow}>
           <Pressable
             focusable
-            hasTVPreferredFocus
+            hasTVPreferredFocus={mode === 'qr'}
             onPress={() => setMode('qr')}
-            style={[styles.modeBtn, mode === 'qr' && styles.modeBtnActive]}
+            style={({ focused }) => [
+              styles.modeBtn,
+              mode === 'qr' && styles.modeBtnActive,
+              focused && styles.modeBtnFocused,
+            ]}
           >
             <Text style={styles.modeText}>Scan QR code</Text>
           </Pressable>
           <Pressable
             focusable
+            hasTVPreferredFocus={mode === 'email'}
             onPress={() => setMode('email')}
-            style={[styles.modeBtn, mode === 'email' && styles.modeBtnActive]}
+            style={({ focused }) => [
+              styles.modeBtn,
+              mode === 'email' && styles.modeBtnActive,
+              focused && styles.modeBtnFocused,
+            ]}
           >
             <Text style={styles.modeText}>Email</Text>
           </Pressable>
@@ -148,14 +160,18 @@ export default function LoginScreen() {
               </Text>
             ) : null}
             {qrStatus === 'expired' ? (
-              <Pressable focusable onPress={() => void beginQrSession()} style={styles.refreshBtn}>
-                <Text style={styles.refreshText}>Code expired — get a new QR</Text>
-              </Pressable>
+              <TvFocusButton
+                label="Code expired — get a new QR"
+                onPress={() => void beginQrSession()}
+                style={styles.refreshBtn}
+              />
             ) : null}
             {qrStatus === 'error' ? (
-              <Pressable focusable onPress={() => void beginQrSession()} style={styles.refreshBtn}>
-                <Text style={styles.refreshText}>Retry QR sign-in</Text>
-              </Pressable>
+              <TvFocusButton
+                label="Retry QR sign-in"
+                onPress={() => void beginQrSession()}
+                style={styles.refreshBtn}
+              />
             ) : null}
           </View>
         ) : (
@@ -166,7 +182,10 @@ export default function LoginScreen() {
               onChangeText={setEmail}
               autoCapitalize="none"
               keyboardType="email-address"
-              style={styles.input}
+              focusable
+              onFocus={() => setEmailFocused(true)}
+              onBlur={() => setEmailFocused(false)}
+              style={[styles.input, emailFocused && styles.inputFocused]}
               placeholderTextColor={colors.mutedForeground}
               placeholder="you@example.com"
             />
@@ -175,23 +194,20 @@ export default function LoginScreen() {
               value={password}
               onChangeText={setPassword}
               secureTextEntry
-              style={styles.input}
+              focusable
+              onFocus={() => setPasswordFocused(true)}
+              onBlur={() => setPasswordFocused(false)}
+              style={[styles.input, passwordFocused && styles.inputFocused]}
               placeholderTextColor={colors.mutedForeground}
               placeholder="••••••••"
             />
-            <Pressable
-              focusable
+            <TvFocusButton
+              label={emailLoading ? 'Signing in…' : 'Sign in'}
               hasTVPreferredFocus
               onPress={() => void onEmailSubmit()}
               disabled={emailLoading}
               style={styles.submit}
-            >
-              {emailLoading ? (
-                <ActivityIndicator color={colors.foreground} />
-              ) : (
-                <Text style={styles.submitText}>Sign in</Text>
-              )}
-            </Pressable>
+            />
           </View>
         )}
 
@@ -247,7 +263,11 @@ const styles = StyleSheet.create({
   },
   modeBtnActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.background,
+  },
+  modeBtnFocused: {
+    borderColor: colors.focus,
+    transform: [{ scale: 1.04 }],
+    backgroundColor: colors.secondary,
   },
   modeText: {
     color: colors.foreground,
@@ -285,14 +305,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   refreshBtn: {
-    padding: spacing.md,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-  },
-  refreshText: {
-    color: colors.foreground,
-    fontWeight: '700',
-    fontSize: typography.body,
+    minWidth: 280,
   },
   emailBlock: { gap: spacing.sm },
   label: {
@@ -310,17 +323,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.border,
   },
+  inputFocused: {
+    borderColor: colors.focus,
+  },
   submit: {
     marginTop: spacing.lg,
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  submitText: {
-    color: colors.foreground,
-    fontSize: typography.body,
-    fontWeight: '700',
+    width: '100%',
+    minWidth: 0,
   },
   error: {
     color: '#ff6b6b',
