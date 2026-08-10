@@ -12,6 +12,7 @@ import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { AdBanner } from '@/components/ads/AdBanner';
 import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { GiftModal } from '@/components/modals/GiftModal';
+import { ShareModal } from '@/components/modals/ShareModal';
 import { withContentServiceGate } from '@/components/layout/ContentServiceGate';
 import { buildShareUrl } from '@/lib/share-url';
 import { ReportModal } from '@/components/modals/ReportModal';

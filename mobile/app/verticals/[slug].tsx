@@ -13,6 +13,7 @@ import { toggleVerticalSeriesSave } from '@/lib/api/verticals';
 import { radius } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useThemedStyles } from '@/theme/useThemedStyles';
+import { buildShareUrl } from '@/lib/share-url';
 
 function VerticalSeriesScreen() {
   const styles = useThemedStyles(createStyles);

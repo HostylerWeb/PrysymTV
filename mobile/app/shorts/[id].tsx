@@ -19,6 +19,7 @@ import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
 import { useWatchAnalytics } from '@/hooks/useWatchAnalytics';
 import { followUser, unfollowUser } from '@/lib/api/users';
 import { toggleVideoLike, toggleVideoSave } from '@/lib/api/videos';
+import { bumpLikeCount } from '@/utils/engagement-count';
 import { colors, withAlpha } from '@/theme/tokens';
 import { formatViewCount } from '@/utils/format-media';
 import { withContentServiceGate } from '@/components/layout/ContentServiceGate';

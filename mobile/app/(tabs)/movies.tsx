@@ -32,6 +32,7 @@ import { fetchMovieGenres, genreLabel, type CategoryItem } from '@/lib/api/categ
 import { radius, withAlpha } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
+import { useThemedStyles } from '@/theme/useThemedStyles';
 import { withContentServiceGate } from '@/components/layout/ContentServiceGate';
 import { formatDuration, formatViewCount } from '@/utils/format-media';
 

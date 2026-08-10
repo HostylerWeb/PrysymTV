@@ -21,6 +21,7 @@ import { useWatchAnalytics } from '@/hooks/useWatchAnalytics';
 import { useBackNavigation } from '@/hooks/useBackNavigation';
 import { toggleVideoLike, toggleVideoSave } from '@/lib/api/videos';
 import { bumpLikeCount } from '@/utils/engagement-count';
+import { buildShareUrl } from '@/lib/share-url';
 import type { ThemeColors } from '@/theme/tokens';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatDuration, formatViewCount } from '@/utils/format-media';

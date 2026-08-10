@@ -7,6 +7,7 @@ import { VideoCardTile } from '@/components/feed/VideoCardTile';
 import { PageFooter } from '@/components/layout/PageFooter';
 import { useVideosFeed } from '@/hooks/api/useVideosFeed';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing, typography } from '@/theme/tokens';
 import { withContentServiceGate } from '@/components/layout/ContentServiceGate';
 
 function WatchBrowseScreen() {

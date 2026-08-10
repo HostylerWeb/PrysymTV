@@ -29,6 +29,7 @@ import { radius } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
+import { buildShareUrl } from '@/lib/share-url';
 import { formatDuration, formatViewCount } from '@/utils/format-media';
 
 function PodcastEpisodeScreen() {

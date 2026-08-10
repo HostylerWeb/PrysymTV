@@ -39,6 +39,7 @@ import {
   toggleVerticalSeriesSave,
 } from '@/lib/api/verticals';
 import { parseResumeSeconds } from '@/lib/continue-watching-nav';
+import { buildShareUrl } from '@/lib/share-url';
 import { radius, withAlpha, type ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
