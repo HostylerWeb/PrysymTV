@@ -12,7 +12,7 @@ import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { AdBanner } from '@/components/ads/AdBanner';
 import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { GiftModal } from '@/components/modals/GiftModal';
-import { ShareModal } from '@/components/modals/ShareModal';
+import { withContentServiceGate } from '@/components/layout/ContentServiceGate';
 import { buildShareUrl } from '@/lib/share-url';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { Button } from '@/components/ui/Button';
@@ -37,7 +37,7 @@ import { bumpLikeCount } from '@/utils/engagement-count';
 import { parseResumeSeconds } from '@/lib/continue-watching-nav';
 import { formatDuration, formatViewCount } from '@/utils/format-media';
 
-export default function WatchScreen() {
+function WatchScreen() {
   const styles = useThemedStyles(createStyles);
   const { id, t } = useLocalSearchParams<{ id: string; t?: string }>();
   const resumeSeconds = parseResumeSeconds(t);
@@ -285,6 +285,8 @@ export default function WatchScreen() {
     </>
   );
 }
+
+export default withContentServiceGate('videos', WatchScreen);
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({

@@ -36,10 +36,11 @@ import { usePublicAdsConfig } from '@/hooks/api/usePublicAdsConfig';
 import { useWatchAnalytics } from '@/hooks/useWatchAnalytics';
 import { bumpLikeCount } from '@/utils/engagement-count';
 import { formatViewCount } from '@/utils/format-media';
+import { withContentServiceGate } from '@/components/layout/ContentServiceGate';
 
 const SHORT_PLAYER_WINDOW = 1;
 
-export default function ShortsScreen() {
+function ShortsScreen() {
   const insets = useSafeAreaInsets();
   const tabInset = useTabBarInset();
   const router = useRouter();
@@ -359,6 +360,8 @@ export default function ShortsScreen() {
     </>
   );
 }
+
+export default withContentServiceGate('shorts', ShortsScreen);
 
 function Action({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress?: () => void }) {
   return (

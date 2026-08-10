@@ -36,6 +36,7 @@ import { UpdatePartnerTierDto } from './dto/update-partner-tier.dto';
 import { UpdateRevenueSplitRuleDto } from './dto/update-revenue-split-rule.dto';
 import { VerifyUserDto } from './dto/verify-user.dto';
 import { UpdateAdsConfigDto } from './dto/update-ads-config.dto';
+import { UpdateContentServicesConfigDto } from './dto/update-content-services-config.dto';
 import { UpdateAnalyticsConfigDto } from './dto/update-analytics-config.dto';
 import { UpdateEconomyConfigDto } from './dto/update-economy-config.dto';
 import { UpdateScorecardConfigDto } from './dto/update-scorecard-config.dto';
@@ -602,6 +603,19 @@ export class AdminController {
     @CurrentUser() admin: AuthUserPayload,
   ) {
     return this.admin.updateMovieGenresConfig(admin.id, body.genres);
+  }
+
+  @Get('config/content-services')
+  contentServicesConfig() {
+    return this.admin.getContentServicesConfig();
+  }
+
+  @Put('config/content-services')
+  updateContentServicesConfig(
+    @Body() body: UpdateContentServicesConfigDto,
+    @CurrentUser() admin: AuthUserPayload,
+  ) {
+    return this.admin.updateContentServicesConfig(admin.id, body);
   }
 
   @Put('coin-packages')

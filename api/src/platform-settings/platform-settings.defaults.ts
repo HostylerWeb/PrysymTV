@@ -7,6 +7,7 @@ import type {
   AdsSettings,
   AnalyticsSettings,
   CategoryConfigEntry,
+  ContentServicesSettings,
   EconomySettings,
   ProgramConfigEntry,
   ScorecardSettings,
@@ -105,3 +106,11 @@ export const DEFAULT_PODCAST_CATEGORIES_SETTINGS: CategoryConfigEntry[] =
 
 export const DEFAULT_MOVIE_GENRES_SETTINGS: CategoryConfigEntry[] =
   DEFAULT_MOVIE_GENRES;
+
+export const DEFAULT_CONTENT_SERVICES_SETTINGS: ContentServicesSettings = {
+  videos: true,
+  movies: true,
+  shorts: true,
+  verticals: true,
+  podcasts: true,
+};

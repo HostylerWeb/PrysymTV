@@ -10,6 +10,7 @@ import {
   type ServedAd,
 } from "@/lib/api/ads"
 import { AdMediaDisplay } from "@/components/ad-media-display"
+import { AdSkipButton, AdSkipCountdown } from "@/components/ad-skip-button"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 import { useAuth } from "@/contexts/auth-context"
@@ -174,15 +175,9 @@ export function VerticalEpisodeAdGate({
           Sponsored
         </a>
         {canSkip ? (
-          <button
-            type="button"
-            onClick={complete}
-            className="text-sm font-bold text-white bg-white/20 px-4 py-1.5 rounded-full"
-          >
-            Skip Ad
-          </button>
+          <AdSkipButton onClick={complete} />
         ) : skipLabel ? (
-          <span className="text-sm text-white/70">{skipLabel}</span>
+          <AdSkipCountdown>{skipLabel}</AdSkipCountdown>
         ) : null}
       </div>
       <AdMediaDisplay

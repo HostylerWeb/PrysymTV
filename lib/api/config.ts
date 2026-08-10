@@ -1,5 +1,6 @@
 import { apiRequest } from "@/lib/api-client";
 import type { AdPlacement } from "@/lib/api/ads";
+import type { ContentServicesSettings } from "@/lib/content-services";
 
 export type PublicAdsConfig = {
   shortsInterstitialEveryNSwipes: number;
@@ -46,6 +47,7 @@ export type PublicPushConfig = {
 };
 
 export type PublicAppConfig = {
+  services?: ContentServicesSettings;
   ads: PublicAdsConfig;
   membership: PublicMembershipConfig;
   insider: PublicMembershipConfig;

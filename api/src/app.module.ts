@@ -31,6 +31,7 @@ import { RevenueModule } from './revenue/revenue.module';
 import { VerticalsModule } from './verticals/verticals.module';
 import { CategoriesModule } from './categories/categories.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
+import { ContentServicesModule } from './content-services/content-services.module';
 import { PublicConfigModule } from './config/config.module';
 import { ReportsModule } from './reports/reports.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -89,6 +90,7 @@ import { GafModule } from './gaf/gaf.module';
     MailModule,
     PrismaModule,
     PlatformSettingsModule,
+    ContentServicesModule,
     PublicConfigModule,
     HealthModule,
     AuthModule,

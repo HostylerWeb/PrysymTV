@@ -9,7 +9,7 @@ import { AudioPlayer } from '@/components/podcasts/AudioPlayer';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { AdPreroll } from '@/components/ads/AdPreroll';
 import { ShareModal } from '@/components/modals/ShareModal';
-import { buildShareUrl } from '@/lib/share-url';
+import { withContentServiceGate } from '@/components/layout/ContentServiceGate';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { GiftModal } from '@/components/modals/GiftModal';
@@ -31,7 +31,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatDuration, formatViewCount } from '@/utils/format-media';
 
-export default function PodcastEpisodeScreen() {
+function PodcastEpisodeScreen() {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const { id, autoplay, t } = useLocalSearchParams<{ id: string; autoplay?: string; t?: string }>();
@@ -267,6 +267,8 @@ export default function PodcastEpisodeScreen() {
     </>
   );
 }
+
+export default withContentServiceGate('podcasts', PodcastEpisodeScreen);
 
 function IconBtn({
   icon,

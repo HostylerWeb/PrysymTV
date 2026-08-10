@@ -8,6 +8,11 @@ import {
   clampPage,
   paginationSkip,
 } from '../common/utils/pagination.util';
+import {
+  ContentServicesService,
+  contentServiceForVideoType,
+} from '../content-services/content-services.service';
+import type { ContentServicesSettings } from '../platform-settings/platform-settings.types';
 import { PlaybackService } from '../playback/playback.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StreamsService } from '../streams/streams.service';
@@ -20,6 +25,7 @@ export class FeedService {
     private readonly prisma: PrismaService,
     private readonly streams: StreamsService,
     private readonly playback: PlaybackService,
+    private readonly contentServices: ContentServicesService,
     private readonly cache: RedisCacheService,
   ) {}
 
@@ -37,6 +43,15 @@ export class FeedService {
 
   private async buildHome(userId?: string) {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const services = await this.contentServices.get();
+    const moviesEnabled = services.movies;
+    const videosEnabled = services.videos;
+    const shortsEnabled = services.shorts;
+    const verticalsEnabled = services.verticals;
+
+    const videoTypes: VideoType[] = [];
+    if (videosEnabled) videoTypes.push(VideoType.video);
+    if (shortsEnabled) videoTypes.push(VideoType.short);
 
     const [liveStreams, movies, newReleaseMovies, videos, newestMovie, topMovie, continueWatching] =
       await Promise.all([
@@ -55,29 +70,36 @@ export class FeedService {
           },
         },
       }),
-      this.prisma.video.findMany({
+      moviesEnabled
+        ? this.prisma.video.findMany({
         where: { type: VideoType.movie, status: ContentStatus.ready, visibility: 'public' },
         orderBy: { viewsCount: 'desc' },
         take: 12,
         select: VIDEO_CARD_SELECT,
-      }),
-      this.prisma.video.findMany({
+      })
+        : Promise.resolve([]),
+      moviesEnabled
+        ? this.prisma.video.findMany({
         where: { type: VideoType.movie, status: ContentStatus.ready, visibility: 'public' },
         orderBy: { createdAt: 'desc' },
         take: 8,
         select: VIDEO_CARD_SELECT,
-      }),
-      this.prisma.video.findMany({
+      })
+        : Promise.resolve([]),
+      videoTypes.length
+        ? this.prisma.video.findMany({
         where: {
-          type: { in: [VideoType.video, VideoType.short] },
+          type: { in: videoTypes },
           status: ContentStatus.ready,
           visibility: 'public',
         },
         orderBy: { viewsCount: 'desc' },
         take: 16,
         select: VIDEO_CARD_SELECT,
-      }),
-      this.prisma.video.findFirst({
+      })
+        : Promise.resolve([]),
+      moviesEnabled
+        ? this.prisma.video.findFirst({
         where: {
           type: VideoType.movie,
           status: ContentStatus.ready,
@@ -86,13 +108,18 @@ export class FeedService {
         },
         orderBy: { createdAt: 'desc' },
         select: VIDEO_CARD_SELECT,
-      }),
-      this.prisma.video.findFirst({
+      })
+        : Promise.resolve(null),
+      moviesEnabled
+        ? this.prisma.video.findFirst({
         where: { type: VideoType.movie, status: ContentStatus.ready, visibility: 'public' },
         orderBy: { viewsCount: 'desc' },
         select: VIDEO_CARD_SELECT,
-      }),
-      userId ? this.continueWatching(userId) : Promise.resolve([]),
+      })
+        : Promise.resolve(null),
+      userId && (videosEnabled || verticalsEnabled)
+        ? this.continueWatching(userId, 12, services)
+        : Promise.resolve([]),
     ]);
 
     const heroMovie = newestMovie ?? (topMovie && topMovie.viewsCount > 0 ? topMovie : null);
@@ -158,12 +185,22 @@ export class FeedService {
     };
   }
 
-  private async continueWatching(userId: string, limit = 12) {
+  private async continueWatching(
+    userId: string,
+    limit = 12,
+    services?: ContentServicesSettings,
+  ) {
+    const enabled = services ?? (await this.contentServices.get());
+    const contentTypes: Array<'video' | 'vertical_episode'> = [];
+    if (enabled.videos || enabled.movies || enabled.shorts) contentTypes.push('video');
+    if (enabled.verticals) contentTypes.push('vertical_episode');
+    if (!contentTypes.length) return [];
+
     const rows = await this.prisma.watchHistory.findMany({
       where: {
         userId,
         completed: false,
-        contentType: { in: ['video', 'vertical_episode'] },
+        contentType: { in: contentTypes },
       },
       orderBy: { updatedAt: 'desc' },
       take: limit * 2,
@@ -216,6 +253,7 @@ export class FeedService {
         if (r.contentType === 'video') {
           const v = videoById.get(r.contentId);
           if (!v) return null;
+          if (!enabled[contentServiceForVideoType(v.type)]) return null;
           return {
             contentType: 'video' as const,
             contentId: r.contentId,

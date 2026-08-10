@@ -6,7 +6,7 @@ import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/Button';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { ShareModal } from '@/components/modals/ShareModal';
-import { buildShareUrl } from '@/lib/share-url';
+import { withContentServiceGate } from '@/components/layout/ContentServiceGate';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { useVerticalSeriesDetail } from '@/hooks/api/useVerticalSeriesDetail';
 import { toggleVerticalSeriesSave } from '@/lib/api/verticals';
@@ -14,7 +14,7 @@ import { radius } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 
-export default function VerticalSeriesScreen() {
+function VerticalSeriesScreen() {
   const styles = useThemedStyles(createStyles);
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
@@ -104,6 +104,8 @@ export default function VerticalSeriesScreen() {
     </>
   );
 }
+
+export default withContentServiceGate('verticals', VerticalSeriesScreen);
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({

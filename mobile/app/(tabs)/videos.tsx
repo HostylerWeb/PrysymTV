@@ -32,11 +32,12 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, typography } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useThemedStyles } from '@/theme/useThemedStyles';
+import { withContentServiceGate } from '@/components/layout/ContentServiceGate';
 
 const MODES = ['All', 'Videos', 'Live'] as const;
 const SORTS = ['Popular', 'Newest'] as const;
 
-export default function VideosScreen() {
+function VideosScreen() {
   const styles = useThemedStyles(createVideosStyles);
   const { colors } = useTheme();
   const { requireAuth } = useMockAuth();
@@ -306,3 +307,5 @@ function createVideosStyles(colors: ThemeColors) {
     loadMore: { marginTop: 12 },
   });
 }
+
+export default withContentServiceGate('videos', VideosScreen);

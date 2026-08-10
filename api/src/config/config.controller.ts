@@ -36,13 +36,15 @@ export class ConfigController {
 
   @Get('public')
   async publicConfig() {
-    const [ads, economy, platformCreatorId] = await Promise.all([
+    const [ads, economy, contentServices, platformCreatorId] = await Promise.all([
       this.platformSettings.getAds(),
       this.platformSettings.getEconomy(),
+      this.platformSettings.getContentServices(),
       this.analytics.resolvePlatformCreatorId().catch(() => null),
     ]);
     return {
       platformCreatorId,
+      services: contentServices,
       membership: {
         priceUsd: economy.membershipPriceUsd,
         label: 'Prysym Membership',

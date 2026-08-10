@@ -32,12 +32,12 @@ import { fetchMovieGenres, genreLabel, type CategoryItem } from '@/lib/api/categ
 import { radius, withAlpha } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
-import { useThemedStyles } from '@/theme/useThemedStyles';
+import { withContentServiceGate } from '@/components/layout/ContentServiceGate';
 import { formatDuration, formatViewCount } from '@/utils/format-media';
 
 const SORTS = ['Popularity', 'Top Rated', 'Newest', 'A-Z'] as const;
 
-export default function MoviesScreen() {
+function MoviesScreen() {
   const styles = useThemedStyles(createMoviesStyles);
   const { colors } = useTheme();
   const router = useRouter();
@@ -388,3 +388,5 @@ function createMoviesStyles(colors: ThemeColors) {
     modalStats: { color: colors.mutedForeground, fontSize: 12, marginBottom: 8 },
   });
 }
+
+export default withContentServiceGate('movies', MoviesScreen);

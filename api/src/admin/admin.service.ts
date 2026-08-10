@@ -2458,6 +2458,17 @@ export class AdminService {
     return this.platformSettings.setMovieGenres(genres, adminId);
   }
 
+  getContentServicesConfig() {
+    return this.platformSettings.getContentServices();
+  }
+
+  updateContentServicesConfig(
+    adminId: string,
+    body: Partial<import('../platform-settings/platform-settings.types').ContentServicesSettings>,
+  ) {
+    return this.platformSettings.setContentServices(body, adminId);
+  }
+
   private validateCategoryEntries(
     entries: CategoryConfigEntry[],
     label: string,

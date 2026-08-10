@@ -1,12 +1,15 @@
-import { Tabs, Redirect } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { PrysymTabBar } from '@/components/layout/PrysymTabBar';
 import { useTheme } from '@/theme/ThemeProvider';
+import { useContentServices } from '@/hooks/api/useContentServices';
+import type { ContentServiceKey } from '@/lib/content-services';
 
 type TabIcon = keyof typeof Ionicons.glyphMap;
 
 export default function TabsLayout() {
   const { colors } = useTheme();
+  const { isEnabled, hasRemoteConfig } = useContentServices();
 
   function tabIcon(name: TabIcon, focused: boolean) {
     return (
@@ -16,6 +19,11 @@ export default function TabsLayout() {
         color={focused ? colors.primary : colors.mutedForeground}
       />
     );
+  }
+
+  function tabHref(service: ContentServiceKey) {
+    if (!hasRemoteConfig) return undefined;
+    return isEnabled(service) ? undefined : null;
   }
 
   return (
@@ -28,12 +36,12 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: colors.mutedForeground,
       }}
     >
-      {/* Home exists as a route but is hidden from the tab bar (web: logo → home). */}
       <Tabs.Screen name="home" options={{ href: null }} />
       <Tabs.Screen
         name="videos"
         options={{
           title: 'Videos',
+          href: tabHref('videos'),
           tabBarIcon: ({ focused }) => tabIcon(focused ? 'videocam' : 'videocam-outline', focused),
         }}
       />
@@ -41,6 +49,7 @@ export default function TabsLayout() {
         name="movies"
         options={{
           title: 'Movies',
+          href: tabHref('movies'),
           tabBarIcon: ({ focused }) => tabIcon(focused ? 'film' : 'film-outline', focused),
         }}
       />
@@ -48,6 +57,7 @@ export default function TabsLayout() {
         name="shorts"
         options={{
           title: 'Shorts',
+          href: tabHref('shorts'),
           tabBarIcon: ({ focused }) => tabIcon(focused ? 'play' : 'play-outline', focused),
         }}
       />
@@ -55,6 +65,7 @@ export default function TabsLayout() {
         name="verticals"
         options={{
           title: 'Verticals',
+          href: tabHref('verticals'),
           tabBarIcon: ({ focused }) => tabIcon(focused ? 'grid' : 'grid-outline', focused),
         }}
       />
@@ -62,6 +73,7 @@ export default function TabsLayout() {
         name="podcasts"
         options={{
           title: 'Podcasts',
+          href: tabHref('podcasts'),
           tabBarIcon: ({ focused }) => tabIcon(focused ? 'headset' : 'headset-outline', focused),
         }}
       />

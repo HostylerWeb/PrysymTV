@@ -11,9 +11,10 @@ import { useVerticalsList } from '@/hooks/api/useVerticalsList';
 import { radius, typography } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useThemedStyles } from '@/theme/useThemedStyles';
+import { withContentServiceGate } from '@/components/layout/ContentServiceGate';
 import { useTheme } from '@/theme/ThemeProvider';
 
-export default function VerticalsScreen() {
+function VerticalsScreen() {
   const styles = useThemedStyles(createVerticalsStyles);
   const { colors } = useTheme();
   const router = useRouter();
@@ -92,3 +93,5 @@ function createVerticalsStyles(colors: ThemeColors) {
     meta: { color: colors.mutedForeground, fontSize: 11, marginTop: 4 },
   });
 }
+
+export default withContentServiceGate('verticals', VerticalsScreen);

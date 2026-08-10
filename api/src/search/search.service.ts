@@ -1,10 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { ContentStatus, StreamStatus, VideoType } from '@prisma/client';
+import { ContentServicesService } from '../content-services/content-services.service';
+import { contentServiceForVideoType } from '../content-services/content-services.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class SearchService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly contentServices: ContentServicesService,
+  ) {}
 
   private videoTypeForScope(type?: string): VideoType | null | undefined {
     if (!type || type === 'all') return undefined;
@@ -26,9 +31,12 @@ export class SearchService {
       return { query: '', videos: [], creators: [], podcasts: [], streams: [], verticals: [] };
     }
 
+    const services = await this.contentServices.get();
     const skip = (page - 1) * limit;
     const contains = { contains: query, mode: 'insensitive' as const };
     const videoType = this.videoTypeForScope(type);
+    const podcastsEnabled = services.podcasts;
+    const verticalsEnabled = services.verticals;
 
     const [videos, creators, podcasts, streams, verticals] = await Promise.all([
       !this.includesVideos(type) || videoType === null
@@ -42,7 +50,9 @@ export class SearchService {
             take: limit,
             skip,
             select: { id: true, title: true, thumbnailUrl: true, type: true, viewsCount: true },
-          }),
+          }).then((rows) =>
+            rows.filter((row) => services[contentServiceForVideoType(row.type)]),
+          ),
       type && type !== 'creator'
         ? []
         : this.prisma.user.findMany({
@@ -62,7 +72,7 @@ export class SearchService {
               isVerified: true,
             },
           }),
-      type && type !== 'podcast'
+      type && type !== 'podcast' || !podcastsEnabled
         ? []
         : this.prisma.podcastShow.findMany({
             where: { OR: [{ title: contains }, { description: contains }] },
@@ -80,7 +90,7 @@ export class SearchService {
             take: limit,
             include: { creator: { select: { username: true, displayName: true } } },
           }),
-      type && type !== 'vertical'
+      type && type !== 'vertical' || !verticalsEnabled
         ? []
         : this.prisma.verticalSeries.findMany({
             where: {

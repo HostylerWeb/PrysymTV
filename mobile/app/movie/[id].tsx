@@ -12,7 +12,7 @@ import { CommentsSheet } from '@/components/modals/CommentsSheet';
 import { AddToPlaylistSheet } from '@/components/modals/AddToPlaylistSheet';
 import { GiftModal } from '@/components/modals/GiftModal';
 import { ShareModal } from '@/components/modals/ShareModal';
-import { buildShareUrl } from '@/lib/share-url';
+import { withContentServiceGate } from '@/components/layout/ContentServiceGate';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { useMockAuth } from '@/context/MockAuthContext';
 import { useVideoDetail } from '@/hooks/api/useVideoDetail';
@@ -25,7 +25,7 @@ import type { ThemeColors } from '@/theme/tokens';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 import { formatDuration, formatViewCount } from '@/utils/format-media';
 
-export default function MovieScreen() {
+function MovieScreen() {
   const styles = useThemedStyles(createStyles);
   const isFocused = useIsFocused();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -218,6 +218,8 @@ export default function MovieScreen() {
     </>
   );
 }
+
+export default withContentServiceGate('movies', MovieScreen);
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({

@@ -24,5 +24,4 @@ node_modules
 .next/
 .DS_Store
 
-# Local archives (do not commit)
-*.zip
+backups/

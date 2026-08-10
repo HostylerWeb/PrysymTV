@@ -12,6 +12,8 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RequireContentService } from '../common/decorators/require-content-service.decorator';
+import { ContentServiceGuard } from '../common/guards/content-service.guard';
 import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
@@ -27,11 +29,15 @@ export class PodcastsController {
   constructor(private readonly podcasts: PodcastsService) {}
 
   @Get('shows/featured')
+  @UseGuards(ContentServiceGuard)
+  @RequireContentService('podcasts')
   featured() {
     return this.podcasts.featuredShow();
   }
 
   @Get('shows/trending')
+  @UseGuards(ContentServiceGuard)
+  @RequireContentService('podcasts')
   trendingShows(@Query('limit') limit?: string) {
     return this.podcasts.trendingShows(limit ? parseInt(limit, 10) : 12);
   }
@@ -43,6 +49,8 @@ export class PodcastsController {
   }
 
   @Get('shows')
+  @UseGuards(ContentServiceGuard)
+  @RequireContentService('podcasts')
   shows(@Query('page') page?: string, @Query('limit') limit?: string) {
     return this.podcasts.listShows(
       page ? parseInt(page, 10) : 1,
@@ -60,6 +68,8 @@ export class PodcastsController {
   }
 
   @Get('shows/:id')
+  @UseGuards(ContentServiceGuard)
+  @RequireContentService('podcasts')
   show(@Param('id') id: string) {
     return this.podcasts.getShow(id);
   }
@@ -100,7 +110,8 @@ export class PodcastsController {
   }
 
   @Get('episodes/feed')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard, ContentServiceGuard)
+  @RequireContentService('podcasts')
   episodesFeed(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -114,7 +125,8 @@ export class PodcastsController {
   }
 
   @Get('episodes/:id')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard, ContentServiceGuard)
+  @RequireContentService('podcasts')
   episode(
     @Param('id') id: string,
     @Req() req: Request & { user?: AuthUserPayload | null },

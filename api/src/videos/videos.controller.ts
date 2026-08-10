@@ -13,6 +13,8 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Request } from 'express';
+import { RequireContentService } from '../common/decorators/require-content-service.decorator';
+import { ContentServiceGuard } from '../common/guards/content-service.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -102,7 +104,8 @@ export class VideosController {
   }
 
   @Get('feed/shorts')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard, ContentServiceGuard)
+  @RequireContentService('shorts')
   shortsFeed(
     @Query('cursor') cursor?: string,
     @Req() req?: Request & { user?: AuthUserPayload | null },
@@ -111,6 +114,8 @@ export class VideosController {
   }
 
   @Get('feed/movies')
+  @UseGuards(ContentServiceGuard)
+  @RequireContentService('movies')
   moviesFeed(@Query('page') page?: string, @Query('limit') limit?: string) {
     return this.videos.moviesFeed(
       page ? parseInt(page, 10) : 1,
@@ -119,12 +124,15 @@ export class VideosController {
   }
 
   @Get('feed/movies/featured')
+  @UseGuards(ContentServiceGuard)
+  @RequireContentService('movies')
   featuredMovie() {
     return this.videos.featuredMovie();
   }
 
   @Get('feed/videos')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard, ContentServiceGuard)
+  @RequireContentService('videos')
   videosBrowse(
     @Query('page') page?: string,
     @Query('limit') limit?: string,

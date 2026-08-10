@@ -3,13 +3,20 @@
 import { Film, Play, Headphones, LayoutGrid, Video } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { useContentServices } from "@/lib/hooks/use-content-services"
+import type { ContentServiceKey } from "@/lib/content-services"
 
 interface BottomNavigationProps {
   activeTab?: string
   onTabChange?: (tab: string) => void
 }
 
-export const SIDEBAR_TABS = [
+export const SIDEBAR_TABS: ReadonlyArray<{
+  id: ContentServiceKey
+  label: string
+  icon: typeof Video
+  href: string
+}> = [
   { id: "videos", label: "Videos", icon: Video, href: "/videos" },
   { id: "movies", label: "Movies", icon: Film, href: "/movies" },
   { id: "shorts", label: "Shorts", icon: Play, href: "/shorts" },
@@ -20,11 +27,16 @@ export const SIDEBAR_TABS = [
 const OUTLINE_WHEN_ACTIVE = new Set(["movies", "podcasts", "verticals", "videos"])
 
 export function BottomNavigation({ activeTab = "none", onTabChange }: BottomNavigationProps) {
+  const { isEnabled, hasRemoteConfig } = useContentServices()
+  const tabs = hasRemoteConfig
+    ? SIDEBAR_TABS.filter((tab) => isEnabled(tab.id))
+    : SIDEBAR_TABS
+
   return (
     <>
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-xl border-t border-border shadow-2xl">
         <div className="flex items-center justify-around px-1 py-2">
-          {SIDEBAR_TABS.map((tab) => {
+          {tabs.map((tab) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
             return (
@@ -54,7 +66,7 @@ export function BottomNavigation({ activeTab = "none", onTabChange }: BottomNavi
           <img src="/favicon.webp" alt="Prysym TV" className="w-10 h-10 object-contain drop-shadow-lg" />
         </Link>
         <div className="flex flex-col items-center gap-1 w-full flex-1">
-          {SIDEBAR_TABS.map((tab) => {
+          {tabs.map((tab) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
             return (

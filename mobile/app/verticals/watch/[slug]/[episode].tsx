@@ -21,7 +21,7 @@ import { VerticalEpisodeAdGate } from '@/components/ads/VerticalEpisodeAdGate';
 import { fetchServedAd, isValidServedAd, type ServedAd } from '@/lib/api/ads';
 import { FeedQueryState } from '@/components/ui/FeedQueryState';
 import { ShareModal } from '@/components/modals/ShareModal';
-import { buildShareUrl } from '@/lib/share-url';
+import { withContentServiceGate } from '@/components/layout/ContentServiceGate';
 import { ReportModal } from '@/components/modals/ReportModal';
 import { GiftModal } from '@/components/modals/GiftModal';
 import { useShouldShowAds } from '@/hooks/useShouldShowAds';
@@ -199,7 +199,7 @@ function VerticalEpisodeCell({
   );
 }
 
-export default function VerticalWatchScreen() {
+function VerticalWatchScreen() {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { slug, episode, t } = useLocalSearchParams<{ slug: string; episode: string; t?: string }>();
@@ -463,6 +463,8 @@ export default function VerticalWatchScreen() {
     </>
   );
 }
+
+export default withContentServiceGate('verticals', VerticalWatchScreen);
 
 const styles = StyleSheet.create({
   cell: {

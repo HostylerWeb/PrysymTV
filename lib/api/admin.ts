@@ -1102,6 +1102,14 @@ export type AdminAdsConfig = {
   };
 };
 
+export type AdminContentServicesConfig = {
+  videos: boolean;
+  movies: boolean;
+  shorts: boolean;
+  verticals: boolean;
+  podcasts: boolean;
+};
+
 export type AdminAnalyticsConfig = {
   defaultRange: "today" | "7d" | "30d";
   kpiVisibility: {
@@ -1141,6 +1149,17 @@ export function fetchAdminAdsConfig() {
 
 export function updateAdminAdsConfig(body: Partial<AdminAdsConfig>) {
   return apiRequest<AdminAdsConfig>("/admin/config/ads", { method: "PUT", body });
+}
+
+export function fetchAdminContentServicesConfig() {
+  return apiRequest<AdminContentServicesConfig>("/admin/config/content-services");
+}
+
+export function updateAdminContentServicesConfig(body: Partial<AdminContentServicesConfig>) {
+  return apiRequest<AdminContentServicesConfig>("/admin/config/content-services", {
+    method: "PUT",
+    body,
+  });
 }
 
 export function fetchAdminAnalyticsConfig() {

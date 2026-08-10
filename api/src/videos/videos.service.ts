@@ -20,6 +20,7 @@ import {
   StreamStatus,
   VideoType,
 } from '@prisma/client';
+import { ContentServicesService } from '../content-services/content-services.service';
 import { RedisCacheService } from '../common/cache/redis-cache.service';
 import {
   enrichCreatorFollowForViewer,
@@ -57,6 +58,7 @@ export class VideosService implements OnModuleInit {
     private readonly streams: StreamsService,
     private readonly playlists: PlaylistsService,
     private readonly playback: PlaybackService,
+    private readonly contentServices: ContentServicesService,
     private readonly cache: RedisCacheService,
     @InjectQueue(VIDEO_PROCESSING_QUEUE) private readonly videoQueue: Queue,
   ) {}
@@ -591,6 +593,7 @@ export class VideosService implements OnModuleInit {
       },
     });
     if (!video) throw new NotFoundException('Video not found');
+    await this.contentServices.assertVideoTypeEnabled(video.type);
 
     const flags = await getViewerVideoFlags(
       this.prisma,

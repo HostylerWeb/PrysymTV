@@ -77,6 +77,24 @@ export type CategoryConfigEntry = {
   sortOrder: number;
 };
 
+/** Consumer-facing content sections toggled from admin settings. */
+export type ContentServiceKey =
+  | 'videos'
+  | 'movies'
+  | 'shorts'
+  | 'verticals'
+  | 'podcasts';
+
+export type ContentServicesSettings = Record<ContentServiceKey, boolean>;
+
+export const CONTENT_SERVICE_KEYS: ContentServiceKey[] = [
+  'videos',
+  'movies',
+  'shorts',
+  'verticals',
+  'podcasts',
+];
+
 export const PLATFORM_SETTING_KEYS = {
   economy: 'economy',
   ads: 'ads',
@@ -85,6 +103,7 @@ export const PLATFORM_SETTING_KEYS = {
   programs: 'programs',
   podcastCategories: 'podcast_categories',
   movieGenres: 'movie_genres',
+  contentServices: 'content_services',
 } as const;
 
 export type PlatformSettingKey =

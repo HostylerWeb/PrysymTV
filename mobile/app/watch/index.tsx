@@ -7,9 +7,9 @@ import { VideoCardTile } from '@/components/feed/VideoCardTile';
 import { PageFooter } from '@/components/layout/PageFooter';
 import { useVideosFeed } from '@/hooks/api/useVideosFeed';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { withContentServiceGate } from '@/components/layout/ContentServiceGate';
 
-export default function WatchBrowseScreen() {
+function WatchBrowseScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const videosQuery = useVideosFeed({ mode: 'videos', sort: 'views', limit: 12 });
@@ -44,6 +44,8 @@ export default function WatchBrowseScreen() {
     </ScrollView>
   );
 }
+
+export default withContentServiceGate('videos', WatchBrowseScreen);
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },

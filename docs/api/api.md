@@ -181,7 +181,7 @@
 | `GET` | `/categories/videos` | ✅ Video upload/browse categories |
 | `GET` | `/categories/podcasts` | ✅ Podcast show categories |
 | `GET` | `/categories/movies` | ✅ Movie genre list (admin-managed) |
-| `GET` | `/config/public` | ✅ Ads, membership, insider, channel tiers, OAuth client IDs, push config |
+| `GET` | `/config/public` | ✅ Ads, membership, insider, channel tiers, OAuth client IDs, push config, **content service toggles** |
 | `GET` | `/push/vapid-public-key` | ✅ Web push VAPID public key |
 | `GET` | `/users/me/push-subscription` | ✅ Bearer — `{ subscribed, enabled }` |
 | `POST` | `/users/me/push-subscription` | ✅ Bearer — register web push subscription |
@@ -262,6 +262,8 @@
 | `PUT` | `/admin/config/movie-genres` | ✅ `{ genres: [...] }` |
 | `GET` | `/admin/config/podcast-categories` | ✅ Podcast category taxonomy |
 | `PUT` | `/admin/config/podcast-categories` | ✅ `{ categories: [...] }` |
+| `GET` | `/admin/config/content-services` | ✅ Consumer section toggles (`videos`, `movies`, `shorts`, `verticals`, `podcasts`) |
+| `PUT` | `/admin/config/content-services` | ✅ Partial update — disables nav + public routes for that section |
 | `GET` | `/admin/analytics/revenue` | ✅ `?range=` revenue breakdown |
 | `GET` | `/admin/analytics/content` | ✅ Top content by range |
 | `GET` | `/admin/analytics/geography` | ✅ Viewer countries |
@@ -1385,10 +1387,17 @@ Long-form video browse (`type = video`). Returns live streams when `mode` includ
 
 | Route | Notes |
 |-------|--------|
-| `GET /config/public` | `{ platformCreatorId, membership, insider, channelMembership, live: { minPaidStreamUsd, coinUsd }, ads: { … }, auth: { google, apple, facebook }, push: { enabled, publicKey } }` — ads UI, OAuth buttons, membership pricing, paid-live minimums, web push |
+| `GET /config/public` | `{ platformCreatorId, services: { videos, movies, shorts, verticals, podcasts }, membership, insider, channelMembership, live: { minPaidStreamUsd, coinUsd }, ads: { … }, auth: { google, apple, facebook }, push: { enabled, publicKey } }` — ads UI, OAuth buttons, membership pricing, paid-live minimums, web push, **consumer section visibility** |
 | `GET /config/viewer-geo` | `{ geo: { city, region, regionName, countryCode } \| null }` — server IP geolocation; used instead of third-party browser geo on localhost |
 
-Values for `ads` are stored in `platform_settings` and edited at `/admin/config/ads`. Membership and insider prices come from `/admin/config/economy`.
+Values for `ads` are stored in `platform_settings` and edited at `/admin/config/ads`. Membership and insider prices come from `/admin/config/economy`. **Content service toggles** (`services`) are edited at **Admin → Settings → API Control** (`GET/PUT /admin/config/content-services`). When a service is disabled:
+
+- `GET /config/public` → `services.{key}: false`
+- Web/mobile navigation hides that tab
+- Direct visits to that section redirect home (clients) or return **503** with `{ code: "SERVICE_DISABLED", service }` (public API routes for that section)
+- Home feed and search omit disabled content types
+
+Default (all enabled): `{ videos: true, movies: true, shorts: true, verticals: true, podcasts: true }`.
 
 ### Web push & native push (`/push`, `/users/me/push-subscription`)
 
@@ -1467,6 +1476,7 @@ Values for `ads` are stored in `platform_settings` and edited at `/admin/config/
 | `GET/PUT /admin/config/programs` | Video categories — add/edit/delete; drives `GET /programs`, `GET /categories/videos`, `/videos` chips, long-video upload |
 | `GET/PUT /admin/config/podcast-categories` | Podcast categories — add/edit/delete; drives `GET /categories/podcasts`, `/podcasts` filters, podcast upload |
 | `GET/PUT /admin/config/movie-genres` | Movie genres — add/edit/delete; drives `GET /categories/movies`, `/movies` filters, admin movie upload |
+| `GET/PUT /admin/config/content-services` | Enable/disable consumer sections: long videos, movies, shorts, verticals, podcasts — exposed on `GET /config/public` → `services`; admin UI: **Settings → API Control** |
 
 ### Demo / sample content
 

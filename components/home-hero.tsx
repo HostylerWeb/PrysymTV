@@ -25,7 +25,7 @@ type HomeHeroProps = {
 
 const HERO_LABELS: Record<HomeHeroMovieReason, string> = {
   new_release: "Recently added",
-  trending: "Popular on Prysym",
+  trending: "Popular on Prysym TV",
 }
 
 const AUTOPLAY_MS = 6500

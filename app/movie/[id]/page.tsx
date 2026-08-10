@@ -4,7 +4,6 @@ import { use, useState, useRef, useEffect, useCallback } from "react"
 import {
   ChevronLeft,
   Play,
-  Pause,
   Plus,
   Check,
   Share2,
@@ -13,9 +12,6 @@ import {
   Lock,
   Flag,
   ThumbsUp,
-  Volume2,
-  Maximize,
-  Minimize2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -28,7 +24,7 @@ import { ReportModal } from "@/components/report-modal"
 import { ShareSheet } from "@/components/share-sheet"
 import { Footer } from "@/components/footer"
 import { HlsVideoPlayer } from "@/components/hls-video-player-lazy"
-import { VideoQualityMenu } from "@/components/video-quality-menu"
+import { VideoPlayerChrome } from "@/components/video-player-chrome"
 import type { HlsQualityControl } from "@/lib/hls-quality"
 import { useAuth } from "@/contexts/auth-context"
 import { genreLabel, fetchMovieGenres } from "@/lib/api/categories"
@@ -226,6 +222,16 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
     }
   }, [])
 
+  const seekTo = useCallback(
+    (seconds: number) => {
+      const el = videoRef.current
+      if (!el || !duration) return
+      el.currentTime = Math.max(0, Math.min(duration, seconds))
+      setCurrentTime(el.currentTime)
+    },
+    [duration],
+  )
+
   const handleWatchNow = () => {
     if (!isAuthenticated) {
       setIsAuthModalOpen(true)
@@ -268,8 +274,6 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
       </main>
     )
   }
-
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20">
@@ -372,62 +376,23 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
                   </div>
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 px-3 pb-3 bg-gradient-to-t from-black/70 to-transparent pointer-events-auto">
-                  <div
-                    className="w-full h-1 bg-white/30 rounded-full mb-2 cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation()
+                  <VideoPlayerChrome
+                    currentTime={currentTime}
+                    duration={duration}
+                    playing={playerPlaying}
+                    muted={isMuted}
+                    qualityControl={qualityControl}
+                    isFullscreen={isImmersive}
+                    onTogglePlay={togglePlay}
+                    onToggleMute={() => {
                       const el = videoRef.current
-                      if (!el || !duration) return
-                      const rect = e.currentTarget.getBoundingClientRect()
-                      el.currentTime = ((e.clientX - rect.left) / rect.width) * duration
+                      if (!el) return
+                      el.muted = !el.muted
+                      setIsMuted(el.muted)
                     }}
-                  >
-                    <div className="h-full bg-primary rounded-full" style={{ width: `${progress}%` }} />
-                  </div>
-                  <div className="flex items-center justify-between text-white text-xs">
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          togglePlay()
-                        }}
-                      >
-                        {playerPlaying ? (
-                          <Pause className="w-5 h-5" />
-                        ) : (
-                          <Play className="w-5 h-5 fill-white" />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          const el = videoRef.current
-                          if (!el) return
-                          el.muted = !el.muted
-                          setIsMuted(el.muted)
-                        }}
-                      >
-                        <Volume2 className="w-5 h-5" />
-                      </button>
-                      <VideoQualityMenu control={qualityControl} variant="compact" />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleImmersive()
-                      }}
-                      aria-label={isImmersive ? "Exit fullscreen" : "Fullscreen"}
-                    >
-                      {isImmersive ? (
-                        <Minimize2 className="w-5 h-5" />
-                      ) : (
-                        <Maximize className="w-5 h-5" />
-                      )}
-                    </button>
-                  </div>
+                    onSeek={seekTo}
+                    onToggleFullscreen={toggleImmersive}
+                  />
                 </div>
               </div>
             </>

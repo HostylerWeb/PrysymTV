@@ -5,6 +5,7 @@ import {
   DEFAULT_ADS_SETTINGS,
   DEFAULT_ANALYTICS_SETTINGS,
   DEFAULT_ECONOMY_SETTINGS,
+  DEFAULT_CONTENT_SERVICES_SETTINGS,
   DEFAULT_MOVIE_GENRES_SETTINGS,
   DEFAULT_PODCAST_CATEGORIES_SETTINGS,
   DEFAULT_PROGRAMS_SETTINGS,
@@ -14,6 +15,7 @@ import {
   AdsSettings,
   AnalyticsSettings,
   CategoryConfigEntry,
+  ContentServicesSettings,
   EconomySettings,
   PLATFORM_SETTING_KEYS,
   ProgramConfigEntry,
@@ -183,6 +185,22 @@ export class PlatformSettingsService {
     adminId?: string,
   ): Promise<CategoryConfigEntry[]> {
     return this.setArray(PLATFORM_SETTING_KEYS.movieGenres, genres, adminId);
+  }
+
+  async getContentServices(): Promise<ContentServicesSettings> {
+    return this.getObject(
+      PLATFORM_SETTING_KEYS.contentServices,
+      DEFAULT_CONTENT_SERVICES_SETTINGS,
+    );
+  }
+
+  async setContentServices(
+    partial: Partial<ContentServicesSettings>,
+    adminId?: string,
+  ): Promise<ContentServicesSettings> {
+    const current = await this.getContentServices();
+    const next: ContentServicesSettings = { ...current, ...partial };
+    return this.setObject(PLATFORM_SETTING_KEYS.contentServices, next, adminId);
   }
 
   async getMinPayoutUsd(): Promise<number> {

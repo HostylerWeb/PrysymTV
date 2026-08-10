@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { VideosModule } from '../videos/videos.module';
+import { ContentServiceGuard } from '../common/guards/content-service.guard';
 import { VerticalsController } from './verticals.controller';
 import { VerticalsService } from './verticals.service';
 
 @Module({
   imports: [PrismaModule, VideosModule],
   controllers: [VerticalsController],
-  providers: [VerticalsService],
+  providers: [VerticalsService, ContentServiceGuard],
   exports: [VerticalsService],
 })
 export class VerticalsModule {}

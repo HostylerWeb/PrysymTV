@@ -8,12 +8,14 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { WebPushRegistrar } from '@/components/web-push-registrar'
 import { Toaster } from '@/components/ui/sonner'
 import { QueryProvider } from '@/providers/query-provider'
+import { fetchPublicConfigServer } from '@/lib/api/server-config'
 import './globals.css'
 
 const geistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 export const metadata: Metadata = {
+  applicationName: 'Prysym TV',
   title: 'Prysym TV - Movies, Live & Videos',
   description: 'Your ultimate streaming destination for movies, live streams, and videos',
   openGraph: {
@@ -37,15 +39,17 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const initialPublicConfig = await fetchPublicConfigServer()
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`} suppressHydrationWarning>
-        <QueryProvider>
+        <QueryProvider initialPublicConfig={initialPublicConfig}>
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="prysym-theme">
             <OAuthConfigProvider>
               <AuthProvider>

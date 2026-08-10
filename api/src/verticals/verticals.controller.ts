@@ -13,6 +13,8 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RequireContentService } from '../common/decorators/require-content-service.decorator';
+import { ContentServiceGuard } from '../common/guards/content-service.guard';
 import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUserPayload } from '../common/types/auth-user.payload';
@@ -28,6 +30,8 @@ export class VerticalsController {
   constructor(private readonly verticals: VerticalsService) {}
 
   @Get()
+  @UseGuards(ContentServiceGuard)
+  @RequireContentService('verticals')
   list() {
     return this.verticals.listSeries();
   }
@@ -137,7 +141,8 @@ export class VerticalsController {
   }
 
   @Get(':slug/episodes/:episodeNumber')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard, ContentServiceGuard)
+  @RequireContentService('verticals')
   episode(
     @Param('slug') slug: string,
     @Param('episodeNumber', ParseIntPipe) episodeNumber: number,
@@ -147,6 +152,8 @@ export class VerticalsController {
   }
 
   @Get(':slug')
+  @UseGuards(ContentServiceGuard)
+  @RequireContentService('verticals')
   series(@Param('slug') slug: string) {
     return this.verticals.getSeries(slug);
   }

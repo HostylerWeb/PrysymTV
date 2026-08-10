@@ -21,11 +21,11 @@ import { followUser, unfollowUser } from '@/lib/api/users';
 import { toggleVideoLike, toggleVideoSave } from '@/lib/api/videos';
 import { colors, withAlpha } from '@/theme/tokens';
 import { formatViewCount } from '@/utils/format-media';
-import { bumpLikeCount } from '@/utils/engagement-count';
+import { withContentServiceGate } from '@/components/layout/ContentServiceGate';
 
 const { height } = Dimensions.get('window');
 
-export default function ShortDetailScreen() {
+function ShortDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -196,6 +196,8 @@ export default function ShortDetailScreen() {
     </>
   );
 }
+
+export default withContentServiceGate('shorts', ShortDetailScreen);
 
 function Action({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress?: () => void }) {
   return (

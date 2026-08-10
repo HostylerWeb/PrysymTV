@@ -21,6 +21,7 @@ import { radius, typography, withAlpha } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
+import { withContentServiceGate } from '@/components/layout/ContentServiceGate';
 import { formatDuration } from '@/utils/format-media';
 
 const FALLBACK_PODCAST_FILTER_CATEGORIES = [
@@ -66,7 +67,7 @@ function ShowRail({
   );
 }
 
-export default function PodcastsScreen() {
+function PodcastsScreen() {
   const styles = useThemedStyles(createPodcastStyles);
   const { colors } = useTheme();
   const router = useRouter();
@@ -272,3 +273,5 @@ function createPodcastStyles(colors: ThemeColors) {
     playIcon: { padding: 2 },
   });
 }
+
+export default withContentServiceGate('podcasts', PodcastsScreen);

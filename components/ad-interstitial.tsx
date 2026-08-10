@@ -10,6 +10,7 @@ import {
   type ServedAd,
 } from "@/lib/api/ads"
 import { AdMediaDisplay } from "@/components/ad-media-display"
+import { AdSkipButton, AdSkipCountdown } from "@/components/ad-skip-button"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
 import { useShouldShowAds } from "@/lib/hooks/use-should-show-ads"
 import { useAuth } from "@/contexts/auth-context"
@@ -133,17 +134,11 @@ export function AdInterstitial({
           Sponsored · {ad.title}
         </a>
         {mediaReady && countdown <= 0 ? (
-          <button
-            type="button"
-            onClick={close}
-            className="text-sm font-bold text-white bg-white/20 px-4 py-1.5 rounded-full"
-          >
-            Close
-          </button>
+          <AdSkipButton onClick={close}>Close</AdSkipButton>
         ) : mediaReady ? (
-          <span className="text-sm text-white/70">Close in {countdown}s</span>
+          <AdSkipCountdown>Close in {countdown}s</AdSkipCountdown>
         ) : (
-          <span className="text-sm text-white/50">Loading…</span>
+          <AdSkipCountdown className="text-white/80">Loading…</AdSkipCountdown>
         )}
       </div>
       <AdMediaDisplay

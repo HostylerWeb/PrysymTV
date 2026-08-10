@@ -142,6 +142,25 @@ export function HlsVideoPlayer({
       .sort((a, b) => b.height - a.height)
   }, [])
 
+  const qualityControlRef = useRef<HlsQualityControl | null>(null)
+
+  const applyQualityLevel = useCallback(
+    (levelIndex: number) => {
+      const instance = hlsRef.current
+      const control = qualityControlRef.current
+      if (!instance || !control) return
+      instance.currentLevel = levelIndex
+      const nextControl: HlsQualityControl = {
+        levels: control.levels,
+        currentLevel: levelIndex,
+        setLevel: control.setLevel,
+      }
+      qualityControlRef.current = nextControl
+      publishQualityControl(nextControl)
+    },
+    [publishQualityControl],
+  )
+
   const syncQualityControl = useCallback(
     (hls: Hls) => {
       let levels = buildLevels(hls)
@@ -151,23 +170,21 @@ export function HlsVideoPlayer({
         if (height > 0) {
           levels = [{ index: 0, height, label: labelForHeight(height) }]
         } else {
+          qualityControlRef.current = null
           publishQualityControl(null)
           return
         }
       }
 
-      publishQualityControl({
+      const control: HlsQualityControl = {
         levels,
         currentLevel: hls.currentLevel,
-        setLevel: (levelIndex: number) => {
-          const instance = hlsRef.current
-          if (!instance) return
-          instance.currentLevel = levelIndex
-          syncQualityControl(instance)
-        },
-      })
+        setLevel: applyQualityLevel,
+      }
+      qualityControlRef.current = control
+      publishQualityControl(control)
     },
-    [buildLevels, publishQualityControl, videoRef],
+    [buildLevels, publishQualityControl, applyQualityLevel, videoRef],
   )
 
   useEffect(() => {
