@@ -8,17 +8,21 @@ import { colors, radius, spacing, withAlpha } from '@/theme/tokens';
 import { commonStyles } from '@/theme/styles';
 import { formatDuration } from '@/utils/format-media';
 import { continueWatchingHref } from '@/lib/continue-watching-nav';
+import { isContinueWatchingItemEnabled } from '@/lib/content-services';
+import { useContentServices } from '@/hooks/api/useContentServices';
 import type { ContinueWatchingItem } from '@/types/api';
 
 export function ContinueWatchingRow({ items }: { items: ContinueWatchingItem[] }) {
   const router = useRouter();
-  if (!items.length) return null;
+  const { services } = useContentServices();
+  const visibleItems = items.filter((item) => isContinueWatchingItemEnabled(services, item));
+  if (!visibleItems.length) return null;
 
   return (
     <View style={[styles.wrap, commonStyles.sectionDivider]}>
       <SectionHeader title="Continue watching" />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {items.map((item) => (
+        {visibleItems.map((item) => (
           <Pressable
             key={item.contentId}
             style={styles.card}

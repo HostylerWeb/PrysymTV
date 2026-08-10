@@ -36,6 +36,8 @@ import {
 } from "@/lib/api/users"
 import { fetchHistory } from "@/lib/api/history"
 import { filterContinueWatchingHistory } from "@/lib/continue-watching"
+import { isLikedItemEnabled, isSavedItemEnabled } from "@/lib/content-services"
+import { useContentServices } from "@/lib/hooks/use-content-services"
 import { createCoinCheckout, fulfillCheckout } from "@/lib/api/billing"
 import { ApiError } from "@/lib/api-client"
 import type {
@@ -105,6 +107,7 @@ function ProfilePageContent() {
       : undefined
 
   const { user, isAuthenticated, isLoading, logout, refreshUser } = useAuth()
+  const { services } = useContentServices()
   const needsProfileBanner = useNeedsProfileCompletion()
   const [activeTab, setActiveTab] = useState("content")
   const [showSettings, setShowSettings] = useState(false)
@@ -220,7 +223,7 @@ function ProfilePageContent() {
         if (cancelled) return
         setSavedItems(savedRes.items)
         setLikedItems(likedRes.items)
-        setWatchHistory(filterContinueWatchingHistory(historyRes.items))
+        setWatchHistory(filterContinueWatchingHistory(historyRes.items, services))
         setMyPlaylists(playlistsRes.items)
       } catch {
         if (!cancelled) {
@@ -238,7 +241,7 @@ function ProfilePageContent() {
     return () => {
       cancelled = true
     }
-  }, [isAuthenticated, isLoading, user?.id])
+  }, [isAuthenticated, isLoading, user?.id, services])
 
   useEffect(() => {
     const checkout = searchParams.get("checkout")
@@ -673,6 +676,7 @@ function ProfilePageContent() {
         {activeTab === "saved" && savedItems.length > 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
             {savedItems
+              .filter((item) => isSavedItemEnabled(services, item))
               .map((item) => mapSavedItemCard(item))
               .filter((card): card is NonNullable<typeof card> => card !== null)
               .map((card) => (
@@ -701,6 +705,7 @@ function ProfilePageContent() {
         {activeTab === "liked" && likedItems.length > 0 ? (
           <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 md:gap-3">
             {likedItems
+              .filter((item) => isLikedItemEnabled(services, item))
               .map((item) => mapLikedItemCard(item))
               .filter((card): card is NonNullable<typeof card> => card !== null)
               .map((card) => (

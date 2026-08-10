@@ -1,4 +1,9 @@
 import type { ContinueWatchingFeedItem, HistoryItemRecord } from "@/lib/api/types";
+import {
+  type ContentServicesSettings,
+  isContinueWatchingItemEnabled,
+  isHistoryItemEnabled,
+} from "@/lib/content-services";
 
 const LONG_VIDEO_TYPES = new Set(["video", "movie", "series_episode"]);
 
@@ -16,21 +21,27 @@ export function isContinueWatchingHistoryItem(item: HistoryItemRecord): boolean 
 
 export function filterContinueWatchingHistory(
   items: HistoryItemRecord[],
+  services?: ContentServicesSettings | null,
 ): HistoryItemRecord[] {
-  return items.filter(isContinueWatchingHistoryItem);
+  return items
+    .filter(isContinueWatchingHistoryItem)
+    .filter((item) => !services || isHistoryItemEnabled(services, item));
 }
 
 export function filterContinueWatchingFeed(
   items: ContinueWatchingFeedItem[],
+  services?: ContentServicesSettings | null,
 ): ContinueWatchingFeedItem[] {
-  return items.filter((item) => {
-    if (item.contentType === "podcast_episode") return false;
-    if (item.contentType === "vertical_episode") return true;
-    if (item.contentType === "video") {
-      return isLongFormVideoType(item.videoType);
-    }
-    return false;
-  });
+  return items
+    .filter((item) => {
+      if (item.contentType === "podcast_episode") return false;
+      if (item.contentType === "vertical_episode") return true;
+      if (item.contentType === "video") {
+        return isLongFormVideoType(item.videoType);
+      }
+      return false;
+    })
+    .filter((item) => !services || isContinueWatchingItemEnabled(services, item));
 }
 
 export function continueWatchingHref(item: ContinueWatchingFeedItem): string {

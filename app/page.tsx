@@ -16,6 +16,8 @@ import { HomeTrendingRail } from "@/components/home-trending-rail"
 import { HomeFeedSkeleton, HomeDualSpotlightSkeleton } from "@/components/content-skeletons"
 import { FeedErrorBanner } from "@/components/feed-error-banner"
 import { usePublicAdsConfig } from "@/lib/hooks/use-public-ads-config"
+import { useContentServices } from "@/lib/hooks/use-content-services"
+import { filterVideosByService } from "@/lib/content-services"
 import { fetchFeedHomeResult } from "@/lib/api/feed"
 import { fetchShortsFeed } from "@/lib/api/videos-feed"
 import { fetchPodcastEpisodesFeed } from "@/lib/api/podcasts"
@@ -25,6 +27,7 @@ import { useLiveFeedUpdates } from "@/lib/hooks/use-live-feed-updates"
 
 export default function Home() {
   const { platformCreatorId } = usePublicAdsConfig()
+  const { isEnabled, services } = useContentServices()
   const [activeTab, setActiveTab] = useState("none")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [homeShorts, setHomeShorts] = useState<
@@ -96,31 +99,33 @@ export default function Home() {
         }
       const slides: HomeFeaturedMovie[] = []
       const seenSlideIds = new Set<string>()
-      if (feed.featuredMovie && feed.heroMovieReason) {
-        slides.push({
-          id: feed.featuredMovie.id,
-          title: feed.featuredMovie.title,
-          poster: moviePosterUrl(feed.featuredMovie),
-          genre: feed.featuredMovie.category ?? "Movie",
-          year: String(feed.featuredMovie.releaseYear ?? new Date().getFullYear()),
-          channel: feed.featuredMovie.channel,
-          reason: feed.heroMovieReason,
-        })
-        seenSlideIds.add(feed.featuredMovie.id)
-      }
-      for (const m of feed.movies) {
-        if (slides.length >= 4) break
-        if (seenSlideIds.has(m.id)) continue
-        seenSlideIds.add(m.id)
-        slides.push({
-          id: m.id,
-          title: m.title,
-          poster: moviePosterUrl(m),
-          genre: m.category ?? "Movie",
-          year: String(m.releaseYear ?? new Date().getFullYear()),
-          channel: m.channel,
-          reason: "trending",
-        })
+      if (isEnabled("movies")) {
+        if (feed.featuredMovie && feed.heroMovieReason) {
+          slides.push({
+            id: feed.featuredMovie.id,
+            title: feed.featuredMovie.title,
+            poster: moviePosterUrl(feed.featuredMovie),
+            genre: feed.featuredMovie.category ?? "Movie",
+            year: String(feed.featuredMovie.releaseYear ?? new Date().getFullYear()),
+            channel: feed.featuredMovie.channel,
+            reason: feed.heroMovieReason,
+          })
+          seenSlideIds.add(feed.featuredMovie.id)
+        }
+        for (const m of feed.movies) {
+          if (slides.length >= 4) break
+          if (seenSlideIds.has(m.id)) continue
+          seenSlideIds.add(m.id)
+          slides.push({
+            id: m.id,
+            title: m.title,
+            poster: moviePosterUrl(m),
+            genre: m.category ?? "Movie",
+            year: String(m.releaseYear ?? new Date().getFullYear()),
+            channel: m.channel,
+            reason: "trending",
+          })
+        }
       }
       setHeroSlides(slides)
       setLiveStreams(
@@ -140,7 +145,7 @@ export default function Home() {
         })),
       )
       setTrendingVideos(
-        feed.trending.map((v) => ({
+        filterVideosByService(feed.trending, services).map((v) => ({
           id: v.id,
           title: v.title,
           thumbnail: v.thumbnailUrl ?? "",
@@ -158,8 +163,8 @@ export default function Home() {
         rating: m.likesCount ?? 0,
         genre: m.category ?? "Movie",
       })
-      setTopMovies(feed.movies.map(mapMovie))
-      setNewReleases(feed.newReleases.map(mapMovie))
+      setTopMovies(isEnabled("movies") ? feed.movies.map(mapMovie) : [])
+      setNewReleases(isEnabled("movies") ? feed.newReleases.map(mapMovie) : [])
     })
       .finally(() => {
         if (!cancelled) setFeedReady(true)
@@ -167,48 +172,78 @@ export default function Home() {
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [feedReloadKey])
+  }, [feedReloadKey, isEnabled, services])
 
   useEffect(() => {
-    void Promise.all([
-      fetchShortsFeed().then((res) => {
-        setHomeShorts(
-          res.items.slice(0, 10).map((s) => ({
-            id: s.id,
-            title: s.title,
-            thumbnail: videoThumbnail(s.thumbnailUrl),
-            channel: s.channel,
-          })),
-        )
-      }),
-      fetchPodcastEpisodesFeed(1, 10).then((res) => {
-        setHomePodcasts(
-          res.items.map((ep) => ({
-            id: ep.id,
-            title: ep.title,
-            podcast: ep.podcast,
-            cover: ep.cover,
-            duration: ep.duration,
-          })),
-        )
-      }),
-      fetchVerticalSeriesList().then((res) => {
-        setHomeVerticals(
-          res.items.slice(0, 10).map((s) => ({
-            slug: s.slug,
-            title: s.title,
-            posterUrl: s.posterUrl,
-            genre: s.genre ?? undefined,
-          })),
-        )
-      }),
-    ]).finally(() => setExtrasReady(true))
-  }, [])
+    const tasks: Promise<void>[] = []
 
-  const top10Items = trendingVideos.slice(0, 10)
+    if (isEnabled("shorts")) {
+      tasks.push(
+        fetchShortsFeed().then((res) => {
+          setHomeShorts(
+            res.items.slice(0, 10).map((s) => ({
+              id: s.id,
+              title: s.title,
+              thumbnail: videoThumbnail(s.thumbnailUrl),
+              channel: s.channel,
+            })),
+          )
+        }),
+      )
+    } else {
+      setHomeShorts([])
+    }
+
+    if (isEnabled("podcasts")) {
+      tasks.push(
+        fetchPodcastEpisodesFeed(1, 10).then((res) => {
+          setHomePodcasts(
+            res.items.map((ep) => ({
+              id: ep.id,
+              title: ep.title,
+              podcast: ep.podcast,
+              cover: ep.cover,
+              duration: ep.duration,
+            })),
+          )
+        }),
+      )
+    } else {
+      setHomePodcasts([])
+    }
+
+    if (isEnabled("verticals")) {
+      tasks.push(
+        fetchVerticalSeriesList().then((res) => {
+          setHomeVerticals(
+            res.items.slice(0, 10).map((s) => ({
+              slug: s.slug,
+              title: s.title,
+              posterUrl: s.posterUrl,
+              genre: s.genre ?? undefined,
+            })),
+          )
+        }),
+      )
+    } else {
+      setHomeVerticals([])
+    }
+
+    void Promise.all(tasks).finally(() => setExtrasReady(true))
+  }, [isEnabled, services])
+
+  const top10Items = isEnabled("videos") ? trendingVideos.slice(0, 10) : []
   const spotlightVideo =
-    trendingVideos.length > 10 ? trendingVideos[10] : (trendingVideos[0] ?? null)
+    isEnabled("videos") && trendingVideos.length > 10
+      ? trendingVideos[10]
+      : isEnabled("videos")
+        ? (trendingVideos[0] ?? null)
+        : null
+  const showDualSpotlight =
+    (isEnabled("shorts") && homeShorts.length > 0) ||
+    (isEnabled("podcasts") && homePodcasts.length > 0)
+  const showExtrasSection =
+    isEnabled("shorts") || isEnabled("podcasts")
 
   return (
     <main className="min-h-screen bg-background pb-24 md:pb-0 md:pl-20 overflow-x-hidden">
@@ -256,12 +291,14 @@ export default function Home() {
               </HomeSectionShell>
             )}
 
-            <HomeEditorialGrid
-              spotlight={spotlightVideo}
-              verticals={homeVerticals}
-            />
+            {(isEnabled("videos") || isEnabled("verticals")) && (
+              <HomeEditorialGrid
+                spotlight={isEnabled("videos") ? spotlightVideo : null}
+                verticals={isEnabled("verticals") ? homeVerticals : []}
+              />
+            )}
 
-            {(newReleases.length > 0 || topMovies.length > 0) && (
+            {isEnabled("movies") && (newReleases.length > 0 || topMovies.length > 0) && (
               <HomeSectionShell eyebrow="Cinema" title="Movies" href="/movies">
                 {newReleases.length > 0 && (
                   <div className="mb-4">
@@ -282,11 +319,14 @@ export default function Home() {
           </>
         )}
 
-        {!extrasReady ? (
+        {showExtrasSection && !extrasReady ? (
           <HomeDualSpotlightSkeleton />
-        ) : (
-          <HomeDualSpotlight shorts={homeShorts} podcasts={homePodcasts} />
-        )}
+        ) : showDualSpotlight ? (
+          <HomeDualSpotlight
+            shorts={isEnabled("shorts") ? homeShorts : []}
+            podcasts={isEnabled("podcasts") ? homePodcasts : []}
+          />
+        ) : null}
       </div>
 
       <Footer />

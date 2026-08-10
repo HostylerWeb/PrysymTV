@@ -5,6 +5,12 @@ import {
   mapFeedLiveStream,
   mapVideoCard,
 } from '@/lib/api/map-content';
+import { useContentServices } from '@/hooks/api/useContentServices';
+import {
+  filterVideosByService,
+  isContentServiceEnabled,
+  isContinueWatchingItemEnabled,
+} from '@/lib/content-services';
 import type { LiveStream, VideoCard } from '@/types/api';
 
 export type HomeFeedData = {
@@ -19,12 +25,16 @@ export type HomeFeedData = {
 };
 
 export function useHomeFeed() {
+  const { services } = useContentServices();
+
   return useQuery({
-    queryKey: ['feed', 'home'],
+    queryKey: ['feed', 'home', services],
     // Poll every 30s so newly-started live streams appear without manual refresh.
     refetchInterval: 30_000,
     queryFn: async (): Promise<HomeFeedData> => {
       const data = await fetchFeedHome();
+      const moviesEnabled = isContentServiceEnabled(services, 'movies');
+
       return {
         liveNow: data.liveNow.map(mapFeedLiveStream),
         featuredLive: data.featuredLive
@@ -34,12 +44,15 @@ export function useHomeFeed() {
               viewers: data.featuredLive.viewerCount,
             })
           : null,
-        continueWatching: data.continueWatching.map(mapContinueWatchingItem),
-        trending: data.trending.map(mapVideoCard),
-        newReleases: data.newReleases.map(mapVideoCard),
-        movies: data.movies.map(mapVideoCard),
-        featuredMovie: data.featuredMovie ? mapVideoCard(data.featuredMovie) : null,
-        heroMovieReason: data.heroMovieReason,
+        continueWatching: data.continueWatching
+          .map(mapContinueWatchingItem)
+          .filter((item) => isContinueWatchingItemEnabled(services, item)),
+        trending: filterVideosByService(data.trending.map(mapVideoCard), services),
+        newReleases: moviesEnabled ? data.newReleases.map(mapVideoCard) : [],
+        movies: moviesEnabled ? data.movies.map(mapVideoCard) : [],
+        featuredMovie:
+          moviesEnabled && data.featuredMovie ? mapVideoCard(data.featuredMovie) : null,
+        heroMovieReason: moviesEnabled ? data.heroMovieReason : null,
       };
     },
   });

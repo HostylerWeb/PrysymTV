@@ -12,6 +12,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+import { useContentServices } from "@/lib/hooks/use-content-services"
+import type { ContentServiceKey } from "@/lib/content-services"
 import { fetchMyVideos } from "@/lib/api/users"
 import type { VideoRecord } from "@/lib/api/types"
 import { fetchVideoDetail, updateMyVideo, deleteMyVideo } from "@/lib/api/videos"
@@ -28,11 +30,11 @@ import { formatDuration, formatViewCount, videoThumbnail } from "@/lib/format-me
 
 type ContentTab = "videos" | "shorts" | "verticals" | "podcasts"
 
-const CONTENT_TABS: Array<{ id: ContentTab; label: string }> = [
-  { id: "videos", label: "Videos" },
-  { id: "shorts", label: "Shorts" },
-  { id: "verticals", label: "Verticals" },
-  { id: "podcasts", label: "Podcasts" },
+const CONTENT_TABS: Array<{ id: ContentTab; label: string; service: ContentServiceKey }> = [
+  { id: "videos", label: "Videos", service: "videos" },
+  { id: "shorts", label: "Shorts", service: "shorts" },
+  { id: "verticals", label: "Verticals", service: "verticals" },
+  { id: "podcasts", label: "Podcasts", service: "podcasts" },
 ]
 
 function videoHref(video: VideoRecord) {
@@ -50,7 +52,9 @@ export function ProfileMyContent({
   onOpenVerticalUpload,
   onOpenPodcastUpload,
 }: ProfileMyContentProps) {
-  const [activeTab, setActiveTab] = useState<ContentTab>("videos")
+  const { isEnabled } = useContentServices()
+  const visibleTabs = CONTENT_TABS.filter((tab) => isEnabled(tab.service))
+  const [activeTab, setActiveTab] = useState<ContentTab>(visibleTabs[0]?.id ?? "videos")
   const [loading, setLoading] = useState(true)
   const [myVideos, setMyVideos] = useState<VideoRecord[]>([])
   const [mySeries, setMySeries] = useState<
@@ -72,6 +76,12 @@ export function ProfileMyContent({
 
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!visibleTabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab(visibleTabs[0]?.id ?? "videos")
+    }
+  }, [activeTab, visibleTabs])
   const [pendingDelete, setPendingDelete] = useState<VideoRecord | null>(null)
   const [pendingDeletePodcast, setPendingDeletePodcast] = useState<{
     type: "episode" | "show"
@@ -264,8 +274,11 @@ export function ProfileMyContent({
 
   return (
     <div className="space-y-4">
+      {visibleTabs.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Content uploads are currently unavailable.</p>
+      ) : null}
       <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
-        {CONTENT_TABS.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.id}
             type="button"

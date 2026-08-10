@@ -3,7 +3,8 @@
 import Link from "next/link"
 import { Play } from "lucide-react"
 import { historyProgressPercent, videoThumbnail } from "@/lib/format-media"
-import { continueWatchingHref, isContinueWatchingHistoryItem } from "@/lib/continue-watching"
+import { continueWatchingHref, filterContinueWatchingFeed, filterContinueWatchingHistory } from "@/lib/continue-watching"
+import { useContentServices } from "@/lib/hooks/use-content-services"
 import type { ContinueWatchingFeedItem, HistoryItemRecord } from "@/lib/api/types"
 import type { VerticalProgressEntry } from "@/lib/vertical-progress"
 
@@ -59,9 +60,12 @@ export function ContinueWatchingRow({
   historyItems,
   verticalItems = [],
 }: ContinueWatchingRowProps) {
-  const hasFeed = feedItems.length > 0
-  const eligibleHistory = historyItems.filter(isContinueWatchingHistoryItem)
-  const hasHistory = eligibleHistory.length > 0 || verticalItems.length > 0
+  const { services, isEnabled } = useContentServices()
+  const visibleFeed = filterContinueWatchingFeed(feedItems, services)
+  const hasFeed = visibleFeed.length > 0
+  const eligibleHistory = filterContinueWatchingHistory(historyItems, services)
+  const visibleVerticalItems = isEnabled("verticals") ? verticalItems : []
+  const hasHistory = eligibleHistory.length > 0 || visibleVerticalItems.length > 0
 
   if (!hasFeed && !hasHistory) return null
 
@@ -71,7 +75,7 @@ export function ContinueWatchingRow({
       <div className="min-w-0 w-full overflow-hidden">
         <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 overscroll-x-contain">
         {!hasFeed &&
-          verticalItems.map((v) => {
+          visibleVerticalItems.map((v) => {
             const pct =
               v.durationSeconds > 0
                 ? historyProgressPercent(v.progressSeconds, v.durationSeconds)
@@ -89,7 +93,7 @@ export function ContinueWatchingRow({
           })}
 
         {hasFeed
-          ? feedItems.map((item) => {
+          ? visibleFeed.map((item) => {
               const pct = historyProgressPercent(
                 item.progressSeconds,
                 item.durationSeconds,

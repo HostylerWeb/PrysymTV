@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Search, X, TrendingUp, Clock, ArrowUpRight, Loader2, Users, Radio, Film, Headphones } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -23,6 +23,8 @@ import {
   type SearchScope,
 } from "@/lib/search-scope"
 import { useDefaultSearchSuggestions } from "@/lib/hooks/use-default-search-suggestions"
+import { useContentServices } from "@/lib/hooks/use-content-services"
+import { isVideoTypeEnabled } from "@/lib/content-services"
 
 interface SearchModalProps {
   isOpen: boolean
@@ -32,14 +34,15 @@ interface SearchModalProps {
 }
 
 const quickCategories = [
-  { label: "Movies", color: "bg-blue-500/20 text-blue-400", type: "video" as const },
-  { label: "Live", color: "bg-red-500/20 text-red-400", type: "stream" as const },
-  { label: "Podcasts", color: "bg-purple-500/20 text-purple-400", type: "podcast" as const },
-  { label: "Creators", color: "bg-green-500/20 text-green-400", type: "creator" as const },
+  { label: "Movies", color: "bg-blue-500/20 text-blue-400", type: "video" as const, service: "movies" as const },
+  { label: "Live", color: "bg-red-500/20 text-red-400", type: "stream" as const, service: null },
+  { label: "Podcasts", color: "bg-purple-500/20 text-purple-400", type: "podcast" as const, service: "podcasts" as const },
+  { label: "Creators", color: "bg-green-500/20 text-green-400", type: "creator" as const, service: null },
 ]
 
 export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
   const router = useRouter()
+  const { isEnabled, services } = useContentServices()
   const scopeConfig = scope ? SEARCH_SCOPE_CONFIG[scope] : null
   const apiType = scopeConfig?.apiType
   const [searchQuery, setSearchQuery] = useState("")
@@ -145,13 +148,31 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
     inputRef.current?.focus()
   }
 
+  const visibleQuickCategories = useMemo(
+    () =>
+      quickCategories.filter(
+        (category) => !category.service || isEnabled(category.service),
+      ),
+    [isEnabled],
+  )
+
+  const filteredResults = useMemo(() => {
+    if (!results) return null
+    return {
+      ...results,
+      videos: results.videos.filter((v) => isVideoTypeEnabled(services, v.type)),
+      podcasts: isEnabled("podcasts") ? results.podcasts : [],
+      verticals: isEnabled("verticals") ? (results.verticals ?? []) : [],
+    }
+  }, [results, isEnabled, services])
+
   const hasResults =
-    results &&
-    (results.videos.length > 0 ||
-      results.creators.length > 0 ||
-      results.podcasts.length > 0 ||
-      results.streams.length > 0 ||
-      (results.verticals?.length ?? 0) > 0)
+    filteredResults &&
+    (filteredResults.videos.length > 0 ||
+      filteredResults.creators.length > 0 ||
+      filteredResults.podcasts.length > 0 ||
+      filteredResults.streams.length > 0 ||
+      (filteredResults.verticals?.length ?? 0) > 0)
 
   if (!isOpen) return null
 
@@ -206,7 +227,7 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
                     <div className="mb-6">
                       <h3 className="text-sm font-semibold text-foreground mb-3">Quick Categories</h3>
                       <div className="flex flex-wrap gap-2">
-                        {quickCategories.map((category) => (
+                        {visibleQuickCategories.map((category) => (
                           <button
                             key={category.label}
                             type="button"
@@ -327,25 +348,25 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
 
               {error && <p className="text-center text-sm text-destructive py-8">{error}</p>}
 
-              {results && !loading && (
+              {filteredResults && !loading && (
                 <div className="space-y-6">
                   {!hasResults && (
                     <p className="text-center text-muted-foreground py-12 text-sm">
-                      No results for &quot;{results.query}&quot;
+                      No results for &quot;{filteredResults.query}&quot;
                     </p>
                   )}
 
-                  {!scope && results.streams.length > 0 && (
+                  {!scope && filteredResults.streams.length > 0 && (
                     <section>
                       <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
                         <Radio className="w-4 h-4 text-red-400" /> Live
                       </h3>
                       <div className="space-y-1">
-                        {results.streams.map((s) => (
+                        {filteredResults.streams.map((s) => (
                           <button
                             key={s.id}
                             type="button"
-                            onClick={() => navigateTo(`/live/${s.id}`, results.query)}
+                            onClick={() => navigateTo(`/live/${s.id}`, filteredResults.query)}
                             className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-secondary/50 text-left"
                           >
                             <span className="text-xs font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded">
@@ -364,7 +385,7 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
                     </section>
                   )}
 
-                  {results.videos.length > 0 && (
+                  {filteredResults.videos.length > 0 && (
                     <section>
                       <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
                         <Film className="w-4 h-4 text-blue-400" />{" "}
@@ -375,11 +396,11 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
                             : scopeConfig?.resultsLabel ?? "Videos"}
                       </h3>
                       <div className="space-y-1">
-                        {results.videos.map((v) => (
+                        {filteredResults.videos.map((v) => (
                           <button
                             key={v.id}
                             type="button"
-                            onClick={() => navigateTo(hrefForSearchVideo(v), results.query)}
+                            onClick={() => navigateTo(hrefForSearchVideo(v), filteredResults.query)}
                             className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-secondary/50 text-left"
                           >
                             <img
@@ -399,17 +420,17 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
                     </section>
                   )}
 
-                  {!scope && results.creators.length > 0 && (
+                  {!scope && filteredResults.creators.length > 0 && (
                     <section>
                       <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
                         <Users className="w-4 h-4 text-green-400" /> Creators
                       </h3>
                       <div className="space-y-1">
-                        {results.creators.map((c) => (
+                        {filteredResults.creators.map((c) => (
                           <button
                             key={c.id}
                             type="button"
-                            onClick={() => navigateTo(`/creator/${c.username}`, results.query)}
+                            onClick={() => navigateTo(`/creator/${c.username}`, filteredResults.query)}
                             className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-secondary/50 text-left"
                           >
                             <img
@@ -429,17 +450,17 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
                     </section>
                   )}
 
-                  {results.podcasts.length > 0 && (
+                  {filteredResults.podcasts.length > 0 && (
                     <section>
                       <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
                         <Headphones className="w-4 h-4 text-purple-400" /> Podcasts
                       </h3>
                       <div className="space-y-1">
-                        {results.podcasts.map((p) => (
+                        {filteredResults.podcasts.map((p) => (
                           <button
                             key={p.id}
                             type="button"
-                            onClick={() => navigateTo(`/podcast/${p.id}`, results.query)}
+                            onClick={() => navigateTo(`/podcast/${p.id}`, filteredResults.query)}
                             className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-secondary/50 text-left"
                           >
                             <img
@@ -459,17 +480,17 @@ export function SearchModal({ isOpen, onClose, scope }: SearchModalProps) {
                     </section>
                   )}
 
-                  {(results.verticals?.length ?? 0) > 0 && (
+                  {(filteredResults.verticals?.length ?? 0) > 0 && (
                     <section>
                       <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
                         <Film className="w-4 h-4 text-primary" /> Verticals
                       </h3>
                       <div className="space-y-1">
-                        {results.verticals!.map((v) => (
+                        {filteredResults.verticals!.map((v) => (
                           <button
                             key={v.id}
                             type="button"
-                            onClick={() => navigateTo(`/verticals/${v.slug}`, results.query)}
+                            onClick={() => navigateTo(`/verticals/${v.slug}`, filteredResults.query)}
                             className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-secondary/50 text-left"
                           >
                             <img

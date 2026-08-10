@@ -1,4 +1,8 @@
 import type { HistoryItemRecord } from '@/types/api';
+import {
+  type ContentServicesSettings,
+  isHistoryItemEnabled,
+} from '@/lib/content-services';
 
 const LONG_VIDEO_TYPES = new Set(['video', 'movie', 'series_episode']);
 
@@ -13,6 +17,11 @@ export function isContinueWatchingHistoryItem(item: HistoryItemRecord): boolean 
   return false;
 }
 
-export function filterContinueWatchingHistory(items: HistoryItemRecord[]): HistoryItemRecord[] {
-  return items.filter(isContinueWatchingHistoryItem);
+export function filterContinueWatchingHistory(
+  items: HistoryItemRecord[],
+  services?: ContentServicesSettings | null,
+): HistoryItemRecord[] {
+  return items
+    .filter(isContinueWatchingHistoryItem)
+    .filter((item) => !services || isHistoryItemEnabled(services, item));
 }

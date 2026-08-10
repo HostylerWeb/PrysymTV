@@ -11,6 +11,8 @@ import {
 } from '@/lib/search-scope';
 import { useDefaultSearchSuggestions } from '@/hooks/api/useDefaultSearchSuggestions';
 import { useSearch, type SearchResultTab } from '@/hooks/api/useSearch';
+import { useContentServices } from '@/hooks/api/useContentServices';
+import type { ContentServiceKey } from '@/lib/content-services';
 import { clearRecentSearches, loadRecentSearches, saveRecentSearch } from '@/lib/search-recent';
 import { radius } from '@/theme/tokens';
 import type { ThemeColors } from '@/theme/tokens';
@@ -18,6 +20,14 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { useThemedStyles } from '@/theme/useThemedStyles';
 
 const TABS: SearchResultTab[] = ['All', 'Videos', 'Creators', 'Podcasts', 'Movies', 'Live', 'Shorts', 'Verticals'];
+
+const TAB_SERVICE: Partial<Record<SearchResultTab, ContentServiceKey>> = {
+  Videos: 'videos',
+  Movies: 'movies',
+  Shorts: 'shorts',
+  Verticals: 'verticals',
+  Podcasts: 'podcasts',
+};
 
 const SCOPE_TAB: Partial<Record<SearchScope, SearchResultTab>> = {
   short: 'Shorts',
@@ -36,6 +46,7 @@ export default function SearchScreen() {
   const scope = isSearchScope(scopeParam) ? scopeParam : undefined;
   const scopeConfig = scope ? SEARCH_SCOPE_CONFIG[scope] : null;
 
+  const { isEnabled } = useContentServices();
   const [q, setQ] = useState('');
   const [tab, setTab] = useState<SearchResultTab>(scope ? (SCOPE_TAB[scope] ?? 'All') : 'All');
   const [recent, setRecent] = useState<string[]>([]);
@@ -51,8 +62,17 @@ export default function SearchScreen() {
     if (scope === 'vertical') return ['Verticals'];
     if (scope === 'podcast') return ['Podcasts'];
     if (scope === 'movie') return ['Movies'];
-    return TABS;
-  }, [scope]);
+    return TABS.filter((tab) => {
+      const service = TAB_SERVICE[tab];
+      return !service || isEnabled(service);
+    });
+  }, [scope, isEnabled]);
+
+  useEffect(() => {
+    if (!visibleTabs.includes(tab)) {
+      setTab(visibleTabs[0] ?? 'All');
+    }
+  }, [tab, visibleTabs]);
 
   const { results, suggestions, isLoading, isError, refetch } = useSearch(q, tab, scope);
 

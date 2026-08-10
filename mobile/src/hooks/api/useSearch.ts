@@ -4,6 +4,8 @@ import { fetchSearch, fetchSearchSuggest, type SearchResponse } from '@/lib/api/
 import { mediaThumb } from '@/lib/api/map-content';
 import { formatViewCount } from '@/utils/format-media';
 import type { SearchScope } from '@/lib/search-scope';
+import { useContentServices } from '@/hooks/api/useContentServices';
+import { isVideoTypeEnabled, type ContentServicesSettings } from '@/lib/content-services';
 
 export type SearchResultTab =
   | 'All'
@@ -38,12 +40,19 @@ function hrefForVideo(id: string, type: string): string {
   return `/watch/${id}`;
 }
 
-function mapSearchResponse(res: SearchResponse, tab: SearchResultTab): SearchResult[] {
+function mapSearchResponse(
+  res: SearchResponse,
+  tab: SearchResultTab,
+  services: ContentServicesSettings,
+): SearchResult[] {
   const results: SearchResult[] = [];
+  const podcastsEnabled = services.podcasts;
+  const verticalsEnabled = services.verticals;
 
   const includeVideos = tab === 'All' || tab === 'Videos' || tab === 'Movies' || tab === 'Shorts';
   if (includeVideos) {
     for (const v of res.videos) {
+      if (!isVideoTypeEnabled(services, v.type)) continue;
       const videoTab: SearchResultTab =
         v.type === 'short' ? 'Shorts' : v.type === 'movie' ? 'Movies' : 'Videos';
       if (tab !== 'All' && tab !== videoTab) continue;
@@ -71,7 +80,7 @@ function mapSearchResponse(res: SearchResponse, tab: SearchResultTab): SearchRes
     }
   }
 
-  if (tab === 'All' || tab === 'Podcasts') {
+  if ((tab === 'All' || tab === 'Podcasts') && podcastsEnabled) {
     for (const p of res.podcasts) {
       results.push({
         type: 'Podcasts',
@@ -96,7 +105,7 @@ function mapSearchResponse(res: SearchResponse, tab: SearchResultTab): SearchRes
     }
   }
 
-  if (tab === 'All' || tab === 'Verticals') {
+  if ((tab === 'All' || tab === 'Verticals') && verticalsEnabled) {
     for (const v of res.verticals) {
       results.push({
         type: 'Verticals',
@@ -118,14 +127,15 @@ export function useSearch(
   scope?: SearchScope,
   enabled = true,
 ) {
+  const { services } = useContentServices();
   const trimmed = query.trim();
   const apiType = scope ? SCOPE_API_TYPE[scope] : undefined;
 
   const searchQuery = useQuery({
-    queryKey: ['search', trimmed, apiType, tab],
+    queryKey: ['search', trimmed, apiType, tab, services],
     queryFn: async () => {
       const res = await fetchSearch(trimmed, apiType);
-      return mapSearchResponse(res, tab);
+      return mapSearchResponse(res, tab, services);
     },
     enabled: enabled && trimmed.length > 0,
     staleTime: 15_000,

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AppHeader } from '@/components/layout/AppHeader';
@@ -7,7 +7,8 @@ import { HomeHero } from '@/components/home/HomeHero';
 import { HomeTrendingRail } from '@/components/home/HomeTrendingRail';
 import { HomeEditorialGrid } from '@/components/home/HomeEditorialGrid';
 import { HomeDualSpotlight } from '@/components/home/HomeDualSpotlight';
-import { CategoryTabs, type HomeCategory } from '@/components/home/CategoryTabs';
+import { CategoryTabs, getVisibleHomeCategories, type HomeCategory } from '@/components/home/CategoryTabs';
+import { useContentServices } from '@/hooks/api/useContentServices';
 import { ContentRow } from '@/components/feed/ContentRow';
 import { ContinueWatchingRow } from '@/components/feed/ContinueWatchingRow';
 import { LiveStreamCard } from '@/components/feed/LiveStreamCard';
@@ -32,16 +33,25 @@ import type { VideoCard } from '@/types/api';
 export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { isEnabled, services } = useContentServices();
   const { requireAuth } = useMockAuth();
   const [category, setCategory] = useState<HomeCategory>('all');
+  const visibleCategories = useMemo(() => getVisibleHomeCategories(services), [services]);
+
+  useEffect(() => {
+    if (!visibleCategories.some((item) => item.id === category)) {
+      setCategory('all');
+    }
+  }, [category, visibleCategories]);
+
   const { trigger, flowHost } = useCreateFlow();
   const [refreshing, setRefreshing] = useState(false);
 
   const homeQuery = useHomeFeed();
   useLiveFeedUpdates();
-  const verticalsQuery = useVerticalsList();
-  const podcastsQuery = usePodcastsCatalog(1, 12);
-  const shortsQuery = useShortsFeed(8);
+  const verticalsQuery = useVerticalsList(isEnabled('verticals'));
+  const podcastsQuery = usePodcastsCatalog(1, 12, isEnabled('podcasts'));
+  const shortsQuery = useShortsFeed(8, isEnabled('shorts'));
 
   const feed = homeQuery.data;
   const verticals = verticalsQuery.data ?? [];
@@ -49,7 +59,7 @@ export default function HomeScreen() {
   const shorts = flattenShortsPages(shortsQuery.data?.pages);
 
   const heroSlides = useMemo(() => {
-    if (!feed) return [];
+    if (!feed || !isEnabled('movies')) return [];
     const slides: Array<VideoCard & { reason: 'new_release' | 'trending' }> = [];
     if (feed.featuredMovie) {
       slides.push({
@@ -71,7 +81,7 @@ export default function HomeScreen() {
       }));
     }
     return slides.slice(0, 4);
-  }, [feed]);
+  }, [feed, isEnabled]);
 
   const featuredLive = feed?.featuredLive ?? feed?.liveNow[0] ?? null;
   const liveStreams = feed?.liveNow ?? [];
@@ -79,9 +89,11 @@ export default function HomeScreen() {
   const movies = feed?.movies ?? [];
 
   const showLive = category === 'all' || category === 'live';
-  const showMovies = category === 'all' || category === 'movies';
-  const showVideos = category === 'all' || category === 'videos' || category === 'trending';
-  const showSeries = category === 'all' || category === 'series';
+  const showMovies = isEnabled('movies') && (category === 'all' || category === 'movies');
+  const showVideos =
+    isEnabled('videos') &&
+    (category === 'all' || category === 'videos' || category === 'trending');
+  const showSeries = isEnabled('verticals') && (category === 'all' || category === 'series');
 
   const isLoading = homeQuery.isLoading && !feed;
   const onRefresh = async () => {
@@ -154,17 +166,23 @@ export default function HomeScreen() {
                 </Pressable>
               </View>
             </Pressable>
-            <CategoryTabs active={category} onChange={setCategory} />
+            <CategoryTabs active={category} onChange={setCategory} categories={visibleCategories} />
             <ContinueWatchingRow items={feed?.continueWatching ?? []} />
 
             {category === 'all' && (
               <>
-                {trendingVideos.length > 0 ? <HomeTrendingRail items={trendingVideos} /> : null}
-                {trendingVideos[0] && verticals[0] ? (
+                {isEnabled('videos') && trendingVideos.length > 0 ? (
+                  <HomeTrendingRail items={trendingVideos} />
+                ) : null}
+                {isEnabled('videos') && trendingVideos[0] && isEnabled('verticals') && verticals[0] ? (
                   <HomeEditorialGrid spotlight={trendingVideos[0]} verticals={verticals} />
                 ) : null}
-                {(shorts.length > 0 || podcastEpisodes.length > 0) && (
-                  <HomeDualSpotlight shorts={shorts} podcasts={podcastEpisodes} />
+                {((isEnabled('shorts') && shorts.length > 0) ||
+                  (isEnabled('podcasts') && podcastEpisodes.length > 0)) && (
+                  <HomeDualSpotlight
+                    shorts={isEnabled('shorts') ? shorts : []}
+                    podcasts={isEnabled('podcasts') ? podcastEpisodes : []}
+                  />
                 )}
               </>
             )}
@@ -194,7 +212,7 @@ export default function HomeScreen() {
               </ContentRow>
             )}
 
-            {category === 'all' && shorts.length > 0 && (
+            {category === 'all' && isEnabled('shorts') && shorts.length > 0 && (
               <ContentRow title="Shorts" actionLabel="View all" onAction={() => router.push('/(tabs)/shorts')}>
                 {shorts.slice(0, 5).map((v) => (
                   <Pressable
@@ -207,7 +225,7 @@ export default function HomeScreen() {
               </ContentRow>
             )}
 
-            {category === 'all' && podcastEpisodes.length > 0 && (
+            {category === 'all' && isEnabled('podcasts') && podcastEpisodes.length > 0 && (
               <ContentRow title="Podcasts" actionLabel="View all" onAction={() => router.push('/(tabs)/podcasts')}>
                 {podcastEpisodes.slice(0, 5).map((ep) => (
                   <Pressable key={ep.id} onPress={() => router.push(`/podcast/${ep.id}`)} style={styles.podCard}>
@@ -249,7 +267,7 @@ export default function HomeScreen() {
               </>
             )}
 
-            {category === 'all' && trendingVideos.length > 2 && (
+            {category === 'all' && isEnabled('videos') && trendingVideos.length > 2 && (
               <ContentRow title="Recommended">
                 {trendingVideos.slice(2, 6).map((v) => (
                   <View key={v.id} style={{ width: 200 }}>

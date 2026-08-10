@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight, Play, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { useContentServices } from "@/lib/hooks/use-content-services"
 
 export type HomeHeroMovieReason = "new_release" | "trending"
 
@@ -49,6 +50,10 @@ function HomeHeroSkeleton() {
 }
 
 function BrandHero() {
+  const { isEnabled } = useContentServices()
+  const showVideos = isEnabled("videos")
+  const showVerticals = isEnabled("verticals")
+
   return (
     <section className="relative w-full">
       <div className="max-w-7xl mx-auto px-4 md:px-8 pt-4 md:pt-6">
@@ -66,12 +71,16 @@ function BrandHero() {
               Stream movies, verticals, live creators, and more — all in one place built for community.
             </p>
             <div className="flex flex-wrap gap-3 mt-8">
-              <Link href="/videos">
-                <Button size="lg" className="rounded-full px-8">Explore videos</Button>
-              </Link>
-              <Link href="/verticals">
-                <Button size="lg" variant="outline" className="rounded-full px-8">Browse series</Button>
-              </Link>
+              {showVideos && (
+                <Link href="/videos">
+                  <Button size="lg" className="rounded-full px-8">Explore videos</Button>
+                </Link>
+              )}
+              {showVerticals && (
+                <Link href="/verticals">
+                  <Button size="lg" variant="outline" className="rounded-full px-8">Browse series</Button>
+                </Link>
+              )}
             </div>
           </div>
         </div>

@@ -4,6 +4,8 @@ import { mediaThumb } from '@/lib/api/map-content';
 import { fetchMyPlaylists, type ApiPlaylistSummary } from '@/lib/api/playlists';
 import { fetchMyLiked, fetchMySaved } from '@/lib/api/users';
 import { filterContinueWatchingHistory } from '@/lib/continue-watching';
+import { isLikedItemEnabled, isSavedItemEnabled } from '@/lib/content-services';
+import { useContentServices } from '@/hooks/api/useContentServices';
 import {
   mapHistoryToContinueWatching,
   mapLikedItemCard,
@@ -36,8 +38,10 @@ function mapPlaylist(p: ApiPlaylistSummary): ProfilePlaylistItem {
 }
 
 export function useProfileLibrary(enabled = true) {
+  const { services } = useContentServices();
+
   return useQuery({
-    queryKey: ['profile', 'library'],
+    queryKey: ['profile', 'library', services],
     enabled,
     queryFn: async (): Promise<ProfileLibraryData> => {
       const [savedRes, likedRes, historyRes, playlistsRes] = await Promise.all([
@@ -48,13 +52,15 @@ export function useProfileLibrary(enabled = true) {
       ]);
 
       return {
-        continueWatching: filterContinueWatchingHistory(historyRes.items)
+        continueWatching: filterContinueWatchingHistory(historyRes.items, services)
           .map(mapHistoryToContinueWatching)
           .filter((item): item is ContinueWatchingItem => item != null),
         saved: savedRes.items
+          .filter((item) => isSavedItemEnabled(services, item))
           .map(mapSavedItemCard)
           .filter((item): item is ProfileItemCard => item != null),
         liked: likedRes.items
+          .filter((item) => isLikedItemEnabled(services, item))
           .map(mapLikedItemCard)
           .filter((item): item is ProfileItemCard => item != null),
         playlists: playlistsRes.items.map(mapPlaylist),
