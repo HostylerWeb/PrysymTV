@@ -24,7 +24,8 @@ export function PrysymTabBar({ state, descriptors, navigation }: BottomTabBarPro
       <View style={styles.row}>
         {state.routes.map((route) => {
           const { options } = descriptors[route.key];
-          if (route.name === 'home') return null;
+          // home is not shown in the tab bar; href: null hides disabled content-service tabs.
+          if (route.name === 'home' || options.href === null) return null;
 
           const isFocused = state.routes[state.index]?.key === route.key;
           const label = options.title ?? route.name;
