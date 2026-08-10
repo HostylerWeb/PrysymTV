@@ -3,11 +3,30 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeProvider';
+import { useContentServices } from '@/hooks/api/useContentServices';
+import type { ContentServiceKey } from '@/lib/content-services';
 import { radius, shadows, spacing, typography, withAlpha } from '@/theme/tokens';
+
+const TAB_CONTENT_SERVICES: Partial<Record<string, ContentServiceKey>> = {
+  videos: 'videos',
+  movies: 'movies',
+  shorts: 'shorts',
+  verticals: 'verticals',
+  podcasts: 'podcasts',
+};
 
 export function PrysymTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { isEnabled, hasRemoteConfig } = useContentServices();
+
+  function isTabVisible(routeName: string): boolean {
+    if (routeName === 'home') return false;
+    const service = TAB_CONTENT_SERVICES[routeName];
+    if (!service) return true;
+    if (!hasRemoteConfig) return true;
+    return isEnabled(service);
+  }
 
   return (
     <View
@@ -23,9 +42,9 @@ export function PrysymTabBar({ state, descriptors, navigation }: BottomTabBarPro
     >
       <View style={styles.row}>
         {state.routes.map((route) => {
+          if (!isTabVisible(route.name)) return null;
+
           const { options } = descriptors[route.key];
-          // home is not shown in the tab bar; href: null hides disabled content-service tabs.
-          if (route.name === 'home' || options.href === null) return null;
 
           const isFocused = state.routes[state.index]?.key === route.key;
           const label = options.title ?? route.name;

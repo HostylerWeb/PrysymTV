@@ -14,7 +14,8 @@ export function useContentServices() {
   const { data, isLoading, isError } = useQuery({
     queryKey: PUBLIC_CONFIG_QUERY_KEY,
     queryFn: fetchPublicConfig,
-    staleTime: 5 * 60_000,
+    staleTime: 60_000,
+    refetchOnMount: true,
   });
 
   const services = useMemo(
