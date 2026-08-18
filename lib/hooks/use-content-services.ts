@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useCallback, useMemo } from "react"
 import {
   type ContentServiceKey,
   type ContentServicesSettings,
@@ -15,13 +15,17 @@ export function useContentServices() {
     () => resolveContentServices(data?.services),
     [data?.services],
   )
+  const isEnabled = useCallback(
+    (service: ContentServiceKey) => isContentServiceEnabled(services, service),
+    [services],
+  )
 
   return {
     services,
     isLoading,
     isError,
     hasRemoteConfig: data !== undefined,
-    isEnabled: (service: ContentServiceKey) => isContentServiceEnabled(services, service),
+    isEnabled,
   }
 }
 
