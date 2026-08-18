@@ -18,6 +18,9 @@ infra/vps/.deploy.env
 credentials.json
 mobile/google-services.json
 mobile/GoogleService-Info.plist
+tv-projector/google-services.json
+mobile/releases/
+tv-projector/releases/
 
 # Common ignores
 node_modules

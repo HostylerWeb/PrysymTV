@@ -67,13 +67,13 @@ Mobile registers via the **same** `POST /users/me/push-subscription` as web, wit
 ## Firebase setup (Android push)
 
 Project in use: **`new-prysymtv`**  
-Android package: **`com.prysymtv.app`**
+Android package: **`com.prysymtv.android`**
 
 ### 1. Firebase Console
 
 1. [Firebase Console](https://console.firebase.google.com/) → project **new-prysymtv**
-2. **Project settings** → **Your apps** → Android app with package `com.prysymtv.app`
-   - If missing: Add app → Android → package `com.prysymtv.app`
+2. **Project settings** → **Your apps** → Android app with package `com.prysymtv.android`
+   - If missing: Add app → Android → package `com.prysymtv.android`
 3. Download **`google-services.json`** → place at **`mobile/google-services.json`**
    - Template: `mobile/google-services.json.example`
    - **Do not commit** `google-services.json` (contains API keys; gitignored)

@@ -15,7 +15,7 @@ Android local APK flow: [`../docs/mobile/README.md`](../docs/mobile/README.md).
 |------|---------------|-----|
 | App code (UI, API, video) | ✅ Same codebase | ✅ Same — no rewrite |
 | Native project (`android/` / `ios/`) | ✅ `android/` after prebuild | ❌ Run `expo prebuild --platform ios` |
-| Bundle / package ID | `com.prysymtv.app` | ✅ `bundleIdentifier` in `app.json` |
+| Bundle / package ID | `com.prysymtv.android` (Android) / `com.prysymtv.app` (iOS) | ✅ in `app.json` |
 | Local build scripts | ✅ `build-android.sh`, npm scripts | ❌ No iOS build doc/scripts yet |
 | Firebase config file | ✅ `google-services.json` | ✅ `GoogleService-Info.plist` (local; gitignored) |
 | Push (lock-screen banners) | ✅ FCM | ❌ APNs key + Firebase iOS app |
@@ -43,7 +43,7 @@ After a signed debug/release build on device, these should work using production
 
 ### 1. `app.json` — add bundle identifier
 
-Android uses `com.prysymtv.app`. iOS must match:
+Android package is `com.prysymtv.android`. iOS bundle ID:
 
 ```json
 "ios": {

@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:272643408537:android:38c9387a05912b60882e08",
+        "mobilesdk_app_id": "1:272643408537:android:672fbaa451d9a65f882e08",
         "android_client_info": {
-          "package_name": "com.prysymtv.android"
+          "package_name": "com.prysymtv.tv"
         }
       },
       "oauth_client": [],

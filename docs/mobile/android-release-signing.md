@@ -33,7 +33,7 @@ keytool -list -v \
 
 Add **SHA-1** and **SHA-256** in:
 
-1. **Firebase Console** → Project settings → Your apps → Android (`com.prysymtv.app`) → **Add fingerprint**
+1. **Firebase Console** → Project settings → Your apps → Android (`com.prysymtv.android`) → **Add fingerprint**
 2. **Google Cloud Console** → APIs & Services → Credentials → Android OAuth client → add SHA-1
 
 Keep the **debug** SHA registered too if you still test debug builds with Google Sign-In.

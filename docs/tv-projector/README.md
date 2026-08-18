@@ -53,6 +53,25 @@ Install on a connected device/emulator:
 npm run install:apk:release
 ```
 
+## Release signing
+
+Production APKs use a local release keystore (never commit):
+
+| File | Purpose |
+|------|---------|
+| `android/app/prysymtv-tv-release.keystore` | Release signing key |
+| `android/keystore.properties` | Passwords + alias (see `keystore.properties.example`) |
+
+After `npm run prebuild:clean`, re-apply signing:
+
+```bash
+bash scripts/patch-android-release-signing.sh
+```
+
+Restore `keystore.properties` and `prysymtv-tv-release.keystore` if prebuild removed them.
+
+Package name: **`com.prysymtv.tv`**. If you add the app in Firebase or Google Cloud, register this package and the release SHA-1 from your keystore.
+
 ## Android TV emulator
 
 1. Open Android Studio → Device Manager → Create Virtual Device
@@ -65,7 +84,7 @@ npm run install:apk:release
 | Setting | Value |
 |---------|-------|
 | App name | PrysymTV |
-| Android package | `tv.prysym.app.tv` |
+| Android package | `com.prysymtv.tv` |
 | API URL | `https://srv1765056.hstgr.cloud/api/v1` (in `app.json` → `extra.apiUrl`) |
 
 Override API URL for local dev:

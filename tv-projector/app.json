@@ -14,7 +14,8 @@
       "backgroundColor": "#030303"
     },
     "android": {
-      "package": "tv.prysym.app.tv",
+      "package": "com.prysymtv.tv",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#030303",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

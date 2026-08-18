@@ -23,7 +23,7 @@
       }
     },
     "android": {
-      "package": "com.prysymtv.app",
+      "package": "com.prysymtv.android",
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "CAMERA",
@@ -85,7 +85,7 @@
       [
         "@react-native-google-signin/google-signin",
         {
-          "iosUrlScheme": "com.googleusercontent.apps.382595461943-faiamjd8k7enffig0j81qk37i9t7h43v"
+          "iosUrlScheme": "com.googleusercontent.apps.272643408537-6bvs6fn58t6q0ol6m16jbefbbkc6ulma"
         }
       ]
     ]

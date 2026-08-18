@@ -3,6 +3,8 @@ node_modules/
 dist/
 ios/
 android/
+android/keystore.properties
+android/app/prysymtv-tv-release.keystore
 npm-debug.*
 *.jks
 *.p8
