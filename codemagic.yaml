@@ -1,0 +1,134 @@
+# PrysymTV — Codemagic CI/CD (https://codemagic.io/apps)
+# App: HostylerWeb/PrysymTV | bundle: com.prysymtv.app
+#
+# Required in Codemagic UI (Environment variables):
+#   Group: prysym_mobile
+#     GOOGLE_SERVICES_JSON      — contents of mobile/google-services.json (secret)
+#     GOOGLE_SERVICE_INFO_PLIST — contents of mobile/GoogleService-Info.plist (secret)
+#
+# Required for signed IPA / TestFlight (Team integrations):
+#   App Store Connect API key — name must match integrations.app_store_connect below
+#
+# Optional: set APP_STORE_APP_ID (numeric) in prysym_mobile group for TestFlight build numbers
+
+workflows:
+  prysym-ios-check:
+    name: PrysymTV iOS — prebuild check (unsigned)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    working_directory: mobile
+    environment:
+      groups:
+        - prysym_mobile
+      vars:
+        XCODE_WORKSPACE: PrysymTV.xcworkspace
+        XCODE_SCHEME: PrysymTV
+        BUNDLE_ID: com.prysymtv.app
+      node: v22.13.1
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+      - name: Restore Firebase config (gitignored locally)
+        script: |
+          set -euo pipefail
+          if [ -z "${GOOGLE_SERVICES_JSON:-}" ] || [ -z "${GOOGLE_SERVICE_INFO_PLIST:-}" ]; then
+            echo "Missing GOOGLE_SERVICES_JSON or GOOGLE_SERVICE_INFO_PLIST in group prysym_mobile"
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICES_JSON" > google-services.json
+          printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" > GoogleService-Info.plist
+      - name: Generate iOS native project (Expo prebuild)
+        script: npx expo prebuild --platform ios --non-interactive
+      - name: Install CocoaPods
+        script: cd ios && pod install
+      - name: Build iOS (unsigned — validates compile)
+        script: |
+          xcodebuild \
+            -workspace "ios/$XCODE_WORKSPACE" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+    artifacts:
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      email:
+        recipients:
+          - alexdumpsteremail@gmail.com
+        notify:
+          success: true
+          failure: true
+
+  prysym-ios:
+    name: PrysymTV iOS — signed IPA
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    working_directory: mobile
+    integrations:
+      app_store_connect: codemagic
+    environment:
+      groups:
+        - prysym_mobile
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.prysymtv.app
+      vars:
+        XCODE_WORKSPACE: PrysymTV.xcworkspace
+        XCODE_SCHEME: PrysymTV
+        BUNDLE_ID: com.prysymtv.app
+        # App Store Connect → App → General → Apple ID (numeric). Add to prysym_mobile group.
+        APP_STORE_APP_ID: $APP_STORE_APP_ID
+      node: v22.13.1
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+      - name: Restore Firebase config (gitignored locally)
+        script: |
+          set -euo pipefail
+          if [ -z "${GOOGLE_SERVICES_JSON:-}" ] || [ -z "${GOOGLE_SERVICE_INFO_PLIST:-}" ]; then
+            echo "Missing GOOGLE_SERVICES_JSON or GOOGLE_SERVICE_INFO_PLIST in group prysym_mobile"
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICES_JSON" > google-services.json
+          printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" > GoogleService-Info.plist
+      - name: Generate iOS native project (Expo prebuild)
+        script: npx expo prebuild --platform ios --non-interactive
+      - name: Install CocoaPods
+        script: cd ios && pod install
+      - name: Set up code signing
+        script: xcode-project use-profiles --warn-only
+      - name: Increment build number
+        script: |
+          set -euo pipefail
+          cd ios
+          if [ -n "${APP_STORE_APP_ID:-}" ]; then
+            LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APP_ID" || echo 0)
+            agvtool new-version -all $(($LATEST + 1))
+          else
+            echo "APP_STORE_APP_ID not set — using Codemagic build number $BUILD_NUMBER"
+            agvtool new-version -all "$BUILD_NUMBER"
+          fi
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --workspace "$CM_BUILD_DIR/mobile/ios/$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+    publishing:
+      email:
+        recipients:
+          - alexdumpsteremail@gmail.com
+        notify:
+          success: true
+          failure: true
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
