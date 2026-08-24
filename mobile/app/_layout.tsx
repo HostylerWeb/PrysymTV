@@ -26,7 +26,8 @@ import { CompleteProfileBanner } from '@/components/auth/CompleteProfileBanner';
 import { ThemedStatusBar } from '@/components/layout/ThemedStatusBar';
 import { StoreCartProvider } from '@/context/StoreCartContext';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
-import { colors } from '@/theme/tokens';
+import { OtaUpdatePrompt } from '@/components/ota/OtaUpdatePrompt';
+import { useOtaUpdates } from '@/hooks/useOtaUpdates';
 
 // Module-level: registered before any notification can arrive, including pushes
 // that wake the JS thread while the app is in the foreground.
@@ -109,7 +110,7 @@ function RootStack() {
   );
 }
 
-export default function RootLayout() {
+function RootLayoutContent() {
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -118,6 +119,7 @@ export default function RootLayout() {
     Inter_800ExtraBold,
     Inter_900Black,
   });
+  const otaUpdate = useOtaUpdates();
 
   useEffect(() => {
     void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
@@ -141,6 +143,7 @@ export default function RootLayout() {
                 <ImmersivePlaybackProvider>
                   <PodcastPlayerProvider>
                     <StoreCartProvider>
+                      <OtaUpdatePrompt state={otaUpdate} />
                       <RootStack />
                     </StoreCartProvider>
                   </PodcastPlayerProvider>
@@ -152,4 +155,8 @@ export default function RootLayout() {
       </ThemeProvider>
     </GestureHandlerRootView>
   );
+}
+
+export default function RootLayout() {
+  return <RootLayoutContent />;
 }

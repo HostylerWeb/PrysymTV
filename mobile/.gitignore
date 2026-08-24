@@ -35,6 +35,12 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
+
+# OTA secrets (xprem)
+infra/ota/.env
+infra/ota/bootstrap.secrets.env
+mobile/certs/
 
 # typescript
 *.tsbuildinfo

@@ -13,6 +13,8 @@ __v0_jsx-dev-runtime.ts
 api/.env
 api/.env.*
 infra/vps/.deploy.env
+infra/ota/.env
+infra/ota/bootstrap.secrets.env
 *.pem
 *.key
 credentials.json
