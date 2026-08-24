@@ -276,6 +276,30 @@ else
 fi
 docker restart prysym-mediamtx 2>/dev/null || (cd /opt/prysym/stack && docker compose up -d mediamtx)
 
+log "OTA stack (xprem)..."
+OTA_DIR="$APP/infra/ota"
+OTA_ENV="$OTA_DIR/.env"
+if [[ -f "$OTA_DIR/docker-compose.yml" ]]; then
+  if [[ ! -f "$OTA_ENV" ]]; then
+    JWT="$(openssl rand -base64 32)"
+    DBKEY="$(openssl rand -base64 32)"
+    DBPASS="$(openssl rand -hex 16)"
+    ADMIN_PASS="PrysymOta$(openssl rand -hex 3)!"
+    cat > "$OTA_ENV" <<EOF
+XPREM_BASE_URL=${BASE_URL}
+XPREM_DB_PASSWORD=${DBPASS}
+XPREM_DB_KEYS_MASTER_KEY_B64=${DBKEY}
+XPREM_JWT_SECRET=${JWT}
+XPREM_ADMIN_EMAIL=admin@prysym.tv
+XPREM_ADMIN_PASSWORD=${ADMIN_PASS}
+EOF
+    chmod 600 "$OTA_ENV"
+    log "Created $OTA_ENV (save XPREM_ADMIN_PASSWORD for bootstrap-xprem.sh)"
+  fi
+  docker compose -f "$OTA_DIR/docker-compose.yml" --env-file "$OTA_ENV" pull
+  docker compose -f "$OTA_DIR/docker-compose.yml" --env-file "$OTA_ENV" up -d
+fi
+
 log "Updating nginx..."
 NGINX_SITE=/etc/nginx/sites-available/prysymtv
 sed -i "s/server_name .*/server_name ${HOST} _;/" "$NGINX_SITE"
@@ -290,6 +314,44 @@ if grep -A12 'location /api/' "$NGINX_SITE" | grep -q proxy_send_timeout; then
   sed -i '/location \/api\/ {/,/^[[:space:]]*}/ s/^[[:space:]]*proxy_send_timeout .*/    proxy_send_timeout 1200s;/' "$NGINX_SITE"
 else
   sed -i '/location \/api\/ {/,/^[[:space:]]*}/ s/\(proxy_read_timeout 1200s;\)/\1\n    proxy_send_timeout 1200s;/' "$NGINX_SITE"
+fi
+if [[ -f "$OTA_DIR/docker-compose.yml" ]] && ! grep -q 'location /ota/' "$NGINX_SITE"; then
+  awk '
+    /location \/api\/ \{/ && !inserted {
+      print "  location /ota/ {"
+      print "    proxy_pass http://127.0.0.1:3011/;"
+      print "    proxy_http_version 1.1;"
+      print "    proxy_set_header Host $host;"
+      print "    proxy_set_header X-Real-IP $remote_addr;"
+      print "    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+      print "    proxy_set_header X-Forwarded-Proto $scheme;"
+      print "    client_max_body_size 128m;"
+      print "  }"
+      print ""
+      print "  location /assets {"
+      print "    proxy_pass http://127.0.0.1:3011;"
+      print "    proxy_http_version 1.1;"
+      print "    proxy_set_header Host $host;"
+      print "    proxy_set_header X-Real-IP $remote_addr;"
+      print "    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+      print "    proxy_set_header X-Forwarded-Proto $scheme;"
+      print "    client_max_body_size 128m;"
+      print "  }"
+      print ""
+      print "  location ~ \"^/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/\" {"
+      print "    proxy_pass http://127.0.0.1:3011;"
+      print "    proxy_http_version 1.1;"
+      print "    proxy_set_header Host $host;"
+      print "    proxy_set_header X-Real-IP $remote_addr;"
+      print "    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+      print "    proxy_set_header X-Forwarded-Proto $scheme;"
+      print "    client_max_body_size 128m;"
+      print "  }"
+      print ""
+      inserted=1
+    }
+    { print }
+  ' "$NGINX_SITE" > "$NGINX_SITE.tmp" && mv "$NGINX_SITE.tmp" "$NGINX_SITE"
 fi
 nginx -t && systemctl reload nginx
 
