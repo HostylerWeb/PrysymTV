@@ -134,8 +134,8 @@ function RootLayoutContent() {
   if (!fontsLoaded) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
-      <ThemeProvider>
+    <ThemeProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <QueryProvider>
             <OAuthConfigProvider>
@@ -152,8 +152,8 @@ function RootLayoutContent() {
             </OAuthConfigProvider>
           </QueryProvider>
         </SafeAreaProvider>
-      </ThemeProvider>
-    </GestureHandlerRootView>
+      </GestureHandlerRootView>
+    </ThemeProvider>
   );
 }
 

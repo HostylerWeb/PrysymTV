@@ -1,3 +1,4 @@
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import type { ContentServiceKey } from '@/lib/content-services';
@@ -18,10 +19,24 @@ export function ContentServiceGate({ service, children }: ContentServiceGateProp
     if (!enabled) router.replace('/(tabs)/home');
   }, [enabled, hasRemoteConfig, router]);
 
-  if (!hasRemoteConfig) return null;
+  if (!hasRemoteConfig) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
   if (!enabled) return null;
   return <>{children}</>;
 }
+
+const styles = StyleSheet.create({
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
 
 export function withContentServiceGate<P extends object>(
   service: ContentServiceKey,

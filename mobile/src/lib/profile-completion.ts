@@ -38,9 +38,9 @@ export function profileCompletionMessage(missing: ProfileCompletionField[]): str
   }
   const labels = missing.map((field) => FIELD_LABELS[field]);
   if (labels.length === 1) {
-    return `Finish setting up your profile — add your ${labels[0]}.`;
+    return `Finish setting up your profile - add your ${labels[0]}.`;
   }
   const last = labels[labels.length - 1];
   const rest = labels.slice(0, -1).join(', ');
-  return `Finish setting up your profile — add your ${rest}, and ${last}.`;
+  return `Finish setting up your profile - add your ${rest}, and ${last}.`;
 }

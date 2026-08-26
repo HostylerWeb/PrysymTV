@@ -11,8 +11,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { useIsFocused } from '@react-navigation/native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommentsSheet } from '@/components/modals/CommentsSheet';
 import { ShareModal } from '@/components/modals/ShareModal';
@@ -47,7 +46,13 @@ function ShortsScreen() {
   const { start } = useLocalSearchParams<{ start?: string }>();
   const { requireAuth } = useMockAuth();
   const { trigger, flowHost } = useCreateFlow();
-  const isFocused = useIsFocused();
+  const [isFocused, setIsFocused] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      setIsFocused(true);
+      return () => setIsFocused(false);
+    }, []),
+  );
   const [feedHeight, setFeedHeight] = useState(0);
 
   const shortsQuery = useShortsFeed();
