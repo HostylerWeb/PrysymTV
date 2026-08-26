@@ -53,7 +53,7 @@ Then update `CORS_ORIGIN`, `FRONTEND_URL`, `API_PUBLIC_URL`, and MediaMTX `webrt
 3. Copy `/etc/prysym/api.env.template` → `/var/www/prysymtv/api/.env` and add R2/Stripe/SMTP.
 4. Never expose Postgres (5432) or Redis (6379) publicly — they bind to `127.0.0.1` only.
 
-See [security-checklist.md](../web/security-checklist.md for full production requirements.
+See [security-checklist.md](../web/security-checklist.md) for full production requirements.
 
 ## Push notifications (Firebase / FCM)
 
@@ -89,3 +89,63 @@ sshpass -p 'YOUR_ROOT_PASSWORD' ssh root@2.25.210.178 'bash /var/www/prysymtv/in
 ```
 
 Or copy `infra/vps/deploy.sh` to the server and run as root.
+
+## Mobile OTA (self-hosted xprem)
+
+Android JS/UI updates are delivered over-the-air via [xprem](https://github.com/mercuretechnologies/xprem) + `expo-updates` — **not** EAS Update.
+
+| URL | Purpose |
+|-----|---------|
+| https://srv1765056.hstgr.cloud/ota/hc | xprem health |
+| https://srv1765056.hstgr.cloud/ota/manifest | Update manifest (used by the app) |
+| https://srv1765056.hstgr.cloud/assets | Published bundle assets |
+
+xprem runs in Docker on `127.0.0.1:3011`. nginx proxies `/ota/`, `/assets`, and UUID asset paths to it (configured in `infra/vps/deploy.sh` and `provision.sh`).
+
+### VPS paths
+
+| Path | Contents |
+|------|----------|
+| `/var/www/prysymtv/infra/ota/.env` | xprem DB password, JWT secret, admin login — mode 600, **not in git** |
+| `/var/www/prysymtv/infra/ota/docker-compose.yml` | xprem + Postgres stack |
+| Docker containers `prysym-xprem`, `prysym-xprem-db` | OTA server |
+
+Full deploy (`infra/vps/deploy.sh`) pulls latest code, runs API/web build, **and** ensures the OTA stack is up.
+
+Deploy OTA stack only (from laptop):
+
+```bash
+# Password in infra/vps/.deploy-pass or PRYSYM_SSH_PASS
+bash scripts/deploy-ota-vps.sh
+```
+
+First deploy creates `infra/ota/.env` with generated secrets and prints `XPREM_ADMIN_PASSWORD`.
+
+### Bootstrap (laptop, once per xprem app)
+
+```bash
+XPREM_URL=https://srv1765056.hstgr.cloud/ota \
+XPREM_ADMIN_EMAIL=admin@prysym.tv \
+XPREM_ADMIN_PASSWORD='…' \
+bash scripts/bootstrap-xprem.sh
+```
+
+Creates PrysymTV app on xprem, `production` branch/channel, publish API key, and `mobile/certs/certificate.pem`. Secrets go to `infra/ota/bootstrap.secrets.env` (gitignored).
+
+### Publish updates
+
+Done from your **development machine**, not on the VPS. See [`mobile/README.md`](../mobile/README.md#ota-updates-self-hosted).
+
+```bash
+cd mobile
+git commit …   # eoas requires clean git tree
+npm run publish:ota
+```
+
+### OTA vs full deploy
+
+| Change | Action |
+|--------|--------|
+| Website / API / admin | `infra/vps/deploy.sh` on VPS |
+| Mobile JS/UI only | `npm run publish:ota` from laptop |
+| Mobile native (new module, permissions) | `npm run build:release:ota` + distribute new APK |

@@ -47,6 +47,8 @@ npm run build:apk:release
 
 Output: `android/app/build/outputs/apk/release/app-release.apk`
 
+Stamped copy: `releases/prysymtv-tv-release-YYYYMMDD.apk`
+
 Install on a connected device/emulator:
 
 ```bash
@@ -69,6 +71,52 @@ bash scripts/patch-android-release-signing.sh
 ```
 
 Restore `keystore.properties` and `prysymtv-tv-release.keystore` if prebuild removed them.
+
+Local credentials backup (passwords + SHA fingerprints): `credentials/android-release.local.txt` — **gitignored**.
+
+---
+
+## OTA updates (self-hosted)
+
+Same xprem server as the phone app, but a **separate OTA app** (`PrysymTV TV`) so TV and phone bundles do not mix.
+
+| | OTA publish | APK rebuild |
+|---|-------------|-------------|
+| **What changes** | React/TS UI, hooks, API client | Native modules, permissions, `app.json` plugins |
+| **User action** | On-screen **Restart now** / **Later** prompt | Install new APK |
+| **Command** | `npm run publish:ota` | `npm run build:release:ota` |
+
+### First-time setup
+
+```bash
+# From repo root (needs xprem admin login)
+XPREM_URL=https://srv1765056.hstgr.cloud/ota \
+XPREM_ADMIN_EMAIL=admin@prysym.tv \
+XPREM_ADMIN_PASSWORD='…' \
+bash scripts/bootstrap-xprem-tv.sh
+```
+
+Writes `infra/ota/bootstrap-tv.secrets.env` and `tv-projector/certs/certificate.pem` (gitignored).
+
+Build and install an OTA-enabled release APK:
+
+```bash
+cd tv-projector
+npm run build:release:ota
+adb install -r releases/prysymtv-tv-release-YYYYMMDD.apk
+```
+
+### Push a JS/UI update
+
+```bash
+cd tv-projector
+git commit …   # eoas requires clean git tree
+npm run publish:ota
+```
+
+Phone OTA docs: [`../mobile/README.md`](../mobile/README.md#ota-updates-self-hosted).
+
+---
 
 Package name: **`com.prysymtv.tv`**. If you add the app in Firebase or Google Cloud, register this package and the release SHA-1 from your keystore.
 

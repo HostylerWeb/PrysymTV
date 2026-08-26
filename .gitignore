@@ -15,6 +15,7 @@ api/.env.*
 infra/vps/.deploy.env
 infra/ota/.env
 infra/ota/bootstrap.secrets.env
+infra/ota/bootstrap-tv.secrets.env
 *.pem
 *.key
 credentials.json

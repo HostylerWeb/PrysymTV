@@ -28,12 +28,17 @@ Services on the VPS (systemd):
   prysym-web   — Next.js frontend (standalone build)
   nginx        — HTTPS reverse proxy
   Docker       — Postgres, Redis, MediaMTX (live streaming)
+  prysym-xprem — Mobile OTA server (port 3011, proxied at /ota/)
 
 Normal workflow:
   1. Develop and test locally
   2. Commit and push to GitHub (main)
   3. SSH into the VPS and run the deploy (see section 3)
   4. Verify health endpoints (see section 5)
+
+  Mobile app (separate from website deploy):
+  - JS/UI-only fixes  →  npm run publish:ota  (see section 9)
+  - Native APK change →  npm run build:release:ota  + install APK
 
 Pushing to GitHub alone does NOT update the live site. You must deploy on the VPS.
 
@@ -274,12 +279,93 @@ Database connection failed:
   Push code:     git push origin main
   Full deploy:   ssh root@2.25.210.178 'bash /var/www/prysymtv/infra/vps/deploy.sh'
   API health:    https://srv1765056.hstgr.cloud/api/v1/health
+  OTA health:    https://srv1765056.hstgr.cloud/ota/hc
   Admin panel:   https://srv1765056.hstgr.cloud/admin
   More docs:     docs/README.md
                  docs/vps/vps-production.md
+                 docs/mobile/README.md
                  docs/web/how-to-run.md
                  docs/web/security-checklist.md
 
+--------------------------------------------------------------------------------
+9. MOBILE APP — OTA UPDATES (self-hosted xprem)
+--------------------------------------------------------------------------------
+
+The Android app can receive JS/UI updates without reinstalling the APK.
+Uses expo-updates + xprem on the VPS (NOT EAS Update).
+
+HOW IT WORKS ON THE PHONE
+  1. App checks https://srv1765056.hstgr.cloud/ota/manifest on launch
+  2. New bundle downloads in background
+  3. User sees "Update available" → taps Restart now
+  4. App reloads with new JS (user stays signed in)
+
+WHEN TO USE OTA vs NEW APK
+  OTA (fast, no reinstall):
+    - React screens, components, hooks, styles
+    - API client / business logic in mobile/src/
+    - Bug fixes that are JS-only
+
+  NEW APK required:
+    - New npm native module (expo install …)
+    - Android permissions or app.json plugin changes
+    - New release keystore or package name change
+    - Bump app version track (runtimeVersion follows app.json version)
+
+--- FIRST-TIME OTA SETUP (once) ---
+
+1. OTA server on VPS (included in full deploy, or standalone):
+
+     bash scripts/deploy-ota-vps.sh
+
+   Health: curl -fsS https://srv1765056.hstgr.cloud/ota/hc
+
+   Admin password printed on first deploy (also in infra/ota/.env on VPS).
+
+2. Bootstrap xprem app from laptop:
+
+     XPREM_URL=https://srv1765056.hstgr.cloud/ota \
+     XPREM_ADMIN_EMAIL=admin@prysym.tv \
+     XPREM_ADMIN_PASSWORD='…' \
+     bash scripts/bootstrap-xprem.sh
+
+   Creates infra/ota/bootstrap.secrets.env (gitignored) and mobile/certs/certificate.pem
+
+3. Build OTA-enabled release APK and install on test devices:
+
+     cd mobile
+     npm run build:release:ota
+     adb install -r releases/prysymtv-android-release-YYYYMMDD.apk
+
+--- PUSH A JS/UI UPDATE (regular workflow) ---
+
+  cd mobile
+  git add … && git commit -m "…"     # eoas publish requires clean git tree
+  npm run publish:ota
+
+Users with an OTA-enabled APK get the update automatically.
+
+--- OTA SECRET FILES (gitignored, do not commit) ---
+
+  infra/ota/bootstrap.secrets.env   — app ID, publish token (laptop)
+  infra/ota/.env                    — xprem admin + DB secrets (VPS)
+  mobile/certs/certificate.pem      — code-signing cert from xprem
+
+--- OTA TROUBLESHOOTING ---
+
+  publish:ota fails "dirty working tree"
+    → commit or stash local changes first
+
+  App crashes after OTA restart
+    → publish a fixed bundle, or clear app data:
+      adb shell pm clear com.prysymtv.android
+      then reinstall OTA-enabled APK
+
+  No update prompt
+    → force-close app and reopen; confirm APK was built with build:release:ota
+
+  Full details: docs/mobile/README.md  and  docs/vps/vps-production.md
+
 ================================================================================
-Last updated: 2026-07-03
+Last updated: 2026-08-25
 ================================================================================

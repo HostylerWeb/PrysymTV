@@ -2,7 +2,9 @@ import { Stack } from 'expo-router';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { OtaUpdatePrompt } from '@/components/ota/OtaUpdatePrompt';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { useOtaUpdates } from '@/hooks/useOtaUpdates';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { colors } from '@/theme/tokens';
 import { useRouter, useSegments } from 'expo-router';
@@ -34,10 +36,13 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
+  const otaUpdate = useOtaUpdates();
+
   return (
     <QueryProvider>
       <AuthProvider>
         <StatusBar style="light" />
+        <OtaUpdatePrompt state={otaUpdate} />
         <AuthGate>
           <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
             <Stack.Screen name="login" />

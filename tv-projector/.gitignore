@@ -21,6 +21,8 @@ web-build/
 # Local env
 .env
 .env.local
+credentials/
+certs/
 
 # @generated expo-cli
 expo-env.d.ts

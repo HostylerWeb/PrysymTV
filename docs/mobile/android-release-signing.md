@@ -46,9 +46,20 @@ Enable **Google Play App Signing** and also add Play’s **app signing key** SHA
 
 ## Build release APK
 
+**OTA-enabled production build** (embeds xprem URL + signing cert — use for phones that receive OTA updates):
+
 ```bash
 cd mobile
-pnpm run build:apk:release
+npm run build:release:ota
+```
+
+Output: `mobile/releases/prysymtv-android-release-YYYYMMDD.apk`. See [README.md](./README.md#ota-updates-self-hosted).
+
+**Plain release APK** (no OTA — local testing only):
+
+```bash
+cd mobile
+npm run build:apk:release
 ```
 
 Output: `android/app/build/outputs/apk/release/app-release.apk`

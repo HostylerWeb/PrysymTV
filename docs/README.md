@@ -8,7 +8,7 @@ All project documentation lives under `docs/`, grouped by area.
 |--------|----------|
 | [**api/**](./api/) | REST API reference, backend roadmap, Stripe, NestJS README |
 | [**web/**](./web/) | Local dev / run guide, admin dashboard plan, security, stakeholder PRD, gaps |
-| [**mobile/**](./mobile/) | Expo APK builds, push notifications (Firebase/FCM), mobile README |
+| [**mobile/**](./mobile/) | Expo APK builds, **OTA updates (xprem)**, push notifications (Firebase/FCM) |
 | [**tv-projector/**](./tv-projector/) | Android TV / projector app setup |
 | [**vps/**](./vps/) | Production VPS bootstrap and deploy notes |
 
@@ -17,7 +17,7 @@ All project documentation lives under `docs/`, grouped by area.
 - **Run the stack locally:** [web/how-to-run.md](./web/how-to-run.md)
 - **API endpoints:** [api/api.md](./api/api.md)
 - **Deploy to production:** [vps/vps-production.md](./vps/vps-production.md) + root `INSTRUCTIONS.txt`
-- **Mobile APK + push:** [mobile/README.md](./mobile/README.md), [mobile/notifications.md](./mobile/notifications.md)
+- **Mobile APK + OTA + push:** [mobile/README.md](./mobile/README.md) (OTA section), [mobile/notifications.md](./mobile/notifications.md)
 
 ## App README stubs
 

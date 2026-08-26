@@ -77,7 +77,7 @@ Android package: **`com.prysymtv.android`**
 3. Download **`google-services.json`** → place at **`mobile/google-services.json`**
    - Template: `mobile/google-services.json.example`
    - **Do not commit** `google-services.json` (contains API keys; gitignored)
-4. Rebuild the APK after changing this file: `npm run prebuild:clean && npm run build:apk:release`
+4. Rebuild the APK after changing this file. For production OTA devices use `npm run build:release:ota`; otherwise `npm run prebuild:clean && npm run build:apk:release`. See [OTA docs](./README.md#ota-updates-self-hosted).
 
 ### 2. Service account (API / FCM server)
 

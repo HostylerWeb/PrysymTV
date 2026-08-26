@@ -7,8 +7,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CERT_OUT="${ROOT_DIR}/mobile/certs/certificate.pem"
-SECRETS_OUT="${ROOT_DIR}/infra/ota/bootstrap.secrets.env"
+CERT_OUT="${XPREM_CERT_OUT:-${ROOT_DIR}/mobile/certs/certificate.pem}"
+SECRETS_OUT="${XPREM_SECRETS_OUT:-${ROOT_DIR}/infra/ota/bootstrap.secrets.env}"
 
 : "${XPREM_URL:?Set XPREM_URL, e.g. https://srv1765056.hstgr.cloud/ota}"
 : "${XPREM_ADMIN_EMAIL:?Set XPREM_ADMIN_EMAIL}"
